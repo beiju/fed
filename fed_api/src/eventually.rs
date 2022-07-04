@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use futures::{future, Stream, stream, StreamExt};
 use log::{info, warn};
 
-pub use crate::api::eventually_schema::{EventuallyEvent, EventuallyResponse};
+pub use crate::eventually_schema::{EventuallyEvent, EventuallyResponse};
 
 const PAGE_SIZE: usize = 100;
 

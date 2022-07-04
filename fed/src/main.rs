@@ -20,7 +20,7 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(AdHoc::on_liftoff("Fed Ingest", |rocket| Box::pin(async {
             let task_holder: &IngestTaskHolder = rocket.state().unwrap();
 
-            let ingest_task = IngestTask::new();
+            let ingest_task = IngestTask::new(FEED_ERA_START);
             let mut task_mut = task_holder.latest_ingest.lock().unwrap();
             *task_mut = Some(ingest_task);
         })))

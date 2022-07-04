@@ -1,6 +1,4 @@
-use anyhow::anyhow;
 use chrono::{DateTime, Utc};
-use itertools::Itertools;
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use serde_repr::{Serialize_repr, Deserialize_repr};
@@ -34,9 +32,9 @@ pub struct EventMetadata {
     #[serde(rename = "_eventually_siblingEvents")]
     pub siblings: Vec<EventuallyEvent>,
     #[serde(rename = "_eventually_ingest_time")]
-    pub ingest_time: i64,
+    pub ingest_time: Option<i64>,
     #[serde(rename = "_eventually_ingest_source")]
-    pub ingest_source: String,
+    pub ingest_source: Option<String>,
 
     pub play: Option<i64>,
     pub sub_play: Option<i64>,
@@ -67,41 +65,41 @@ pub struct EventuallyEvent {
     pub nuts: i32,
 }
 
-impl EventuallyEvent {
-    pub fn game_id(&self) -> Result<Uuid, anyhow::Error> {
-        self.game_tags.iter()
-            .exactly_one()
-            .map_err(|err| anyhow!("Expected exactly one game id but found {:?}", err))
-            .cloned()
-    }
-
-    pub fn player_id(&self) -> Result<Uuid, anyhow::Error> {
-        self.player_tags.iter()
-            .exactly_one()
-            .map_err(|err| anyhow!("Expected exactly one player id but found {:?}", err))
-            .cloned()
-    }
-
-    pub fn team_id(&self) -> Result<Uuid, anyhow::Error> {
-        self.team_id_excluding(Uuid::nil())
-    }
-
-    pub fn player_id_excluding(&self, excluding: Uuid) -> Result<Uuid, anyhow::Error> {
-        self.player_tags.iter()
-            .filter(|uuid| uuid != &&excluding)
-            .exactly_one()
-            .map_err(|err| anyhow!("Expected exactly one player id, excluding {}, but found {:?}", excluding, err))
-            .cloned()
-    }
-
-    pub fn team_id_excluding(&self, excluding: Uuid) -> Result<Uuid, anyhow::Error> {
-        self.team_tags.iter()
-            .filter(|uuid| uuid != &&excluding)
-            .exactly_one()
-            .map_err(|err| anyhow!("Expected exactly one team id, excluding {}, but found {:?}", excluding, err))
-            .cloned()
-    }
-}
+// impl EventuallyEvent {
+//     pub fn game_id(&self) -> Result<Uuid, anyhow::Error> {
+//         self.game_tags.iter()
+//             .exactly_one()
+//             .map_err(|err| anyhow!("Expected exactly one game id but found {:?}", err))
+//             .cloned()
+//     }
+//
+//     pub fn player_id(&self) -> Result<Uuid, anyhow::Error> {
+//         self.player_tags.iter()
+//             .exactly_one()
+//             .map_err(|err| anyhow!("Expected exactly one player id but found {:?}", err))
+//             .cloned()
+//     }
+//
+//     pub fn team_id(&self) -> Result<Uuid, anyhow::Error> {
+//         self.team_id_excluding(Uuid::nil())
+//     }
+//
+//     pub fn player_id_excluding(&self, excluding: Uuid) -> Result<Uuid, anyhow::Error> {
+//         self.player_tags.iter()
+//             .filter(|uuid| uuid != &&excluding)
+//             .exactly_one()
+//             .map_err(|err| anyhow!("Expected exactly one player id, excluding {}, but found {:?}", excluding, err))
+//             .cloned()
+//     }
+//
+//     pub fn team_id_excluding(&self, excluding: Uuid) -> Result<Uuid, anyhow::Error> {
+//         self.team_tags.iter()
+//             .filter(|uuid| uuid != &&excluding)
+//             .exactly_one()
+//             .map_err(|err| anyhow!("Expected exactly one team id, excluding {}, but found {:?}", excluding, err))
+//             .cloned()
+//     }
+// }
 
 #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
 #[repr(i32)]
