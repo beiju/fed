@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use rocket::futures::{pin_mut, StreamExt};
 use rocket::tokio::task;
+use crate::parse;
 
 #[derive(Default)]
 pub struct IngestTaskHolder {
@@ -24,7 +25,8 @@ async fn ingest_main(start: &'static str) {
 
     pin_mut!(event_stream);
 
-    while let Some(event) = event_stream.next().await {
-        println!("Got event: {:?}", event);
+    while let Some(feed_event) = event_stream.next().await {
+        let parsed_event = parse::parse_feed_event(feed_event);
+        println!("Got event: {:?}", parsed_event);
     }
 }

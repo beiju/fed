@@ -1,4 +1,7 @@
 mod ingest;
+mod event_schema;
+mod parse;
+mod error;
 
 #[macro_use] extern crate rocket;
 
