@@ -33,7 +33,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::PlayBall => {
-            parse_fixed_description(event, "Play ball!", FedEventData::PlayBall)
+            parse_fixed_description(event, "Play ball!", FedEventData::PlayBall {
+                game: GameEvent::try_from_event(event)?,
+            })
         }
         EventType::HalfInning => { todo!() }
         EventType::PitcherChange => { todo!() }
