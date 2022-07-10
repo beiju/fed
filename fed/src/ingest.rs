@@ -26,7 +26,9 @@ async fn ingest_main(start: &'static str) {
     pin_mut!(event_stream);
 
     while let Some(feed_event) = event_stream.next().await {
-        let parsed_event = parse::parse_feed_event(feed_event);
+        let parsed_event = parse::parse_feed_event(&feed_event).unwrap();
         println!("Got event: {:?}", parsed_event);
+        let reconstructed_event = parsed_event.into_feed_event();
+        assert_json_diff::assert_json_eq!(feed_event, reconstructed_event);
     }
 }

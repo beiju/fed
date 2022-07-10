@@ -6,9 +6,16 @@ pub enum FeedParseError {
     #[error("Expected metadata field \"{field}\" for {event_type:?} event")]
     MissingMetadata {
         event_type: EventType,
-        field: &'static str
+        field: &'static str,
     },
 
     #[error("Unknown being id {0}")]
-    UnknownBeing(i64)
+    UnknownBeing(i64),
+
+    #[error("Unexpected description for {event_type:?} event: {description} (expected {expected})")]
+    UnexpectedDescription {
+        event_type: EventType,
+        description: String,
+        expected: String,
+    }
 }
