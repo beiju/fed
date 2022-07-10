@@ -1,7 +1,7 @@
 use nom::IResult;
-use fed_api::{EventuallyEvent, EventType};
+use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData};
+use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -15,7 +15,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     match event.r#type {
         EventType::Undefined => { todo!() }
         EventType::LetsGo => {
-            parse_fixed_description(event, "Let's Go!", FedEventData::LetsGo)
+            let missing_weather_error = || {
+                FeedParseError::MissingMetadata { event_type: event.r#type, field: "weather" }
+            };
+            let weather = event.metadata.other
+                .as_object()
+                .ok_or_else(missing_weather_error)?
+                .get("weather")
+                .ok_or_else(missing_weather_error)?
+                .as_i64()
+                .ok_or_else(missing_weather_error)?;
+
+            parse_fixed_description(event, "Let's Go!", FedEventData::LetsGo {
+                game: GameEvent::try_from_event(event)?,
+                weather: Weather::try_from(weather as i32)
+                    .map_err(|_| FeedParseError::UnknownWeather(weather))?,
+            })
         }
         EventType::PlayBall => {
             parse_fixed_description(event, "Play ball!", FedEventData::PlayBall)
@@ -58,8 +73,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .ok_or_else(metadata_err)?;
 
             Ok(make_fed_event(event, FedEventData::BeingSpeech {
-                being: Being::from_id(being_id)
-                    .ok_or_else(|| FeedParseError::UnknownBeing(being_id))?,
+                being: Being::try_from(being_id as i32)
+                    .map_err(|_| FeedParseError::UnknownBeing(being_id))?,
                 message: event.description.clone(),
             }))
         }

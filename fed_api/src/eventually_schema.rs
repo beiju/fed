@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 #[derive(Deserialize)]
 pub struct EventuallyResponse(pub(crate) Vec<EventuallyEvent>);
@@ -101,7 +102,7 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Weather {
     Void = 0,

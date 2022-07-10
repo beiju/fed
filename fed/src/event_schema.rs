@@ -1,46 +1,57 @@
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventType, EventuallyEvent};
+use fed_api::{EventType, EventuallyEvent, Weather};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use crate::error::FeedParseError;
 
-#[derive(Debug)]
+#[derive(Debug, IntoPrimitive, TryFromPrimitive)]
+#[repr(i32)]
 pub enum Being {
-    EmergencyAlert,
-    TheShelledOne,
-    TheMonitor,
-    TheCoin,
-    TheReader,
-    TheMicrophone,
-    Lootcrates,
-    Namerifeht,
+    EmergencyAlert = -1,
+    TheShelledOne =  0,
+    TheMonitor =  1,
+    TheCoin =  2,
+    TheReader =  3,
+    TheMicrophone =  4,
+    Lootcrates =  5,
+    Namerifeht =  6,
 }
 
-impl Being {
-    pub fn from_id(being_id: i64) -> Option<Being> {
-        Some(match being_id {
-            -1 => Being::EmergencyAlert,
-            0 => Being::TheShelledOne,
-            1 => Being::TheMonitor,
-            2 => Being::TheCoin,
-            3 => Being::TheReader,
-            4 => Being::TheMicrophone,
-            5 => Being::Lootcrates,
-            6 => Being::Namerifeht,
-            _ => return None
-        })
-    }
+#[derive(Debug)]
+pub struct GameEvent {
+    pub game_id: Uuid,
+    pub home_team: Uuid,
+    pub away_team: Uuid,
+    pub play: i64,
+    pub sub_play: i64,
+}
 
-    pub fn id(&self) -> i64 {
-        match self {
-            Being::EmergencyAlert => -1,
-            Being::TheShelledOne => 0,
-            Being::TheMonitor => 1,
-            Being::TheCoin => 2,
-            Being::TheReader => 3,
-            Being::TheMicrophone => 4,
-            Being::Lootcrates => 5,
-            Being::Namerifeht => 6,
-        }
+impl GameEvent {
+    pub fn try_from_event(event: &EventuallyEvent) -> Result<Self, FeedParseError> {
+        let (&game_id, ) = event.game_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
+
+        // Order is very important here
+        let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
+
+        Ok(Self {
+            game_id,
+            home_team,
+            away_team,
+            play: event.metadata.play
+                .ok_or_else(|| FeedParseError::MissingMetadata {
+                    event_type: event.r#type,
+                    field: "play",
+                })?,
+            sub_play: event.metadata.sub_play
+                .ok_or_else(|| FeedParseError::MissingMetadata {
+                    event_type: event.r#type,
+                    field: "sub_play",
+                })?
+        })
     }
 }
 
@@ -51,7 +62,10 @@ pub enum FedEventData {
         message: String,
     },
 
-    LetsGo,
+    LetsGo {
+        game: GameEvent,
+        weather: Weather,
+    },
 
     PlayBall,
 }
@@ -97,13 +111,21 @@ impl FedEvent {
                 event.r#type = EventType::BigDeal;
                 event.category = 4;
                 event.description = message;
+                let being_id: i32 = being.into();
                 event.metadata.other = json!({
-                    "being": being.id()
+                    "being": being_id
                 });
             }
-            FedEventData::LetsGo => {
+            FedEventData::LetsGo { game, weather } => {
+                populate_game_event(&mut event, &game);
                 event.r#type = EventType::LetsGo;
-                event.description = "Let's Go!".to_string()
+                event.description = "Let's Go!".to_string();
+                let weather_id: i32 = weather.into();
+                event.metadata.other = json!({
+                    "home": game.home_team,
+                    "away": game.away_team,
+                    "weather": weather_id,
+                });
             }
             FedEventData::PlayBall => { todo!() }
         }
@@ -111,4 +133,12 @@ impl FedEvent {
 
         event
     }
+}
+
+fn populate_game_event(event: &mut EventuallyEvent, game: &GameEvent) {
+    event.game_tags.push(game.game_id);
+    event.team_tags.push(game.away_team);
+    event.team_tags.push(game.home_team);
+    event.metadata.play = Some(game.play);
+    event.metadata.sub_play = Some(game.sub_play);
 }
