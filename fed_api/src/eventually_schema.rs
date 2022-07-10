@@ -23,7 +23,7 @@ impl IntoIterator for EventuallyResponse {
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used
@@ -44,7 +44,7 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,

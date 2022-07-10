@@ -8,7 +8,7 @@ mod error;
 use rocket::fairing::AdHoc;
 use crate::ingest::{IngestTask, IngestTaskHolder};
 
-const FEED_ERA_START: &'static str = "2021-03-01T00:00:00.000Z";
+const FEED_ERA_START: &'static str = "2021-03-01T05:00:00.000Z";
 
 #[get("/hello/<name>/<age>")]
 fn hello(name: &str, age: u8) -> String {
