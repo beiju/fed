@@ -67,7 +67,9 @@ pub enum FedEventData {
         weather: Weather,
     },
 
-    PlayBall,
+    PlayBall {
+        game: GameEvent,
+    },
 }
 
 #[derive(Debug)]
@@ -127,7 +129,11 @@ impl FedEvent {
                     "weather": weather_id,
                 });
             }
-            FedEventData::PlayBall => { todo!() }
+            FedEventData::PlayBall { game } => {
+                populate_game_event(&mut event, &game);
+                event.r#type = EventType::PlayBall;
+                event.description = "Play ball!".to_string();
+            }
         }
 
 
