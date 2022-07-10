@@ -31,5 +31,11 @@ pub enum FeedParseError {
         event_type: EventType,
         description: String,
         expected: String,
-    }
+    },
+
+    #[error("Description parse error for {event_type:?} event: {err}")]
+    DescriptionParseError {
+        event_type: EventType,
+        err: String,
+    },
 }

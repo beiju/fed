@@ -1,4 +1,10 @@
-use nom::IResult;
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_until, take_until1, take_while};
+use nom::{Finish, IResult, Parser};
+use nom::character::complete::digit1;
+use nom::character::is_digit;
+use nom::error::convert_error;
+use nom::multi::many1;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent};
@@ -37,7 +43,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event)?,
             })
         }
-        EventType::HalfInning => { todo!() }
+        EventType::HalfInning => {
+            let (_, (top_of_inning, inning, team_name)) = parse_half_inning(&event.description)
+                .finish()
+                .map_err(|e| FeedParseError::DescriptionParseError {
+                    event_type: event.r#type,
+                    err: convert_error(&event.description as &str, e),
+                })?;
+
+            Ok(make_fed_event(event, FedEventData::HalfInningStart {
+                game: GameEvent::try_from_event(event)?,
+                top_of_inning,
+                inning,
+                batting_team_name: team_name.to_string()
+            }))
+        }
         EventType::PitcherChange => { todo!() }
         EventType::StolenBase => { todo!() }
         EventType::Walk => { todo!() }
@@ -174,7 +194,7 @@ fn parse_fixed_description(event: &EventuallyEvent, expected_description: &'stat
         Err(FeedParseError::UnexpectedDescription {
             event_type: event.r#type,
             description: event.description.clone(),
-            expected: expected_description.to_string()
+            expected: expected_description.to_string(),
         })
     }
 }
@@ -191,4 +211,23 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
         nuts: feed_event.nuts,
         data,
     }
+}
+
+fn parse_half_inning(input: &str) -> IResult<&str, (bool, i32, &str), nom::error::VerboseError<&str>> {
+    let (input, top_of_inning) = alt((
+        tag("Top").map(|_| true),
+        tag("Bottom").map(|_| false),
+    ))(input)?;
+
+    let (input, _) = tag(" of ")(input)?;
+    // TODO There has to be a better way to match a whole number
+    let (input, inning_str) = many1(digit1)(input)?;
+    // The parser should ensure inning_str always represents a valid number
+    let inning = inning_str.join("").parse().unwrap();
+
+    let (input, _) = tag(", ")(input)?;
+    let (input, team_name) = take_until1(" batting.")(input)?;
+    let (input, _) = tag(" batting.")(input)?;
+
+    Ok((input, (top_of_inning, inning, team_name)))
 }

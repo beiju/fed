@@ -10,13 +10,13 @@ use crate::error::FeedParseError;
 #[repr(i32)]
 pub enum Being {
     EmergencyAlert = -1,
-    TheShelledOne =  0,
-    TheMonitor =  1,
-    TheCoin =  2,
-    TheReader =  3,
-    TheMicrophone =  4,
-    Lootcrates =  5,
-    Namerifeht =  6,
+    TheShelledOne = 0,
+    TheMonitor = 1,
+    TheCoin = 2,
+    TheReader = 3,
+    TheMicrophone = 4,
+    Lootcrates = 5,
+    Namerifeht = 6,
 }
 
 #[derive(Debug)]
@@ -50,7 +50,7 @@ impl GameEvent {
                 .ok_or_else(|| FeedParseError::MissingMetadata {
                     event_type: event.r#type,
                     field: "sub_play",
-                })?
+                })?,
         })
     }
 }
@@ -69,6 +69,13 @@ pub enum FedEventData {
 
     PlayBall {
         game: GameEvent,
+    },
+
+    HalfInningStart {
+        game: GameEvent,
+        top_of_inning: bool,
+        inning: i32,
+        batting_team_name: String,
     },
 }
 
@@ -133,6 +140,14 @@ impl FedEvent {
                 populate_game_event(&mut event, &game);
                 event.r#type = EventType::PlayBall;
                 event.description = "Play ball!".to_string();
+            }
+            FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name } => {
+                populate_game_event(&mut event, &game);
+                event.r#type = EventType::HalfInning;
+                event.description = format!("{} of {}, {} batting.",
+                                            if top_of_inning { "Top" } else { "Bottom" },
+                                            inning,
+                                            batting_team_name);
             }
         }
 
