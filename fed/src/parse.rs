@@ -1,8 +1,7 @@
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until, take_until1, take_while};
+use nom::bytes::complete::{tag, take_until1};
 use nom::{Finish, IResult, Parser};
 use nom::character::complete::digit1;
-use nom::character::is_digit;
 use nom::error::convert_error;
 use nom::multi::many1;
 use fed_api::{EventuallyEvent, EventType, Weather};
@@ -44,18 +43,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::HalfInning => {
-            let (_, (top_of_inning, inning, team_name)) = parse_half_inning(&event.description)
-                .finish()
-                .map_err(|e| FeedParseError::DescriptionParseError {
-                    event_type: event.r#type,
-                    err: convert_error(&event.description as &str, e),
-                })?;
+            let (top_of_inning, inning, team_name) = run_parser(&event, parse_half_inning)?;
 
             Ok(make_fed_event(event, FedEventData::HalfInningStart {
                 game: GameEvent::try_from_event(event)?,
                 top_of_inning,
                 inning,
-                batting_team_name: team_name.to_string()
+                batting_team_name: team_name.to_string(),
             }))
         }
         EventType::PitcherChange => { todo!() }
@@ -67,7 +61,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::HomeRun => { todo!() }
         EventType::Hit => { todo!() }
         EventType::GameEnd => { todo!() }
-        EventType::BatterUp => { todo!() }
+        EventType::BatterUp => {
+            let (batter_name, team_name) = run_parser(&event, parse_batter_up)?;
+
+            Ok(make_fed_event(event, FedEventData::BatterUp {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: batter_name.to_string(),
+                team_name: team_name.to_string(),
+            }))
+
+        }
         EventType::Strike => { todo!() }
         EventType::Ball => { todo!() }
         EventType::FoulBall => { todo!() }
@@ -187,6 +190,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
+type ParserResult<'a, Out> = IResult<&'a str, Out, nom::error::VerboseError<&'a str>>;
+
+fn run_parser<'a, F, Out>(event: &'a EventuallyEvent, parser: F) -> Result<Out, FeedParseError>
+    where F: Fn(&'a str) -> ParserResult<'a, Out> {
+    let (_, output) = parser(&event.description)
+        .finish()
+        .map_err(|e| FeedParseError::DescriptionParseError {
+            event_type: event.r#type,
+            err: convert_error(&event.description as &str, e),
+        })?;
+
+    Ok(output)
+}
+
 fn parse_fixed_description(event: &EventuallyEvent, expected_description: &'static str, data: FedEventData) -> Result<FedEvent, FeedParseError> {
     if event.description == expected_description {
         Ok(make_fed_event(event, data))
@@ -212,8 +229,7 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
         data,
     }
 }
-
-fn parse_half_inning(input: &str) -> IResult<&str, (bool, i32, &str), nom::error::VerboseError<&str>> {
+fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     let (input, top_of_inning) = alt((
         tag("Top").map(|_| true),
         tag("Bottom").map(|_| false),
@@ -230,4 +246,14 @@ fn parse_half_inning(input: &str) -> IResult<&str, (bool, i32, &str), nom::error
     let (input, _) = tag(" batting.")(input)?;
 
     Ok((input, (top_of_inning, inning, team_name)))
+}
+
+fn parse_batter_up(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, batter_name) = take_until1(" batting for the ")(input)?;
+    let (input, _) = tag(" batting for the ")(input)?;
+    // This is going to fail if a team ever has a period in it
+    let (input, team_name) = take_until1(".")(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, (batter_name, team_name)))
 }

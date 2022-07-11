@@ -77,6 +77,12 @@ pub enum FedEventData {
         inning: i32,
         batting_team_name: String,
     },
+
+    BatterUp {
+        game: GameEvent,
+        batter_name: String,
+        team_name: String,
+    }
 }
 
 #[derive(Debug)]
@@ -148,6 +154,11 @@ impl FedEvent {
                                             if top_of_inning { "Top" } else { "Bottom" },
                                             inning,
                                             batting_team_name);
+            }
+            FedEventData::BatterUp { game, batter_name, team_name } => {
+                populate_game_event(&mut event, &game);
+                event.r#type = EventType::BatterUp;
+                event.description = format!("{} batting for the {}.", batter_name, team_name);
             }
         }
 
