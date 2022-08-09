@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventMetadataBuilder, EventType, EventuallyEvent, EventuallyEventBuilder, Weather};
+use fed_api::{EventMetadata, EventMetadataBuilder, EventType, EventuallyEvent, EventuallyEventBuilder, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use crate::error::FeedParseError;
@@ -56,20 +56,21 @@ impl GameEvent {
     }
 }
 
-// Some effects in the game (e.g. Superyummy, Homebody) mean a player always has either
-// Overperforming or Underperforming. Those players always have a AddedModFromOtherMod (146) event
-// the first time their status changes and a ChangedModFromOtherMod (148) thereafter.
+// This contains only the event properties that will differ from the parent, including id, created,
+// and nuts; but not properties that will be the same, like day, season, and tournament.
 #[derive(Debug, Clone)]
-pub enum PermaPerformingChange {
-    Added(bool),
-    Changed(bool),
+pub struct SubEvent {
+    pub id: Uuid,
+    pub created: DateTime<Utc>,
+    pub nuts: i32,
 }
 
-impl Into<bool> for PermaPerformingChange {
-    fn into(self) -> bool {
-        match self {
-            PermaPerformingChange::Added(p) => { p }
-            PermaPerformingChange::Changed(p) => { p }
+impl SubEvent {
+    pub fn from_event(event: &EventuallyEvent) -> Self {
+        Self {
+            id: event.id,
+            created: event.created,
+            nuts: event.nuts,
         }
     }
 }
@@ -106,7 +107,11 @@ pub enum FedEventData {
     SuperyummyGameStart {
         game: GameEvent,
         player_name: String,
-        change: PermaPerformingChange,
+        peanuts: bool,
+        is_first_proc: bool,
+        sub_event: SubEvent,
+        player_id: Uuid,
+        team_id: Uuid,
     },
 }
 
@@ -122,6 +127,28 @@ pub struct FedEvent {
     pub nuts: i32,
     pub data: FedEventData,
 
+}
+
+trait GameEventForBuilder {
+    fn for_game(self, game: &GameEvent) -> Self;
+    fn for_sub_event(self, sub: &SubEvent) -> Self;
+}
+
+impl GameEventForBuilder for EventuallyEventBuilder {
+    fn for_game(self, game: &GameEvent) -> Self {
+        self
+            .category(0)
+            .game_tags(vec![game.game_id])
+            .team_tags(vec![game.away_team, game.home_team])
+            .metadata(make_game_event_metadata(&game))
+    }
+
+    fn for_sub_event(self, sub: &SubEvent) -> Self {
+        self
+            .id(sub.id)
+            .created(sub.created)
+            .nuts(sub.nuts)
+    }
 }
 
 impl FedEvent {
@@ -143,12 +170,11 @@ impl FedEvent {
             }
             FedEventData::LetsGo { game, weather } => {
                 let weather_id: i32 = weather.into();
-                event_builder
+                event_builder.for_game(&game)
                     .r#type(EventType::LetsGo)
-                    .category(0)
                     .description("Let's Go!".to_string())
                     .metadata(
-                        EventMetadataBuilder::default()
+                        make_game_event_metadata_builder(&game)
                             .other(json!({
                                 "home": game.home_team,
                                 "away": game.away_team,
@@ -158,32 +184,61 @@ impl FedEvent {
                             .unwrap())
             }
             FedEventData::PlayBall { game } => {
-                event_builder
+                event_builder.for_game(&game)
                     .r#type(EventType::PlayBall)
-                    .category(0)
                     .description("Play ball!".to_string())
             }
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name } => {
-                event_builder
+                event_builder.for_game(&game)
                     .r#type(EventType::HalfInning)
-                    .category(0)
                     .description(format!("{} of {}, {} batting.",
                                          if top_of_inning { "Top" } else { "Bottom" },
                                          inning,
                                          batting_team_name))
             }
             FedEventData::BatterUp { game, batter_name, team_name } => {
-                event_builder
+                event_builder.for_game(&game)
                     .r#type(EventType::BatterUp)
-                    .category(0)
                     .description(format!("{} batting for the {}.", batter_name, team_name))
             }
-            FedEventData::SuperyummyGameStart { game, player_name, change } => {
-                event_builder
-                    .r#type(EventType::Superyummy)
+            FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
+                let description = format!("{} {} Peanuts.", player_name,
+                                          if peanuts { "loves" } else { "misses" });
+                let mod_name = if peanuts { "OVERPERFORMING" } else { "UNDERPERFORMING" };
+                let change_event = if is_first_proc {
+                    self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&sub_event)
+                        .category(1)
+                        .r#type(EventType::AddedModFromOtherMod)
+                        .description(description.clone())
+                        .team_tags(vec![team_id])
+                        .player_tags(vec![player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0) // not sure if this is hardcoded
+                            .other(json!({
+                                "mod": mod_name,
+                                "source": "SUPERYUMMY",
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()
+                } else {
+                    todo!()
+                };
+                event_builder.for_game(&game)
                     .category(2)
-                    .description(format!("{} {} Peanuts.", player_name,
-                                         if change.into() { "loves" } else { "misses" }))
+                    .r#type(EventType::Superyummy)
+                    .description(description)
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![change_event])
+                        .build()
+                        .unwrap())
 
                 // let mod_event =
                 //
@@ -208,10 +263,15 @@ impl FedEvent {
     }
 }
 
-fn populate_game_event(event: &mut EventuallyEvent, game: &GameEvent) {
-    event.game_tags.push(game.game_id);
-    event.team_tags.push(game.away_team);
-    event.team_tags.push(game.home_team);
-    event.metadata.play = Some(game.play);
-    event.metadata.sub_play = Some(game.sub_play);
+
+fn make_game_event_metadata_builder(game: &GameEvent) -> EventMetadataBuilder {
+    EventMetadataBuilder::default()
+        .play(game.play)
+        .sub_play(game.sub_play)
+}
+
+fn make_game_event_metadata(game: &GameEvent) -> EventMetadata {
+    make_game_event_metadata_builder(game)
+        .build()
+        .unwrap()
 }

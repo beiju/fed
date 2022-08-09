@@ -56,4 +56,10 @@ pub enum FeedParseError {
         event_type: EventType,
         err: String,
     },
+
+    #[error("Description parse error for {event_type:?} event: {err}")]
+    MissingPlayerId {
+        event_type: EventType,
+        err: String,
+    },
 }

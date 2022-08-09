@@ -27,7 +27,7 @@ impl IntoIterator for EventuallyResponse {
 
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder)]
-#[builder(default, pattern = "owned")]
+#[builder(default, pattern = "owned", setter(strip_option))]
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used

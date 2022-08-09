@@ -7,7 +7,7 @@ use nom::error::convert_error;
 use nom::multi::many1;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, PermaPerformingChange};
+use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -168,7 +168,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .as_str()
                 .ok_or_else(|| FeedParseError::MissingMetadata {event_type: event.r#type, field: "mod"})?;
 
-            let over = if mod_name == "OVERPERFORMING" {
+            let which_performing = if mod_name == "OVERPERFORMING" {
                 true
             } else if mod_name == "UNDERPERFORMING" {
                 false
@@ -179,18 +179,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 });
             };
 
-            let change = if mod_add_event.r#type == EventType::AddedModFromOtherMod {
-                PermaPerformingChange::Added(over)
-            } else if mod_add_event.r#type == EventType::ChangedModFromOtherMod {
-                PermaPerformingChange::Changed(over)
-            } else {
-                return Err(FeedParseError::UnexpectedChildType {
-                    event_type: event.r#type,
-                    child_type: mod_add_event.r#type,
-                });
-            };
-
-            let player_name = if over {
+            let player_name = if which_performing {
                 run_parser(event, parse_loves_peanuts)?
             } else {
                 run_parser(event, parse_misses_peanuts)?
@@ -199,7 +188,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             Ok(make_fed_event(event, FedEventData::SuperyummyGameStart {
                 game: GameEvent::try_from_event(event)?,
                 player_name: player_name.to_string(),
-                change
+                peanuts: which_performing,
+                is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
+                sub_event: SubEvent::from_event(mod_add_event),
+                player_id: *mod_add_event.player_tags.iter()
+                    .exactly_one()
+                    .map_err(|_| FeedParseError::MissingTags {
+                        event_type: EventType::Undefined,
+                        tag_type: "player"
+                    })?,
+                team_id: *mod_add_event.team_tags.iter()
+                    .exactly_one()
+                    .map_err(|_| FeedParseError::MissingTags {
+                        event_type: EventType::Undefined,
+                        tag_type: "team"
+                    })?,
             }))
 
         }
