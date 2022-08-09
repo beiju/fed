@@ -20,6 +20,18 @@ pub enum FeedParseError {
         tag_type: &'static str,
     },
 
+    #[error("Expected {num_children} children for {event_type:?} event")]
+    MissingChild {
+        event_type: EventType,
+        num_children: i32,
+    },
+
+    #[error("Unexpected type {child_type:?} for child of {event_type:?} event")]
+    UnexpectedChildType {
+        event_type: EventType,
+        child_type: EventType,
+    },
+
     #[error("Unknown being id {0}")]
     UnknownBeing(i64),
 
@@ -31,6 +43,12 @@ pub enum FeedParseError {
         event_type: EventType,
         description: String,
         expected: String,
+    },
+
+    #[error("Unexpected mod name in {event_type:?} event: {mod_name}")]
+    UnexpectedModName {
+        event_type: EventType,
+        mod_name: String,
     },
 
     #[error("Description parse error for {event_type:?} event: {err}")]

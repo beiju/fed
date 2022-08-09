@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use futures::{future, Stream, stream, StreamExt};
 use log::{info, warn};
 
-pub use crate::eventually_schema::{EventuallyEvent, EventuallyResponse};
+pub use crate::eventually_schema::{EventuallyEvent, EventuallyEventBuilder, EventuallyResponse};
 
 const PAGE_SIZE: usize = 100;
 
@@ -27,6 +27,10 @@ pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
                 if sibling.id != event.id {
                     seen_ids.insert(sibling.id);
                 }
+            }
+
+            for child in &event.metadata.children {
+                seen_ids.insert(child.id);
             }
 
             let id_order: HashMap<_, _> = event.metadata.sibling_ids.iter()
@@ -89,6 +93,7 @@ async fn eventually_page(start: &'static str, state: EventuallyState) -> (Vec<Ev
             ("offset", state.page * PAGE_SIZE),
         ])
         .query(&[
+            ("expand_children", "true"),
             ("expand_siblings", "true"),
             ("sortby", "{created}"),
             ("sortorder", "asc"),

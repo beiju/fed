@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_until1};
 use nom::{Finish, IResult, Parser};
@@ -6,7 +7,7 @@ use nom::error::convert_error;
 use nom::multi::many1;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent};
+use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, PermaPerformingChange};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -151,7 +152,57 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::UnderOver => { todo!() }
         EventType::Undersea => { todo!() }
         EventType::Homebody => { todo!() }
-        EventType::Superyummy => { todo!() }
+        EventType::Superyummy => {
+            let (mod_add_event,): (&EventuallyEvent,) = event.metadata.children.iter()
+                .collect_tuple()
+                .ok_or_else(|| FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    num_children: 1,
+                })?;
+
+            let mod_name = mod_add_event.metadata.other
+                .as_object()
+                .ok_or_else(|| FeedParseError::NoMetadata { event_type: event.r#type })?
+                .get("mod")
+                .ok_or_else(|| FeedParseError::MissingMetadata {event_type: event.r#type, field: "mod"})?
+                .as_str()
+                .ok_or_else(|| FeedParseError::MissingMetadata {event_type: event.r#type, field: "mod"})?;
+
+            let over = if mod_name == "OVERPERFORMING" {
+                true
+            } else if mod_name == "UNDERPERFORMING" {
+                false
+            } else {
+                return Err(FeedParseError::UnexpectedModName {
+                    event_type: event.r#type,
+                    mod_name: mod_name.to_string(),
+                });
+            };
+
+            let change = if mod_add_event.r#type == EventType::AddedModFromOtherMod {
+                PermaPerformingChange::Added(over)
+            } else if mod_add_event.r#type == EventType::ChangedModFromOtherMod {
+                PermaPerformingChange::Changed(over)
+            } else {
+                return Err(FeedParseError::UnexpectedChildType {
+                    event_type: event.r#type,
+                    child_type: mod_add_event.r#type,
+                });
+            };
+
+            let player_name = if over {
+                run_parser(event, parse_loves_peanuts)?
+            } else {
+                run_parser(event, parse_misses_peanuts)?
+            };
+
+            Ok(make_fed_event(event, FedEventData::SuperyummyGameStart {
+                game: GameEvent::try_from_event(event)?,
+                player_name: player_name.to_string(),
+                change
+            }))
+
+        }
         EventType::Perk => { todo!() }
         EventType::Earlbird => { todo!() }
         EventType::LateToTheParty => { todo!() }
@@ -179,6 +230,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
+        EventType::ChangedModFromOtherMod => { todo!() }
         EventType::TeamWasShamed => { todo!() }
         EventType::TeamDidShame => { todo!() }
         EventType::RunsScored => { todo!() }
@@ -229,6 +281,7 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
         data,
     }
 }
+
 fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     let (input, top_of_inning) = alt((
         tag("Top").map(|_| true),
@@ -256,4 +309,18 @@ fn parse_batter_up(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag(".")(input)?;
 
     Ok((input, (batter_name, team_name)))
+}
+
+fn parse_misses_peanuts(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = take_until1(" misses Peanuts.")(input)?;
+    let (input, _) = tag(" misses Peanuts.")(input)?;
+
+    Ok((input, player_name))
+}
+
+fn parse_loves_peanuts(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = take_until1(" loves Peanuts.")(input)?;
+    let (input, _) = tag(" loves Peanuts.")(input)?;
+
+    Ok((input, player_name))
 }

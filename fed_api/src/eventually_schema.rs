@@ -4,6 +4,8 @@ use serde_json::Value;
 use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use derive_builder::Builder;
+
 
 #[derive(Deserialize)]
 pub struct EventuallyResponse(pub(crate) Vec<EventuallyEvent>);
@@ -24,11 +26,14 @@ impl IntoIterator for EventuallyResponse {
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder)]
+#[builder(default, pattern = "owned")]
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used
     // in game update' lastUpdateFull field
+    #[serde(default)]
+    pub children: Vec<EventuallyEvent>,
     #[serde(default)]
     #[serde(rename = "_eventually_siblingEvents")]
     pub siblings: Vec<EventuallyEvent>,
@@ -45,7 +50,8 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder)]
+#[builder(pattern = "owned")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,
@@ -55,9 +61,9 @@ pub struct EventuallyEvent {
     pub metadata: EventMetadata,
     pub blurb: String,
     pub description: String,
-    pub player_tags: Vec<Uuid>,
-    pub game_tags: Vec<Uuid>,
-    pub team_tags: Vec<Uuid>,
+    #[builder(default)] pub player_tags: Vec<Uuid>,
+    #[builder(default)] pub game_tags: Vec<Uuid>,
+    #[builder(default)] pub team_tags: Vec<Uuid>,
     pub sim: String,
     pub day: i32,
     pub season: i32,
@@ -102,7 +108,7 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Weather {
     Void = 0,
@@ -245,6 +251,7 @@ pub enum EventType {
     ReverbRotationShuffle = 132,
     // At this point I got bored typing them all and only filled in the ones I encountered
     AddedModFromOtherMod = 146,
+    ChangedModFromOtherMod = 148,
     TeamWasShamed = 154,
     TeamDidShame = 155,
     RunsScored = 209,
