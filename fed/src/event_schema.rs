@@ -220,6 +220,11 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
     },
+
+    InningEnd {
+        game: GameEvent,
+        inning_num: i32,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -501,7 +506,14 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
+            }
+            FedEventData::InningEnd { game, inning_num } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::InningEnd)
+                    .description(format!("Inning {} is now an Outing.", inning_num))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
             }
         }
             .build()

@@ -190,7 +190,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StrikeZapped => { todo!() }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => { todo!() }
-        EventType::InningEnd => { todo!() }
+        EventType::InningEnd => {
+            let inning_num = run_parser(&event, parse_inning_end)?;
+            Ok(make_fed_event(event, FedEventData::InningEnd {
+                game: GameEvent::try_from_event(event)?,
+                inning_num,
+            }))
+        }
         EventType::BigDeal => {
             let metadata_err = || FeedParseError::MissingMetadata {
                 event_type: event.r#type,
@@ -646,4 +652,12 @@ fn parse_walk(input: &str) -> ParserResult<&str> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
     Ok((input, batter_name))
+}
+
+fn parse_inning_end(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("Inning ")(input)?;
+    let (input, inning_num) = parse_whole_number(input)?;
+    let (input, _) = tag(" is now an Outing.")(input)?;
+
+    Ok((input, inning_num))
 }
