@@ -69,7 +69,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Walk => { todo!() }
-        EventType::Strikeout => { todo!() }
+        EventType::Strikeout => {
+            let (batter_name, is_swinging) = run_parser(&event, parse_strikeout)?;
+            if is_swinging {
+                Ok(make_fed_event(event, FedEventData::StrikeoutSwinging {
+                    game: GameEvent::try_from_event(event)?,
+                    batter_name: batter_name.to_string(),
+                }))
+            } else {
+                Ok(make_fed_event(event, FedEventData::StrikeoutLooking {
+                    game: GameEvent::try_from_event(event)?,
+                    batter_name: batter_name.to_string(),
+                }))
+            }
+        }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores) = run_parser(&event, parse_flyout)?;
             let scores = merge_scores_with_ids(scores, &event.player_tags, event.r#type, 0)?;
@@ -360,13 +373,13 @@ fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
 fn is_known_team_name(name: &str) -> bool {
     vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers", "Seattle Garages",
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
-         "Boston Flowers", "New York Millennials", "Philly Pies",
+         "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
-         "Flowers", "Millennials", "Pies",
+         "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift",
     ].contains(&name)
 }
 
@@ -568,8 +581,8 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
         tag("solo home run!").map(|_| 1),
-        tag("two-run home run!").map(|_| 2),
-        tag("three-run home run!").map(|_| 3),
+        tag("2-run home run!").map(|_| 2),
+        tag("3-run home run!").map(|_| 3),
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     ))(input)?;
 
@@ -586,4 +599,15 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag(" base!")(input)?;
 
     Ok((input, (batter_name, num_runs)))
+}
+
+fn parse_strikeout(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, batter_name) = parse_terminated(" strikes out ")(input)?;
+    let (input, is_swinging) = alt((
+        tag("swinging.").map(|_| true),
+        tag("looking.").map(|_| false),
+    ))(input)?;
+
+    Ok((input, (batter_name, is_swinging)))
+
 }

@@ -198,6 +198,16 @@ pub enum FedEventData {
         runner_id: Uuid,
         base_stolen: i32,
     },
+
+    StrikeoutSwinging {
+        game: GameEvent,
+        batter_name: String,
+    },
+
+    StrikeoutLooking {
+        game: GameEvent,
+        batter_name: String,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -407,8 +417,8 @@ impl FedEvent {
                     .r#type(EventType::HomeRun)
                     .description(format!("{} hits a {}!", batter_name, match num_runs {
                         1 => "solo home run",
-                        2 => "two-run home run",
-                        3 => "three-run home run",
+                        2 => "2-run home run",
+                        3 => "3-run home run",
                         4 => "grand slam",
                         // TODO Turn this into a Result error
                         _ => panic!("Unknown num runs in home run")
@@ -436,6 +446,22 @@ impl FedEvent {
                         _ => panic!("What base is this")
                     }))
                     .player_tags(vec![runner_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StrikeoutSwinging { game, batter_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strikeout)
+                    .description(format!("{} strikes out swinging.", batter_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StrikeoutLooking { game, batter_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strikeout)
+                    .description(format!("{} strikes out looking.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
