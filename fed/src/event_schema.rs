@@ -199,6 +199,12 @@ pub enum FedEventData {
         base_stolen: i32,
     },
 
+    CaughtStealing {
+        game: GameEvent,
+        runner_name: String,
+        base_stolen: i32,
+    },
+
     StrikeoutSwinging {
         game: GameEvent,
         batter_name: String,
@@ -207,6 +213,12 @@ pub enum FedEventData {
     StrikeoutLooking {
         game: GameEvent,
         batter_name: String,
+    },
+
+    Walk {
+        game: GameEvent,
+        batter_name: String,
+        batter_id: Uuid,
     },
 }
 
@@ -465,6 +477,29 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
+            }
+            FedEventData::Walk { game, batter_name, batter_id } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Walk)
+                    .description(format!("{} draws a walk.", batter_name))
+                    .player_tags(vec![batter_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::StolenBase)
+                    .description(format!("{} gets caught stealing {} base.", runner_name, match base_stolen {
+                        2 => "second",
+                        3 => "third",
+                        4 => "home",
+                        _ => panic!("What base is this")
+                    }))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()

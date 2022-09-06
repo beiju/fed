@@ -60,15 +60,30 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::PitcherChange => { todo!() }
         EventType::StolenBase => {
-            let (runner_name, base_stolen) = run_parser(&event, parse_stolen_base)?;
-            Ok(make_fed_event(event, FedEventData::StolenBase {
+            let (runner_name, base_stolen, is_successful) = run_parser(&event, parse_stolen_base)?;
+            if is_successful {
+                Ok(make_fed_event(event, FedEventData::StolenBase {
+                    game: GameEvent::try_from_event(event)?,
+                    runner_name: runner_name.to_string(),
+                    runner_id: get_one_player_id(event)?,
+                    base_stolen,
+                }))
+            } else {
+                Ok(make_fed_event(event, FedEventData::CaughtStealing {
+                    game: GameEvent::try_from_event(event)?,
+                    runner_name: runner_name.to_string(),
+                    base_stolen,
+                }))
+            }
+        }
+        EventType::Walk => {
+            let batter_name = run_parser(&event, parse_walk)?;
+            Ok(make_fed_event(event, FedEventData::Walk {
                 game: GameEvent::try_from_event(event)?,
-                runner_name: runner_name.to_string(),
-                runner_id: get_one_player_id(event)?,
-                base_stolen,
+                batter_name: batter_name.to_string(),
+                batter_id: get_one_player_id(event)?,
             }))
         }
-        EventType::Walk => { todo!() }
         EventType::Strikeout => {
             let (batter_name, is_swinging) = run_parser(&event, parse_strikeout)?;
             if is_swinging {
@@ -374,12 +389,13 @@ fn is_known_team_name(name: &str) -> bool {
     vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers", "Seattle Garages",
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
+         "Chicago Firefighters", "Dallas Steaks",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
-         "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift",
+         "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
     ].contains(&name)
 }
 
@@ -589,16 +605,22 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
     Ok((input, (batter_name, num_runs)))
 }
 
-fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32)> {
-    let (input, batter_name) = parse_terminated(" steals ")(input)?;
+fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool)> {
+    let (input, (runner_name, is_successful)) = alt((
+        parse_terminated(" steals ").map(|n| (n, true)),
+        parse_terminated(" gets caught stealing ").map(|n| (n, false)),
+    ))(input)?;
+
     let (input, num_runs) = alt((
         tag("second").map(|_| 2),
         tag("third").map(|_| 3),
         tag("home").map(|_| 4), // this will be wrong with 5th base...
     ))(input)?;
-    let (input, _) = tag(" base!")(input)?;
 
-    Ok((input, (batter_name, num_runs)))
+    // Decide whether to be excited
+    let (input, _) = tag(if is_successful { " base!" } else { " base." })(input)?;
+
+    Ok((input, (runner_name, num_runs, is_successful)))
 }
 
 fn parse_strikeout(input: &str) -> ParserResult<(&str, bool)> {
@@ -609,5 +631,10 @@ fn parse_strikeout(input: &str) -> ParserResult<(&str, bool)> {
     ))(input)?;
 
     Ok((input, (batter_name, is_swinging)))
+}
 
+fn parse_walk(input: &str) -> ParserResult<&str> {
+    let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
+
+    Ok((input, batter_name))
 }
