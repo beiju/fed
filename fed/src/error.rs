@@ -20,6 +20,14 @@ pub enum FeedParseError {
         tag_type: &'static str,
     },
 
+    #[error("Expected {expected_num} {tag_type} tag(s) for {event_type:?} event but saw {actual_num}")]
+    WrongNumberOfTags {
+        event_type: EventType,
+        tag_type: &'static str,
+        expected_num: usize,
+        actual_num: usize,
+    },
+
     #[error("Expected {num_children} children for {event_type:?} event")]
     MissingChild {
         event_type: EventType,

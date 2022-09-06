@@ -1,3 +1,4 @@
+use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde_json::json;
@@ -76,6 +77,24 @@ impl SubEvent {
 }
 
 #[derive(Debug, Clone)]
+pub struct Score {
+    pub player_id: Uuid,
+    pub player_name: String,
+    pub used_free_refill: bool,
+}
+
+impl Score {
+    pub fn to_description(&self, score_text: &str) -> String {
+        let refill_text = if self.used_free_refill {
+            format!("\n{} used their Free Refill.\n{} Refills the In!", self.player_name, self.player_name)
+        } else {
+            String::new()
+        };
+        format!("\n{} {}!{}", self.player_name, score_text, refill_text)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -149,6 +168,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         fielder_name: String,
+        scores: Vec<Score>,
     },
 
     GroundOut {
@@ -162,6 +182,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         num_bases: i32,
+        scores: Vec<Score>,
     },
 
     HomeRun {
@@ -348,30 +369,38 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Flyout { game, batter_name, fielder_name } => {
+            FedEventData::Flyout { game, batter_name, fielder_name, scores } => {
+                let score_text = scores.iter()
+                    .map(|score| score.to_description("tags up and scores"))
+                    // the \n is in each element since it needs to be before the first element too
+                    .join("");
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
-                    .description(format!("{} hit a flyout to {}.", batter_name, fielder_name))
+                    .description(format!("{} hit a flyout to {}.{}", batter_name, fielder_name, score_text))
+                    .player_tags(scores.iter().map(|score| score.player_id).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { game, batter_name, batter_id, num_bases } => {
+            FedEventData::Hit { game, batter_name, batter_id, num_bases, scores } => {
+                let score_text = scores.iter()
+                    .map(|score| score.to_description("scores"))
+                    // the \n is in each element since it needs to be before the first element too
+                    .join("");
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
-                    .description(format!("{} hits a {}!", batter_name, match num_bases {
+                    .description(format!("{} hits a {}!{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
                         3 => "Triple",
                         4 => "Quadruple",
                         // TODO Turn this into a Result error
                         _ => panic!("Unknown hit type")
-                    }))
-                    .player_tags(vec![batter_id])
+                    }, score_text))
+                    .player_tags(iter::once(batter_id).chain(scores.iter().map(|score| score.player_id)).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
             }
             FedEventData::HomeRun { game, batter_name, batter_id, num_runs } => {
                 event_builder.for_game(&game)
@@ -410,7 +439,6 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
             }
         }
             .build()
