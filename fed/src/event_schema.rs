@@ -106,13 +106,19 @@ pub enum FedEventData {
 
     SuperyummyGameStart {
         game: GameEvent,
+        player_id: Uuid,
+        team_id: Uuid,
         player_name: String,
         peanuts: bool,
         is_first_proc: bool,
         sub_event: SubEvent,
-        player_id: Uuid,
-        team_id: Uuid,
     },
+
+    Ball {
+        game: GameEvent,
+        balls: i32,
+        strikes: i32,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -126,7 +132,6 @@ pub struct FedEvent {
     pub phase: i32,
     pub nuts: i32,
     pub data: FedEventData,
-
 }
 
 trait GameEventForBuilder {
@@ -239,9 +244,14 @@ impl FedEvent {
                         .children(vec![change_event])
                         .build()
                         .unwrap())
-
-                // let mod_event =
-                //
+            }
+            FedEventData::Ball { game, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Ball)
+                    .description(format!("Ball. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
             }
         }
             .build()

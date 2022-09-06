@@ -73,7 +73,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
         }
         EventType::Strike => { todo!() }
-        EventType::Ball => { todo!() }
+        EventType::Ball => {
+            let (balls, strikes) = run_parser(&event, parse_ball)?;
+            Ok(make_fed_event(event, FedEventData::Ball {
+                game: GameEvent::try_from_event(event)?,
+                balls,
+                strikes
+            }))
+        }
         EventType::FoulBall => { todo!() }
         EventType::ShamingRun => { todo!() }
         EventType::HomeFieldAdvantage => { todo!() }
@@ -292,16 +299,19 @@ fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     ))(input)?;
 
     let (input, _) = tag(" of ")(input)?;
-    // TODO There has to be a better way to match a whole number
-    let (input, inning_str) = many1(digit1)(input)?;
-    // The parser should ensure inning_str always represents a valid number
-    let inning = inning_str.join("").parse().unwrap();
+    let (input, inning) = parse_whole_number(input)?;
 
     let (input, _) = tag(", ")(input)?;
     let (input, team_name) = take_until1(" batting.")(input)?;
     let (input, _) = tag(" batting.")(input)?;
 
     Ok((input, (top_of_inning, inning, team_name)))
+}
+
+fn parse_whole_number(input: &str) -> ParserResult<i32> {
+    let (input, num_str) = many1(digit1)(input)?;
+    // The parser should ensure num_str always represents a valid number
+    Ok((input, num_str.join("").parse().unwrap()))
 }
 
 fn parse_batter_up(input: &str) -> ParserResult<(&str, &str)> {
@@ -326,4 +336,20 @@ fn parse_loves_peanuts(input: &str) -> ParserResult<&str> {
     let (input, _) = tag(" loves Peanuts.")(input)?;
 
     Ok((input, player_name))
+}
+
+fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
+    let (input, _) = tag("Ball. ")(input)?;
+    let (input, count) = parse_count(input)?;
+
+    Ok((input, count))
+}
+
+fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
+    // this should handle double-digit counts because i know how blaseball is
+    let (input, balls) = parse_whole_number(input)?;
+    let (input, _) = tag("-")(input)?;
+    let (input, strikes) = parse_whole_number(input)?;
+
+    Ok((input, (balls, strikes)))
 }
