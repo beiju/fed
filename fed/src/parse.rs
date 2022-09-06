@@ -1,10 +1,11 @@
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until1};
+use nom::bytes::complete::{tag, take_till1, take_until1};
 use nom::{Finish, IResult, Parser};
-use nom::character::complete::digit1;
+use nom::character::complete::{digit1, one_of};
 use nom::error::convert_error;
 use nom::multi::many1;
+use rocket::futures::FutureExt;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, SubEvent};
@@ -46,6 +47,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::HalfInning => {
             let (top_of_inning, inning, team_name) = run_parser(&event, parse_half_inning)?;
 
+            assert!(is_known_team_name(team_name));
+
             Ok(make_fed_event(event, FedEventData::HalfInningStart {
                 game: GameEvent::try_from_event(event)?,
                 top_of_inning,
@@ -63,22 +66,33 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Hit => { todo!() }
         EventType::GameEnd => { todo!() }
         EventType::BatterUp => {
-            let (batter_name, team_name) = run_parser(&event, parse_batter_up)?;
+            let (batter_name, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
+
+            // I missed `team_name: "Millennials, wielding An Actual Airplane"` once and I don't
+            // want something like that to happen again
+            assert!(is_known_team_nickname(team_name));
 
             Ok(make_fed_event(event, FedEventData::BatterUp {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
                 team_name: team_name.to_string(),
+                wielding_item: wielding_item.map(|s| s.to_string()),
             }))
-
         }
-        EventType::Strike => { todo!() }
+        EventType::Strike => {
+            let (balls, strikes) = run_parser(&event, parse_ball)?;
+            Ok(make_fed_event(event, FedEventData::Ball {
+                game: GameEvent::try_from_event(event)?,
+                balls,
+                strikes,
+            }))
+        }
         EventType::Ball => {
             let (balls, strikes) = run_parser(&event, parse_ball)?;
             Ok(make_fed_event(event, FedEventData::Ball {
                 game: GameEvent::try_from_event(event)?,
                 balls,
-                strikes
+                strikes,
             }))
         }
         EventType::FoulBall => { todo!() }
@@ -160,7 +174,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Undersea => { todo!() }
         EventType::Homebody => { todo!() }
         EventType::Superyummy => {
-            let (mod_add_event,): (&EventuallyEvent,) = event.metadata.children.iter()
+            let (mod_add_event, ): (&EventuallyEvent, ) = event.metadata.children.iter()
                 .collect_tuple()
                 .ok_or_else(|| FeedParseError::MissingChild {
                     event_type: event.r#type,
@@ -171,9 +185,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .as_object()
                 .ok_or_else(|| FeedParseError::NoMetadata { event_type: event.r#type })?
                 .get("mod")
-                .ok_or_else(|| FeedParseError::MissingMetadata {event_type: event.r#type, field: "mod"})?
+                .ok_or_else(|| FeedParseError::MissingMetadata { event_type: event.r#type, field: "mod" })?
                 .as_str()
-                .ok_or_else(|| FeedParseError::MissingMetadata {event_type: event.r#type, field: "mod"})?;
+                .ok_or_else(|| FeedParseError::MissingMetadata { event_type: event.r#type, field: "mod" })?;
 
             let which_performing = if mod_name == "OVERPERFORMING" {
                 true
@@ -202,16 +216,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     .exactly_one()
                     .map_err(|_| FeedParseError::MissingTags {
                         event_type: EventType::Undefined,
-                        tag_type: "player"
+                        tag_type: "player",
                     })?,
                 team_id: *mod_add_event.team_tags.iter()
                     .exactly_one()
                     .map_err(|_| FeedParseError::MissingTags {
                         event_type: EventType::Undefined,
-                        tag_type: "team"
+                        tag_type: "team",
                     })?,
             }))
-
         }
         EventType::Perk => { todo!() }
         EventType::Earlbird => { todo!() }
@@ -250,6 +263,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
     }
+}
+
+fn is_known_team_name(name: &str) -> bool {
+    vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers",
+         "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
+         "Boston Flowers", "New York Millennials", "Philly Pies",
+    ].contains(&name)
+}
+
+fn is_known_team_nickname(name: &str) -> bool {
+    vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
+         "Flowers", "Millennials", "Pies",
+    ].contains(&name)
 }
 
 type ParserResult<'a, Out> = IResult<&'a str, Out, nom::error::VerboseError<&'a str>>;
@@ -314,14 +340,24 @@ fn parse_whole_number(input: &str) -> ParserResult<i32> {
     Ok((input, num_str.join("").parse().unwrap()))
 }
 
-fn parse_batter_up(input: &str) -> ParserResult<(&str, &str)> {
+fn parse_batter_up(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
     let (input, batter_name) = take_until1(" batting for the ")(input)?;
     let (input, _) = tag(" batting for the ")(input)?;
-    // This is going to fail if a team ever has a period in it
-    let (input, team_name) = take_until1(".")(input)?;
-    let (input, _) = tag(".")(input)?;
+    // This is going to fail if a team ever has a period or comma in it
+    let (input, team_name) = take_till1(|c| c == ',' || c == '.')(input)?;
+    let (input, wielding_item) = alt((
+        // No legacy item
+        tag(".").map(|_| None),
+        // Legacy item
+        parse_wielding_item.map(|s| Some(s))
+    ))(input)?;
 
-    Ok((input, (batter_name, team_name)))
+    Ok((input, (batter_name, team_name, wielding_item)))
+}
+
+fn parse_wielding_item(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag(", wielding ")(input)?;
+    take_until1(".")(input)
 }
 
 fn parse_misses_peanuts(input: &str) -> ParserResult<&str> {

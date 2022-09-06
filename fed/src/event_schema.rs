@@ -102,6 +102,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         team_name: String,
+        wielding_item: Option<String>,
     },
 
     SuperyummyGameStart {
@@ -201,10 +202,15 @@ impl FedEvent {
                                          inning,
                                          batting_team_name))
             }
-            FedEventData::BatterUp { game, batter_name, team_name } => {
+            FedEventData::BatterUp { game, batter_name, team_name, wielding_item: wielding_item_name } => {
+                let item_suffix = if let Some(item_name) = wielding_item_name {
+                    format!(", wielding {}", item_name)
+                } else {
+                    String::default()
+                };
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterUp)
-                    .description(format!("{} batting for the {}.", batter_name, team_name))
+                    .description(format!("{} batting for the {}{}.", batter_name, team_name, item_suffix))
             }
             FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
                 let description = format!("{} {} Peanuts.", player_name,
