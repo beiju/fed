@@ -151,6 +151,12 @@ pub enum FedEventData {
         fielder_name: String,
     },
 
+    GroundOut {
+        game: GameEvent,
+        batter_name: String,
+        fielder_name: String,
+    },
+
     Hit {
         game: GameEvent,
         batter_name: String,
@@ -163,6 +169,13 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         num_runs: i32,
+    },
+
+    StolenBase {
+        game: GameEvent,
+        runner_name: String,
+        runner_id: Uuid,
+        base_stolen: i32,
     },
 }
 
@@ -375,6 +388,29 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
+            }
+            FedEventData::GroundOut { game, batter_name, fielder_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::GroundOut)
+                    .description(format!("{} hit a ground out to {}.", batter_name, fielder_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::StolenBase)
+                    .description(format!("{} steals {} base!", runner_name, match base_stolen {
+                        2 => "second",
+                        3 => "third",
+                        4 => "home",
+                        _ => panic!("What base is this")
+                    }))
+                    .player_tags(vec![runner_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()

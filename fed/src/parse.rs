@@ -57,7 +57,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::PitcherChange => { todo!() }
-        EventType::StolenBase => { todo!() }
+        EventType::StolenBase => {
+            let (runner_name, base_stolen) = run_parser(&event, parse_stolen_base)?;
+            Ok(make_fed_event(event, FedEventData::StolenBase {
+                game: GameEvent::try_from_event(event)?,
+                runner_name: runner_name.to_string(),
+                runner_id: get_one_player_id(event)?,
+                base_stolen
+            }))
+        }
         EventType::Walk => { todo!() }
         EventType::Strikeout => { todo!() }
         EventType::FlyOut => {
@@ -68,7 +76,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 fielder_name: fielder_name.to_string(),
             }))
         }
-        EventType::GroundOut => { todo!() }
+        EventType::GroundOut => {
+            let (batter_name, fielder_name) = run_parser(&event, parse_ground_out)?;
+            Ok(make_fed_event(event, FedEventData::GroundOut {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: batter_name.to_string(),
+                fielder_name: fielder_name.to_string(),
+            }))
+        }
         EventType::HomeRun => {
             let (batter_name, num_runs) = run_parser(&event, parse_hr)?;
             Ok(make_fed_event(event, FedEventData::HomeRun {
@@ -308,7 +323,7 @@ fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
 }
 
 fn is_known_team_name(name: &str) -> bool {
-    vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers",
+    vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers", "Seattle Garages",
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies",
     ].contains(&name)
@@ -457,6 +472,13 @@ fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (batter_name, fielder_name)))
 }
 
+fn parse_ground_out(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
+    let (input, fielder_name) = parse_terminated(".")(input)?;
+
+    Ok((input, (batter_name, fielder_name)))
+}
+
 fn parse_hit(input: &str) -> ParserResult<(&str, i32)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_bases) = alt((
@@ -477,6 +499,18 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
         tag("three-run home run!").map(|_| 3),
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     ))(input)?;
+
+    Ok((input, (batter_name, num_runs)))
+}
+
+fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, batter_name) = parse_terminated(" steals ")(input)?;
+    let (input, num_runs) = alt((
+        tag("second").map(|_| 2),
+        tag("third").map(|_| 3),
+        tag("home").map(|_| 4), // this will be wrong with 5th base...
+    ))(input)?;
+    let (input, _) = tag(" base!")(input)?;
 
     Ok((input, (batter_name, num_runs)))
 }
