@@ -5,6 +5,7 @@ use nom::{Finish, IResult, Parser};
 use nom::character::complete::digit1;
 use nom::error::convert_error;
 use nom::multi::many1;
+use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, SubEvent};
@@ -64,13 +65,28 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             Ok(make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
-                fielder_name: fielder_name.to_string()
+                fielder_name: fielder_name.to_string(),
             }))
-
         }
         EventType::GroundOut => { todo!() }
-        EventType::HomeRun => { todo!() }
-        EventType::Hit => { todo!() }
+        EventType::HomeRun => {
+            let (batter_name, num_runs) = run_parser(&event, parse_hr)?;
+            Ok(make_fed_event(event, FedEventData::HomeRun {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: batter_name.to_string(),
+                batter_id: get_one_player_id(event)?,
+                num_runs,
+            }))
+        }
+        EventType::Hit => {
+            let (batter_name, num_bases) = run_parser(&event, parse_hit)?;
+            Ok(make_fed_event(event, FedEventData::Hit {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: batter_name.to_string(),
+                batter_id: get_one_player_id(event)?,
+                num_bases,
+            }))
+        }
         EventType::GameEnd => { todo!() }
         EventType::BatterUp => {
             let (batter_name, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
@@ -228,18 +244,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 peanuts: which_performing,
                 is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
                 sub_event: SubEvent::from_event(mod_add_event),
-                player_id: *mod_add_event.player_tags.iter()
-                    .exactly_one()
-                    .map_err(|_| FeedParseError::MissingTags {
-                        event_type: EventType::Undefined,
-                        tag_type: "player",
-                    })?,
-                team_id: *mod_add_event.team_tags.iter()
-                    .exactly_one()
-                    .map_err(|_| FeedParseError::MissingTags {
-                        event_type: EventType::Undefined,
-                        tag_type: "team",
-                    })?,
+                player_id: get_one_player_id(mod_add_event)?,
+                team_id: get_one_team_id(mod_add_event)?,
             }))
         }
         EventType::Perk => { todo!() }
@@ -279,6 +285,26 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
     }
+}
+
+fn get_one_player_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
+    event.player_tags.iter()
+        .exactly_one()
+        .map(|u| *u)
+        .map_err(|_| FeedParseError::MissingTags {
+            event_type: EventType::Undefined,
+            tag_type: "player",
+        })
+}
+
+fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
+    event.team_tags.iter()
+        .exactly_one()
+        .map(|u| *u)
+        .map_err(|_| FeedParseError::MissingTags {
+            event_type: EventType::Undefined,
+            tag_type: "team",
+        })
 }
 
 fn is_known_team_name(name: &str) -> bool {
@@ -400,7 +426,7 @@ fn parse_foul_ball(input: &str) -> ParserResult<(i32, i32)> {
 pub enum StrikeType {
     Swinging,
     Looking,
-    Flinching
+    Flinching,
 }
 
 fn parse_strike(input: &str) -> ParserResult<(StrikeType, i32, i32)> {
@@ -409,7 +435,7 @@ fn parse_strike(input: &str) -> ParserResult<(StrikeType, i32, i32)> {
         tag("swinging. ").map(|_| StrikeType::Swinging),
         tag("looking. ").map(|_| StrikeType::Looking),
         tag("flinching. ").map(|_| StrikeType::Flinching),
-        ))(input)?;
+    ))(input)?;
     let (input, (balls, strikes)) = parse_count(input)?;
 
     Ok((input, (strike_type, balls, strikes)))
@@ -429,4 +455,28 @@ fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
     Ok((input, (batter_name, fielder_name)))
+}
+
+fn parse_hit(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, batter_name) = parse_terminated(" hits a ")(input)?;
+    let (input, num_bases) = alt((
+        tag("Single!").map(|_| 1),
+        tag("Double!").map(|_| 2),
+        tag("Triple!").map(|_| 3),
+        tag("Quadruple!").map(|_| 4),
+    ))(input)?;
+
+    Ok((input, (batter_name, num_bases)))
+}
+
+fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, batter_name) = parse_terminated(" hits a ")(input)?;
+    let (input, num_runs) = alt((
+        tag("solo home run!").map(|_| 1),
+        tag("two-run home run!").map(|_| 2),
+        tag("three-run home run!").map(|_| 3),
+        tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
+    ))(input)?;
+
+    Ok((input, (batter_name, num_runs)))
 }

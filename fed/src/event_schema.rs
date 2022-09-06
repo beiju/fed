@@ -149,7 +149,21 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         fielder_name: String,
-    }
+    },
+
+    Hit {
+        game: GameEvent,
+        batter_name: String,
+        batter_id: Uuid,
+        num_bases: i32,
+    },
+
+    HomeRun {
+        game: GameEvent,
+        batter_name: String,
+        batter_id: Uuid,
+        num_runs: i32,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -325,6 +339,39 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
                     .description(format!("{} hit a flyout to {}.", batter_name, fielder_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Hit { game, batter_name, batter_id, num_bases } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Hit)
+                    .description(format!("{} hits a {}!", batter_name, match num_bases {
+                        1 => "Single",
+                        2 => "Double",
+                        3 => "Triple",
+                        4 => "Quadruple",
+                        // TODO Turn this into a Result error
+                        _ => panic!("Unknown hit type")
+                    }))
+                    .player_tags(vec![batter_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+
+            }
+            FedEventData::HomeRun { game, batter_name, batter_id, num_runs } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::HomeRun)
+                    .description(format!("{} hits a {}!", batter_name, match num_runs {
+                        1 => "solo home run",
+                        2 => "two-run home run",
+                        3 => "three-run home run",
+                        4 => "grand slam",
+                        // TODO Turn this into a Result error
+                        _ => panic!("Unknown num runs in home run")
+                    }))
+                    .player_tags(vec![batter_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
