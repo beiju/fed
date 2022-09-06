@@ -3,7 +3,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till1, take_until1};
 use nom::{Finish, IResult, Parser};
 use nom::character::complete::digit1;
-use nom::combinator::{eof, opt};
+use nom::combinator::{eof, fail, opt};
 use nom::error::convert_error;
 use nom::multi::{many1, separated_list0};
 use nom::sequence::{preceded, terminated};
@@ -389,13 +389,14 @@ fn is_known_team_name(name: &str) -> bool {
     vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers", "Seattle Garages",
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
-         "Chicago Firefighters", "Dallas Steaks",
+         "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
          "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
+         "Magic", "Breath Mints",
     ].contains(&name)
 }
 
@@ -485,7 +486,14 @@ fn parse_batter_up(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
 
 fn parse_wielding_item(input: &str) -> ParserResult<&str> {
     let (input, _) = tag(", wielding ")(input)?;
-    parse_terminated(".")(input)
+    // can't use parse_terminated because the terminator would be "." and "the Iffey Jr." exists
+    if let Some((idx, end)) = input.rmatch_indices('.').next() {
+        let (input, item_name) = (end, &input[0..idx]);
+        let (input, _) = tag(".")(input)?;
+        Ok((input, item_name))
+    } else {
+        fail(input)
+    }
 }
 
 fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
@@ -614,7 +622,8 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool)> {
     let (input, num_runs) = alt((
         tag("second").map(|_| 2),
         tag("third").map(|_| 3),
-        tag("home").map(|_| 4), // this will be wrong with 5th base...
+        tag("fourth").map(|_| 4),
+        tag("fifth").map(|_| 5),
     ))(input)?;
 
     // Decide whether to be excited

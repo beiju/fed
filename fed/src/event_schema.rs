@@ -454,7 +454,8 @@ impl FedEvent {
                     .description(format!("{} steals {} base!", runner_name, match base_stolen {
                         2 => "second",
                         3 => "third",
-                        4 => "home",
+                        4 => "fourth",
+                        5 => "fifth",
                         _ => panic!("What base is this")
                     }))
                     .player_tags(vec![runner_id])
@@ -493,7 +494,8 @@ impl FedEvent {
                     .description(format!("{} gets caught stealing {} base.", runner_name, match base_stolen {
                         2 => "second",
                         3 => "third",
-                        4 => "home",
+                        4 => "fourth",
+                        5 => "fifth",
                         _ => panic!("What base is this")
                     }))
                     .metadata(make_game_event_metadata_builder(&game)
