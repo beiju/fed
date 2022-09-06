@@ -2,10 +2,9 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till1, take_until1};
 use nom::{Finish, IResult, Parser};
-use nom::character::complete::{digit1, one_of};
+use nom::character::complete::digit1;
 use nom::error::convert_error;
 use nom::multi::many1;
-use rocket::futures::FutureExt;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, SubEvent};
@@ -60,7 +59,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StolenBase => { todo!() }
         EventType::Walk => { todo!() }
         EventType::Strikeout => { todo!() }
-        EventType::FlyOut => { todo!() }
+        EventType::FlyOut => {
+            let (batter_name, fielder_name) = run_parser(&event, parse_flyout)?;
+            Ok(make_fed_event(event, FedEventData::Flyout {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: batter_name.to_string(),
+                fielder_name: fielder_name.to_string()
+            }))
+
+        }
         EventType::GroundOut => { todo!() }
         EventType::HomeRun => { todo!() }
         EventType::Hit => { todo!() }
@@ -80,11 +87,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Strike => {
-            let (balls, strikes) = run_parser(&event, parse_ball)?;
-            Ok(make_fed_event(event, FedEventData::Ball {
-                game: GameEvent::try_from_event(event)?,
-                balls,
-                strikes,
+            let (strike_type, balls, strikes) = run_parser(&event, parse_strike)?;
+            let game = GameEvent::try_from_event(event)?;
+            Ok(make_fed_event(event, match strike_type {
+                StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes },
+                StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes },
+                StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes },
             }))
         }
         EventType::Ball => {
@@ -95,7 +103,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 strikes,
             }))
         }
-        EventType::FoulBall => { todo!() }
+        EventType::FoulBall => {
+            // Eventually this will need very foul support, but I'll get to that when it comes up
+            let (balls, strikes) = run_parser(&event, parse_foul_ball)?;
+            Ok(make_fed_event(event, FedEventData::FoulBall {
+                game: GameEvent::try_from_event(event)?,
+                balls,
+                strikes,
+            }))
+        }
         EventType::ShamingRun => { todo!() }
         EventType::HomeFieldAdvantage => { todo!() }
         EventType::HitByPitch => { todo!() }
@@ -201,9 +217,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             };
 
             let player_name = if which_performing {
-                run_parser(event, parse_loves_peanuts)?
+                run_parser(event, parse_terminated(" loves Peanuts."))?
             } else {
-                run_parser(event, parse_misses_peanuts)?
+                run_parser(event, parse_terminated(" misses Peanuts."))?
             };
 
             Ok(make_fed_event(event, FedEventData::SuperyummyGameStart {
@@ -318,6 +334,15 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
     }
 }
 
+fn parse_terminated(tag_content: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
+    move |input| {
+        let (input, parsed_value) = take_until1(tag_content)(input)?;
+        let (input, _) = tag(tag_content)(input)?;
+
+        Ok((input, parsed_value))
+    }
+}
+
 fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     let (input, top_of_inning) = alt((
         tag("Top").map(|_| true),
@@ -328,8 +353,7 @@ fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     let (input, inning) = parse_whole_number(input)?;
 
     let (input, _) = tag(", ")(input)?;
-    let (input, team_name) = take_until1(" batting.")(input)?;
-    let (input, _) = tag(" batting.")(input)?;
+    let (input, team_name) = parse_terminated(" batting.")(input)?;
 
     Ok((input, (top_of_inning, inning, team_name)))
 }
@@ -341,8 +365,7 @@ fn parse_whole_number(input: &str) -> ParserResult<i32> {
 }
 
 fn parse_batter_up(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
-    let (input, batter_name) = take_until1(" batting for the ")(input)?;
-    let (input, _) = tag(" batting for the ")(input)?;
+    let (input, batter_name) = parse_terminated(" batting for the ")(input)?;
     // This is going to fail if a team ever has a period or comma in it
     let (input, team_name) = take_till1(|c| c == ',' || c == '.')(input)?;
     let (input, wielding_item) = alt((
@@ -360,25 +383,36 @@ fn parse_wielding_item(input: &str) -> ParserResult<&str> {
     take_until1(".")(input)
 }
 
-fn parse_misses_peanuts(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = take_until1(" misses Peanuts.")(input)?;
-    let (input, _) = tag(" misses Peanuts.")(input)?;
-
-    Ok((input, player_name))
-}
-
-fn parse_loves_peanuts(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = take_until1(" loves Peanuts.")(input)?;
-    let (input, _) = tag(" loves Peanuts.")(input)?;
-
-    Ok((input, player_name))
-}
-
 fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     let (input, _) = tag("Ball. ")(input)?;
     let (input, count) = parse_count(input)?;
 
     Ok((input, count))
+}
+
+fn parse_foul_ball(input: &str) -> ParserResult<(i32, i32)> {
+    let (input, _) = tag("Foul Ball. ")(input)?;
+    let (input, count) = parse_count(input)?;
+
+    Ok((input, count))
+}
+
+pub enum StrikeType {
+    Swinging,
+    Looking,
+    Flinching
+}
+
+fn parse_strike(input: &str) -> ParserResult<(StrikeType, i32, i32)> {
+    let (input, _) = tag("Strike, ")(input)?;
+    let (input, strike_type) = alt((
+        tag("swinging. ").map(|_| StrikeType::Swinging),
+        tag("looking. ").map(|_| StrikeType::Looking),
+        tag("flinching. ").map(|_| StrikeType::Flinching),
+        ))(input)?;
+    let (input, (balls, strikes)) = parse_count(input)?;
+
+    Ok((input, (strike_type, balls, strikes)))
 }
 
 fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
@@ -388,4 +422,11 @@ fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     let (input, strikes) = parse_whole_number(input)?;
 
     Ok((input, (balls, strikes)))
+}
+
+fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, batter_name) = parse_terminated(" hit a flyout to ")(input)?;
+    let (input, fielder_name) = parse_terminated(".")(input)?;
+
+    Ok((input, (batter_name, fielder_name)))
 }

@@ -119,6 +119,36 @@ pub enum FedEventData {
         game: GameEvent,
         balls: i32,
         strikes: i32,
+    },
+
+    FoulBall {
+        game: GameEvent,
+        balls: i32,
+        strikes: i32,
+    },
+
+    StrikeSwinging {
+        game: GameEvent,
+        balls: i32,
+        strikes: i32,
+    },
+
+    StrikeLooking {
+        game: GameEvent,
+        balls: i32,
+        strikes: i32,
+    },
+
+    StrikeFlinching {
+        game: GameEvent,
+        balls: i32,
+        strikes: i32,
+    },
+
+    Flyout {
+        game: GameEvent,
+        batter_name: String,
+        fielder_name: String,
     }
 }
 
@@ -255,6 +285,46 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::Ball)
                     .description(format!("Ball. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StrikeSwinging { game, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strike)
+                    .description(format!("Strike, swinging. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StrikeLooking { game, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strike)
+                    .description(format!("Strike, looking. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::StrikeFlinching { game, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strike)
+                    .description(format!("Strike, flinching. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::FoulBall { game, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::FoulBall)
+                    .description(format!("Foul Ball. {}-{}", balls, strikes))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Flyout { game, batter_name, fielder_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::FlyOut)
+                    .description(format!("{} hit a flyout to {}.", batter_name, fielder_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
