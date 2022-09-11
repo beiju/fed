@@ -1,3 +1,4 @@
+use std::slice::Iter;
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till1, take_until1};
@@ -5,7 +6,7 @@ use nom::{Finish, IResult, Parser};
 use nom::character::complete::digit1;
 use nom::combinator::{eof, fail, opt};
 use nom::error::convert_error;
-use nom::multi::{many1, separated_list0};
+use nom::multi::{many0, many1, separated_list0};
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
@@ -86,9 +87,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         let (sub_event, ) = event.metadata.children.iter().collect_tuple()
                             .ok_or_else(|| FeedParseError::MissingChild {
                                 event_type: event.r#type,
-                                expected_num_children: 1
+                                expected_num_children: 1,
                             })?;
-                        
+
                         let (&team_id, ) = sub_event.team_tags.iter().collect_tuple()
                             .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                                 event_type: sub_event.r#type,
@@ -96,7 +97,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                                 expected_num: 1,
                                 actual_num: sub_event.team_tags.len(),
                             })?;
-                        
+
                         let (&player_id, ) = sub_event.player_tags.iter().collect_tuple()
                             .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                                 event_type: sub_event.r#type,
@@ -111,7 +112,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             player_id,
                             team_id,
                         })
-                    }).transpose()?
+                    }).transpose()?,
                 }))
             } else {
                 Ok(make_fed_event(event, FedEventData::CaughtStealing {
@@ -152,14 +153,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             charmer_name: charmer_name.to_string(),
                             charmed_id,
                             charmed_name: charmed_name.to_string(),
-                            num_swings
+                            num_swings,
                         }))
                     } else {
                         Err(FeedParseError::WrongNumberOfTags {
                             event_type: EventType::Strikeout,
                             tag_type: "players",
                             expected_num: 3,
-                            actual_num: event.player_tags.len()
+                            actual_num: event.player_tags.len(),
                         })
                     }
                 }
@@ -189,7 +190,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         runner_out_name: runner_out_name.to_string(),
                         batter_name: batter_name.to_string(),
-                        out_at_base: base
+                        out_at_base: base,
                     }))
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
@@ -201,12 +202,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
-            let (batter_name, num_runs) = run_parser(&event, parse_hr)?;
+            let mut children = event.metadata.children.iter();
+            let (batter_name, num_runs, free_refillers) = run_parser(&event, parse_hr)?;
             Ok(make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
                 batter_id: get_one_player_id(event)?,
                 num_runs,
+                free_refills: free_refillers.into_iter()
+                    .map(|refiller_name| {
+                        make_free_refill(event.r#type, &mut children, refiller_name)
+                    })
+                    .collect::<Result<_, _>>()?,
             }))
         }
         EventType::Hit => {
@@ -449,34 +456,7 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
                 player_id: scorer_id,
                 player_name: score.name.to_string(),
                 free_refill: if let Some(refiller_name) = score.free_refiller {
-                    let child = children.next()
-                        .ok_or_else(|| FeedParseError::MissingChild {
-                            event_type,
-                            expected_num_children: -1 // Unknown at this point in the computation
-                        })?;
-
-                    let (&team_id,) = child.team_tags.iter().collect_tuple()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type,
-                            tag_type: "team",
-                            expected_num: 1,
-                            actual_num: child.team_tags.len()
-                        })?;
-
-                    let (&player_id,) = child.player_tags.iter().collect_tuple()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type,
-                            tag_type: "player",
-                            expected_num: 1,
-                            actual_num: child.player_tags.len()
-                        })?;
-
-                    Some(FreeRefill {
-                        sub_event: SubEvent::from_event(child),
-                        player_name: refiller_name.to_string(),
-                        player_id,
-                        team_id
-                    })
+                    Some(make_free_refill(event_type, &mut children, refiller_name)?)
                 } else {
                     None
                 },
@@ -488,7 +468,7 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
         } else {
             Err(FeedParseError::MissingChild {
                 event_type,
-                expected_num_children: 0
+                expected_num_children: 0,
             })
         }
     } else {
@@ -499,6 +479,37 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
             actual_num: scorer_ids.len() + extra_player_tags,
         })
     }
+}
+
+fn make_free_refill(event_type: EventType, mut children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
+    let child = children.next()
+        .ok_or_else(|| FeedParseError::MissingChild {
+            event_type,
+            expected_num_children: -1, // Unknown at this point in the computation
+        })?;
+
+    let (&team_id, ) = child.team_tags.iter().collect_tuple()
+        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+            event_type,
+            tag_type: "team",
+            expected_num: 1,
+            actual_num: child.team_tags.len(),
+        })?;
+
+    let (&player_id, ) = child.player_tags.iter().collect_tuple()
+        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+            event_type,
+            tag_type: "player",
+            expected_num: 1,
+            actual_num: child.player_tags.len(),
+        })?;
+
+    Ok(FreeRefill {
+        sub_event: SubEvent::from_event(child),
+        player_name: refiller_name.to_string(),
+        player_id,
+        team_id,
+    })
 }
 
 fn get_one_id(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> Result<Uuid, FeedParseError> {
@@ -700,7 +711,7 @@ enum ParsedGroundOut<'a> {
     },
     DoublePlay {
         batter_name: &'a str,
-    }
+    },
 }
 
 fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
@@ -775,7 +786,7 @@ fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<Parse
     }
 }
 
-fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
+fn parse_hr(input: &str) -> ParserResult<(&str, i32, Vec<&str>)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
         tag("solo home run!").map(|_| 1),
@@ -784,7 +795,9 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     ))(input)?;
 
-    Ok((input, (batter_name, num_runs)))
+    let (input, free_refillers) = many0(parse_free_refill)(input)?;
+
+    Ok((input, (batter_name, num_runs, free_refillers)))
 }
 
 fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {

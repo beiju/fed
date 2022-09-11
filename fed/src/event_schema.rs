@@ -210,6 +210,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         num_runs: i32,
+        free_refills: Vec<FreeRefill>,
     },
 
     StolenBase {
@@ -471,19 +472,32 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { game, batter_name, batter_id, num_runs } => {
+            FedEventData::HomeRun { ref game, ref batter_name, batter_id, num_runs, ref free_refills } => {
+                let suffix = free_refills.iter()
+                    .map(|free_refill| {
+                        format!("\n{} used their Free Refill.\n{} Refills the In!",
+                                free_refill.player_name, free_refill.player_name)
+                    })
+                    .join("");
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .description(format!("{} hits a {}!", batter_name, match num_runs {
+                    .category(if suffix.is_empty() { 0 } else { 2 })
+                    .description(format!("{} hits a {}!{}", batter_name, match num_runs {
                         1 => "solo home run",
                         2 => "2-run home run",
                         3 => "3-run home run",
                         4 => "grand slam",
                         // TODO Turn this into a Result error
                         _ => panic!("Unknown num runs in home run")
-                    }))
+                    }, suffix))
                     .player_tags(vec![batter_id])
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(
+                            free_refills.iter()
+                                .map(|free_refill| self.make_free_refill_child(&game, free_refill))
+                                .collect()
+                        )
+
                         .build()
                         .unwrap())
             }
