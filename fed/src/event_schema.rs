@@ -185,6 +185,13 @@ pub enum FedEventData {
         fielder_name: String,
     },
 
+    FieldersChoice {
+        game: GameEvent,
+        batter_name: String,
+        runner_out_name: String,
+        out_at_base: i32,
+    },
+
     Hit {
         game: GameEvent,
         batter_name: String,
@@ -492,13 +499,7 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
                     .category(if free_refill.is_some() { 2 } else { 0 })
-                    .description(format!("{} steals {} base!{}", runner_name, match base_stolen {
-                        2 => "second",
-                        3 => "third",
-                        4 => "fourth",
-                        5 => "fifth",
-                        _ => panic!("What base is this")
-                    }, suffix))
+                    .description(format!("{} steals {} base!{}", runner_name, base_name(base_stolen), suffix))
                     .player_tags(vec![runner_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(
@@ -538,13 +539,7 @@ impl FedEvent {
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
-                    .description(format!("{} gets caught stealing {} base.", runner_name, match base_stolen {
-                        2 => "second",
-                        3 => "third",
-                        4 => "fourth",
-                        5 => "fifth",
-                        _ => panic!("What base is this")
-                    }))
+                    .description(format!("{} gets caught stealing {} base.", runner_name, base_name(base_stolen)))
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
@@ -568,6 +563,16 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
+            }
+            FedEventData::FieldersChoice { game, batter_name, runner_out_name, out_at_base } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::GroundOut)
+                    .description(format!("{} out at {} base.\n{} reaches on fielder's choice.",
+                                         runner_out_name, base_name(out_at_base), batter_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
@@ -626,3 +631,12 @@ fn make_game_event_metadata(game: &GameEvent) -> EventMetadata {
         .unwrap()
 }
 
+fn base_name(base_stolen: i32) -> &'static str {
+    match base_stolen {
+        2 => "second",
+        3 => "third",
+        4 => "fourth",
+        5 => "fifth",
+        _ => panic!("What base is this")
+    }
+}

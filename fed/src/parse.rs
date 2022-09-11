@@ -164,12 +164,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::GroundOut => {
-            let (batter_name, fielder_name) = run_parser(&event, parse_ground_out)?;
-            Ok(make_fed_event(event, FedEventData::GroundOut {
-                game: GameEvent::try_from_event(event)?,
-                batter_name: batter_name.to_string(),
-                fielder_name: fielder_name.to_string(),
-            }))
+            match run_parser(&event, parse_ground_out)? {
+                ParsedGroundOut::Simple { batter_name, fielder_name } => {
+                    Ok(make_fed_event(event, FedEventData::GroundOut {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                        fielder_name: fielder_name.to_string(),
+                    }))
+                }
+                ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
+                    Ok(make_fed_event(event, FedEventData::FieldersChoice {
+                        game: GameEvent::try_from_event(event)?,
+                        runner_out_name: runner_out_name.to_string(),
+                        batter_name: batter_name.to_string(),
+                        out_at_base: base
+                    }))
+                }
+            }
+
         }
         EventType::HomeRun => {
             let (batter_name, num_runs) = run_parser(&event, parse_hr)?;
@@ -649,11 +661,36 @@ fn parse_flyout(input: &str) -> ParserResult<(&str, &str, Vec<ParsedScore>)> {
     Ok((input, (batter_name, fielder_name, scores)))
 }
 
-fn parse_ground_out(input: &str) -> ParserResult<(&str, &str)> {
+enum ParsedGroundOut<'a> {
+    Simple {
+        batter_name: &'a str,
+        fielder_name: &'a str,
+    },
+    FieldersChoice {
+        runner_out_name: &'a str,
+        batter_name: &'a str,
+        base: i32,
+    }
+}
+
+fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+    alt((parse_simple_ground_out, parse_fielders_choice,))(input)
+}
+
+fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
-    Ok((input, (batter_name, fielder_name)))
+    Ok((input, ParsedGroundOut::Simple { batter_name, fielder_name }))
+}
+
+fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut> {
+    let (input, runner_out_name) = parse_terminated(" out at ")(input)?;
+    let (input, base) = parse_named_base(input)?;
+    let (input, _) = tag(" base.\n")(input)?;
+    let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
+
+    Ok((input, ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }))
 }
 
 fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {
@@ -720,12 +757,7 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, Option<&str>
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
     ))(input)?;
 
-    let (input, num_runs) = alt((
-        tag("second").map(|_| 2),
-        tag("third").map(|_| 3),
-        tag("fourth").map(|_| 4),
-        tag("fifth").map(|_| 5),
-    ))(input)?;
+    let (input, num_runs) = parse_named_base(input)?;
 
     // Decide whether to be excited
     let (input, _) = tag(if is_successful { " base!" } else { " base." })(input)?;
@@ -733,6 +765,16 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, Option<&str>
     let (input, free_refill) = opt(parse_free_refill)(input)?;
 
     Ok((input, (runner_name, num_runs, is_successful, free_refill)))
+}
+
+fn parse_named_base(input: &str) -> ParserResult<i32> {
+    alt((
+        tag("first").map(|_| 1),
+        tag("second").map(|_| 2),
+        tag("third").map(|_| 3),
+        tag("fourth").map(|_| 4),
+        tag("fifth").map(|_| 5),
+    ))(input)
 }
 
 enum ParsedStrikeout<'a> {
