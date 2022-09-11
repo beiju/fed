@@ -111,6 +111,13 @@ pub struct Inhabiting {
 }
 
 #[derive(Debug, Clone)]
+pub struct StoppedInhabiting {
+    pub sub_event: SubEvent,
+    pub inhabiting_player_name: String,
+    pub inhabiting_player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -186,6 +193,7 @@ pub enum FedEventData {
         batter_name: String,
         fielder_name: String,
         scores: Vec<Score>,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     GroundOut {
@@ -193,6 +201,7 @@ pub enum FedEventData {
         batter_name: String,
         fielder_name: String,
         scores: Vec<Score>,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     FieldersChoice {
@@ -200,11 +209,15 @@ pub enum FedEventData {
         batter_name: String,
         runner_out_name: String,
         out_at_base: i32,
+        scores: Vec<Score>,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     DoublePlay {
         game: GameEvent,
         batter_name: String,
+        scores: Vec<Score>,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     Hit {
@@ -213,6 +226,7 @@ pub enum FedEventData {
         batter_id: Uuid,
         num_bases: i32,
         scores: Vec<Score>,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     HomeRun {
@@ -488,9 +502,11 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores } => {
-                let (score_text, has_any_refills, children) =
+            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting } => {
+                let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " tags up and scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
@@ -502,9 +518,11 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores } => {
-                let (score_text, has_any_refills, children) =
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting } => {
+                let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
@@ -552,9 +570,11 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores } => {
-                let (score_text, has_any_refills, children) =
+            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting } => {
+                let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " advances on the sacrifice.");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
@@ -648,12 +668,19 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::FieldersChoice { game, batter_name, runner_out_name, out_at_base } => {
+            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting } => {
+                let (score_text, has_any_refills, mut children) =
+                    self.get_score_data(game, scores, " scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .description(format!("{} out at {} base.\n{} reaches on fielder's choice.",
-                                         runner_out_name, base_name(out_at_base), batter_name))
+                    .category(if has_any_refills { 2 } else { 0 })
+                    .description(format!("{} out at {} base.\n{} reaches on fielder's choice.{}",
+                                         runner_out_name, base_name(out_at_base), batter_name, score_text))
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
@@ -675,17 +702,52 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::DoublePlay { game, batter_name } => {
+            FedEventData::DoublePlay { ref game,ref  batter_name, ref scores, ref stopped_inhabiting } => {
+                let (score_text, has_any_refills, mut children) =
+                    self.get_score_data(game, scores, " scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .description(format!("{} hit into a double play!", batter_name))
+                    .category(if has_any_refills { 2 } else { 0 })
+                    .description(format!("{} hit into a double play!{}", batter_name, score_text))
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
         }
             .build()
             .unwrap()
+    }
+
+    fn push_stopped_inhabiting(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>, children: &mut Vec<EventuallyEvent>) {
+        if let Some(inh) = stopped_inhabiting {
+            children.push(
+                self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&inh.sub_event)
+                    .category(1)
+                    .r#type(EventType::RemovedMod)
+                    .description(format!("{} stopped Inhabiting.", inh.inhabiting_player_name))
+                    .team_tags(vec![])
+                    .player_tags(vec![inh.inhabiting_player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                                "mod": "INHABITING",
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap()
+            )
+        }
     }
 
     fn get_score_data(&self, game: &GameEvent, scores: &Vec<Score>, score_text: &str) -> (String, bool, Vec<EventuallyEvent>) {

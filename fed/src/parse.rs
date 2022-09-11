@@ -11,7 +11,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, SubEvent};
+use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -168,17 +168,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores) = run_parser(&event, parse_flyout)?;
-            let scores = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
             Ok(make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
                 fielder_name: fielder_name.to_string(),
                 scores,
+                stopped_inhabiting,
             }))
         }
         EventType::GroundOut => {
             let (parsed_out, scores) = run_parser(&event, parse_ground_out)?;
-            let scores = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
             match parsed_out {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     Ok(make_fed_event(event, FedEventData::GroundOut {
@@ -186,6 +187,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         batter_name: batter_name.to_string(),
                         fielder_name: fielder_name.to_string(),
                         scores,
+                        stopped_inhabiting,
                     }))
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -194,12 +196,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         runner_out_name: runner_out_name.to_string(),
                         batter_name: batter_name.to_string(),
                         out_at_base: base,
+                        scores,
+                        stopped_inhabiting,
                     }))
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
                     Ok(make_fed_event(event, FedEventData::DoublePlay {
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
+                        scores,
+                        stopped_inhabiting,
                     }))
                 }
             }
@@ -222,7 +228,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Hit => {
             let (batter_name, num_bases, scores) = run_parser(&event, parse_hit)?;
             if let Some((&batter_id, scorer_ids)) = event.player_tags.split_first() {
-                let scores = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 1)?;
+                let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 1)?;
 
                 Ok(make_fed_event(event, FedEventData::Hit {
                     game: GameEvent::try_from_event(event)?,
@@ -230,6 +236,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     batter_id,
                     num_bases,
                     scores,
+                    stopped_inhabiting,
                 }))
             } else {
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
@@ -474,7 +481,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<Vec<Score>, FeedParseError> {
+fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<(Vec<Score>, Option<StoppedInhabiting>), FeedParseError> {
     let mut children = children.iter();
     if scorer_ids.len() == scores.len() {
         let result = scores.into_iter().zip(scorer_ids)
@@ -489,13 +496,27 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
             }))
             .collect::<Result<_, _>>()?;
 
-        if children.next().is_none() {
-            Ok(result)
+        if let Some(extra_child) = children.next() {
+            if extra_child.r#type == EventType::RemovedMod && extra_child.metadata.other.as_object()
+                .and_then(|o| o.get("mod"))
+                .and_then(|m| m.as_str())
+                .map(|m| m == "INHABITING")
+                .unwrap_or(false) {
+
+                let name = run_parser(extra_child, parse_stopped_inhabiting)?;
+                Ok((result, Some(StoppedInhabiting {
+                    sub_event: SubEvent::from_event(extra_child),
+                    inhabiting_player_name: name.to_string(),
+                    inhabiting_player_id: get_one_player_id(extra_child)?
+                })))
+            } else {
+                Err(FeedParseError::MissingChild {
+                    event_type,
+                    expected_num_children: 0,
+                })
+            }
         } else {
-            Err(FeedParseError::MissingChild {
-                event_type,
-                expected_num_children: 0,
-            })
+            Ok((result, None))
         }
     } else {
         Err(FeedParseError::WrongNumberOfTags {
@@ -923,4 +944,7 @@ fn parse_inning_end(input: &str) -> ParserResult<i32> {
     let (input, _) = tag(" is now an Outing.")(input)?;
 
     Ok((input, inning_num))
+}
+fn parse_stopped_inhabiting(input: &str) -> ParserResult<&str> {
+    parse_terminated(" stopped Inhabiting.")(input)
 }
