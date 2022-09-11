@@ -60,13 +60,43 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::PitcherChange => { todo!() }
         EventType::StolenBase => {
-            let (runner_name, base_stolen, is_successful) = run_parser(&event, parse_stolen_base)?;
+            let (runner_name, base_stolen, is_successful, free_refiller) = run_parser(&event, parse_stolen_base)?;
             if is_successful {
                 Ok(make_fed_event(event, FedEventData::StolenBase {
                     game: GameEvent::try_from_event(event)?,
                     runner_name: runner_name.to_string(),
                     runner_id: get_one_player_id(event)?,
                     base_stolen,
+                    free_refill: free_refiller.map(|refiller_name| {
+                        let (sub_event, ) = event.metadata.children.iter().collect_tuple()
+                            .ok_or_else(|| FeedParseError::MissingChild {
+                                event_type: event.r#type,
+                                expected_num_children: 1
+                            })?;
+                        
+                        let (&team_id, ) = sub_event.team_tags.iter().collect_tuple()
+                            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                                event_type: sub_event.r#type,
+                                tag_type: "team",
+                                expected_num: 1,
+                                actual_num: sub_event.team_tags.len(),
+                            })?;
+                        
+                        let (&player_id, ) = sub_event.player_tags.iter().collect_tuple()
+                            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                                event_type: sub_event.r#type,
+                                tag_type: "player",
+                                expected_num: 1,
+                                actual_num: sub_event.player_tags.len(),
+                            })?;
+
+                        Ok(FreeRefill {
+                            sub_event: SubEvent::from_event(sub_event),
+                            player_name: refiller_name.to_string(),
+                            player_id,
+                            team_id,
+                        })
+                    }).transpose()?
                 }))
             } else {
                 Ok(make_fed_event(event, FedEventData::CaughtStealing {
@@ -379,7 +409,7 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
             .map(|(score, &scorer_id)| Ok(Score {
                 player_id: scorer_id,
                 player_name: score.name.to_string(),
-                free_refill: if score.free_refill {
+                free_refill: if let Some(refiller_name) = score.free_refiller {
                     let child = children.next()
                         .ok_or_else(|| FeedParseError::MissingChild {
                             event_type,
@@ -394,8 +424,18 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
                             actual_num: child.team_tags.len()
                         })?;
 
+                    let (&player_id,) = child.player_tags.iter().collect_tuple()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type,
+                            tag_type: "player",
+                            expected_num: 1,
+                            actual_num: child.player_tags.len()
+                        })?;
+
                     Some(FreeRefill {
                         sub_event: SubEvent::from_event(child),
+                        player_name: refiller_name.to_string(),
+                        player_id,
                         team_id
                     })
                 } else {
@@ -632,19 +672,16 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {
 
 struct ParsedScore<'a> {
     name: &'a str,
-    free_refill: bool,
+    free_refiller: Option<&'a str>,
 }
 
-fn parse_free_refill(name: &str) -> impl Fn(&str) -> ParserResult<()> + '_ {
-    move |input| {
-        let (input, _) = tag("\n")(input)?;
-        let (input, _) = tag(name)(input)?;
-        let (input, _) = tag(" used their Free Refill.\n")(input)?;
-        let (input, _) = tag(name)(input)?;
-        let (input, _) = tag(" Refills the In!")(input)?;
+fn parse_free_refill(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\n")(input)?;
+    let (input, name) = parse_terminated(" used their Free Refill.\n")(input)?;
+    let (input, _) = tag(name)(input)?;
+    let (input, _) = tag(" Refills the In!")(input)?;
 
-        Ok((input, ()))
-    }
+    Ok((input, name))
 }
 
 fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
@@ -657,11 +694,11 @@ fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserR
 fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
         let (input, name) = parse_terminated(score_label)(input)?;
-        let (input, free_refill) = opt(parse_free_refill(name))(input)?;
-        Ok((input, ParsedScore {
-            name,
-            free_refill: free_refill.is_some(),
-        }))
+        let (input, free_refiller) = opt(parse_free_refill)(input)?;
+
+        if let Some(free_refiller) = free_refiller { assert_eq!(name, free_refiller); }
+
+        Ok((input, ParsedScore { name, free_refiller }))
     }
 }
 
@@ -677,7 +714,7 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
     Ok((input, (batter_name, num_runs)))
 }
 
-fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool)> {
+fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -693,7 +730,9 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool)> {
     // Decide whether to be excited
     let (input, _) = tag(if is_successful { " base!" } else { " base." })(input)?;
 
-    Ok((input, (runner_name, num_runs, is_successful)))
+    let (input, free_refill) = opt(parse_free_refill)(input)?;
+
+    Ok((input, (runner_name, num_runs, is_successful, free_refill)))
 }
 
 enum ParsedStrikeout<'a> {

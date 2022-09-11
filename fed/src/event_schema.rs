@@ -79,6 +79,8 @@ impl SubEvent {
 #[derive(Debug, Clone)]
 pub struct FreeRefill {
     pub sub_event: SubEvent,
+    pub player_name: String,
+    pub player_id: Uuid,
     pub team_id: Uuid,
 }
 
@@ -203,6 +205,7 @@ pub enum FedEventData {
         runner_name: String,
         runner_id: Uuid,
         base_stolen: i32,
+        free_refill: Option<FreeRefill>,
     },
 
     CaughtStealing {
@@ -433,27 +436,7 @@ impl FedEvent {
                 let children: Vec<_> = scores.iter()
                     .filter_map(|score| {
                         score.free_refill.as_ref().map(|free_refill| {
-                            self.make_event_builder()
-                                .for_game(&game)
-                                .for_sub_event(&free_refill.sub_event)
-                                .category(1)
-                                .r#type(EventType::RemovedMod)
-                                .description(format!("{} used their Free Refill.", score.player_name))
-                                .team_tags(vec![free_refill.team_id])
-                                .player_tags(vec![score.player_id])
-                                .metadata(EventMetadataBuilder::default()
-                                    .play(game.play)
-                                    .sub_play(0) // not sure if this is hardcoded
-                                    .other(json!({
-                                "mod": "COFFEE_RALLY",
-                                "type": 0, // ?
-                                "parent": self.id
-                            }))
-                                    .build()
-                                    .unwrap()
-                                )
-                                .build()
-                                .unwrap()
+                            self.make_free_refill_child(game, free_refill)
                         })
                     })
                     .collect();
@@ -499,18 +482,31 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen } => {
+            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, ref free_refill } => {
+                let suffix = if let Some(free_refill) = free_refill {
+                    format!("\n{} used their Free Refill.\n{} Refills the In!",
+                            free_refill.player_name, free_refill.player_name)
+                } else {
+                    String::new()
+                };
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
-                    .description(format!("{} steals {} base!", runner_name, match base_stolen {
+                    .category(if free_refill.is_some() { 2 } else { 0 })
+                    .description(format!("{} steals {} base!{}", runner_name, match base_stolen {
                         2 => "second",
                         3 => "third",
                         4 => "fourth",
                         5 => "fifth",
                         _ => panic!("What base is this")
-                    }))
+                    }, suffix))
                     .player_tags(vec![runner_id])
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(
+                            free_refill.as_ref()
+                                .map(|free_refill| self.make_free_refill_child(&game, free_refill))
+                                .into_iter()
+                                .collect()
+                        )
                         .build()
                         .unwrap())
             }
@@ -591,6 +587,30 @@ impl FedEvent {
             .tournament(self.tournament)
             .nuts(self.nuts)
     }
+
+    fn make_free_refill_child(&self, game: &GameEvent, free_refill: &FreeRefill) -> EventuallyEvent {
+        self.make_event_builder()
+            .for_game(&game)
+            .for_sub_event(&free_refill.sub_event)
+            .category(1)
+            .r#type(EventType::RemovedMod)
+            .description(format!("{} used their Free Refill.", free_refill.player_name))
+            .team_tags(vec![free_refill.team_id])
+            .player_tags(vec![free_refill.player_id])
+            .metadata(EventMetadataBuilder::default()
+                .play(game.play)
+                .sub_play(0) // not sure if this is hardcoded
+                .other(json!({
+                                "mod": "COFFEE_RALLY",
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                .build()
+                .unwrap()
+            )
+            .build()
+            .unwrap()
+    }
 }
 
 
@@ -605,3 +625,4 @@ fn make_game_event_metadata(game: &GameEvent) -> EventMetadata {
         .build()
         .unwrap()
 }
+
