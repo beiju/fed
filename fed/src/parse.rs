@@ -11,7 +11,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Score, SubEvent};
+use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -185,7 +185,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         fielder_name: fielder_name.to_string(),
-                        scores
+                        scores,
                     }))
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -237,7 +237,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::GameEnd => { todo!() }
         EventType::BatterUp => {
-            let (batter_name, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
+            let (batter_name, inhabited, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
 
             // I missed `team_name: "Millennials, wielding An Actual Airplane"` once and I don't
             // want something like that to happen again
@@ -248,6 +248,29 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_name: batter_name.to_string(),
                 team_name: team_name.to_string(),
                 wielding_item: wielding_item.map(|s| s.to_string()),
+                inhabiting: inhabited.map(|inhabited| {
+                    let (child, ) = event.metadata.children.iter().collect_tuple()
+                        .ok_or_else(|| FeedParseError::MissingChild {
+                            event_type: event.r#type,
+                            expected_num_children: 1,
+                        })?;
+
+                    // These live on the parent
+                    let (&inhabiting_player_id, &inhabited_player_id) = event.player_tags.iter().collect_tuple()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: event.player_tags.len(),
+                        })?;
+
+                    Ok(Inhabiting {
+                        sub_event: SubEvent::from_event(child),
+                        inhabited_player_name: inhabited.to_string(),
+                        inhabiting_player_id,
+                        inhabited_player_id,
+                    })
+                }).transpose()?,
             }))
         }
         EventType::Strike => {
@@ -484,7 +507,7 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
     }
 }
 
-fn make_free_refill(event_type: EventType, mut children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
+fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
     let child = children.next()
         .ok_or_else(|| FeedParseError::MissingChild {
             event_type,
@@ -626,8 +649,12 @@ fn parse_whole_number(input: &str) -> ParserResult<i32> {
     Ok((input, num_str.join("").parse().unwrap()))
 }
 
-fn parse_batter_up(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
-    let (input, batter_name) = parse_terminated(" batting for the ")(input)?;
+fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>)> {
+    let (input, (batter_name, inhabiting_name)) = alt((
+        // NOTE order matters here. inhabiting must be first
+        parse_batter_up_inhabiting,
+        parse_terminated(" batting for the ").map(|n| (n, None)),
+    ))(input)?;
     // This is going to fail if a team ever has a period or comma in it
     let (input, team_name) = take_till1(|c| c == ',' || c == '.')(input)?;
     let (input, wielding_item) = alt((
@@ -637,7 +664,16 @@ fn parse_batter_up(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
         parse_wielding_item.map(|s| Some(s))
     ))(input)?;
 
-    Ok((input, (batter_name, team_name, wielding_item)))
+    Ok((input, (batter_name, inhabiting_name, team_name, wielding_item)))
+}
+
+fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>)> {
+    let (input, batter_name) = parse_terminated(" is Inhabiting ")(input)?;
+    let (input, inhabiting_name) = parse_terminated("!\n")(input)?;
+    let (input, _) = tag(batter_name)(input)?;
+    let (input, _) = tag(" batting for the ")(input)?;
+
+    Ok((input, (batter_name, Some(inhabiting_name))))
 }
 
 fn parse_wielding_item(input: &str) -> ParserResult<&str> {

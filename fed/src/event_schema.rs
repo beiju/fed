@@ -103,6 +103,14 @@ impl Score {
 }
 
 #[derive(Debug, Clone)]
+pub struct Inhabiting {
+    pub sub_event: SubEvent,
+    pub inhabited_player_name: String,
+    pub inhabiting_player_id: Uuid,
+    pub inhabited_player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -130,6 +138,7 @@ pub enum FedEventData {
         batter_name: String,
         team_name: String,
         wielding_item: Option<String>,
+        inhabiting: Option<Inhabiting>,
     },
 
     SuperyummyGameStart {
@@ -349,7 +358,7 @@ impl FedEvent {
                                          inning,
                                          batting_team_name))
             }
-            FedEventData::BatterUp { game, batter_name, team_name, wielding_item: wielding_item_name } => {
+            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, wielding_item: ref wielding_item_name, ref inhabiting } => {
                 let item_suffix = if let Some(item_name) = wielding_item_name {
                     format!(", wielding {}", item_name)
                 } else {
@@ -357,7 +366,48 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterUp)
-                    .description(format!("{} batting for the {}{}.", batter_name, team_name, item_suffix))
+                    .category(if inhabiting.is_some() { 2 } else { 0 })
+                    .description(if let Some(inhabiting) = &inhabiting {
+                        format!("{} is Inhabiting {}!\n{} batting for the {}{}.", batter_name,
+                                inhabiting.inhabited_player_name, batter_name, team_name, item_suffix)
+                    } else {
+                        format!("{} batting for the {}{}.", batter_name, team_name, item_suffix)
+                    })
+                    .player_tags(if let Some(inhabiting) = inhabiting {
+                        vec![inhabiting.inhabiting_player_id, inhabiting.inhabited_player_id]
+                    } else {
+                        vec![]
+                    })
+                    .metadata(
+                        make_game_event_metadata_builder(&game)
+                            .children(inhabiting.iter()
+                                .map(|inhabiting| {
+                                    self.make_event_builder()
+                                        .for_game(&game)
+                                        .for_sub_event(&inhabiting.sub_event)
+                                        .category(1)
+                                        .r#type(EventType::AddedMod)
+                                        .description(format!("{} is Inhabiting {}!",
+                                                             batter_name, inhabiting.inhabited_player_name))
+                                        .player_tags(vec![inhabiting.inhabiting_player_id])
+                                        .team_tags(vec![]) // need to clear it
+                                        .metadata(EventMetadataBuilder::default()
+                                            .play(game.play)
+                                            .sub_play(0) // not sure if this is hardcoded
+                                            .other(json!({
+                                            "mod": "INHABITING",
+                                            "type": 0, // ?
+                                            "parent": self.id
+                                        }))
+                                            .build()
+                                            .unwrap()
+                                        )
+                                        .build()
+                                        .unwrap()
+                                })
+                                .collect())
+                            .build()
+                            .unwrap())
             }
             FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
                 let description = format!("{} {} Peanuts.", player_name,
@@ -606,7 +656,6 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
             }
             FedEventData::StrikeZapped { game } => {
                 event_builder.for_game(&game)
