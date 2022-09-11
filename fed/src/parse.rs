@@ -10,7 +10,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, GameEvent, Score, SubEvent};
+use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Score, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -125,7 +125,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores) = run_parser(&event, parse_flyout)?;
-            let scores = merge_scores_with_ids(scores, &event.player_tags, event.r#type, 0)?;
+            let scores = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
             Ok(make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
@@ -153,7 +153,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Hit => {
             let (batter_name, num_bases, scores) = run_parser(&event, parse_hit)?;
             if let Some((&batter_id, scorer_ids)) = event.player_tags.split_first() {
-                let scores = merge_scores_with_ids(scores, scorer_ids, event.r#type, 1)?;
+                let scores = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 1)?;
 
                 Ok(make_fed_event(event, FedEventData::Hit {
                     game: GameEvent::try_from_event(event)?,
@@ -295,7 +295,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .collect_tuple()
                 .ok_or_else(|| FeedParseError::MissingChild {
                     event_type: event.r#type,
-                    num_children: 1,
+                    expected_num_children: 1,
                 })?;
 
             let mod_name = mod_add_event.metadata.other
@@ -372,15 +372,46 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], event_type: EventType, extra_player_tags: usize) -> Result<Vec<Score>, FeedParseError> {
+fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<Vec<Score>, FeedParseError> {
+    let mut children = children.iter();
     if scorer_ids.len() == scores.len() {
-        Ok(scores.into_iter().zip(scorer_ids)
-            .map(|(score, &scorer_id)| Score {
+        let result = scores.into_iter().zip(scorer_ids)
+            .map(|(score, &scorer_id)| Ok(Score {
                 player_id: scorer_id,
                 player_name: score.name.to_string(),
-                used_free_refill: score.free_refill,
+                free_refill: if score.free_refill {
+                    let child = children.next()
+                        .ok_or_else(|| FeedParseError::MissingChild {
+                            event_type,
+                            expected_num_children: -1 // Unknown at this point in the computation
+                        })?;
+
+                    let (&team_id,) = child.team_tags.iter().collect_tuple()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type,
+                            tag_type: "team",
+                            expected_num: 1,
+                            actual_num: child.team_tags.len()
+                        })?;
+
+                    Some(FreeRefill {
+                        sub_event: SubEvent::from_event(child),
+                        team_id
+                    })
+                } else {
+                    None
+                },
+            }))
+            .collect::<Result<_, _>>()?;
+
+        if children.next().is_none() {
+            Ok(result)
+        } else {
+            Err(FeedParseError::MissingChild {
+                event_type,
+                expected_num_children: 0
             })
-            .collect())
+        }
     } else {
         Err(FeedParseError::WrongNumberOfTags {
             event_type,
@@ -606,6 +637,7 @@ struct ParsedScore<'a> {
 
 fn parse_free_refill(name: &str) -> impl Fn(&str) -> ParserResult<()> + '_ {
     move |input| {
+        let (input, _) = tag("\n")(input)?;
         let (input, _) = tag(name)(input)?;
         let (input, _) = tag(" used their Free Refill.\n")(input)?;
         let (input, _) = tag(name)(input)?;

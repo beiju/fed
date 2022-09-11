@@ -28,10 +28,10 @@ pub enum FeedParseError {
         actual_num: usize,
     },
 
-    #[error("Expected {num_children} children for {event_type:?} event")]
+    #[error("Expected {expected_num_children} children for {event_type:?} event")]
     MissingChild {
         event_type: EventType,
-        num_children: i32,
+        expected_num_children: i32,
     },
 
     #[error("Unexpected type {child_type:?} for child of {event_type:?} event")]

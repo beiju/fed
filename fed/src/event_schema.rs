@@ -77,15 +77,21 @@ impl SubEvent {
 }
 
 #[derive(Debug, Clone)]
+pub struct FreeRefill {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub struct Score {
     pub player_id: Uuid,
     pub player_name: String,
-    pub used_free_refill: bool,
+    pub free_refill: Option<FreeRefill>,
 }
 
 impl Score {
     pub fn to_description(&self, score_text: &str) -> String {
-        let refill_text = if self.used_free_refill {
+        let refill_text = if self.free_refill.is_some() {
             format!("\n{} used their Free Refill.\n{} Refills the In!", self.player_name, self.player_name)
         } else {
             String::new()
@@ -418,13 +424,43 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { game, batter_name, batter_id, num_bases, scores } => {
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores } => {
                 let score_text = scores.iter()
                     .map(|score| score.to_description("scores"))
                     // the \n is in each element since it needs to be before the first element too
                     .join("");
+                let has_any_refills = scores.iter().any(|score| score.free_refill.is_some());
+                let children: Vec<_> = scores.iter()
+                    .filter_map(|score| {
+                        score.free_refill.as_ref().map(|free_refill| {
+                            self.make_event_builder()
+                                .for_game(&game)
+                                .for_sub_event(&free_refill.sub_event)
+                                .category(1)
+                                .r#type(EventType::RemovedMod)
+                                .description(format!("{} used their Free Refill.", score.player_name))
+                                .team_tags(vec![free_refill.team_id])
+                                .player_tags(vec![score.player_id])
+                                .metadata(EventMetadataBuilder::default()
+                                    .play(game.play)
+                                    .sub_play(0) // not sure if this is hardcoded
+                                    .other(json!({
+                                "mod": "COFFEE_RALLY",
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                                    .build()
+                                    .unwrap()
+                                )
+                                .build()
+                                .unwrap()
+                        })
+                    })
+                    .collect();
+
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
+                    .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hits a {}!{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
@@ -435,6 +471,7 @@ impl FedEvent {
                     }, score_text))
                     .player_tags(iter::once(batter_id).chain(scores.iter().map(|score| score.player_id)).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
