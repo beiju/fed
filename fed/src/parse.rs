@@ -60,13 +60,28 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::PitcherChange => { todo!() }
         EventType::StolenBase => {
-            let (runner_name, base_stolen, is_successful, free_refiller) = run_parser(&event, parse_stolen_base)?;
+            let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = run_parser(&event, parse_stolen_base)?;
             if is_successful {
+                let runner_id = if blaserunning {
+                    let (&id1, &id2) = event.player_tags.iter().collect_tuple()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: event.player_tags.len(),
+                        })?;
+                    assert_eq!(id1, id2);
+                    id1
+                } else {
+                    get_one_player_id(event)?
+                };
+
                 Ok(make_fed_event(event, FedEventData::StolenBase {
                     game: GameEvent::try_from_event(event)?,
                     runner_name: runner_name.to_string(),
-                    runner_id: get_one_player_id(event)?,
+                    runner_id,
                     base_stolen,
+                    blaserunning,
                     free_refill: free_refiller.map(|refiller_name| {
                         let (sub_event, ) = event.metadata.children.iter().collect_tuple()
                             .ok_or_else(|| FeedParseError::MissingChild {
@@ -147,9 +162,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             actual_num: event.player_tags.len()
                         })
                     }
-
-
-
                 }
             }
         }
@@ -756,7 +768,7 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
     Ok((input, (batter_name, num_runs)))
 }
 
-fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, Option<&str>)> {
+fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -767,9 +779,10 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, Option<&str>
     // Decide whether to be excited
     let (input, _) = tag(if is_successful { " base!" } else { " base." })(input)?;
 
+    let (input, blaserunning) = opt(preceded(tag("\n"), preceded(tag(runner_name), tag(" scores with Blaserunning!"))))(input)?;
     let (input, free_refill) = opt(parse_free_refill)(input)?;
 
-    Ok((input, (runner_name, num_runs, is_successful, free_refill)))
+    Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill)))
 }
 
 fn parse_named_base(input: &str) -> ParserResult<i32> {

@@ -212,6 +212,7 @@ pub enum FedEventData {
         runner_name: String,
         runner_id: Uuid,
         base_stolen: i32,
+        blaserunning: bool,
         free_refill: Option<FreeRefill>,
     },
 
@@ -493,8 +494,14 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, ref free_refill } => {
-                let suffix = if let Some(free_refill) = free_refill {
+            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill } => {
+                let blaserunning_str = if blaserunning {
+                    format!("\n{} scores with Blaserunning!", runner_name)
+                } else {
+                    String::new()
+                };
+
+                let free_refill_str = if let Some(free_refill) = free_refill {
                     format!("\n{} used their Free Refill.\n{} Refills the In!",
                             free_refill.player_name, free_refill.player_name)
                 } else {
@@ -503,8 +510,8 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
                     .category(if free_refill.is_some() { 2 } else { 0 })
-                    .description(format!("{} steals {} base!{}", runner_name, base_name(base_stolen), suffix))
-                    .player_tags(vec![runner_id])
+                    .description(format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str))
+                    .player_tags(if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] })
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(
                             free_refill.as_ref()
