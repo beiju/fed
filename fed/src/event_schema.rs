@@ -426,32 +426,23 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Flyout { game, batter_name, fielder_name, scores } => {
-                let score_text = scores.iter()
-                    .map(|score| score.to_description("tags up and scores"))
-                    // the \n is in each element since it needs to be before the first element too
-                    .join("");
+            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores } => {
+                let (score_text, has_any_refills, children) =
+                    self.get_score_data(game, scores, "tags up and scores");
+
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
+                    .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hit a flyout to {}.{}", batter_name, fielder_name, score_text))
                     .player_tags(scores.iter().map(|score| score.player_id).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
             FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores } => {
-                let score_text = scores.iter()
-                    .map(|score| score.to_description("scores"))
-                    // the \n is in each element since it needs to be before the first element too
-                    .join("");
-                let has_any_refills = scores.iter().any(|score| score.free_refill.is_some());
-                let children: Vec<_> = scores.iter()
-                    .filter_map(|score| {
-                        score.free_refill.as_ref().map(|free_refill| {
-                            self.make_free_refill_child(game, free_refill)
-                        })
-                    })
-                    .collect();
+                let (score_text, has_any_refills, children) =
+                    self.get_score_data(game, scores, "scores");
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
@@ -598,6 +589,22 @@ impl FedEvent {
         }
             .build()
             .unwrap()
+    }
+
+    fn get_score_data(&self, game: &GameEvent, scores: &Vec<Score>, score_text: &str) -> (String, bool, Vec<EventuallyEvent>) {
+        let score_text = scores.iter()
+            .map(|score| score.to_description(score_text))
+            // the \n is in each element since it needs to be before the first element too
+            .join("");
+        let has_any_refills = scores.iter().any(|score| score.free_refill.is_some());
+        let children: Vec<_> = scores.iter()
+            .filter_map(|score| {
+                score.free_refill.as_ref().map(|free_refill| {
+                    self.make_free_refill_child(game, free_refill)
+                })
+            })
+            .collect();
+        (score_text, has_any_refills, children)
     }
 
     fn make_event_builder(&self) -> EventuallyEventBuilder {
