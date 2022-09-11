@@ -336,7 +336,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GrindRail => { todo!() }
         EventType::TunnelsUsed => { todo!() }
         EventType::PeanutMister => { todo!() }
-        EventType::PeanutFlavorText => { todo!() }
+        EventType::PeanutFlavorText => {
+            Ok(make_fed_event(event, FedEventData::PeanutFlavorText {
+                game: GameEvent::try_from_event(event)?,
+                message: event.description.clone(),
+            }))
+        }
         EventType::TasteTheInfinite => { todo!() }
         EventType::EventHorizonActivation => { todo!() }
         EventType::EventHorizonAwaits => { todo!() }

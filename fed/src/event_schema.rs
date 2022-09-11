@@ -254,7 +254,12 @@ pub enum FedEventData {
 
     StrikeZapped {
         game: GameEvent,
-    }
+    },
+
+    PeanutFlavorText {
+        game: GameEvent,
+        message: String,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -581,6 +586,15 @@ impl FedEvent {
                     .r#type(EventType::StrikeZapped)
                     .category(2)
                     .description("The Electricity zaps a strike away!".to_string())
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PeanutFlavorText { game, message } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::PeanutFlavorText)
+                    .category(2)
+                    .description(message)
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
