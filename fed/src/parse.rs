@@ -177,12 +177,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::GroundOut => {
-            match run_parser(&event, parse_ground_out)? {
+            let (parsed_out, scores) = run_parser(&event, parse_ground_out)?;
+            let scores = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+            match parsed_out {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     Ok(make_fed_event(event, FedEventData::GroundOut {
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         fielder_name: fielder_name.to_string(),
+                        scores
                     }))
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -714,30 +717,34 @@ enum ParsedGroundOut<'a> {
     },
 }
 
-fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     alt((parse_simple_ground_out, parse_fielders_choice, parse_double_play))(input)
 }
 
-fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
-    Ok((input, ParsedGroundOut::Simple { batter_name, fielder_name }))
+    let (input, scores) = parse_scores(" advances on the sacrifice.")(input)?;
+
+    Ok((input, (ParsedGroundOut::Simple { batter_name, fielder_name }, scores)))
 }
 
-fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut> {
+fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     let (input, runner_out_name) = parse_terminated(" out at ")(input)?;
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.\n")(input)?;
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
 
-    Ok((input, ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }))
+    // TODO scoring on FC
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, vec![])))
 }
 
-fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
+fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     let (input, batter_name) = parse_terminated(" hit into a double play!")(input)?;
 
-    Ok((input, ParsedGroundOut::DoublePlay { batter_name }))
+    // TODO scoring on DP
+    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, vec![])))
 }
 
 fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {

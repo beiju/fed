@@ -98,7 +98,7 @@ impl Score {
         } else {
             String::new()
         };
-        format!("\n{} {}!{}", self.player_name, score_text, refill_text)
+        format!("\n{}{}{}", self.player_name, score_text, refill_text)
     }
 }
 
@@ -183,6 +183,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         fielder_name: String,
+        scores: Vec<Score>,
     },
 
     FieldersChoice {
@@ -439,7 +440,7 @@ impl FedEvent {
             }
             FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores } => {
                 let (score_text, has_any_refills, children) =
-                    self.get_score_data(game, scores, "tags up and scores");
+                    self.get_score_data(game, scores, " tags up and scores!");
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
@@ -453,7 +454,7 @@ impl FedEvent {
             }
             FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores } => {
                 let (score_text, has_any_refills, children) =
-                    self.get_score_data(game, scores, "scores");
+                    self.get_score_data(game, scores, " scores!");
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
@@ -501,11 +502,18 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::GroundOut { game, batter_name, fielder_name } => {
+            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores } => {
+                let (score_text, has_any_refills, children) =
+                    self.get_score_data(game, scores, " advances on the sacrifice.");
+
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .description(format!("{} hit a ground out to {}.", batter_name, fielder_name))
+                    .category(if has_any_refills { 2 } else { 0 })
+                    .description(format!("{} hit a ground out to {}.{}",
+                                         batter_name, fielder_name, score_text))
+                    .player_tags(scores.iter().map(|score| score.player_id).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
