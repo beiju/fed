@@ -254,7 +254,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::HitByPitch => { todo!() }
         EventType::BatterSkipped => { todo!() }
         EventType::Party => { todo!() }
-        EventType::StrikeZapped => { todo!() }
+        EventType::StrikeZapped => {
+            assert_eq!(event.description, "The Electricity zaps a strike away!");
+            Ok(make_fed_event(event, FedEventData::StrikeZapped {
+                game: GameEvent::try_from_event(event)?,
+            }))
+        }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => { todo!() }
         EventType::InningEnd => {
@@ -504,14 +509,14 @@ fn is_known_team_name(name: &str) -> bool {
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
          "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
-         "Houston Spies", "Charleston Shoe Thieves",
+         "Houston Spies", "Charleston Shoe Thieves", "LA Unlimited Tacos",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
          "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
-         "Magic", "Breath Mints", "Spies", "Shoe Thieves",
+         "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos",
     ].contains(&name)
 }
 

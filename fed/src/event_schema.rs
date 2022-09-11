@@ -250,6 +250,10 @@ pub enum FedEventData {
         charmed_name: String,
         num_swings: i32,
     },
+
+    StrikeZapped {
+        game: GameEvent,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -569,6 +573,16 @@ impl FedEvent {
                     .r#type(EventType::GroundOut)
                     .description(format!("{} out at {} base.\n{} reaches on fielder's choice.",
                                          runner_out_name, base_name(out_at_base), batter_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+
+            }
+            FedEventData::StrikeZapped { game } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::StrikeZapped)
+                    .category(2)
+                    .description("The Electricity zaps a strike away!".to_string())
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
