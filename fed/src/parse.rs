@@ -192,8 +192,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         out_at_base: base
                     }))
                 }
+                ParsedGroundOut::DoublePlay { batter_name } => {
+                    Ok(make_fed_event(event, FedEventData::DoublePlay {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                    }))
+                }
             }
-
         }
         EventType::HomeRun => {
             let (batter_name, num_runs) = run_parser(&event, parse_hr)?;
@@ -692,11 +697,14 @@ enum ParsedGroundOut<'a> {
         runner_out_name: &'a str,
         batter_name: &'a str,
         base: i32,
+    },
+    DoublePlay {
+        batter_name: &'a str,
     }
 }
 
 fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
-    alt((parse_simple_ground_out, parse_fielders_choice,))(input)
+    alt((parse_simple_ground_out, parse_fielders_choice, parse_double_play))(input)
 }
 
 fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
@@ -713,6 +721,12 @@ fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut> {
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
 
     Ok((input, ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }))
+}
+
+fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
+    let (input, batter_name) = parse_terminated(" hit into a double play!")(input)?;
+
+    Ok((input, ParsedGroundOut::DoublePlay { batter_name }))
 }
 
 fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {

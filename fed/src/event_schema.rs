@@ -192,6 +192,11 @@ pub enum FedEventData {
         out_at_base: i32,
     },
 
+    DoublePlay {
+        game: GameEvent,
+        batter_name: String,
+    },
+
     Hit {
         game: GameEvent,
         batter_name: String,
@@ -598,7 +603,14 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
+            }
+            FedEventData::DoublePlay { game, batter_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::GroundOut)
+                    .description(format!("{} hit into a double play!", batter_name))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
             }
         }
             .build()
