@@ -6,7 +6,7 @@ use nom::{Finish, IResult, Parser};
 use nom::character::complete::digit1;
 use nom::combinator::{eof, fail, opt};
 use nom::error::convert_error;
-use nom::multi::{many0, many1, separated_list0};
+use nom::multi::{many0, many1};
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
@@ -790,18 +790,22 @@ fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<Pa
 fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     let (input, runner_out_name) = parse_terminated(" out at ")(input)?;
     let (input, base) = parse_named_base(input)?;
-    let (input, _) = tag(" base.\n")(input)?;
+    let (input, _) = tag(" base.")(input)?;
+
+    let (input, scores) = parse_scores(" scores!")(input)?;
+    let (input, _) = tag("\n")(input)?;
+
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
 
-    // TODO scoring on FC
-    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, vec![])))
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores)))
 }
 
 fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
     let (input, batter_name) = parse_terminated(" hit into a double play!")(input)?;
 
-    // TODO scoring on DP
-    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, vec![])))
+    let (input, scores) = parse_scores(" scores!")(input)?;
+
+    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores)))
 }
 
 fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {
@@ -833,14 +837,16 @@ fn parse_free_refill(input: &str) -> ParserResult<&str> {
 }
 
 fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
-    alt((
-        eof.map(|_| Vec::new()), // No scores
-        preceded(tag("\n"), separated_list0(tag("\n"), parse_score(score_label)))
-    ))
+    move |input| {
+        let (input, out) = opt(many0(parse_score(score_label)))(input)?;
+
+        Ok((input, out.unwrap_or(Vec::new())))
+    }
 }
 
 fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
+        let (input, _) = tag("\n")(input)?;
         let (input, name) = parse_terminated(score_label)(input)?;
         let (input, free_refiller) = opt(parse_free_refill)(input)?;
 
