@@ -225,6 +225,15 @@ pub enum FedEventData {
         game: GameEvent,
         inning_num: i32,
     },
+
+    CharmStrikeout {
+        game: GameEvent,
+        charmer_id: Uuid,
+        charmer_name: String,
+        charmed_id: Uuid,
+        charmed_name: String,
+        num_swings: i32,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -511,6 +520,18 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::InningEnd)
                     .description(format!("Inning {} is now an Outing.", inning_num))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, num_swings } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Strikeout)
+                    .category(2)
+                    .description(format!("{} charmed {}!\n{} swings {} times to strike out willingly!",
+                                         charmer_name, charmed_name, charmed_name, num_swings))
+                    // I do not know why the charmer appears twice, but that seems to be accurate
+                    .player_tags(vec![charmer_id, charmer_id, charmed_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())

@@ -85,17 +85,42 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Strikeout => {
-            let (batter_name, is_swinging) = run_parser(&event, parse_strikeout)?;
-            if is_swinging {
-                Ok(make_fed_event(event, FedEventData::StrikeoutSwinging {
-                    game: GameEvent::try_from_event(event)?,
-                    batter_name: batter_name.to_string(),
-                }))
-            } else {
-                Ok(make_fed_event(event, FedEventData::StrikeoutLooking {
-                    game: GameEvent::try_from_event(event)?,
-                    batter_name: batter_name.to_string(),
-                }))
+            match run_parser(&event, parse_strikeout)? {
+                ParsedStrikeout::Swinging(batter_name) => {
+                    Ok(make_fed_event(event, FedEventData::StrikeoutSwinging {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                    }))
+                }
+                ParsedStrikeout::Looking(batter_name) => {
+                    Ok(make_fed_event(event, FedEventData::StrikeoutLooking {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                    }))
+                }
+                ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
+                    if let Some((&charmer_id, &charmer_id_2, &charmed_id)) = event.player_tags.iter().collect_tuple() {
+                        assert_eq!(charmer_id, charmer_id_2);
+                        Ok(make_fed_event(event, FedEventData::CharmStrikeout {
+                            game: GameEvent::try_from_event(event)?,
+                            charmer_id,
+                            charmer_name: charmer_name.to_string(),
+                            charmed_id,
+                            charmed_name: charmed_name.to_string(),
+                            num_swings
+                        }))
+                    } else {
+                        Err(FeedParseError::WrongNumberOfTags {
+                            event_type: EventType::Strikeout,
+                            tag_type: "players",
+                            expected_num: 3,
+                            actual_num: event.player_tags.len()
+                        })
+                    }
+
+
+
+                }
             }
         }
         EventType::FlyOut => {
@@ -396,13 +421,14 @@ fn is_known_team_name(name: &str) -> bool {
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
          "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
+         "Houston Spies", "Charleston Shoe Thieves",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
          "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
-         "Magic", "Breath Mints",
+         "Magic", "Breath Mints", "Spies", "Shoe Thieves",
     ].contains(&name)
 }
 
@@ -638,14 +664,45 @@ fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool)> {
     Ok((input, (runner_name, num_runs, is_successful)))
 }
 
-fn parse_strikeout(input: &str) -> ParserResult<(&str, bool)> {
+enum ParsedStrikeout<'a> {
+    Swinging(&'a str),
+    Looking(&'a str),
+
+    Charm {
+        charmer_name: &'a str,
+        charmed_name: &'a str,
+        num_swings: i32,
+    },
+}
+
+fn parse_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+    alt((
+        parse_normal_strikeout,
+        parse_charm_strikeout
+    ))(input)
+}
+
+fn parse_normal_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     let (input, batter_name) = parse_terminated(" strikes out ")(input)?;
     let (input, is_swinging) = alt((
         tag("swinging.").map(|_| true),
         tag("looking.").map(|_| false),
     ))(input)?;
 
-    Ok((input, (batter_name, is_swinging)))
+    Ok((input, if is_swinging { ParsedStrikeout::Swinging(batter_name) } else { ParsedStrikeout::Looking(batter_name) }))
+}
+
+fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+    let (input, charmer_name) = parse_terminated(" charmed ")(input)?;
+    let (input, charmed_name) = parse_terminated("!\n")(input)?;
+    let (input, charmed_name2) = parse_terminated(" swings ")(input)?;
+    let (input, num_swings) = parse_whole_number(input)?;
+    let (input, _) = tag(" times to strike out willingly!")(input)?;
+
+    // I believe these should always be equal
+    assert_eq!(charmed_name, charmed_name2);
+
+    Ok((input, ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings }))
 }
 
 fn parse_walk(input: &str) -> ParserResult<&str> {
