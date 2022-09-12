@@ -5,9 +5,10 @@ use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::character::is_digit;
-use nom::combinator::{eof, fail, opt, recognize};
+use nom::combinator::{eof, fail, map_res, opt, recognize};
 use nom::error::convert_error;
 use nom::multi::{many0, many1};
+use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
@@ -684,9 +685,7 @@ fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
 }
 
 fn parse_whole_number(input: &str) -> ParserResult<i32> {
-    let (input, num_str) = many1(digit1)(input)?;
-    // The parser should ensure num_str always represents a valid number
-    Ok((input, num_str.join("").parse().unwrap()))
+    map_res(digit1, str::parse)(input)
 }
 
 fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>)> {
@@ -975,14 +974,14 @@ fn parse_stopped_inhabiting(input: &str) -> ParserResult<&str> {
     parse_terminated(" stopped Inhabiting.")(input)
 }
 
-fn parse_game_end(input: &str) -> ParserResult<((&str, i32), (&str, i32))> {
+fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
     // This is a bit tricky because it's a string of arbitrary words (a team name) followed by an
     // arbitrary number (score)
     let (input, winning_team_name) = take_till(AsChar::is_dec_digit)(input)?;
-    let (input, winning_team_score) = parse_whole_number(input)?;
+    let (input, winning_team_score) = float(input)?;
     let (input, _) = tag(", ")(input)?;
     let (input, losing_team_name) = take_till(AsChar::is_dec_digit)(input)?;
-    let (input, losing_team_score) = parse_whole_number(input)?;
+    let (input, losing_team_score) = float(input)?;
 
     // Just checking that my assumption is correct. It's <= because of 20.3
     assert!(losing_team_score <= winning_team_score);

@@ -313,9 +313,9 @@ pub enum FedEventData {
         game: GameEvent,
         winner_id: Uuid,
         winning_team_name: String,
-        winning_team_score: i32,
+        winning_team_score: f32,
         losing_team_name: String,
-        losing_team_score: i32,
+        losing_team_score: f32,
     },
 }
 
