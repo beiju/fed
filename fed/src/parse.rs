@@ -338,13 +338,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => {
-            let (pitcher_name, balls, strikes) = run_parser(&event, parse_mild_pitch)?;
+            let (pitcher_name, balls, strikes, runners_advance) = run_parser(&event, parse_mild_pitch)?;
             Ok(make_fed_event(event, FedEventData::MildPitch {
                 game: GameEvent::try_from_event(event)?,
                 pitcher_id: get_one_player_id(event)?,
                 pitcher_name: pitcher_name.to_string(),
                 balls,
                 strikes,
+                runners_advance,
             }))
         }
         EventType::InningEnd => {
@@ -1019,17 +1020,19 @@ fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
                 (losing_team_name.strip_suffix(" ").unwrap(), losing_team_score))))
 }
 
-fn parse_mild_pitch(input: &str) -> ParserResult<(&str, i32, i32)> {
+fn parse_mild_pitch(input: &str) -> ParserResult<(&str, i32, i32, bool)> {
     let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n")(input)?;
 
-    // TODO: "Runners advance on the pathetic play", scoring
+    // TODO: scoring
 
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
     let (input, _) = tag("Ball, ")(input)?;
     let (input, (balls, strikes)) = parse_count(input)?;
     let (input, _) = tag(".")(input)?;
 
-    Ok((input, (pitcher_name, balls, strikes)))
+    let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!"))(input)?;
+
+    Ok((input, (pitcher_name, balls, strikes, runners_advance.is_some())))
 }
 
 fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {

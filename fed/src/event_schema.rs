@@ -330,6 +330,7 @@ pub enum FedEventData {
         pitcher_name: String,
         balls: i32,
         strikes: i32,
+        runners_advance: bool,
     },
 
     CoffeeBean {
@@ -342,7 +343,7 @@ pub enum FedEventData {
         has_mod: bool,
         sub_event: SubEvent,
         team_id: Uuid,
-    }
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -756,7 +757,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::DoublePlay { ref game,ref  batter_name, ref scores, ref stopped_inhabiting } => {
+            FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
 
@@ -779,25 +780,31 @@ impl FedEvent {
                     .description(format!("{} {}, {} {}", winning_team_name, winning_team_score, losing_team_name, losing_team_score))
                     .team_tags(vec![
                         // For some reason the teams are repeated like this? idk why
-                        game.away_team, game.home_team, game.home_team, game.away_team
+                        game.away_team, game.home_team, game.home_team, game.away_team,
                     ])
                     .metadata(make_game_event_metadata_builder(&game)
                         .other(json!({ "winner": winner_id }))
                         .build()
                         .unwrap())
             }
-            FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes } => {
+            FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes, runners_advance } => {
+                let runners_advance_str = if runners_advance {
+                    "\nRunners advance on the pathetic play!"
+                } else {
+                    ""
+                };
+
                 event_builder.for_game(&game)
                     .r#type(EventType::MildPitch)
                     .category(2)
-                    .description(format!("{} throws a Mild pitch!\nBall, {}-{}.", pitcher_name, balls, strikes))
+                    .description(format!("{} throws a Mild pitch!\nBall, {}-{}.{}", pitcher_name, balls, strikes, runners_advance_str))
                     .player_tags(vec![pitcher_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
             }
             FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, has_mod, ref sub_event, team_id } => {
-                let change_str = if has_mod { "is" } else { "is no longer"};
+                let change_str = if has_mod { "is" } else { "is no longer" };
                 let mod_str = match which_mod {
                     CoffeeBeanMod::Wired => { "Wired" }
                     CoffeeBeanMod::Tired => { "Tired" }
@@ -838,7 +845,6 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
-
             }
         }
             .build()
