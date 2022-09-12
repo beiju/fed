@@ -39,6 +39,24 @@ impl GameEvent {
         let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
 
+        Self::try_from_event_with_teams(event, game_id, away_team, home_team)
+    }
+
+    pub fn try_from_event_extra_teams(event: &EventuallyEvent) -> Result<Self, FeedParseError> {
+        let (&game_id, ) = event.game_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
+
+        // Order is very important here. Apparently game end events have extra teams?
+        let (&away_team, &home_team, &home_team2, &away_team2) = event.team_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
+
+        assert_eq!(away_team, away_team2);
+        assert_eq!(home_team, home_team2);
+
+        Self::try_from_event_with_teams(event, game_id, away_team, home_team)
+    }
+
+    fn try_from_event_with_teams(event: &EventuallyEvent, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
         Ok(Self {
             game_id,
             home_team,
@@ -289,6 +307,15 @@ pub enum FedEventData {
     PeanutFlavorText {
         game: GameEvent,
         message: String,
+    },
+
+    GameEnd {
+        game: GameEvent,
+        winner_id: Uuid,
+        winning_team_name: String,
+        winning_team_score: i32,
+        losing_team_name: String,
+        losing_team_score: i32,
     },
 }
 
@@ -715,6 +742,20 @@ impl FedEvent {
                     .description(format!("{} hit into a double play!{}", batter_name, score_text))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::GameEnd)
+                    .category(3)
+                    .description(format!("{} {}, {} {}", winning_team_name, winning_team_score, losing_team_name, losing_team_score))
+                    .team_tags(vec![
+                        // For some reason the teams are repeated like this? idk why
+                        game.away_team, game.home_team, game.home_team, game.away_team
+                    ])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .other(json!({ "winner": winner_id }))
                         .build()
                         .unwrap())
             }

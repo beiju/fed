@@ -1,10 +1,11 @@
 use std::slice::Iter;
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_till1, take_until1};
-use nom::{Finish, IResult, Parser};
-use nom::character::complete::digit1;
-use nom::combinator::{eof, fail, opt};
+use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
+use nom::{AsChar, Finish, IResult, Parser};
+use nom::character::complete::{char, digit1};
+use nom::character::is_digit;
+use nom::combinator::{eof, fail, opt, recognize};
 use nom::error::convert_error;
 use nom::multi::{many0, many1};
 use nom::sequence::{preceded, terminated};
@@ -242,7 +243,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
             }
         }
-        EventType::GameEnd => { todo!() }
+        EventType::GameEnd => {
+            let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = run_parser(&event, parse_game_end)?;
+            let winner_id = event.metadata.other.as_object()
+                .and_then(|map| map.get("winner"))
+                .and_then(|obj| obj.as_str())
+                .and_then(|uuid_str| Uuid::try_parse(uuid_str).ok())
+                .ok_or_else(|| FeedParseError::MissingMetadata {
+                    event_type: event.r#type,
+                    field: "winner"
+                })?;
+            Ok(make_fed_event(event, FedEventData::GameEnd {
+                game: GameEvent::try_from_event_extra_teams(event)?,
+                winner_id,
+                winning_team_name: winning_team_name.to_string(),
+                winning_team_score,
+                losing_team_name: losing_team_name.to_string(),
+                losing_team_score,
+            }))
+        }
         EventType::BatterUp => {
             let (batter_name, inhabited, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
 
@@ -951,6 +970,24 @@ fn parse_inning_end(input: &str) -> ParserResult<i32> {
 
     Ok((input, inning_num))
 }
+
 fn parse_stopped_inhabiting(input: &str) -> ParserResult<&str> {
     parse_terminated(" stopped Inhabiting.")(input)
+}
+
+fn parse_game_end(input: &str) -> ParserResult<((&str, i32), (&str, i32))> {
+    // This is a bit tricky because it's a string of arbitrary words (a team name) followed by an
+    // arbitrary number (score)
+    let (input, winning_team_name) = take_till(AsChar::is_dec_digit)(input)?;
+    let (input, winning_team_score) = parse_whole_number(input)?;
+    let (input, _) = tag(", ")(input)?;
+    let (input, losing_team_name) = take_till(AsChar::is_dec_digit)(input)?;
+    let (input, losing_team_score) = parse_whole_number(input)?;
+
+    // Just checking that my assumption is correct. It's <= because of 20.3
+    assert!(losing_team_score <= winning_team_score);
+
+    // The parsers for *_team_name should always leave us with a space at the end
+    Ok((input, ((winning_team_name.strip_suffix(" ").unwrap(), winning_team_score),
+                (losing_team_name.strip_suffix(" ").unwrap(), losing_team_score))))
 }
