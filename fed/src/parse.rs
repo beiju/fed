@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
+use crate::event_schema::{Being, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -251,7 +251,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .and_then(|uuid_str| Uuid::try_parse(uuid_str).ok())
                 .ok_or_else(|| FeedParseError::MissingMetadata {
                     event_type: event.r#type,
-                    field: "winner"
+                    field: "winner",
                 })?;
             Ok(make_fed_event(event, FedEventData::GameEnd {
                 game: GameEvent::try_from_event_extra_teams(event)?,
@@ -381,7 +381,28 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => { todo!() }
         EventType::GainFreeRefill => { todo!() }
-        EventType::CoffeeBean => { todo!() }
+        EventType::CoffeeBean => {
+            let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
+            let (sub_event, ) = event.metadata.children.iter().collect_tuple()
+                .ok_or_else(|| FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: 1
+                })?;
+            let player_id = get_one_player_id(event)?;
+            // The player ID should match in the sub event
+            assert_eq!(player_id, get_one_player_id(sub_event)?);
+            Ok(make_fed_event(event, FedEventData::CoffeeBean {
+                game: GameEvent::try_from_event(event)?,
+                player_id,
+                player_name: player_name.to_string(),
+                roast: roast.to_string(),
+                notes: notes.to_string(),
+                which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
+                has_mod: gained,
+                sub_event: SubEvent::from_event(sub_event),
+                team_id: get_one_team_id(sub_event)?,
+            }))
+        }
         EventType::FeedbackBlocked => { todo!() }
         EventType::FeedbackSwap => { todo!() }
         EventType::SuperallergicReaction => { todo!() }
@@ -530,12 +551,11 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
                 .and_then(|m| m.as_str())
                 .map(|m| m == "INHABITING")
                 .unwrap_or(false) {
-
                 let name = run_parser(extra_child, parse_stopped_inhabiting)?;
                 Ok((result, Some(StoppedInhabiting {
                     sub_event: SubEvent::from_event(extra_child),
                     inhabiting_player_name: name.to_string(),
-                    inhabiting_player_id: get_one_player_id(extra_child)?
+                    inhabiting_player_id: get_one_player_id(extra_child)?,
                 })))
             } else {
                 Err(FeedParseError::MissingChild {
@@ -1010,4 +1030,20 @@ fn parse_mild_pitch(input: &str) -> ParserResult<(&str, i32, i32)> {
     let (input, _) = tag(".")(input)?;
 
     Ok((input, (pitcher_name, balls, strikes)))
+}
+
+fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {
+    let (input, player_name) = parse_terminated(" is Beaned by a ")(input)?;
+    let (input, roast) = parse_terminated(" roast with ")(input)?;
+    let (input, notes) = parse_terminated(".\n")(input)?;
+    let (input, player_name2) = parse_terminated(" is ")(input)?;
+    assert_eq!(player_name, player_name2);
+    let (input, (wired, gained)) = alt((
+        tag("Wired!").map(|_| (true, true)),
+        tag("no longer Wired!").map(|_| (true, false)),
+        tag("Tired!").map(|_| (false, true)),
+        tag("no longer Tired!").map(|_| (false, false)),
+    ))(input)?;
+
+    Ok((input, (player_name2, roast, notes, wired, gained)))
 }

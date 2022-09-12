@@ -136,6 +136,12 @@ pub struct StoppedInhabiting {
 }
 
 #[derive(Debug, Clone)]
+pub enum CoffeeBeanMod {
+    Wired,
+    Tired,
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -325,6 +331,18 @@ pub enum FedEventData {
         balls: i32,
         strikes: i32,
     },
+
+    CoffeeBean {
+        game: GameEvent,
+        player_id: Uuid,
+        player_name: String,
+        roast: String,
+        notes: String,
+        which_mod: CoffeeBeanMod,
+        has_mod: bool,
+        sub_event: SubEvent,
+        team_id: Uuid,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -777,6 +795,50 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
+            }
+            FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, has_mod, ref sub_event, team_id } => {
+                let change_str = if has_mod { "is" } else { "is no longer"};
+                let mod_str = match which_mod {
+                    CoffeeBeanMod::Wired => { "Wired" }
+                    CoffeeBeanMod::Tired => { "Tired" }
+                };
+                let mod_id = match which_mod {
+                    CoffeeBeanMod::Wired => { "WIRED" }
+                    CoffeeBeanMod::Tired => { "TIRED" }
+                };
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedMod)
+                    .description(format!("{} {} {}!", player_name, change_str, mod_str))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                                "mod": mod_id,
+                                "type": 3, // ?
+                                "parent": self.id
+                            }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::CoffeeBean)
+                    .category(2)
+                    .description(format!("{} is Beaned by a {} roast with {}.\n{} {} {}!",
+                                         player_name, roast, notes, player_name, change_str, mod_str))
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
