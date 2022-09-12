@@ -317,6 +317,14 @@ pub enum FedEventData {
         losing_team_name: String,
         losing_team_score: f32,
     },
+
+    MildPitch {
+        game: GameEvent,
+        pitcher_id: Uuid,
+        pitcher_name: String,
+        balls: i32,
+        strikes: i32,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -757,6 +765,16 @@ impl FedEvent {
                     ])
                     .metadata(make_game_event_metadata_builder(&game)
                         .other(json!({ "winner": winner_id }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::MildPitch)
+                    .category(2)
+                    .description(format!("{} throws a Mild pitch!\nBall, {}-{}.", pitcher_name, balls, strikes))
+                    .player_tags(vec![pitcher_id])
+                    .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
             }

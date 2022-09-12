@@ -3,11 +3,10 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
-use nom::character::complete::{char, digit1};
-use nom::character::is_digit;
-use nom::combinator::{eof, fail, map_res, opt, recognize};
+use nom::character::complete::digit1;
+use nom::combinator::{eof, fail, map_res, opt};
 use nom::error::convert_error;
-use nom::multi::{many0, many1};
+use nom::multi::many0;
 use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
@@ -338,7 +337,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::WeatherChange => { todo!() }
-        EventType::MildPitch => { todo!() }
+        EventType::MildPitch => {
+            let (pitcher_name, balls, strikes) = run_parser(&event, parse_mild_pitch)?;
+            Ok(make_fed_event(event, FedEventData::MildPitch {
+                game: GameEvent::try_from_event(event)?,
+                pitcher_id: get_one_player_id(event)?,
+                pitcher_name: pitcher_name.to_string(),
+                balls,
+                strikes,
+            }))
+        }
         EventType::InningEnd => {
             let inning_num = run_parser(&event, parse_inning_end)?;
             Ok(make_fed_event(event, FedEventData::InningEnd {
@@ -989,4 +997,17 @@ fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
     // The parsers for *_team_name should always leave us with a space at the end
     Ok((input, ((winning_team_name.strip_suffix(" ").unwrap(), winning_team_score),
                 (losing_team_name.strip_suffix(" ").unwrap(), losing_team_score))))
+}
+
+fn parse_mild_pitch(input: &str) -> ParserResult<(&str, i32, i32)> {
+    let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n")(input)?;
+
+    // TODO: "Runners advance on the pathetic play", scoring
+
+    // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
+    let (input, _) = tag("Ball, ")(input)?;
+    let (input, (balls, strikes)) = parse_count(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, (pitcher_name, balls, strikes)))
 }
