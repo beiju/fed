@@ -740,6 +740,7 @@ impl FedEvent {
                     .r#type(EventType::GroundOut)
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hit into a double play!{}", batter_name, score_text))
+                    .player_tags(scores.iter().map(|score| score.player_id).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
