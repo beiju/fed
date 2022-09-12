@@ -290,6 +290,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         batter_id: Uuid,
+        scores: Vec<Score>,
     },
 
     InningEnd {
@@ -685,12 +686,17 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Walk { game, batter_name, batter_id } => {
+            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores } => {
+                let (score_text, has_any_refills, children) =
+                    self.get_score_data(game, scores, " scores!");
+
                 event_builder.for_game(&game)
                     .r#type(EventType::Walk)
-                    .description(format!("{} draws a walk.", batter_name))
-                    .player_tags(vec![batter_id])
+                    .category(if has_any_refills { 2 } else { 0 })
+                    .description(format!("{} draws a walk.{}", batter_name, score_text))
+                    .player_tags(iter::once(batter_id).chain(scores.iter().map(|score| score.player_id)).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }

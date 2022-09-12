@@ -124,11 +124,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Walk => {
-            let batter_name = run_parser(&event, parse_walk)?;
+            let (batter_name, scores) = run_parser(&event, parse_walk)?;
+            let (&batter_id, scorer_ids) = event.player_tags.split_first()
+                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                    event_type: event.r#type,
+                    tag_type: "player",
+                    expected_num: 1 + scores.len(),
+                    actual_num: event.player_tags.len(),
+                })?;
+
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
+
+            // I don't think a walk stops inhabiting because you end up on base
+            assert!(stopped_inhabiting.is_none());
+
             Ok(make_fed_event(event, FedEventData::Walk {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
-                batter_id: get_one_player_id(event)?,
+                batter_id,
+                scores,
             }))
         }
         EventType::Strikeout => {
@@ -985,10 +999,12 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     Ok((input, ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings }))
 }
 
-fn parse_walk(input: &str) -> ParserResult<&str> {
+fn parse_walk(input: &str) -> ParserResult<(&str, Vec<ParsedScore>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
-    Ok((input, batter_name))
+    let (input, scores) = parse_scores(" scores!")(input)?;
+
+    Ok((input, (batter_name, scores)))
 }
 
 fn parse_inning_end(input: &str) -> ParserResult<i32> {
