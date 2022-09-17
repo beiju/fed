@@ -272,6 +272,7 @@ pub enum FedEventData {
         num_bases: i32,
         scores: Vec<Score>,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        heating_up: bool,
     },
 
     HomeRun {
@@ -595,7 +596,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting } => {
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, heating_up } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
 
@@ -604,15 +605,20 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
                     .category(if has_any_refills { 2 } else { 0 })
-                    .description(format!("{} hits a {}!{}", batter_name, match num_bases {
+                    .description(format!("{} hits a {}!{}{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
                         3 => "Triple",
                         4 => "Quadruple",
                         // TODO Turn this into a Result error
                         _ => panic!("Unknown hit type")
-                    }, score_text))
-                    .player_tags(iter::once(batter_id).chain(scores.iter().map(|score| score.player_id)).collect())
+                    }, score_text, if heating_up { format!("\n{} is Heating Up!", batter_name) } else { String::new() }))
+                    .player_tags(
+                        iter::once(batter_id)
+                            .chain(scores.iter().map(|score| score.player_id))
+                            .chain(if heating_up { Some(batter_id) } else { None }.into_iter())
+                            .collect()
+                    )
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()

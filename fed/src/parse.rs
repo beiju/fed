@@ -3,7 +3,7 @@ use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
-use nom::character::complete::digit1;
+use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt};
 use nom::error::convert_error;
 use nom::multi::many0;
@@ -241,8 +241,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Hit => {
-            let (batter_name, num_bases, scores) = run_parser(&event, parse_hit)?;
+            let (batter_name, num_bases, scores, heating_up) = run_parser(&event, parse_hit)?;
             if let Some((&batter_id, scorer_ids)) = event.player_tags.split_first() {
+                let scorer_ids = if heating_up {
+                    scorer_ids.split_last()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: scores.len() + 2, // i think
+                            actual_num: scorer_ids.len(),
+                        })?
+                        .1
+                } else {
+                    scorer_ids
+                };
                 let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 1)?;
 
                 Ok(make_fed_event(event, FedEventData::Hit {
@@ -252,6 +264,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     num_bases,
                     scores,
                     stopped_inhabiting,
+                    heating_up,
                 }))
             } else {
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
@@ -899,7 +912,7 @@ fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedSc
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores)))
 }
 
-fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {
+fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>, bool)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_bases) = alt((
         tag("Single!").map(|_| 1),
@@ -910,7 +923,9 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>)> {
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
-    Ok((input, (batter_name, num_bases, scores)))
+    let (input, heating_up) = opt(terminated(terminated(char('\n'), tag(batter_name)), tag(" is Heating Up!")))(input)?;
+
+    Ok((input, (batter_name, num_bases, scores, heating_up.is_some())))
 }
 
 struct ParsedScore<'a> {
