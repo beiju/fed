@@ -358,10 +358,10 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::BatterSkipped => { todo!() }
         EventType::Party => { todo!() }
         EventType::StrikeZapped => {
-            assert_eq!(event.description, "The Electricity zaps a strike away!");
-            Ok(make_fed_event(event, FedEventData::StrikeZapped {
-                game: GameEvent::try_from_event(event)?,
-            }))
+            parse_fixed_description(event, "The Electricity zaps a strike away!",
+                                    FedEventData::StrikeZapped {
+                                        game: GameEvent::try_from_event(event)?,
+                                    })
         }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => {
@@ -411,11 +411,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GainFreeRefill => { todo!() }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
-            let (sub_event, ): (&EventuallyEvent, ) = event.metadata.children.iter().collect_tuple()
-                .ok_or_else(|| FeedParseError::MissingChild {
-                    event_type: event.r#type,
-                    expected_num_children: 1,
-                })?;
+            let sub_event = get_one_sub_event(event)?;
             let player_id = get_one_player_id(event)?;
             let prev_mod = if sub_event.r#type == EventType::ModChange {
                 let mod_str = get_str_metadata(sub_event, "to")?;
@@ -459,7 +455,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::BlooddrainSiphon => { todo!() }
         EventType::BlooddrainBlocked => { todo!() }
         EventType::Incineration => { todo!() }
-        EventType::IncinerationBlocked => { todo!() }
+        EventType::IncinerationBlocked => {
+            // For now I only support magmatic, that may have to change
+            let player_name = run_parser(&event, parse_incineration_blocked)?;
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::BecameMagmatic {
+                game: GameEvent::try_from_event(event)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+                team_id: get_one_team_id(sub_event)?,
+                mod_add_event: SubEvent::from_event(sub_event),
+            }))
+        }
         EventType::FlagPlanted => { todo!() }
         EventType::RenovationBuilt => { todo!() }
         EventType::LightSwitchToggled => { todo!() }
@@ -575,6 +582,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
     }
+}
+
+fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
+    let (sub_event, ) = event.metadata.children.iter().collect_tuple()
+        .ok_or_else(|| FeedParseError::MissingChild {
+            event_type: event.r#type,
+            expected_num_children: 1,
+        })?;
+    Ok(sub_event)
 }
 
 fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<&'a str, FeedParseError> {
@@ -1111,3 +1127,14 @@ fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)
 
     Ok((input, (player_name2, roast, notes, wired, gained)))
 }
+
+
+
+fn parse_incineration_blocked(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Rogue Umpire tried to incinerate ")(input)?;
+    let (input, player_name) = parse_terminated(", but ")(input)?;
+    let (input, _) = tag(player_name)(input)?;
+    let (input, _) = tag(" ate the flame! They became Magmatic!")(input)?;
+    Ok((input, player_name))
+}
+
