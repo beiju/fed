@@ -14,6 +14,13 @@ pub enum FeedParseError {
         field: &'static str,
     },
 
+    #[error("Unexpected value \"{value}\" in metadata field \"{field}\" for {event_type:?} event")]
+    UnexpectedMetadataValue {
+        event_type: EventType,
+        field: &'static str,
+        value: String,
+    },
+
     #[error("Expected {tag_type} tag(s) for {event_type:?} event")]
     MissingTags {
         event_type: EventType,

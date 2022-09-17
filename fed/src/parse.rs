@@ -398,12 +398,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GainFreeRefill => { todo!() }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
-            let (sub_event, ) = event.metadata.children.iter().collect_tuple()
+            let (sub_event, ): (&EventuallyEvent, ) = event.metadata.children.iter().collect_tuple()
                 .ok_or_else(|| FeedParseError::MissingChild {
                     event_type: event.r#type,
-                    expected_num_children: 1
+                    expected_num_children: 1,
                 })?;
             let player_id = get_one_player_id(event)?;
+            let prev_mod = if sub_event.r#type == EventType::ModChange {
+                let mod_str = get_str_metadata(sub_event, "to")?;
+                // Check that the added mod matches what was parsed
+                assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
+                Some(get_str_metadata(sub_event, "from")?)
+            } else {
+                let mod_str = get_str_metadata(sub_event, "mod")?;
+                // Check that the added mod matches what was parsed
+                assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
+                None
+            };
             // The player ID should match in the sub event
             assert_eq!(player_id, get_one_player_id(sub_event)?);
             Ok(make_fed_event(event, FedEventData::CoffeeBean {
@@ -416,6 +427,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 has_mod: gained,
                 sub_event: SubEvent::from_event(sub_event),
                 team_id: get_one_team_id(sub_event)?,
+                previous: prev_mod.map(|s| s.try_into()
+                    .map_err(|_| FeedParseError::UnexpectedMetadataValue {
+                        event_type: sub_event.r#type,
+                        field: "from",
+                        value: s.to_string(),
+                    })
+                ).transpose()?,
             }))
         }
         EventType::FeedbackBlocked => { todo!() }
@@ -532,6 +550,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbFullShuffle => { todo!() }
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
+        EventType::ModChange => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
         EventType::ChangedModFromOtherMod => { todo!() }
         EventType::TeamWasShamed => { todo!() }
@@ -543,6 +562,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
     }
+}
+
+fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<&'a str, FeedParseError> {
+    event.metadata.other
+        .as_object()
+        .and_then(|obj| obj.get(field))
+        .and_then(|to| to.as_str())
+        .ok_or_else(|| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field,
+        })
 }
 
 fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<(Vec<Score>, Option<StoppedInhabiting>), FeedParseError> {
@@ -1060,7 +1090,7 @@ fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)
     let (input, (wired, gained)) = alt((
         tag("Wired!").map(|_| (true, true)),
         tag("no longer Wired!").map(|_| (true, false)),
-        tag("Tired!").map(|_| (false, true)),
+        tag("Tired.").map(|_| (false, true)),
         tag("no longer Tired!").map(|_| (false, false)),
     ))(input)?;
 
