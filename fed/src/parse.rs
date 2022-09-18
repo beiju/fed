@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventuallyEvent, EventType, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{Being, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -452,7 +452,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbBestowsReverberating => { todo!() }
         EventType::ReverbRosterShuffle => { todo!() }
         EventType::Blooddrain => { todo!() }
-        EventType::BlooddrainSiphon => { todo!() }
+        EventType::BlooddrainSiphon => {
+            let (sipper_name, sipped_name, sipped_category, action) = run_parser(&event, parse_blooddrain_siphon)?;
+            let (&sipper_id, &sipped_id) = event.player_tags.iter().collect_tuple()
+                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                    event_type: event.r#type,
+                    tag_type: "player",
+                    expected_num: 2,
+                    actual_num: event.player_tags.len(),
+                })?;
+
+            let stat_decrease_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
+                game: GameEvent::try_from_event(event)?,
+                sipper_id,
+                sipped_team_id: get_one_team_id(stat_decrease_event)?,
+                sipper_name: sipper_name.to_string(),
+                sipped_id,
+                sipped_name: sipped_name.to_string(),
+                sipped_category,
+                action,
+                sipped_event: SubEvent::from_event(stat_decrease_event),
+                rating_before: get_float_metadata(stat_decrease_event, "before")?,
+                rating_after: get_float_metadata(stat_decrease_event, "after")?
+            }))
+        }
         EventType::BlooddrainBlocked => { todo!() }
         EventType::Incineration => { todo!() }
         EventType::IncinerationBlocked => {
@@ -598,6 +622,17 @@ fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Resu
         .as_object()
         .and_then(|obj| obj.get(field))
         .and_then(|to| to.as_str())
+        .ok_or_else(|| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field,
+        })
+}
+
+fn get_float_metadata(event: &EventuallyEvent, field: &'static str) -> Result<f64, FeedParseError> {
+    event.metadata.other
+        .as_object()
+        .and_then(|obj| obj.get(field))
+        .and_then(|to| to.as_f64())
         .ok_or_else(|| FeedParseError::MissingMetadata {
             event_type: event.r#type,
             field,
@@ -1129,12 +1164,42 @@ fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)
 }
 
 
-
 fn parse_incineration_blocked(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("Rogue Umpire tried to incinerate ")(input)?;
     let (input, player_name) = parse_terminated(", but ")(input)?;
     let (input, _) = tag(player_name)(input)?;
     let (input, _) = tag(" ate the flame! They became Magmatic!")(input)?;
     Ok((input, player_name))
+}
+
+fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, BlooddrainAction)> {
+    let (input, _) = tag("The Blooddrain gurgled!\n")(input)?;
+    let (input, drinker_name) = parse_terminated("'s Siphon activates!\n")(input)?;
+    let (input, _) = tag(drinker_name)(input)?;
+    let (input, _) = tag(" siphoned some of ")(input)?;
+    let (input, drunk_name) = parse_terminated("'s ")(input)?;
+    let (input, category) = parse_category(input)?;
+    let (input, _) = tag(" ability!\n")(input)?;
+    let (input, _) = tag(drinker_name)(input)?;
+    let (input, action) = alt((
+        // preceded(tag(" increased their "), terminated(parse_category, tag(" ability!"))).map(|ability| BlooddrainAction::IncreaseAbility(ability)),
+        tag(" adds a Ball!").map(|_| BlooddrainAction::AddBall),
+        tag(" removes a Ball!").map(|_| BlooddrainAction::RemoveBall),
+        tag(" adds a Strike!").map(|_| BlooddrainAction::AddStrike),
+        tag(" removes a Strike!").map(|_| BlooddrainAction::RemoveStrike),
+        tag(" adds a Out!").map(|_| BlooddrainAction::AddOut),
+        tag(" removes a Out!").map(|_| BlooddrainAction::RemoveOut),
+    ))(input)?;
+
+    Ok((input, (drinker_name, drunk_name, category, action)))
+}
+
+fn parse_category(input: &str) -> ParserResult<AttrCategory> {
+    alt((
+        tag("batting").map(|_| AttrCategory::Batting),
+        tag("baserunning").map(|_| AttrCategory::Baserunning),
+        tag("pitching").map(|_| AttrCategory::Pitching),
+        tag("defense").map(|_| AttrCategory::Defense),
+    ))(input)
 }
 

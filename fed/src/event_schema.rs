@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
@@ -29,6 +30,7 @@ pub struct GameEvent {
     pub play: i64,
     pub sub_play: i64,
 }
+
 
 impl GameEvent {
     pub fn try_from_event(event: &EventuallyEvent) -> Result<Self, FeedParseError> {
@@ -158,6 +160,48 @@ impl TryFrom<&str> for CoffeeBeanMod {
             "WIRED" => Ok(Self::Wired),
             "TIRED" => Ok(Self::Tired),
             _ => Err(())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AttrCategory {
+    Batting,
+    Baserunning,
+    Pitching,
+    Defense,
+}
+
+impl Display for AttrCategory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AttrCategory::Batting => { write!(f, "batting") }
+            AttrCategory::Baserunning => { write!(f, "baserunning") }
+            AttrCategory::Pitching => { write!(f, "pitching") }
+            AttrCategory::Defense => { write!(f, "defense") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BlooddrainAction {
+    AddBall,
+    RemoveBall,
+    AddStrike,
+    RemoveStrike,
+    AddOut,
+    RemoveOut,
+}
+
+impl Display for BlooddrainAction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BlooddrainAction::AddBall => { write!(f, "adds a Ball") }
+            BlooddrainAction::RemoveBall => { write!(f, "removes a Ball") }
+            BlooddrainAction::AddStrike => { write!(f, "adds a Strike") }
+            BlooddrainAction::RemoveStrike => { write!(f, "removes a Strike") }
+            BlooddrainAction::AddOut => { write!(f, "adds a Out") }
+            BlooddrainAction::RemoveOut => { write!(f, "removes a Out") }
         }
     }
 }
@@ -375,7 +419,33 @@ pub enum FedEventData {
         player_name: String,
         team_id: Uuid,
         mod_add_event: SubEvent,
-    }
+    },
+
+    // Blooddrain {
+    //     game: GameEvent,
+    //     sipper_id: Uuid,
+    //     sipper_name: String,
+    //     sipped_id: Uuid,
+    //     sipped_name: String,
+    //     is_siphon: bool,
+    //     sipped_category: AttrCategory,
+    //     sipper_event: SubEvent,
+    //     sipped_event: SubEvent,
+    // },
+
+    SpecialBlooddrain {
+        game: GameEvent,
+        sipper_id: Uuid,
+        sipper_name: String,
+        sipped_id: Uuid,
+        sipped_team_id: Uuid,
+        sipped_name: String,
+        sipped_category: AttrCategory,
+        action: BlooddrainAction,
+        sipped_event: SubEvent,
+        rating_before: f64,
+        rating_after: f64,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -923,6 +993,39 @@ impl FedEvent {
                     .description(format!("Rogue Umpire tried to incinerate {}, but {} ate the flame! They became Magmatic!",
                                          player_name, player_name))
                     .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, ref sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sipped_event)
+                    .category(1)
+                    .r#type(EventType::PlayerStatDecrease)
+                    .description(format!("{sipped_name} had blood drained by {sipper_name}."))
+                    .team_tags(vec![sipped_team_id])
+                    .player_tags(vec![sipped_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                                "type": 1, // ?
+                                "parent": self.id,
+                                "before": rating_before,
+                                "after": rating_after,
+                            }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+                event_builder.for_game(&game)
+                    .r#type(EventType::BlooddrainSiphon)
+                    .category(2)
+                    .description(format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}!"))
+                    .player_tags(vec![sipper_id, sipped_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
                         .build()

@@ -108,7 +108,7 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Weather {
     Void = 0,
