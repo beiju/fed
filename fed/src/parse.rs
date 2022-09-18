@@ -4,15 +4,17 @@ use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{eof, fail, map_res, opt};
+use nom::combinator::{eof, fail, map_res, opt, verify};
 use nom::error::convert_error;
 use nom::multi::many0;
 use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
-use fed_api::{EventuallyEvent, EventType, Weather};
+use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
+use crate::feed_event_util;
+use crate::feed_event_util::get_one_team_id;
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -75,7 +77,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     assert_eq!(id1, id2);
                     id1
                 } else {
-                    get_one_player_id(event)?
+                    feed_event_util::get_one_player_id(event)?
                 };
 
                 Ok(make_fed_event(event, FedEventData::StolenBase {
@@ -227,11 +229,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::HomeRun => {
             let mut children = event.metadata.children.iter();
-            let (batter_name, num_runs, free_refillers) = run_parser(&event, parse_hr)?;
+            let (is_magmatic, batter_name, num_runs, free_refillers) = run_parser(&event, parse_hr)?;
+            let magmatic_event = if is_magmatic {
+                Some(feed_event_util::get_one_sub_event(event)?)
+            } else {
+                None
+            };
             Ok(make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event)?,
+                magmatic: magmatic_event.map(|e| {
+                    Ok((SubEvent::from_event(e), get_one_team_id(e)?))
+                }).transpose()?,
                 batter_name: batter_name.to_string(),
-                batter_id: get_one_player_id(event)?,
+                batter_id: feed_event_util::get_one_player_id(event)?,
                 num_runs,
                 free_refills: free_refillers.into_iter()
                     .map(|refiller_name| {
@@ -368,7 +378,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (pitcher_name, balls, strikes, runners_advance) = run_parser(&event, parse_mild_pitch)?;
             Ok(make_fed_event(event, FedEventData::MildPitch {
                 game: GameEvent::try_from_event(event)?,
-                pitcher_id: get_one_player_id(event)?,
+                pitcher_id: feed_event_util::get_one_player_id(event)?,
                 pitcher_name: pitcher_name.to_string(),
                 balls,
                 strikes,
@@ -411,21 +421,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GainFreeRefill => { todo!() }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
-            let sub_event = get_one_sub_event(event)?;
-            let player_id = get_one_player_id(event)?;
+            let sub_event = feed_event_util::get_one_sub_event(event)?;
+            let player_id = feed_event_util::get_one_player_id(event)?;
             let prev_mod = if sub_event.r#type == EventType::ModChange {
-                let mod_str = get_str_metadata(sub_event, "to")?;
+                let mod_str = feed_event_util::get_str_metadata(sub_event, "to")?;
                 // Check that the added mod matches what was parsed
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
-                Some(get_str_metadata(sub_event, "from")?)
+                Some(feed_event_util::get_str_metadata(sub_event, "from")?)
             } else {
-                let mod_str = get_str_metadata(sub_event, "mod")?;
+                let mod_str = feed_event_util::get_str_metadata(sub_event, "mod")?;
                 // Check that the added mod matches what was parsed
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
                 None
             };
             // The player ID should match in the sub event
-            assert_eq!(player_id, get_one_player_id(sub_event)?);
+            assert_eq!(player_id, feed_event_util::get_one_player_id(sub_event)?);
             Ok(make_fed_event(event, FedEventData::CoffeeBean {
                 game: GameEvent::try_from_event(event)?,
                 player_id,
@@ -435,7 +445,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
                 has_mod: gained,
                 sub_event: SubEvent::from_event(sub_event),
-                team_id: get_one_team_id(sub_event)?,
+                team_id: feed_event_util::get_one_team_id(sub_event)?,
                 previous: prev_mod.map(|s| s.try_into()
                     .map_err(|_| FeedParseError::UnexpectedMetadataValue {
                         event_type: sub_event.r#type,
@@ -462,19 +472,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     actual_num: event.player_tags.len(),
                 })?;
 
-            let stat_decrease_event = get_one_sub_event(event)?;
+            let stat_decrease_event = feed_event_util::get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
                 game: GameEvent::try_from_event(event)?,
                 sipper_id,
-                sipped_team_id: get_one_team_id(stat_decrease_event)?,
+                sipped_team_id: feed_event_util::get_one_team_id(stat_decrease_event)?,
                 sipper_name: sipper_name.to_string(),
                 sipped_id,
                 sipped_name: sipped_name.to_string(),
                 sipped_category,
                 action,
                 sipped_event: SubEvent::from_event(stat_decrease_event),
-                rating_before: get_float_metadata(stat_decrease_event, "before")?,
-                rating_after: get_float_metadata(stat_decrease_event, "after")?
+                rating_before: feed_event_util::get_float_metadata(stat_decrease_event, "before")?,
+                rating_after: feed_event_util::get_float_metadata(stat_decrease_event, "after")?
             }))
         }
         EventType::BlooddrainBlocked => { todo!() }
@@ -482,12 +492,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::IncinerationBlocked => {
             // For now I only support magmatic, that may have to change
             let player_name = run_parser(&event, parse_incineration_blocked)?;
-            let sub_event = get_one_sub_event(event)?;
+            let sub_event = feed_event_util::get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::BecameMagmatic {
                 game: GameEvent::try_from_event(event)?,
-                player_id: get_one_player_id(event)?,
+                player_id: feed_event_util::get_one_player_id(event)?,
                 player_name: player_name.to_string(),
-                team_id: get_one_team_id(sub_event)?,
+                team_id: feed_event_util::get_one_team_id(sub_event)?,
                 mod_add_event: SubEvent::from_event(sub_event),
             }))
         }
@@ -564,8 +574,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 peanuts: which_performing,
                 is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
                 sub_event: SubEvent::from_event(mod_add_event),
-                player_id: get_one_player_id(mod_add_event)?,
-                team_id: get_one_team_id(mod_add_event)?,
+                player_id: feed_event_util::get_one_player_id(mod_add_event)?,
+                team_id: feed_event_util::get_one_team_id(mod_add_event)?,
             }))
         }
         EventType::Perk => { todo!() }
@@ -608,37 +618,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
-    let (sub_event, ) = event.metadata.children.iter().collect_tuple()
-        .ok_or_else(|| FeedParseError::MissingChild {
-            event_type: event.r#type,
-            expected_num_children: 1,
-        })?;
-    Ok(sub_event)
-}
-
-fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<&'a str, FeedParseError> {
-    event.metadata.other
-        .as_object()
-        .and_then(|obj| obj.get(field))
-        .and_then(|to| to.as_str())
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
-        })
-}
-
-fn get_float_metadata(event: &EventuallyEvent, field: &'static str) -> Result<f64, FeedParseError> {
-    event.metadata.other
-        .as_object()
-        .and_then(|obj| obj.get(field))
-        .and_then(|to| to.as_f64())
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
-        })
-}
-
 fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<(Vec<Score>, Option<StoppedInhabiting>), FeedParseError> {
     let mut children = children.iter();
     if scorer_ids.len() == scores.len() {
@@ -664,7 +643,7 @@ fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children
                 Ok((result, Some(StoppedInhabiting {
                     sub_event: SubEvent::from_event(extra_child),
                     inhabiting_player_name: name.to_string(),
-                    inhabiting_player_id: get_one_player_id(extra_child)?,
+                    inhabiting_player_id: feed_event_util::get_one_player_id(extra_child)?,
                 })))
             } else {
                 Err(FeedParseError::MissingChild {
@@ -714,31 +693,6 @@ fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>,
         player_id,
         team_id,
     })
-}
-
-fn get_one_id(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> Result<Uuid, FeedParseError> {
-    if let Some((first, rest)) = tags.split_first() {
-        if rest.is_empty() {
-            Ok(*first)
-        } else {
-            Err(FeedParseError::WrongNumberOfTags {
-                event_type,
-                tag_type,
-                expected_num: 1,
-                actual_num: tags.len(),
-            })
-        }
-    } else {
-        Err(FeedParseError::MissingTags { event_type, tag_type })
-    }
-}
-
-fn get_one_player_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
-    get_one_id("player", &event.player_tags, event.r#type)
-}
-
-fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
-    get_one_id("team", &event.team_tags, event.r#type)
 }
 
 fn is_known_team_name(name: &str) -> bool {
@@ -799,7 +753,7 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
 
 fn parse_terminated(tag_content: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
-        let (input, parsed_value) = take_until1(tag_content)(input)?;
+        let (input, parsed_value) = verify(take_until1(tag_content), |s: &str| !s.contains('\n'))(input)?;
         let (input, _) = tag(tag_content)(input)?;
 
         Ok((input, parsed_value))
@@ -1013,7 +967,8 @@ fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<Parse
     }
 }
 
-fn parse_hr(input: &str) -> ParserResult<(&str, i32, Vec<&str>)> {
+fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>)> {
+    let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n"))(input)?;
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
         tag("solo home run!").map(|_| 1),
@@ -1024,7 +979,11 @@ fn parse_hr(input: &str) -> ParserResult<(&str, i32, Vec<&str>)> {
 
     let (input, free_refillers) = many0(parse_free_refill)(input)?;
 
-    Ok((input, (batter_name, num_runs, free_refillers)))
+    if let Some(name) = magmatic_player {
+        assert_eq!(name, batter_name);
+    }
+
+    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers)))
 }
 
 fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {

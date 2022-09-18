@@ -321,6 +321,7 @@ pub enum FedEventData {
 
     HomeRun {
         game: GameEvent,
+        magmatic: Option<(SubEvent, Uuid)>,
         batter_name: String,
         batter_id: Uuid,
         num_runs: i32,
@@ -702,29 +703,62 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { ref game, ref batter_name, batter_id, num_runs, ref free_refills } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills } => {
                 let suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
                                 free_refill.player_name, free_refill.player_name)
                     })
                     .join("");
+
+                let children = if let Some((sub_event, team_id)) = magmatic {
+                    vec![self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&sub_event)
+                        .category(1)
+                        .r#type(EventType::RemovedMod)
+                        .description(format!("{batter_name} hit a Magmatic home run!"))
+                        .team_tags(vec![*team_id])
+                        .player_tags(vec![batter_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0) // not sure if this is hardcoded
+                            .other(json!({
+                                "mod": "MAGMATIC",
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()]
+                } else {
+                    Vec::new()
+                };
+
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .category(if suffix.is_empty() { 0 } else { 2 })
-                    .description(format!("{} hits a {}!{}", batter_name, match num_runs {
-                        1 => "solo home run",
-                        2 => "2-run home run",
-                        3 => "3-run home run",
-                        4 => "grand slam",
-                        // TODO Turn this into a Result error
-                        _ => panic!("Unknown num runs in home run")
-                    }, suffix))
+                    .category(if magmatic.is_some() || !suffix.is_empty() { 2 } else { 0 })
+                    .description(format!("{}{} hits a {}!{}",
+                                         if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
+                                         batter_name,
+                                         match num_runs {
+                                             1 => "solo home run",
+                                             2 => "2-run home run",
+                                             3 => "3-run home run",
+                                             4 => "grand slam",
+                                             // TODO Turn this into a Result error
+                                             _ => panic!("Unknown num runs in home run")
+                                         },
+                                         suffix
+                    ))
                     .player_tags(vec![batter_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(
                             free_refills.iter()
                                 .map(|free_refill| self.make_free_refill_child(&game, free_refill))
+                                .chain(children.into_iter())
                                 .collect()
                         )
 
