@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
@@ -105,20 +105,34 @@ pub struct FreeRefill {
 }
 
 #[derive(Debug, Clone)]
-pub struct Score {
+pub struct ScoringPlayer {
     pub player_id: Uuid,
     pub player_name: String,
-    pub free_refill: Option<FreeRefill>,
 }
 
-impl Score {
+#[derive(Debug, Clone)]
+pub struct ScoreInfo {
+    pub scoring_players: Vec<ScoringPlayer>,
+    pub free_refills: Vec<FreeRefill>,
+}
+
+impl ScoreInfo {
     pub fn to_description(&self, score_text: &str) -> String {
-        let refill_text = if self.free_refill.is_some() {
-            format!("\n{} used their Free Refill.\n{} Refills the In!", self.player_name, self.player_name)
-        } else {
-            String::new()
-        };
-        format!("\n{}{}{}", self.player_name, score_text, refill_text)
+        let mut output = String::new();
+        for score in &self.scoring_players {
+            write!(output, "\n{}{}", score.player_name, score_text).unwrap();
+        }
+        for refill in &self.free_refills {
+            write!(output, "\n{} used their Free Refill.\n{} Refills the In!", refill.player_name, refill.player_name).unwrap();
+        }
+
+        output
+    }
+    
+    pub fn scorer_ids(&self) -> Vec<Uuid> {
+        self.scoring_players.iter()
+            .map(|p| p.player_id)
+            .collect()
     }
 }
 
@@ -281,7 +295,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         fielder_name: String,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
@@ -289,7 +303,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         fielder_name: String,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
@@ -298,14 +312,14 @@ pub enum FedEventData {
         batter_name: String,
         runner_out_name: String,
         out_at_base: i32,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     DoublePlay {
         game: GameEvent,
         batter_name: String,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
@@ -314,7 +328,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         num_bases: i32,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
         heating_up: bool,
     },
@@ -357,7 +371,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         batter_id: Uuid,
-        scores: Vec<Score>,
+        scores: ScoreInfo,
     },
 
     InningEnd {
@@ -669,7 +683,7 @@ impl FedEvent {
                     .r#type(EventType::FlyOut)
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hit a flyout to {}.{}", batter_name, fielder_name, score_text))
-                    .player_tags(scores.iter().map(|score| score.player_id).collect())
+                    .player_tags(scores.scorer_ids())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -694,7 +708,7 @@ impl FedEvent {
                     }, score_text, if heating_up { format!("\n{} is Heating Up!", batter_name) } else { String::new() }))
                     .player_tags(
                         iter::once(batter_id)
-                            .chain(scores.iter().map(|score| score.player_id))
+                            .chain(scores.scorer_ids())
                             .chain(if heating_up { Some(batter_id) } else { None }.into_iter())
                             .collect()
                     )
@@ -776,7 +790,7 @@ impl FedEvent {
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hit a ground out to {}.{}",
                                          batter_name, fielder_name, score_text))
-                    .player_tags(scores.iter().map(|score| score.player_id).collect())
+                    .player_tags(scores.scorer_ids())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -834,7 +848,7 @@ impl FedEvent {
                     .r#type(EventType::Walk)
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} draws a walk.{}", batter_name, score_text))
-                    .player_tags(iter::once(batter_id).chain(scores.iter().map(|score| score.player_id)).collect())
+                    .player_tags(iter::once(batter_id).chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -879,7 +893,7 @@ impl FedEvent {
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} out at {} base.{}\n{} reaches on fielder's choice.",
                                          runner_out_name, base_name(out_at_base), score_text, batter_name))
-                    .player_tags(scores.iter().map(|score| score.player_id).collect())
+                    .player_tags(scores.scorer_ids())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -913,7 +927,7 @@ impl FedEvent {
                     .r#type(EventType::GroundOut)
                     .category(if has_any_refills { 2 } else { 0 })
                     .description(format!("{} hit into a double play!{}", batter_name, score_text))
-                    .player_tags(scores.iter().map(|score| score.player_id).collect())
+                    .player_tags(scores.scorer_ids())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -1098,18 +1112,11 @@ impl FedEvent {
         }
     }
 
-    fn get_score_data(&self, game: &GameEvent, scores: &Vec<Score>, score_text: &str) -> (String, bool, Vec<EventuallyEvent>) {
-        let score_text = scores.iter()
-            .map(|score| score.to_description(score_text))
-            // the \n is in each element since it needs to be before the first element too
-            .join("");
-        let has_any_refills = scores.iter().any(|score| score.free_refill.is_some());
-        let children: Vec<_> = scores.iter()
-            .filter_map(|score| {
-                score.free_refill.as_ref().map(|free_refill| {
-                    self.make_free_refill_child(game, free_refill)
-                })
-            })
+    fn get_score_data(&self, game: &GameEvent, scores: &ScoreInfo, score_text: &str) -> (String, bool, Vec<EventuallyEvent>) {
+        let score_text = scores.to_description(score_text);
+        let has_any_refills = !scores.free_refills.is_empty();
+        let children: Vec<_> = scores.free_refills.iter()
+            .map(|free_refill| self.make_free_refill_child(game, free_refill))
             .collect();
         (score_text, has_any_refills, children)
     }

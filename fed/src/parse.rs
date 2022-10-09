@@ -12,9 +12,9 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, Score, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
 use crate::feed_event_util;
-use crate::feed_event_util::get_one_team_id;
+use crate::feed_event_util::{get_one_player_id, get_one_team_id};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -131,7 +131,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                     event_type: event.r#type,
                     tag_type: "player",
-                    expected_num: 1 + scores.len(),
+                    expected_num: 1 + scores.scorers.len(),
                     actual_num: event.player_tags.len(),
                 })?;
 
@@ -258,7 +258,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                             event_type: event.r#type,
                             tag_type: "player",
-                            expected_num: scores.len() + 2, // i think
+                            expected_num: scores.scorers.len() + 2, // i think
                             actual_num: scorer_ids.len(),
                         })?
                         .1
@@ -618,49 +618,84 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn merge_scores_with_ids(scores: Vec<ParsedScore>, scorer_ids: &[Uuid], children: &[EventuallyEvent], event_type: EventType, extra_player_tags: usize) -> Result<(Vec<Score>, Option<StoppedInhabiting>), FeedParseError> {
+fn merge_scores_with_ids(
+    scores: ParsedScores,
+    scorer_ids: &[Uuid],
+    children: &[EventuallyEvent],
+    event_type: EventType,
+    extra_player_tags: usize
+) -> Result<(ScoreInfo, Option<StoppedInhabiting>), FeedParseError> {
     let mut children = children.iter();
-    if scorer_ids.len() == scores.len() {
-        let result = scores.into_iter().zip(scorer_ids)
-            .map(|(score, &scorer_id)| Ok(Score {
-                player_id: scorer_id,
-                player_name: score.name.to_string(),
-                free_refill: if let Some(refiller_name) = score.free_refiller {
-                    Some(make_free_refill(event_type, &mut children, refiller_name)?)
-                } else {
-                    None
-                },
-            }))
-            .collect::<Result<_, _>>()?;
 
-        if let Some(extra_child) = children.next() {
-            if extra_child.r#type == EventType::RemovedMod && extra_child.metadata.other.as_object()
-                .and_then(|o| o.get("mod"))
-                .and_then(|m| m.as_str())
-                .map(|m| m == "INHABITING")
-                .unwrap_or(false) {
-                let name = run_parser(extra_child, parse_stopped_inhabiting)?;
-                Ok((result, Some(StoppedInhabiting {
-                    sub_event: SubEvent::from_event(extra_child),
-                    inhabiting_player_name: name.to_string(),
-                    inhabiting_player_id: feed_event_util::get_one_player_id(extra_child)?,
-                })))
+    if scorer_ids.len() != scores.scorers.len() {
+        return Err(FeedParseError::WrongNumberOfTags {
+            event_type,
+            tag_type: "player",
+            expected_num: scores.scorers.len() + extra_player_tags,
+            actual_num: scorer_ids.len() + extra_player_tags,
+        });
+    }
+
+    let scoring_players = scores.scorers.into_iter().zip(scorer_ids)
+        .map(|(score, &scorer_id)| Ok(ScoringPlayer {
+            player_id: scorer_id,
+            player_name: score.to_string(),
+        }))
+        .collect::<Result<_, _>>()?;
+
+
+    let free_refills = scores.refillers.into_iter()
+        .map(|name| {
+            if let Some(event) = children.next() {
+                let expected_description = format!("{} used their Free Refill.", name);
+                if event.description == expected_description {
+                    Ok(FreeRefill {
+                        sub_event: SubEvent::from_event(event),
+                        player_name: name.to_string(),
+                        player_id: get_one_player_id(event)?,
+                        team_id: get_one_team_id(event)?,
+                    })
+                } else {
+                    Err(FeedParseError::UnexpectedDescription {
+                        event_type,
+                        description: event.description.clone(),
+                        expected: expected_description,
+                    })
+                }
             } else {
                 Err(FeedParseError::MissingChild {
                     event_type,
-                    expected_num_children: 0,
+                    expected_num_children: -1
                 })
             }
+        })
+        .collect::<Result<_, _>>()?;
+
+    let result = ScoreInfo {
+        scoring_players,
+        free_refills,
+    };
+
+    if let Some(extra_child) = children.next() {
+        if extra_child.r#type == EventType::RemovedMod && extra_child.metadata.other.as_object()
+            .and_then(|o| o.get("mod"))
+            .and_then(|m| m.as_str())
+            .map(|m| m == "INHABITING")
+            .unwrap_or(false) {
+            let name = run_parser(extra_child, parse_stopped_inhabiting)?;
+            Ok((result, Some(StoppedInhabiting {
+                sub_event: SubEvent::from_event(extra_child),
+                inhabiting_player_name: name.to_string(),
+                inhabiting_player_id: feed_event_util::get_one_player_id(extra_child)?,
+            })))
         } else {
-            Ok((result, None))
+            Err(FeedParseError::MissingChild {
+                event_type,
+                expected_num_children: 0,
+            })
         }
     } else {
-        Err(FeedParseError::WrongNumberOfTags {
-            event_type,
-            tag_type: "player",
-            expected_num: scores.len() + extra_player_tags,
-            actual_num: scorer_ids.len() + extra_player_tags,
-        })
+        Ok((result, None))
     }
 }
 
@@ -859,7 +894,7 @@ fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-fn parse_flyout(input: &str) -> ParserResult<(&str, &str, Vec<ParsedScore>)> {
+fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
@@ -883,11 +918,11 @@ enum ParsedGroundOut<'a> {
     },
 }
 
-fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
+fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
     alt((parse_simple_ground_out, parse_fielders_choice, parse_double_play))(input)
 }
 
-fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
+fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
@@ -896,7 +931,7 @@ fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, Vec<Pa
     Ok((input, (ParsedGroundOut::Simple { batter_name, fielder_name }, scores)))
 }
 
-fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
+fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
     let (input, runner_out_name) = parse_terminated(" out at ")(input)?;
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.")(input)?;
@@ -909,7 +944,7 @@ fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, Vec<Pars
     Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores)))
 }
 
-fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedScore>)> {
+fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
     let (input, batter_name) = parse_terminated(" hit into a double play!")(input)?;
 
     let (input, scores) = parse_scores(" scores!")(input)?;
@@ -917,7 +952,7 @@ fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, Vec<ParsedSc
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores)))
 }
 
-fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>, bool)> {
+fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, bool)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_bases) = alt((
         tag("Single!").map(|_| 1),
@@ -933,9 +968,9 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, Vec<ParsedScore>, bool)> {
     Ok((input, (batter_name, num_bases, scores, heating_up.is_some())))
 }
 
-struct ParsedScore<'a> {
-    name: &'a str,
-    free_refiller: Option<&'a str>,
+struct ParsedScores<'a> {
+    scorers: Vec<&'a str>,
+    refillers: Vec<&'a str>,
 }
 
 fn parse_free_refill(input: &str) -> ParserResult<&str> {
@@ -947,23 +982,24 @@ fn parse_free_refill(input: &str) -> ParserResult<&str> {
     Ok((input, name))
 }
 
-fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
+fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<ParsedScores<'a>> {
     move |input| {
-        let (input, out) = opt(many0(parse_score(score_label)))(input)?;
+        let (input, scorers) = many0(parse_score(score_label))(input)?;
+        let (input, refillers) = many0(parse_free_refill)(input)?;
 
-        Ok((input, out.unwrap_or(Vec::new())))
+        Ok((input, ParsedScores {
+            scorers,
+            refillers
+        }))
     }
 }
 
-fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<ParsedScore> {
+fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
         let (input, _) = tag("\n")(input)?;
         let (input, name) = parse_terminated(score_label)(input)?;
-        let (input, free_refiller) = opt(parse_free_refill)(input)?;
 
-        if let Some(free_refiller) = free_refiller { assert_eq!(name, free_refiller); }
-
-        Ok((input, ParsedScore { name, free_refiller }))
+        Ok((input, name))
     }
 }
 
@@ -1054,7 +1090,7 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     Ok((input, ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings }))
 }
 
-fn parse_walk(input: &str) -> ParserResult<(&str, Vec<ParsedScore>)> {
+fn parse_walk(input: &str) -> ParserResult<(&str, ParsedScores)> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
     let (input, scores) = parse_scores(" scores!")(input)?;
