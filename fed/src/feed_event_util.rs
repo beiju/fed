@@ -23,6 +23,20 @@ pub fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> 
         })
 }
 
+pub fn get_str_vec_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<Vec<&'a str>, FeedParseError> {
+    event.metadata.other
+        .as_object()
+        .and_then(|obj| obj.get(field))
+        .and_then(|to| {
+            to.as_array()
+                .and_then(|arr| arr.iter().map(|v| v.as_str()).collect::<Option<Vec<_>>>())
+        })
+        .ok_or_else(|| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field,
+        })
+}
+
 pub fn get_float_metadata(event: &EventuallyEvent, field: &'static str) -> Result<f64, FeedParseError> {
     event.metadata.other
         .as_object()

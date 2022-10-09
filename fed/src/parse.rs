@@ -12,9 +12,9 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
 use crate::feed_event_util;
-use crate::feed_event_util::{get_one_player_id, get_one_team_id};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_str_metadata, get_str_vec_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -484,7 +484,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 action,
                 sipped_event: SubEvent::from_event(stat_decrease_event),
                 rating_before: feed_event_util::get_float_metadata(stat_decrease_event, "before")?,
-                rating_after: feed_event_util::get_float_metadata(stat_decrease_event, "after")?
+                rating_after: feed_event_util::get_float_metadata(stat_decrease_event, "after")?,
             }))
         }
         EventType::BlooddrainBlocked => { todo!() }
@@ -584,7 +584,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ShameDonor => { todo!() }
         EventType::AddedMod => { todo!() }
         EventType::RemovedMod => { todo!() }
-        EventType::ModExpires => { todo!() }
+        EventType::ModExpires => {
+            let (player_name, mod_duration) = run_parser(&event, parse_mod_expires)?;
+            let mods = get_str_vec_metadata(event, "mods")?;
+            Ok(make_fed_event(event, FedEventData::ModExpires {
+                team_id: get_one_team_id(event)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+                mods: mods.into_iter().map(String::from).collect(),
+                mod_duration
+            }))
+        }
         EventType::PlayerAddedToTeam => { todo!() }
         EventType::PlayerReplacedByNecromancy => { todo!() }
         EventType::PlayerReplacesReturned => { todo!() }
@@ -623,7 +633,7 @@ fn merge_scores_with_ids(
     scorer_ids: &[Uuid],
     children: &[EventuallyEvent],
     event_type: EventType,
-    extra_player_tags: usize
+    extra_player_tags: usize,
 ) -> Result<(ScoreInfo, Option<StoppedInhabiting>), FeedParseError> {
     let mut children = children.iter();
 
@@ -665,7 +675,7 @@ fn merge_scores_with_ids(
             } else {
                 Err(FeedParseError::MissingChild {
                     event_type,
-                    expected_num_children: -1
+                    expected_num_children: -1,
                 })
             }
         })
@@ -989,7 +999,7 @@ fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserR
 
         Ok((input, ParsedScores {
             scorers,
-            refillers
+            refillers,
         }))
     }
 }
@@ -1165,6 +1175,20 @@ fn parse_incineration_blocked(input: &str) -> ParserResult<&str> {
     let (input, _) = tag(player_name)(input)?;
     let (input, _) = tag(" ate the flame! They became Magmatic!")(input)?;
     Ok((input, player_name))
+}
+
+fn parse_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+    // This message treats possessives of names ending in s correctly
+    let (input, player_name) = alt((
+        parse_terminated("'s "),
+        parse_terminated("' ")
+    ))(input)?;
+    let (input, duration) = alt((
+        tag("game").map(|_| ModDuration::Game),
+        tag("seasonal").map(|_| ModDuration::Seasonal),
+    ))(input)?;
+    let (input, _) = tag(" mods wore off.")(input)?;
+    Ok((input, (player_name, duration)))
 }
 
 fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, BlooddrainAction)> {

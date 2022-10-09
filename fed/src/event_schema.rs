@@ -221,6 +221,26 @@ impl Display for BlooddrainAction {
 }
 
 #[derive(Debug, Clone)]
+#[repr(i32)]
+pub enum ModDuration {
+    Permanent = 0,
+    Seasonal = 1,
+    Weekly = 2,
+    Game = 3
+}
+
+impl Display for ModDuration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModDuration::Permanent => { write!(f, "permanent") }
+            ModDuration::Seasonal => { write!(f, "seasonal") }
+            ModDuration::Weekly => { write!(f, "weekly") }
+            ModDuration::Game => { write!(f, "game") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -461,6 +481,14 @@ pub enum FedEventData {
         rating_before: f64,
         rating_after: f64,
     },
+
+    ModExpires {
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        mods: Vec<String>,
+        mod_duration: ModDuration,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -1076,6 +1104,27 @@ impl FedEvent {
                     .player_tags(vec![sipper_id, sipped_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::ModExpires { team_id, player_id, player_name, mods, mod_duration } => {
+                let player_name_possessive = if player_name.chars().last().unwrap() == 's' {
+                    player_name + "'"
+                } else {
+                    player_name + "'s"
+                };
+                let duration_str = mod_duration.to_string();
+                event_builder
+                    .r#type(EventType::ModExpires)
+                    .category(1)
+                    .description(format!("{player_name_possessive} {duration_str} mods wore off."))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mods": mods,
+                            "type": mod_duration as i32
+                        }))
                         .build()
                         .unwrap())
             }
