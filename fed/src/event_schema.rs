@@ -488,6 +488,10 @@ pub enum FedEventData {
         player_name: String,
         mods: Vec<String>,
         mod_duration: ModDuration,
+    },
+
+    BirdsCircle {
+        game: GameEvent,
     }
 }
 
@@ -1127,6 +1131,13 @@ impl FedEvent {
                         }))
                         .build()
                         .unwrap())
+            }
+            FedEventData::BirdsCircle { game } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::BirdsCircle)
+                    .category(2)
+                    .description("The Birds circle ... but they don't find what they're looking for.".to_string())
+
             }
         }
             .build()

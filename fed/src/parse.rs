@@ -414,7 +414,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::BlackHole => { todo!() }
         EventType::Sun2 => { todo!() }
-        EventType::BirdsCircle => { todo!() }
+        EventType::BirdsCircle => {
+            parse_fixed_description(event, "The Birds circle ... but they don't find what they're looking for.", FedEventData::BirdsCircle {
+                game: GameEvent::try_from_event(event)?,
+            })
+        }
         EventType::FriendOfCrows => { todo!() }
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => { todo!() }
