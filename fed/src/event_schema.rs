@@ -380,11 +380,13 @@ pub enum FedEventData {
     StrikeoutSwinging {
         game: GameEvent,
         batter_name: String,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     StrikeoutLooking {
         game: GameEvent,
         batter_name: String,
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     Walk {
@@ -856,19 +858,21 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::StrikeoutSwinging { game, batter_name } => {
+            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
                     .description(format!("{} strikes out swinging.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
                         .build()
                         .unwrap())
             }
-            FedEventData::StrikeoutLooking { game, batter_name } => {
+            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
                     .description(format!("{} strikes out looking.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
                         .build()
                         .unwrap())
             }
@@ -1142,6 +1146,12 @@ impl FedEvent {
         }
             .build()
             .unwrap()
+    }
+
+    fn stopped_inhabiting_children(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>) -> Vec<EventuallyEvent> {
+        let mut vec = Vec::new();
+        self.push_stopped_inhabiting(game, stopped_inhabiting, &mut vec);
+        vec
     }
 
     fn push_stopped_inhabiting(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>, children: &mut Vec<EventuallyEvent>) {

@@ -148,17 +148,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Strikeout => {
+
+
             match run_parser(&event, parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
+                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &event.metadata.children, event.r#type, 0)?;
                     Ok(make_fed_event(event, FedEventData::StrikeoutSwinging {
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
+                        stopped_inhabiting,
                     }))
                 }
                 ParsedStrikeout::Looking(batter_name) => {
+                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &event.metadata.children, event.r#type, 0)?;
                     Ok(make_fed_event(event, FedEventData::StrikeoutLooking {
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
+                        stopped_inhabiting,
                     }))
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
@@ -985,6 +991,15 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, bool)> {
 struct ParsedScores<'a> {
     scorers: Vec<&'a str>,
     refillers: Vec<&'a str>,
+}
+
+impl ParsedScores<'_> {
+    fn empty() -> Self {
+        ParsedScores {
+            scorers: Vec::new(),
+            refillers: Vec::new(),
+        }
+    }
 }
 
 fn parse_free_refill(input: &str) -> ParserResult<&str> {
