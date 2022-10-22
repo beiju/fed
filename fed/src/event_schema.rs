@@ -269,6 +269,7 @@ pub enum FedEventData {
         team_name: String,
         wielding_item: Option<String>,
         inhabiting: Option<Inhabiting>,
+        is_repeating: bool,
     },
 
     SuperyummyGameStart {
@@ -577,20 +578,25 @@ impl FedEvent {
                                          inning,
                                          batting_team_name))
             }
-            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, wielding_item: ref wielding_item_name, ref inhabiting } => {
+            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, wielding_item: ref wielding_item_name, ref inhabiting, is_repeating } => {
                 let item_suffix = if let Some(item_name) = wielding_item_name {
                     format!(", wielding {}", item_name)
                 } else {
                     String::default()
                 };
+                let prefix = if is_repeating {
+                    format!("{batter_name} is Repeating!\n")
+                } else {
+                    String::default()
+                };
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterUp)
-                    .category(if inhabiting.is_some() { 2 } else { 0 })
+                    .category(if inhabiting.is_some() || is_repeating { 2 } else { 0 })
                     .description(if let Some(inhabiting) = &inhabiting {
-                        format!("{} is Inhabiting {}!\n{} batting for the {}{}.", batter_name,
+                        format!("{prefix}{} is Inhabiting {}!\n{} batting for the {}{}.", batter_name,
                                 inhabiting.inhabited_player_name, batter_name, team_name, item_suffix)
                     } else {
-                        format!("{} batting for the {}{}.", batter_name, team_name, item_suffix)
+                        format!("{prefix}{} batting for the {}{}.", batter_name, team_name, item_suffix)
                     })
                     .player_tags(if let Some(inhabiting) = inhabiting {
                         vec![inhabiting.inhabiting_player_id, inhabiting.inhabited_player_id]

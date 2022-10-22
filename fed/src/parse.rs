@@ -306,7 +306,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::BatterUp => {
-            let (batter_name, inhabited, team_name, wielding_item) = run_parser(&event, parse_batter_up)?;
+            let (batter_name, inhabited, team_name, wielding_item, is_repeating) = run_parser(&event, parse_batter_up)?;
 
             // I missed `team_name: "Millennials, wielding An Actual Airplane"` once and I don't
             // want something like that to happen again
@@ -340,6 +340,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         inhabited_player_id,
                     })
                 }).transpose()?,
+                is_repeating,
             }))
         }
         EventType::Strike => {
@@ -834,7 +835,8 @@ fn parse_whole_number(input: &str) -> ParserResult<i32> {
     map_res(digit1, str::parse)(input)
 }
 
-fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>)> {
+fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>, bool)> {
+    let (input, repeating) = opt(parse_terminated("is Repeating!\n"))(input)?;
     let (input, (batter_name, inhabiting_name)) = alt((
         // NOTE order matters here. inhabiting must be first
         parse_batter_up_inhabiting,
@@ -849,7 +851,7 @@ fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Optio
         parse_wielding_item.map(|s| Some(s))
     ))(input)?;
 
-    Ok((input, (batter_name, inhabiting_name, team_name, wielding_item)))
+    Ok((input, (batter_name, inhabiting_name, team_name, wielding_item, repeating.is_some())))
 }
 
 fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>)> {
