@@ -13,7 +13,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -86,33 +86,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     base_stolen,
                     blaserunning,
                     free_refill: free_refiller.map(|refiller_name| {
-                        let (sub_event, ) = event.metadata.children.iter().collect_tuple()
-                            .ok_or_else(|| FeedParseError::MissingChild {
-                                event_type: event.r#type,
-                                expected_num_children: 1,
-                            })?;
-
-                        let (&team_id, ) = sub_event.team_tags.iter().collect_tuple()
-                            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                                event_type: sub_event.r#type,
-                                tag_type: "team",
-                                expected_num: 1,
-                                actual_num: sub_event.team_tags.len(),
-                            })?;
-
-                        let (&player_id, ) = sub_event.player_tags.iter().collect_tuple()
-                            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                                event_type: sub_event.r#type,
-                                tag_type: "player",
-                                expected_num: 1,
-                                actual_num: sub_event.player_tags.len(),
-                            })?;
-
+                        let sub_event = get_one_sub_event(event)?;
                         Ok(FreeRefill {
                             sub_event: SubEvent::from_event(sub_event),
                             player_name: refiller_name.to_string(),
-                            player_id,
-                            team_id,
+                            player_id: get_one_player_id(sub_event)?,
+                            team_id: get_one_team_id(sub_event)?,
                         })
                     }).transpose()?,
                 }))
@@ -125,26 +104,42 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Walk => {
-            let (batter_name, scores) = run_parser(&event, parse_walk)?;
-            let (&batter_id, scorer_ids) = event.player_tags.split_first()
-                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                    event_type: event.r#type,
-                    tag_type: "player",
-                    expected_num: 1 + scores.scorers.len(),
-                    actual_num: event.player_tags.len(),
-                })?;
+            let parsed_walk = run_parser(&event, parse_walk)?;
+            match parsed_walk {
+                ParsedWalk::Ordinary((batter_name, scores)) => {
+                    let (&batter_id, scorer_ids) = event.player_tags.split_first()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 1 + scores.scorers.len(),
+                            actual_num: event.player_tags.len(),
+                        })?;
 
-            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
 
-            // I don't think a walk stops inhabiting because you end up on base
-            assert!(stopped_inhabiting.is_none());
+                    // I don't think a walk stops inhabiting because you end up on base
+                    assert!(stopped_inhabiting.is_none());
 
-            Ok(make_fed_event(event, FedEventData::Walk {
-                game: GameEvent::try_from_event(event)?,
-                batter_name: batter_name.to_string(),
-                batter_id,
-                scores,
-            }))
+                    Ok(make_fed_event(event, FedEventData::Walk {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                        batter_id,
+                        scores,
+                    }))
+
+                }
+                ParsedWalk::Charm((batter_name, pitcher_name)) => {
+                    let (batter_id, charmer_id) = get_two_player_ids(event)?;
+                    assert_eq!(batter_id, charmer_id);
+                    Ok(make_fed_event(event, FedEventData::CharmWalk {
+                        game: GameEvent::try_from_event(event)?,
+                        batter_name: batter_name.to_string(),
+                        batter_id,
+                        pitcher_name: pitcher_name.to_string()
+                    }))
+
+                }
+            }
         }
         EventType::Strikeout => {
 
@@ -1202,12 +1197,34 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     Ok((input, ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings }))
 }
 
-fn parse_walk(input: &str) -> ParserResult<(&str, ParsedScores)> {
+enum ParsedWalk<'s> {
+    Ordinary((&'s str, ParsedScores<'s>)),
+    Charm((&'s str, &'s str))
+}
+
+fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
+    alt((
+        parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
+        parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
+    ))(input)
+}
+
+fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores)> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
     Ok((input, (batter_name, scores)))
+}
+
+fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
+    // This will need to be updated if anyone charms in a run
+    let (input, batter_name) = parse_terminated(" charms ")(input)?;
+    let (input, pitcher_name) = parse_terminated("!\n")(input)?;
+    let (input, _) = tag(batter_name)(input)?;
+    let (input, _) = tag(" walks to first base.")(input)?;
+
+    Ok((input, (batter_name, pitcher_name)))
 }
 
 fn parse_inning_end(input: &str) -> ParserResult<i32> {

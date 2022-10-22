@@ -2,6 +2,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent};
 use itertools::Itertools;
 use crate::error::FeedParseError;
+use crate::event_schema::{FedEventData, GameEvent};
 
 pub fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
     let (sub_event, ) = event.metadata.children.iter().collect_tuple()
@@ -82,4 +83,25 @@ pub fn get_one_player_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError
 
 pub fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
     get_one_id("team", &event.team_tags, event.r#type)
+}
+
+fn get_two_ids(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> Result<(Uuid, Uuid), FeedParseError> {
+    tags.iter()
+        .cloned()
+        .collect_tuple()
+        .ok_or_else(||
+            FeedParseError::WrongNumberOfTags {
+                event_type,
+                tag_type,
+                expected_num: 2,
+                actual_num: tags.len(),
+            })
+}
+
+pub fn get_two_player_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {
+    get_two_ids("player", &event.player_tags, event.r#type)
+}
+
+pub fn get_two_team_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {
+    get_two_ids("team", &event.team_tags, event.r#type)
 }

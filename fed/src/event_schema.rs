@@ -532,6 +532,13 @@ pub enum FedEventData {
         total_shames: i64,
         total_shamings: i64,
     },
+
+    CharmWalk {
+        game: GameEvent,
+        batter_name: String,
+        batter_id: Uuid,
+        pitcher_name: String,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1238,6 +1245,13 @@ impl FedEvent {
                         }))
                         .build()
                         .unwrap())
+            }
+            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Walk)
+                    .category(2)
+                    .description(format!("{batter_name} charms {pitcher_name}!\n{batter_name} walks to first base."))
+                    .player_tags(vec![batter_id, batter_id]) // two of them
             }
         }
             .build()
