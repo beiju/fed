@@ -361,6 +361,7 @@ pub enum FedEventData {
         batter_id: Uuid,
         num_runs: i32,
         free_refills: Vec<FreeRefill>,
+        heating_up: bool,
     },
 
     StolenBase {
@@ -792,13 +793,19 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, heating_up } => {
                 let suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
                                 free_refill.player_name, free_refill.player_name)
                     })
                     .join("");
+
+                let suffix = if heating_up {
+                    format!("{suffix}\n{batter_name} is Heating Up!")
+                } else {
+                    suffix
+                };
 
                 let children = if let Some((sub_event, team_id)) = magmatic {
                     vec![self.make_event_builder()
@@ -828,7 +835,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .category(if magmatic.is_some() || !suffix.is_empty() { 2 } else { 0 })
+                    .category(if magmatic.is_some() || !free_refills.is_empty() { 2 } else { 0 })
                     .description(format!("{}{} hits a {}!{}",
                                          if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
                                          batter_name,
@@ -842,7 +849,7 @@ impl FedEvent {
                                          },
                                          suffix
                     ))
-                    .player_tags(vec![batter_id])
+                    .player_tags(if heating_up { vec![batter_id, batter_id] } else { vec![batter_id] })
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(
                             free_refills.iter()

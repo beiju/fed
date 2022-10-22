@@ -234,11 +234,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::HomeRun => {
             let mut children = event.metadata.children.iter();
-            let (is_magmatic, batter_name, num_runs, free_refillers) = run_parser(&event, parse_hr)?;
+            let (is_magmatic, batter_name, num_runs, free_refillers, heating_up) = run_parser(&event, parse_hr)?;
             let magmatic_event = if is_magmatic {
                 Some(get_one_sub_event(event)?)
             } else {
                 None
+            };
+            let batter_id = if heating_up {
+                let (&id1, &id2) = event.player_tags.iter().collect_tuple()
+                    .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                        event_type: event.r#type,
+                        tag_type: "player",
+                        expected_num: 2,
+                        actual_num: event.player_tags.len(),
+                    })?;
+                assert_eq!(id1, id2, "Two IDs from Heating Up should match");
+                id1
+            } else {
+                get_one_player_id(event)?
             };
             Ok(make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event)?,
@@ -246,13 +259,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     Ok((SubEvent::from_event(e), get_one_team_id(e)?))
                 }).transpose()?,
                 batter_name: batter_name.to_string(),
-                batter_id: get_one_player_id(event)?,
+                batter_id,
                 num_runs,
                 free_refills: free_refillers.into_iter()
                     .map(|refiller_name| {
                         make_free_refill(event.r#type, &mut children, refiller_name)
                     })
                     .collect::<Result<_, _>>()?,
+                heating_up,
             }))
         }
         EventType::Hit => {
@@ -1043,9 +1057,16 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, bool)> {
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
-    let (input, heating_up) = opt(terminated(terminated(char('\n'), tag(batter_name)), tag(" is Heating Up!")))(input)?;
+    let (input, heating_up) = parse_heating_up(batter_name)(input)?;
 
-    Ok((input, (batter_name, num_bases, scores, heating_up.is_some())))
+    Ok((input, (batter_name, num_bases, scores, heating_up)))
+}
+
+fn parse_heating_up(batter_name: &str) -> impl FnMut(&str) -> ParserResult<bool> + '_ {
+    move |input: &str| {
+        let (input, heating_up) = opt(terminated(terminated(char('\n'), tag(batter_name)), tag(" is Heating Up!")))(input)?;
+        Ok((input, heating_up.is_some()))
+    }
 }
 
 struct ParsedScores<'a> {
@@ -1092,7 +1113,7 @@ fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<&str>
     }
 }
 
-fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>)> {
+fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, bool)> {
     let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n"))(input)?;
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
@@ -1108,7 +1129,9 @@ fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>)> {
         assert_eq!(name, batter_name);
     }
 
-    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers)))
+    let (input, heating_up) = parse_heating_up(batter_name)(input)?;
+
+    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, heating_up)))
 }
 
 fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
