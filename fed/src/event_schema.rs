@@ -495,7 +495,15 @@ pub enum FedEventData {
 
     BirdsCircle {
         game: GameEvent,
-    }
+    },
+
+    FriendOfCrows {
+        game: GameEvent,
+        batter_uuid: Uuid,
+        batter_name: String,
+        pitcher_uuid: Uuid,
+        pitcher_name: String,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1148,6 +1156,13 @@ impl FedEvent {
                     .category(2)
                     .description("The Birds circle ... but they don't find what they're looking for.".to_string())
 
+            }
+            FedEventData::FriendOfCrows { game, batter_uuid, batter_name, pitcher_uuid, pitcher_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::FriendOfCrows)
+                    .category(2)
+                    .description(format!("{pitcher_name} calls upon their Friends!\nA murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
+                    .player_tags(vec![pitcher_uuid, batter_uuid])
             }
         }
             .build()

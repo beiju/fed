@@ -426,7 +426,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event)?,
             })
         }
-        EventType::FriendOfCrows => { todo!() }
+        EventType::FriendOfCrows => {
+            let (pitcher_name, batter_name) = run_parser(&event, parse_friend_of_crows)?;
+            let (pitcher_uuid, batter_uuid) = event.player_tags.iter().cloned().collect_tuple()
+                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                    event_type: event.r#type,
+                    tag_type: "player",
+                    expected_num: 2,
+                    actual_num: event.player_tags.len(),
+                })?;
+
+            Ok(make_fed_event(event, FedEventData::FriendOfCrows {
+                game: GameEvent::try_from_event(event)?,
+                pitcher_uuid,
+                pitcher_name: pitcher_name.to_string(),
+                batter_uuid,
+                batter_name: batter_name.to_string(),
+            }))
+
+        }
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => { todo!() }
         EventType::GainFreeRefill => { todo!() }
@@ -1241,5 +1259,12 @@ fn parse_category(input: &str) -> ParserResult<AttrCategory> {
         tag("pitching").map(|_| AttrCategory::Pitching),
         tag("defense").map(|_| AttrCategory::Defense),
     ))(input)
+}
+
+fn parse_friend_of_crows(input: &str)-> ParserResult<(&str, &str)> {
+    let (input, pitcher_name) = parse_terminated(" calls upon their Friends!\nA murder of Crows ambush ")(input)?;
+    let (input, batter_name) = parse_terminated("!\nThey run to safety, resulting in an out.")(input)?;
+
+    Ok((input, (pitcher_name, batter_name)))
 }
 
