@@ -499,10 +499,21 @@ pub enum FedEventData {
 
     FriendOfCrows {
         game: GameEvent,
-        batter_uuid: Uuid,
+        batter_id: Uuid,
         batter_name: String,
-        pitcher_uuid: Uuid,
+        pitcher_id: Uuid,
         pitcher_name: String,
+    },
+
+    BlackHoleSwallowedWin {
+        team_id: Uuid,
+        team_nickname: String,
+    },
+
+    BlackHole {
+        game: GameEvent,
+        scoring_team_nickname: String,
+        victim_team_nickname: String,
     },
 }
 
@@ -1157,12 +1168,25 @@ impl FedEvent {
                     .description("The Birds circle ... but they don't find what they're looking for.".to_string())
 
             }
-            FedEventData::FriendOfCrows { game, batter_uuid, batter_name, pitcher_uuid, pitcher_name } => {
+            FedEventData::FriendOfCrows { game, batter_id, batter_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::FriendOfCrows)
                     .category(2)
                     .description(format!("{pitcher_name} calls upon their Friends!\nA murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
-                    .player_tags(vec![pitcher_uuid, batter_uuid])
+                    .player_tags(vec![pitcher_id, batter_id])
+            }
+            FedEventData::BlackHoleSwallowedWin { team_id, team_nickname } => {
+                event_builder
+                    .r#type(EventType::BlackHoleSwallowedWin)
+                    .category(3)
+                    .description(format!("The Black Hole swallowed a Win from the {team_nickname}!"))
+                    .team_tags(vec![team_id])
+            }
+            FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::BlackHole)
+                    .category(2)
+                    .description(format!("The {scoring_team_nickname} collect 10!\nThe Black Hole swallows the Runs and a {victim_team_nickname} Win."))
             }
         }
             .build()

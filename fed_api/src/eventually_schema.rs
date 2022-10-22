@@ -25,6 +25,15 @@ impl IntoIterator for EventuallyResponse {
     }
 }
 
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: Default + Deserialize<'de>,
+        D: serde::Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder)]
 #[builder(default, pattern = "owned", setter(strip_option))]
@@ -58,7 +67,9 @@ pub struct EventuallyEvent {
     pub created: DateTime<Utc>,
     pub r#type: EventType,
     pub category: i32,
-    pub metadata: EventMetadata,
+    // Some event types have "metadata: null", this replaces that with a default EventMetadata
+    #[serde(deserialize_with = "deserialize_null_default")]
+    #[builder(default)] pub metadata: EventMetadata,
     pub blurb: String,
     pub description: String,
     #[builder(default)] pub player_tags: Vec<Uuid>,
@@ -255,6 +266,7 @@ pub enum EventType {
     ChangedModFromOtherMod = 148,
     TeamWasShamed = 154,
     TeamDidShame = 155,
+    BlackHoleSwallowedWin = 157,
     RunsScored = 209,
     WinCollectedRegular = 214,
     WinCollectedPostseason = 215,

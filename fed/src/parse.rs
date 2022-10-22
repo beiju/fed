@@ -13,8 +13,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
-use crate::feed_event_util;
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_str_metadata, get_str_vec_metadata};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -77,7 +76,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     assert_eq!(id1, id2);
                     id1
                 } else {
-                    feed_event_util::get_one_player_id(event)?
+                    get_one_player_id(event)?
                 };
 
                 Ok(make_fed_event(event, FedEventData::StolenBase {
@@ -237,7 +236,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let mut children = event.metadata.children.iter();
             let (is_magmatic, batter_name, num_runs, free_refillers) = run_parser(&event, parse_hr)?;
             let magmatic_event = if is_magmatic {
-                Some(feed_event_util::get_one_sub_event(event)?)
+                Some(get_one_sub_event(event)?)
             } else {
                 None
             };
@@ -247,7 +246,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     Ok((SubEvent::from_event(e), get_one_team_id(e)?))
                 }).transpose()?,
                 batter_name: batter_name.to_string(),
-                batter_id: feed_event_util::get_one_player_id(event)?,
+                batter_id: get_one_player_id(event)?,
                 num_runs,
                 free_refills: free_refillers.into_iter()
                     .map(|refiller_name| {
@@ -385,7 +384,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (pitcher_name, balls, strikes, runners_advance) = run_parser(&event, parse_mild_pitch)?;
             Ok(make_fed_event(event, FedEventData::MildPitch {
                 game: GameEvent::try_from_event(event)?,
-                pitcher_id: feed_event_util::get_one_player_id(event)?,
+                pitcher_id: get_one_player_id(event)?,
                 pitcher_name: pitcher_name.to_string(),
                 balls,
                 strikes,
@@ -419,7 +418,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 message: event.description.clone(),
             }))
         }
-        EventType::BlackHole => { todo!() }
+        EventType::BlackHole => {
+            let (scoring_team, victim_team) = run_parser(&event, parse_black_hole)?;
+            assert!(is_known_team_nickname(scoring_team));
+            assert!(is_known_team_nickname(victim_team));
+            Ok(make_fed_event(event, FedEventData::BlackHole {
+                game: GameEvent::try_from_event(event)?,
+                scoring_team_nickname: scoring_team.to_string(),
+                victim_team_nickname: victim_team.to_string()
+            }))
+        }
         EventType::Sun2 => { todo!() }
         EventType::BirdsCircle => {
             parse_fixed_description(event, "The Birds circle ... but they don't find what they're looking for.", FedEventData::BirdsCircle {
@@ -438,9 +446,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             Ok(make_fed_event(event, FedEventData::FriendOfCrows {
                 game: GameEvent::try_from_event(event)?,
-                pitcher_uuid,
+                pitcher_id: pitcher_uuid,
                 pitcher_name: pitcher_name.to_string(),
-                batter_uuid,
+                batter_id: batter_uuid,
                 batter_name: batter_name.to_string(),
             }))
 
@@ -450,21 +458,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GainFreeRefill => { todo!() }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
-            let sub_event = feed_event_util::get_one_sub_event(event)?;
-            let player_id = feed_event_util::get_one_player_id(event)?;
+            let sub_event = get_one_sub_event(event)?;
+            let player_id = get_one_player_id(event)?;
             let prev_mod = if sub_event.r#type == EventType::ModChange {
-                let mod_str = feed_event_util::get_str_metadata(sub_event, "to")?;
+                let mod_str = get_str_metadata(sub_event, "to")?;
                 // Check that the added mod matches what was parsed
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
-                Some(feed_event_util::get_str_metadata(sub_event, "from")?)
+                Some(get_str_metadata(sub_event, "from")?)
             } else {
-                let mod_str = feed_event_util::get_str_metadata(sub_event, "mod")?;
+                let mod_str = get_str_metadata(sub_event, "mod")?;
                 // Check that the added mod matches what was parsed
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
                 None
             };
             // The player ID should match in the sub event
-            assert_eq!(player_id, feed_event_util::get_one_player_id(sub_event)?);
+            assert_eq!(player_id, get_one_player_id(sub_event)?);
             Ok(make_fed_event(event, FedEventData::CoffeeBean {
                 game: GameEvent::try_from_event(event)?,
                 player_id,
@@ -474,7 +482,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
                 has_mod: gained,
                 sub_event: SubEvent::from_event(sub_event),
-                team_id: feed_event_util::get_one_team_id(sub_event)?,
+                team_id: get_one_team_id(sub_event)?,
                 previous: prev_mod.map(|s| s.try_into()
                     .map_err(|_| FeedParseError::UnexpectedMetadataValue {
                         event_type: sub_event.r#type,
@@ -501,19 +509,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     actual_num: event.player_tags.len(),
                 })?;
 
-            let stat_decrease_event = feed_event_util::get_one_sub_event(event)?;
+            let stat_decrease_event = get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
                 game: GameEvent::try_from_event(event)?,
                 sipper_id,
-                sipped_team_id: feed_event_util::get_one_team_id(stat_decrease_event)?,
+                sipped_team_id: get_one_team_id(stat_decrease_event)?,
                 sipper_name: sipper_name.to_string(),
                 sipped_id,
                 sipped_name: sipped_name.to_string(),
                 sipped_category,
                 action,
                 sipped_event: SubEvent::from_event(stat_decrease_event),
-                rating_before: feed_event_util::get_float_metadata(stat_decrease_event, "before")?,
-                rating_after: feed_event_util::get_float_metadata(stat_decrease_event, "after")?,
+                rating_before: get_float_metadata(stat_decrease_event, "before")?,
+                rating_after: get_float_metadata(stat_decrease_event, "after")?,
             }))
         }
         EventType::BlooddrainBlocked => { todo!() }
@@ -521,12 +529,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::IncinerationBlocked => {
             // For now I only support magmatic, that may have to change
             let player_name = run_parser(&event, parse_incineration_blocked)?;
-            let sub_event = feed_event_util::get_one_sub_event(event)?;
+            let sub_event = get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::BecameMagmatic {
                 game: GameEvent::try_from_event(event)?,
-                player_id: feed_event_util::get_one_player_id(event)?,
+                player_id: get_one_player_id(event)?,
                 player_name: player_name.to_string(),
-                team_id: feed_event_util::get_one_team_id(sub_event)?,
+                team_id: get_one_team_id(sub_event)?,
                 mod_add_event: SubEvent::from_event(sub_event),
             }))
         }
@@ -603,8 +611,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 peanuts: which_performing,
                 is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
                 sub_event: SubEvent::from_event(mod_add_event),
-                player_id: feed_event_util::get_one_player_id(mod_add_event)?,
-                team_id: feed_event_util::get_one_team_id(mod_add_event)?,
+                player_id: get_one_player_id(mod_add_event)?,
+                team_id: get_one_team_id(mod_add_event)?,
             }))
         }
         EventType::Perk => { todo!() }
@@ -654,6 +662,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GameOver => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
+        EventType::BlackHoleSwallowedWin => {
+            let team_name = run_parser(&event, parse_black_hole_swallowed_win)?;
+            assert!(is_known_team_nickname(team_name));
+            Ok(make_fed_event(event, FedEventData::BlackHoleSwallowedWin {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_name.to_string(),
+            }))
+        }
     }
 }
 
@@ -725,7 +741,7 @@ fn merge_scores_with_ids(
             Ok((result, Some(StoppedInhabiting {
                 sub_event: SubEvent::from_event(extra_child),
                 inhabiting_player_name: name.to_string(),
-                inhabiting_player_id: feed_event_util::get_one_player_id(extra_child)?,
+                inhabiting_player_id: get_one_player_id(extra_child)?,
             })))
         } else {
             Err(FeedParseError::MissingChild {
@@ -1266,5 +1282,20 @@ fn parse_friend_of_crows(input: &str)-> ParserResult<(&str, &str)> {
     let (input, batter_name) = parse_terminated("!\nThey run to safety, resulting in an out.")(input)?;
 
     Ok((input, (pitcher_name, batter_name)))
+}
+
+fn parse_black_hole_swallowed_win(input: &str)-> ParserResult<&str> {
+    let (input, _) = tag("The Black Hole swallowed a Win from the ")(input)?;
+    let (input, team_name) = parse_terminated("!")(input)?;
+
+    Ok((input, team_name))
+}
+
+fn parse_black_hole(input: &str)-> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, scoring_team) = parse_terminated(" collect 10!\nThe Black Hole swallows the Runs and a ")(input)?;
+    let (input, victim_team) = parse_terminated(" Win.")(input)?;
+
+    Ok((input, (scoring_team, victim_team)))
 }
 
