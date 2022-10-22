@@ -13,7 +13,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -654,8 +654,32 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ModChange => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
         EventType::ChangedModFromOtherMod => { todo!() }
-        EventType::TeamWasShamed => { todo!() }
-        EventType::TeamDidShame => { todo!() }
+        EventType::TeamWasShamed => {
+            let (shaming_team, shamed_team) = run_parser(&event, parse_team_was_shamed)?;
+            assert!(is_known_team_nickname(shaming_team));
+            assert!(is_known_team_nickname(shamed_team));
+
+            Ok(make_fed_event(event, FedEventData::TeamWasShamed {
+                shamed_team_id: get_one_team_id(event)?,
+                shaming_team_nickname: shaming_team.to_string(),
+                shamed_team_nickname: shamed_team.to_string(),
+                total_shames: get_int_metadata(event, "totalShames")?,
+                total_shamings: get_int_metadata(event, "totalShamings")?,
+            }))
+        }
+        EventType::TeamDidShame => {
+            let (shaming_team, shamed_team) = run_parser(&event, parse_team_did_shame)?;
+            assert!(is_known_team_nickname(shaming_team));
+            assert!(is_known_team_nickname(shamed_team));
+
+            Ok(make_fed_event(event, FedEventData::TeamDidShame {
+                shaming_team_id: get_one_team_id(event)?,
+                shaming_team_nickname: shaming_team.to_string(),
+                shamed_team_nickname: shamed_team.to_string(),
+                total_shames: get_int_metadata(event, "totalShames")?,
+                total_shamings: get_int_metadata(event, "totalShamings")?,
+            }))
+        }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }
@@ -1297,5 +1321,21 @@ fn parse_black_hole(input: &str)-> ParserResult<(&str, &str)> {
     let (input, victim_team) = parse_terminated(" Win.")(input)?;
 
     Ok((input, (scoring_team, victim_team)))
+}
+
+fn parse_team_did_shame(input: &str)-> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, shaming_team) = parse_terminated(" shamed the ")(input)?;
+    let (input, shamed_team) = parse_terminated(".")(input)?;
+
+    Ok((input, (shaming_team, shamed_team)))
+}
+
+fn parse_team_was_shamed(input: &str)-> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, shamed_team) = parse_terminated(" were shamed by the ")(input)?;
+    let (input, shaming_team) = parse_terminated(".")(input)?;
+
+    Ok((input, (shaming_team, shamed_team)))
 }
 

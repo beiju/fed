@@ -515,6 +515,22 @@ pub enum FedEventData {
         scoring_team_nickname: String,
         victim_team_nickname: String,
     },
+
+    TeamDidShame {
+        shaming_team_id: Uuid,
+        shaming_team_nickname: String,
+        shamed_team_nickname: String,
+        total_shames: i64,
+        total_shamings: i64,
+    },
+
+    TeamWasShamed {
+        shamed_team_id: Uuid,
+        shaming_team_nickname: String,
+        shamed_team_nickname: String,
+        total_shames: i64,
+        total_shamings: i64,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1187,6 +1203,34 @@ impl FedEvent {
                     .r#type(EventType::BlackHole)
                     .category(2)
                     .description(format!("The {scoring_team_nickname} collect 10!\nThe Black Hole swallows the Runs and a {victim_team_nickname} Win."))
+            }
+            FedEventData::TeamDidShame { shaming_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
+                event_builder
+                    .r#type(EventType::TeamDidShame)
+                    .category(3)
+                    .description(format!("The {shaming_team_nickname} shamed the {shamed_team_nickname}."))
+                    .team_tags(vec![shaming_team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "totalShames": total_shames,
+                            "totalShamings": total_shamings,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::TeamWasShamed { shamed_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
+                event_builder
+                    .r#type(EventType::TeamWasShamed)
+                    .category(3)
+                    .description(format!("The {shamed_team_nickname} were shamed by the {shaming_team_nickname}."))
+                    .team_tags(vec![shamed_team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "totalShames": total_shames,
+                            "totalShamings": total_shamings,
+                        }))
+                        .build()
+                        .unwrap())
             }
         }
             .build()

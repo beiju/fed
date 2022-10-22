@@ -48,6 +48,17 @@ pub fn get_float_metadata(event: &EventuallyEvent, field: &'static str) -> Resul
         })
 }
 
+pub fn get_int_metadata(event: &EventuallyEvent, field: &'static str) -> Result<i64, FeedParseError> {
+    event.metadata.other
+        .as_object()
+        .and_then(|obj| obj.get(field))
+        .and_then(|to| to.as_i64())
+        .ok_or_else(|| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field,
+        })
+}
+
 fn get_one_id(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> Result<Uuid, FeedParseError> {
     if let Some((first, rest)) = tags.split_first() {
         if rest.is_empty() {
