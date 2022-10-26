@@ -2,15 +2,18 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent};
 use itertools::Itertools;
 use crate::error::FeedParseError;
-use crate::event_schema::{FedEventData, GameEvent};
 
-pub fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
-    let (sub_event, ) = event.metadata.children.iter().collect_tuple()
+pub fn get_one_sub_event_from_slice(children: &[EventuallyEvent], event_type: EventType) -> Result<&EventuallyEvent, FeedParseError> {
+    let (sub_event, ) = children.iter().collect_tuple()
         .ok_or_else(|| FeedParseError::MissingChild {
-            event_type: event.r#type,
+            event_type,
             expected_num_children: 1,
         })?;
     Ok(sub_event)
+}
+
+pub(crate) fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
+    get_one_sub_event_from_slice(&event.metadata.children, event.r#type)
 }
 
 pub fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<&'a str, FeedParseError> {

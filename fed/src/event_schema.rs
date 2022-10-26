@@ -241,6 +241,32 @@ impl Display for ModDuration {
 }
 
 #[derive(Debug, Clone)]
+pub enum SpicyStatus {
+    None,
+    HeatingUp,
+    RedHot {
+        sub_event: SubEvent,
+        // Player ID is already on the parent event
+        team_id: Uuid,
+    },
+}
+
+impl SpicyStatus {
+    pub fn is_none(&self) -> bool {
+        match self {
+            SpicyStatus::None => true,
+            _ => false
+        }
+    }
+    pub fn is_special(&self) -> bool {
+        match self {
+            SpicyStatus::RedHot { .. } => true,
+            _ => false
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -351,7 +377,7 @@ pub enum FedEventData {
         num_bases: i32,
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
-        heating_up: bool,
+        spicy_status: SpicyStatus,
     },
 
     HomeRun {
@@ -361,7 +387,7 @@ pub enum FedEventData {
         batter_id: Uuid,
         num_runs: i32,
         free_refills: Vec<FreeRefill>,
-        heating_up: bool,
+        spicy_status: SpicyStatus,
     },
 
     StolenBase {
@@ -772,15 +798,47 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, heating_up } => {
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
+                if let SpicyStatus::RedHot { sub_event, team_id } = spicy_status {
+                    children.push(
+                        self.make_event_builder()
+                            .for_game(&game)
+                            .for_sub_event(&sub_event)
+                            .category(1)
+                            .r#type(EventType::AddedMod)
+                            .description(format!("{batter_name} is Red Hot!"))
+                            .team_tags(vec![*team_id])
+                            .player_tags(vec![batter_id])
+                            .metadata(EventMetadataBuilder::default()
+                                .play(game.play)
+                                .sub_play(0) // not sure if this is hardcoded
+                                .other(json!({
+                                    "mod": "ON_FIRE",
+                                    "type": 0, // ?
+                                    "parent": self.id
+                                }))
+                                .build()
+                                .unwrap()
+                            )
+                            .build()
+                            .unwrap()
+
+                    )
+                }
+
+                let spicy_text = match spicy_status {
+                    SpicyStatus::None => String::new(),
+                    SpicyStatus::HeatingUp => format!("\n{} is Heating Up!", batter_name),
+                    SpicyStatus::RedHot{ .. } => format!("\n{} is Red Hot!", batter_name),
+                };
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
-                    .category(if has_any_refills { 2 } else { 0 })
+                    .category(if has_any_refills || spicy_status.is_special() { 2 } else { 0 })
                     .description(format!("{} hits a {}!{}{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
@@ -788,11 +846,11 @@ impl FedEvent {
                         4 => "Quadruple",
                         // TODO Turn this into a Result error
                         _ => panic!("Unknown hit type")
-                    }, score_text, if heating_up { format!("\n{} is Heating Up!", batter_name) } else { String::new() }))
+                    }, score_text, spicy_text))
                     .player_tags(
                         iter::once(batter_id)
                             .chain(scores.scorer_ids())
-                            .chain(if heating_up { Some(batter_id) } else { None }.into_iter())
+                            .chain(if spicy_status.is_none() { None } else { Some(batter_id) }.into_iter())
                             .collect()
                     )
                     .metadata(make_game_event_metadata_builder(&game)
@@ -800,7 +858,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, heating_up } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status } => {
                 let suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
@@ -808,10 +866,10 @@ impl FedEvent {
                     })
                     .join("");
 
-                let suffix = if heating_up {
-                    format!("{suffix}\n{batter_name} is Heating Up!")
-                } else {
-                    suffix
+                let suffix = match spicy_status {
+                    SpicyStatus::None => suffix,
+                    SpicyStatus::HeatingUp => format!("{suffix}\n{batter_name} is Heating Up!"),
+                    SpicyStatus::RedHot { .. } => format!("{suffix}\n{batter_name} is Red Hot!"),
                 };
 
                 let children = if let Some((sub_event, team_id)) = magmatic {
@@ -856,7 +914,7 @@ impl FedEvent {
                                          },
                                          suffix
                     ))
-                    .player_tags(if heating_up { vec![batter_id, batter_id] } else { vec![batter_id] })
+                    .player_tags(if spicy_status.is_none() { vec![batter_id] } else { vec![batter_id, batter_id] })
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(
                             free_refills.iter()

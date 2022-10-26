@@ -12,8 +12,8 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -126,7 +126,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         batter_id,
                         scores,
                     }))
-
                 }
                 ParsedWalk::Charm((batter_name, pitcher_name)) => {
                     let (batter_id, charmer_id) = get_two_player_ids(event)?;
@@ -135,15 +134,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         batter_id,
-                        pitcher_name: pitcher_name.to_string()
+                        pitcher_name: pitcher_name.to_string(),
                     }))
-
                 }
             }
         }
         EventType::Strikeout => {
-
-
             match run_parser(&event, parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
                     let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &event.metadata.children, event.r#type, 0)?;
@@ -229,24 +225,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::HomeRun => {
             let mut children = event.metadata.children.iter();
-            let (is_magmatic, batter_name, num_runs, free_refillers, heating_up) = run_parser(&event, parse_hr)?;
+            let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status) = run_parser(&event, parse_hr)?;
+            let (remaining_children, spicy_status) = extract_spicy_event(event, spicy_status)?;
             let magmatic_event = if is_magmatic {
-                Some(get_one_sub_event(event)?)
+                Some(get_one_sub_event_from_slice(remaining_children, event.r#type)?)
             } else {
                 None
             };
-            let batter_id = if heating_up {
-                let (&id1, &id2) = event.player_tags.iter().collect_tuple()
-                    .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                        event_type: event.r#type,
-                        tag_type: "player",
-                        expected_num: 2,
-                        actual_num: event.player_tags.len(),
-                    })?;
+            let batter_id = if let SpicyStatus::None = spicy_status {
+                get_one_player_id(event)?
+            } else {
+                let (id1, id2) = get_two_player_ids(event)?;
                 assert_eq!(id1, id2, "Two IDs from Heating Up should match");
                 id1
-            } else {
-                get_one_player_id(event)?
             };
             Ok(make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event)?,
@@ -261,13 +252,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         make_free_refill(event.r#type, &mut children, refiller_name)
                     })
                     .collect::<Result<_, _>>()?,
-                heating_up,
+                spicy_status,
             }))
         }
         EventType::Hit => {
-            let (batter_name, num_bases, scores, heating_up) = run_parser(&event, parse_hit)?;
+            let (batter_name, num_bases, scores, spicy_status) = run_parser(&event, parse_hit)?;
             if let Some((&batter_id, scorer_ids)) = event.player_tags.split_first() {
-                let scorer_ids = if heating_up {
+                let scorer_ids = if spicy_status != ParsedSpicyStatus::None {
                     scorer_ids.split_last()
                         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                             event_type: event.r#type,
@@ -279,7 +270,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 } else {
                     scorer_ids
                 };
-                let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 1)?;
+
+                let (score_children, spicy_status) = extract_spicy_event(event, spicy_status)?;
+                let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, score_children, event.r#type, 1)?;
 
                 Ok(make_fed_event(event, FedEventData::Hit {
                     game: GameEvent::try_from_event(event)?,
@@ -288,7 +281,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     num_bases,
                     scores,
                     stopped_inhabiting,
-                    heating_up,
+                    spicy_status,
                 }))
             } else {
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
@@ -434,7 +427,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             Ok(make_fed_event(event, FedEventData::BlackHole {
                 game: GameEvent::try_from_event(event)?,
                 scoring_team_nickname: scoring_team.to_string(),
-                victim_team_nickname: victim_team.to_string()
+                victim_team_nickname: victim_team.to_string(),
             }))
         }
         EventType::Sun2 => { todo!() }
@@ -460,7 +453,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_id: batter_uuid,
                 batter_name: batter_name.to_string(),
             }))
-
         }
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => { todo!() }
@@ -638,7 +630,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 player_id: get_one_player_id(event)?,
                 player_name: player_name.to_string(),
                 mods: mods.into_iter().map(String::from).collect(),
-                mod_duration
+                mod_duration,
             }))
         }
         EventType::PlayerAddedToTeam => { todo!() }
@@ -704,6 +696,29 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
     }
+}
+
+fn extract_spicy_event(event: &EventuallyEvent, spicy_status: ParsedSpicyStatus) -> Result<(&[EventuallyEvent], SpicyStatus), FeedParseError> {
+    Ok(match spicy_status {
+        ParsedSpicyStatus::None => { (event.metadata.children.as_slice(), SpicyStatus::None) }
+        ParsedSpicyStatus::HeatingUp => { (event.metadata.children.as_slice(), SpicyStatus::HeatingUp) }
+        ParsedSpicyStatus::RedHot => {
+            // TODO Is the spicy event always the last? first? neither?
+            if let Some((spicy_event, children)) = event.metadata.children.split_last() {
+                // TODO Make this assert into a propagated error
+                assert_eq!(spicy_event.r#type, EventType::AddedMod);
+                (children, SpicyStatus::RedHot {
+                    sub_event: SubEvent::from_event(spicy_event),
+                    team_id: get_one_team_id(spicy_event)?,
+                })
+            } else {
+                Err(FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: 1,  // at least one
+                })?
+            }
+        }
+    })
 }
 
 fn merge_scores_with_ids(
@@ -1041,7 +1056,7 @@ fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores)))
 }
 
-fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, bool)> {
+fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, ParsedSpicyStatus)> {
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_bases) = alt((
         tag("Single!").map(|_| 1),
@@ -1052,15 +1067,25 @@ fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, bool)> {
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
-    let (input, heating_up) = parse_heating_up(batter_name)(input)?;
+    let (input, spicy_status) = parse_spicy_status(batter_name)(input)?;
 
-    Ok((input, (batter_name, num_bases, scores, heating_up)))
+    Ok((input, (batter_name, num_bases, scores, spicy_status)))
 }
 
-fn parse_heating_up(batter_name: &str) -> impl FnMut(&str) -> ParserResult<bool> + '_ {
+#[derive(PartialEq)]
+enum ParsedSpicyStatus {
+    None,
+    HeatingUp,
+    RedHot,
+}
+
+fn parse_spicy_status(batter_name: &str) -> impl FnMut(&str) -> ParserResult<ParsedSpicyStatus> + '_ {
     move |input: &str| {
-        let (input, heating_up) = opt(terminated(terminated(char('\n'), tag(batter_name)), tag(" is Heating Up!")))(input)?;
-        Ok((input, heating_up.is_some()))
+        let (input, heating_up) = opt(alt((
+            terminated(terminated(char('\n'), tag(batter_name)), tag(" is Heating Up!")).map(|_| ParsedSpicyStatus::HeatingUp),
+            terminated(terminated(char('\n'), tag(batter_name)), tag(" is Red Hot!")).map(|_| ParsedSpicyStatus::RedHot),
+        )))(input)?;
+        Ok((input, heating_up.unwrap_or(ParsedSpicyStatus::None)))
     }
 }
 
@@ -1108,7 +1133,7 @@ fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<&str>
     }
 }
 
-fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, bool)> {
+fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus)> {
     let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n"))(input)?;
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
@@ -1124,9 +1149,9 @@ fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, bool)> {
         assert_eq!(name, batter_name);
     }
 
-    let (input, heating_up) = parse_heating_up(batter_name)(input)?;
+    let (input, spicy_status) = parse_spicy_status(batter_name)(input)?;
 
-    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, heating_up)))
+    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status)))
 }
 
 fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
@@ -1199,7 +1224,7 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
 
 enum ParsedWalk<'s> {
     Ordinary((&'s str, ParsedScores<'s>)),
-    Charm((&'s str, &'s str))
+    Charm((&'s str, &'s str)),
 }
 
 fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -1341,21 +1366,21 @@ fn parse_category(input: &str) -> ParserResult<AttrCategory> {
     ))(input)
 }
 
-fn parse_friend_of_crows(input: &str)-> ParserResult<(&str, &str)> {
+fn parse_friend_of_crows(input: &str) -> ParserResult<(&str, &str)> {
     let (input, pitcher_name) = parse_terminated(" calls upon their Friends!\nA murder of Crows ambush ")(input)?;
     let (input, batter_name) = parse_terminated("!\nThey run to safety, resulting in an out.")(input)?;
 
     Ok((input, (pitcher_name, batter_name)))
 }
 
-fn parse_black_hole_swallowed_win(input: &str)-> ParserResult<&str> {
+fn parse_black_hole_swallowed_win(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The Black Hole swallowed a Win from the ")(input)?;
     let (input, team_name) = parse_terminated("!")(input)?;
 
     Ok((input, team_name))
 }
 
-fn parse_black_hole(input: &str)-> ParserResult<(&str, &str)> {
+fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ")(input)?;
     let (input, scoring_team) = parse_terminated(" collect 10!\nThe Black Hole swallows the Runs and a ")(input)?;
     let (input, victim_team) = parse_terminated(" Win.")(input)?;
@@ -1363,7 +1388,7 @@ fn parse_black_hole(input: &str)-> ParserResult<(&str, &str)> {
     Ok((input, (scoring_team, victim_team)))
 }
 
-fn parse_team_did_shame(input: &str)-> ParserResult<(&str, &str)> {
+fn parse_team_did_shame(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ")(input)?;
     let (input, shaming_team) = parse_terminated(" shamed the ")(input)?;
     let (input, shamed_team) = parse_terminated(".")(input)?;
@@ -1371,7 +1396,7 @@ fn parse_team_did_shame(input: &str)-> ParserResult<(&str, &str)> {
     Ok((input, (shaming_team, shamed_team)))
 }
 
-fn parse_team_was_shamed(input: &str)-> ParserResult<(&str, &str)> {
+fn parse_team_was_shamed(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ")(input)?;
     let (input, shamed_team) = parse_terminated(" were shamed by the ")(input)?;
     let (input, shaming_team) = parse_terminated(".")(input)?;
