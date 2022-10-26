@@ -1,4 +1,5 @@
 use thiserror::Error;
+use uuid::Uuid;
 use fed_api::EventType;
 
 #[derive(Error, Debug)]
@@ -33,6 +34,14 @@ pub enum FeedParseError {
         tag_type: &'static str,
         expected_num: usize,
         actual_num: usize,
+    },
+
+    #[error("Expected equal {tag_type} tag(s) for {event_type:?} event but saw {tag1} and {tag2}")]
+    ExpectedEqualTags {
+        event_type: EventType,
+        tag_type: &'static str,
+        tag1: Uuid,
+        tag2: Uuid,
     },
 
     #[error("Expected {expected_num_children} children for {event_type:?} event")]

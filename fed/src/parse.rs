@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModDuration, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -65,19 +65,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::StolenBase => {
             let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = run_parser(&event, parse_stolen_base)?;
             if is_successful {
-                let runner_id = if blaserunning {
-                    let (&id1, &id2) = event.player_tags.iter().collect_tuple()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type: event.r#type,
-                            tag_type: "player",
-                            expected_num: 2,
-                            actual_num: event.player_tags.len(),
-                        })?;
-                    assert_eq!(id1, id2);
-                    id1
-                } else {
-                    get_one_player_id(event)?
-                };
+                let runner_id = get_one_player_id_advanced(event, blaserunning)?;
 
                 Ok(make_fed_event(event, FedEventData::StolenBase {
                     game: GameEvent::try_from_event(event)?,
@@ -191,8 +179,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::GroundOut => {
-            let (parsed_out, scores) = run_parser(&event, parse_ground_out)?;
-            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+            let (parsed_out, scores, cooled_off) = run_parser(&event, parse_ground_out)?;
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, cooled_off, &event.player_tags)?;
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             match parsed_out {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     Ok(make_fed_event(event, FedEventData::GroundOut {
@@ -201,6 +190,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         fielder_name: fielder_name.to_string(),
                         scores,
                         stopped_inhabiting,
+                        cooled_off,
                     }))
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -232,13 +222,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             } else {
                 None
             };
-            let batter_id = if let SpicyStatus::None = spicy_status {
-                get_one_player_id(event)?
-            } else {
-                let (id1, id2) = get_two_player_ids(event)?;
-                assert_eq!(id1, id2, "Two IDs from Heating Up should match");
-                id1
-            };
+
+            let batter_id = get_one_player_id_advanced(event, !spicy_status.is_none())?;
             Ok(make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event)?,
                 magmatic: magmatic_event.map(|e| {
@@ -326,13 +311,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         })?;
 
                     // These live on the parent
-                    let (&inhabiting_player_id, &inhabited_player_id) = event.player_tags.iter().collect_tuple()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type: event.r#type,
-                            tag_type: "player",
-                            expected_num: 2,
-                            actual_num: event.player_tags.len(),
-                        })?;
+                    let (inhabiting_player_id, inhabited_player_id) = get_two_player_ids(event)?;
 
                     Ok(Inhabiting {
                         sub_event: SubEvent::from_event(child),
@@ -502,13 +481,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Blooddrain => { todo!() }
         EventType::BlooddrainSiphon => {
             let (sipper_name, sipped_name, sipped_category, action) = run_parser(&event, parse_blooddrain_siphon)?;
-            let (&sipper_id, &sipped_id) = event.player_tags.iter().collect_tuple()
-                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                    event_type: event.r#type,
-                    tag_type: "player",
-                    expected_num: 2,
-                    actual_num: event.player_tags.len(),
-                })?;
+            let (sipper_id, sipped_id) = get_two_player_ids(event)?;
 
             let stat_decrease_event = get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
@@ -698,6 +671,30 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
+fn get_one_player_id_advanced(event: &EventuallyEvent, has_extra_id: bool) -> Result<Uuid, FeedParseError> {
+    if has_extra_id {
+        let (&id1, &id2) = event.player_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                event_type: event.r#type,
+                tag_type: "player",
+                expected_num: 2,
+                actual_num: event.player_tags.len(),
+            })?;
+        if id1 != id2 {
+            Err(FeedParseError::ExpectedEqualTags {
+                event_type: event.r#type,
+                tag_type: "player",
+                tag1: id1,
+                tag2: id2,
+            })
+        } else {
+            Ok(id1)
+        }
+    } else {
+        get_one_player_id(event)
+    }
+}
+
 fn extract_spicy_event(event: &EventuallyEvent, spicy_status: ParsedSpicyStatus) -> Result<(&[EventuallyEvent], SpicyStatus), FeedParseError> {
     Ok(match spicy_status {
         ParsedSpicyStatus::None => { (event.metadata.children.as_slice(), SpicyStatus::None) }
@@ -707,10 +704,41 @@ fn extract_spicy_event(event: &EventuallyEvent, spicy_status: ParsedSpicyStatus)
             if let Some((spicy_event, children)) = event.metadata.children.split_last() {
                 // TODO Make this assert into a propagated error
                 assert_eq!(spicy_event.r#type, EventType::AddedMod);
-                (children, SpicyStatus::RedHot {
+                (children, SpicyStatus::RedHot(ModChangeSubEvent {
                     sub_event: SubEvent::from_event(spicy_event),
                     team_id: get_one_team_id(spicy_event)?,
-                })
+                }))
+            } else {
+                Err(FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: 1,  // at least one
+                })?
+            }
+        }
+    })
+}
+
+fn extract_cooled_off_event<'e, 't>(event: &'e EventuallyEvent, cooled_off: bool, player_tags: &'t [Uuid]) -> Result<(&'e [EventuallyEvent], Option<ModChangeSubEventWithPlayer>, &'t [Uuid]), FeedParseError> {
+    Ok(match cooled_off {
+        false => { (event.metadata.children.as_slice(), None, player_tags) }
+        true => {
+            // TODO Is the spicy event always the last? first? neither?
+            if let Some((cooled_off_event, children)) = event.metadata.children.split_last() {
+                // TODO Make this assert into a propagated error
+                assert_eq!(cooled_off_event.r#type, EventType::RemovedMod);
+                let (&player_id, remaining_tags) = player_tags.split_last()
+                    .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                        event_type: event.r#type,
+                        tag_type: "player",
+                        expected_num: 1, // at least
+                        actual_num: 0
+                    })?;
+
+                (children, Some(ModChangeSubEventWithPlayer {
+                    sub_event: SubEvent::from_event(cooled_off_event),
+                    team_id: get_one_team_id(cooled_off_event)?,
+                    player_id,
+                }), remaining_tags)
             } else {
                 Err(FeedParseError::MissingChild {
                     event_type: event.r#type,
@@ -1022,20 +1050,22 @@ enum ParsedGroundOut<'a> {
     },
 }
 
-fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
+fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
     alt((parse_simple_ground_out, parse_fielders_choice, parse_double_play))(input)
 }
 
-fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
+fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
     let (input, scores) = parse_scores(" advances on the sacrifice.")(input)?;
 
-    Ok((input, (ParsedGroundOut::Simple { batter_name, fielder_name }, scores)))
+    let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
+
+    Ok((input, (ParsedGroundOut::Simple { batter_name, fielder_name }, scores, cooled_off)))
 }
 
-fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
+fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
     let (input, runner_out_name) = parse_terminated(" out at ")(input)?;
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.")(input)?;
@@ -1045,15 +1075,19 @@ fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedSc
 
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
 
-    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores)))
+    let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
+
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores, cooled_off)))
 }
 
-fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores)> {
+fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
     let (input, batter_name) = parse_terminated(" hit into a double play!")(input)?;
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
-    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores)))
+    let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
+
+    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores, cooled_off)))
 }
 
 fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, ParsedSpicyStatus)> {
@@ -1086,6 +1120,15 @@ fn parse_spicy_status(batter_name: &str) -> impl FnMut(&str) -> ParserResult<Par
             terminated(terminated(char('\n'), tag(batter_name)), tag(" is Red Hot!")).map(|_| ParsedSpicyStatus::RedHot),
         )))(input)?;
         Ok((input, heating_up.unwrap_or(ParsedSpicyStatus::None)))
+    }
+}
+
+fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserResult<bool> + '_ {
+    move |input: &str| {
+        let (input, cooled_off) = opt(
+            terminated(terminated(char('\n'), tag(batter_name)), tag(" cooled off.")),
+        )(input)?;
+        Ok((input, cooled_off.is_some()))
     }
 }
 

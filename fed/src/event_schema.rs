@@ -241,14 +241,23 @@ impl Display for ModDuration {
 }
 
 #[derive(Debug, Clone)]
+pub struct ModChangeSubEvent {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModChangeSubEventWithPlayer {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
 pub enum SpicyStatus {
     None,
     HeatingUp,
-    RedHot {
-        sub_event: SubEvent,
-        // Player ID is already on the parent event
-        team_id: Uuid,
-    },
+    RedHot(ModChangeSubEvent),
 }
 
 impl SpicyStatus {
@@ -352,6 +361,7 @@ pub enum FedEventData {
         fielder_name: String,
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        cooled_off: Option<ModChangeSubEventWithPlayer>
     },
 
     FieldersChoice {
@@ -804,15 +814,15 @@ impl FedEvent {
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
-                if let SpicyStatus::RedHot { sub_event, team_id } = spicy_status {
+                if let SpicyStatus::RedHot(red_hot) = spicy_status {
                     children.push(
                         self.make_event_builder()
                             .for_game(&game)
-                            .for_sub_event(&sub_event)
+                            .for_sub_event(&red_hot.sub_event)
                             .category(1)
                             .r#type(EventType::AddedMod)
                             .description(format!("{batter_name} is Red Hot!"))
-                            .team_tags(vec![*team_id])
+                            .team_tags(vec![red_hot.team_id])
                             .player_tags(vec![batter_id])
                             .metadata(EventMetadataBuilder::default()
                                 .play(game.play)
@@ -827,7 +837,6 @@ impl FedEvent {
                             )
                             .build()
                             .unwrap()
-
                     )
                 }
 
@@ -926,18 +935,52 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting } => {
+            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " advances on the sacrifice.");
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
+                if let Some(cooled_off) = cooled_off {
+                    children.push(
+                        self.make_event_builder()
+                            .for_game(&game)
+                            .for_sub_event(&cooled_off.sub_event)
+                            .category(1)
+                            .r#type(EventType::RemovedMod)
+                            .description(format!("{batter_name} cooled off."))
+                            .team_tags(vec![cooled_off.team_id])
+                            .player_tags(vec![cooled_off.player_id])
+                            .metadata(EventMetadataBuilder::default()
+                                .play(game.play)
+                                .sub_play(0) // not sure if this is hardcoded
+                                .other(json!({
+                                    "mod": "ON_FIRE",
+                                    "type": 0, // ?
+                                    "parent": self.id
+                                }))
+                                .build()
+                                .unwrap()
+                            )
+                            .build()
+                            .unwrap()
+                    )
+                }
+
+                let mut player_tags = scores.scorer_ids();
+                let suffix = if let Some(cooled_off) = cooled_off {
+                    player_tags.push(cooled_off.player_id);
+                    format!("\n{batter_name} cooled off.")
+                } else {
+                    String::new()
+                };
+
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills { 2 } else { 0 })
-                    .description(format!("{} hit a ground out to {}.{}",
-                                         batter_name, fielder_name, score_text))
-                    .player_tags(scores.scorer_ids())
+                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .description(format!("{} hit a ground out to {}.{}{}",
+                                         batter_name, fielder_name, score_text, suffix))
+                    .player_tags(player_tags)
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
