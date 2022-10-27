@@ -363,15 +363,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => {
-            let (pitcher_name, balls, strikes, runners_advance) = run_parser(&event, parse_mild_pitch)?;
-            Ok(make_fed_event(event, FedEventData::MildPitch {
-                game: GameEvent::try_from_event(event)?,
-                pitcher_id: get_one_player_id(event)?,
-                pitcher_name: pitcher_name.to_string(),
-                balls,
-                strikes,
-                runners_advance,
-            }))
+            let (pitcher_name, pitch_type, runners_advance) = run_parser(&event, parse_mild_pitch)?;
+            match pitch_type {
+                MildPitchType::Ball((balls, strikes)) => {
+                    Ok(make_fed_event(event, FedEventData::MildPitch {
+                        game: GameEvent::try_from_event(event)?,
+                        pitcher_id: get_one_player_id(event)?,
+                        pitcher_name: pitcher_name.to_string(),
+                        balls,
+                        strikes,
+                        runners_advance,
+                    }))
+                }
+                MildPitchType::Walk(batter_name) => {
+                    let (pitcher_id, batter_id) = get_two_player_ids(event)?;
+                    // I don't believe this should be possible
+                    assert!(!runners_advance, "Runners \"advanced on the pathetic play\" on a mild pitch that was also a walk");
+                    Ok(make_fed_event(event, FedEventData::MildPitchWalk {
+                        game: GameEvent::try_from_event(event)?,
+                        pitcher_id,
+                        pitcher_name: pitcher_name.to_string(),
+                        batter_id,
+                        batter_name: batter_name.to_string(),
+                    }))
+                }
+            }
         }
         EventType::InningEnd => {
             let inning_num = run_parser(&event, parse_inning_end)?;
@@ -1370,19 +1386,34 @@ fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
                 (losing_team_name.strip_suffix(" ").unwrap(), losing_team_score))))
 }
 
-fn parse_mild_pitch(input: &str) -> ParserResult<(&str, i32, i32, bool)> {
+enum MildPitchType<'a> {
+    Ball((i32, i32)),
+    Walk(&'a str),
+}
+
+fn parse_mild_pitch_ball(input: &str) -> ParserResult<MildPitchType> {
+    // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
+    let (input, _) = tag("Ball, ")(input)?;
+    let (input, count) = parse_count(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, MildPitchType::Ball(count)))
+}
+
+fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType, bool)> {
     let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n")(input)?;
 
     // TODO: scoring
 
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
-    let (input, _) = tag("Ball, ")(input)?;
-    let (input, (balls, strikes)) = parse_count(input)?;
-    let (input, _) = tag(".")(input)?;
+    let (input, pitch_type) = alt((
+        parse_mild_pitch_ball,
+        parse_terminated(" draws a walk.").map(|name| MildPitchType::Walk(name))
+    ))(input)?;
 
     let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!"))(input)?;
 
-    Ok((input, (pitcher_name, balls, strikes, runners_advance.is_some())))
+    Ok((input, (pitcher_name, pitch_type, runners_advance.is_some())))
 }
 
 fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {

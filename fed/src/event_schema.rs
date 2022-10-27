@@ -476,6 +476,14 @@ pub enum FedEventData {
         runners_advance: bool,
     },
 
+    MildPitchWalk {
+        game: GameEvent,
+        pitcher_id: Uuid,
+        pitcher_name: String,
+        batter_id: Uuid,
+        batter_name: String,
+    },
+
     CoffeeBean {
         game: GameEvent,
         player_id: Uuid,
@@ -1446,6 +1454,17 @@ impl FedEvent {
                     .player_tags(vec![player_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
+                        .build()
+                        .unwrap())
+
+            }
+            FedEventData::MildPitchWalk { game, pitcher_id, pitcher_name, batter_id, batter_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::MildPitch)
+                    .category(2)
+                    .description(format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."))
+                    .player_tags(vec![pitcher_id, batter_id])
+                    .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
 
