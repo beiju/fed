@@ -460,13 +460,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Sun2 => {
-            let scoring_team= run_parser(&event, parse_sun2)?;
+            let scoring_team = run_parser(&event, parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
             Ok(make_fed_event(event, FedEventData::Sun2 {
                 game: GameEvent::try_from_event(event)?,
                 team_nickname: scoring_team.to_string(),
             }))
-
         }
         EventType::BirdsCircle => {
             parse_fixed_description(event, "The Birds circle ... but they don't find what they're looking for.", FedEventData::BirdsCircle {
@@ -736,17 +735,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             Ok(make_fed_event(event, FedEventData::PerkUp {
                 game: GameEvent::try_from_event(event)?,
-                players: player_names.into_iter().zip_eq(&event.metadata.children)
-                    .map(|(player_name, mod_add_event)| {
+                players: event.metadata.children.iter()
+                    .map(|mod_add_event| {
+                        let sub_play = mod_add_event.metadata.sub_play
+                            .ok_or_else(|| FeedParseError::MissingMetadata {
+                                event_type: mod_add_event.r#type,
+                                field: "subPlay",
+                            })?;
+                        let player_name = player_names[sub_play as usize];
                         assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
                         Ok(PerkPlayers {
                             player_name: player_name.to_string(),
                             sub_event: SubEvent::from_event(mod_add_event),
                             player_id: get_one_player_id(mod_add_event)?,
                             team_id: get_one_team_id(mod_add_event)?,
+                            sub_play,
                         })
                     })
-                    .collect::<Result<_, _>>()?
+                    .collect::<Result<_, _>>()?,
             }))
         }
         EventType::Earlbird => { todo!() }
@@ -1654,7 +1660,7 @@ fn parse_black_hole_swallowed_win(input: &str) -> ParserResult<&str> {
 }
 
 fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
-        let (input, _) = tag("Sun 2 set a Win upon the ")(input)?;
+    let (input, _) = tag("Sun 2 set a Win upon the ")(input)?;
     let (input, team_name) = parse_terminated(".")(input)?;
 
     Ok((input, team_name))

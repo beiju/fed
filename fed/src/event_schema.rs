@@ -326,6 +326,7 @@ pub struct PerkPlayers {
     pub player_id: Uuid,
     pub player_name: String,
     pub sub_event: SubEvent,
+    pub sub_play: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -1510,7 +1511,7 @@ impl FedEvent {
                         .unwrap())
             }
             FedEventData::PerkUp { ref game, ref players } => {
-                let children = players.iter().enumerate().map(|(sub_play, player)| {
+                let children = players.iter().map(|player| {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&player.sub_event)
@@ -1521,7 +1522,7 @@ impl FedEvent {
                         .player_tags(vec![player.player_id])
                         .metadata(EventMetadataBuilder::default()
                             .play(game.play)
-                            .sub_play(sub_play as i64)
+                            .sub_play(player.sub_play)
                             .other(json!({
                                 "mod": "OVERPERFORMING",
                                 "source": "PERK",
@@ -1539,7 +1540,10 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::Perk)
                     .category(2)
-                    .description(players.iter().map(|player| format!("{} Perks up.", player.player_name)).join("\n"))
+                    .description(players.iter()
+                        .sorted_by_key(|player| player.sub_play)
+                        .map(|player| format!("{} Perks up.", player.player_name))
+                        .join("\n"))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
