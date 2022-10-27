@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -493,7 +493,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::BirdsUnshell => { todo!() }
-        EventType::BecomeTripleThreat => { todo!() }
+        EventType::BecomeTripleThreat => {
+            let pitcher_names = run_parser(&event, parse_become_triple_threat)?;
+            let (event1, event2) = get_two_sub_events(event)?;
+
+            let mod_event = |event: &EventuallyEvent| {
+                let sub_play = event.metadata.sub_play
+                    .ok_or_else(|| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "subPlay"
+                    })?;
+                Ok(ModChangeSubEventWithNamedPlayer {
+                    sub_event: SubEvent::from_event(event),
+                    team_id: get_one_team_id(event)?,
+                    player_id: get_one_player_id(event)?,
+                    player_name: pitcher_names[sub_play as usize].to_string(),
+                    sub_play,
+                })
+            };
+
+            Ok(make_fed_event(event, FedEventData::BecomeTripleThreat {
+                game: GameEvent::try_from_event(event)?,
+                pitchers: (mod_event(event1)?, mod_event(event2)?)
+            }))
+
+        }
         EventType::GainFreeRefill => {
             let (player_name, roast, ingredient1, ingredient2) = run_parser(&event, parse_gain_free_refill)?;
             let sub_event = get_one_sub_event(event)?;
@@ -1801,5 +1825,12 @@ fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType)> {
     ))(input)?;
 
     Ok((input, result))
+}
+
+fn parse_become_triple_threat(input: &str) -> ParserResult<[&str; 2]> {
+    let (input, pitcher1_name) = parse_terminated(" and ")(input)?;
+    let (input, pitcher2_name) = parse_terminated(" chug a Third Wave of Coffee!\nThey are now Triple Threats!")(input)?;
+
+    Ok((input, [pitcher1_name, pitcher2_name]))
 }
 

@@ -181,18 +181,18 @@ impl TryFrom<&str> for CoffeeBeanMod {
 #[derive(Debug, Clone, Copy)]
 pub enum AttrCategory {
     Batting,
-    Baserunning,
     Pitching,
     Defense,
+    Baserunning,
 }
 
 impl Display for AttrCategory {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             AttrCategory::Batting => { write!(f, "hitting") }
-            AttrCategory::Baserunning => { write!(f, "baserunning") }
             AttrCategory::Pitching => { write!(f, "pitching") }
             AttrCategory::Defense => { write!(f, "defensive") }
+            AttrCategory::Baserunning => { write!(f, "baserunning") }
         }
     }
 }
@@ -201,9 +201,9 @@ impl AttrCategory {
     pub fn metadata_type(&self) -> i32 {
         match self {
             AttrCategory::Batting => { 0 }
-            AttrCategory::Baserunning => { -1 } // TODO
             AttrCategory::Pitching => { 1 }
             AttrCategory::Defense => { 2 }
+            AttrCategory::Baserunning => { 3 }
         }
     }
 }
@@ -262,6 +262,15 @@ pub struct ModChangeSubEventWithPlayer {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
     pub player_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModChangeSubEventWithNamedPlayer {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    pub player_name: String,
+    pub sub_play: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -723,6 +732,11 @@ pub enum FedEventData {
         player_id: Uuid,
         r#mod: String,
     },
+
+    BecomeTripleThreat {
+        game: GameEvent,
+        pitchers: (ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithNamedPlayer),
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -1805,7 +1819,50 @@ impl FedEvent {
                         }))
                         .build()
                         .unwrap())
+            }
+            FedEventData::BecomeTripleThreat { ref game, pitchers: (ref pitcher_a, ref pitcher_b) } => {
+                // a and b = sub-event order. 1 and 2 = description order
+                let (pitcher_1, pitcher_2) = if pitcher_a.sub_play < pitcher_b.sub_play {
+                    (pitcher_a, pitcher_b)
+                } else {
+                    (pitcher_b, pitcher_a)
+                };
 
+                let children = [pitcher_a, pitcher_b].iter().map(|pitcher| {
+                    self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&pitcher.sub_event)
+                        .category(1)
+                        .r#type(EventType::AddedMod)
+                        .description(format!("{} is a Triple Threat.", pitcher.player_name))
+                        .team_tags(vec![pitcher.team_id])
+                        .player_tags(vec![pitcher.player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(pitcher.sub_play) // not sure if this is hardcoded
+                            .other(json!({
+                                "mod": "TRIPLE_THREAT",
+                                "type": 0, // ?
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()
+                })
+                    .collect();
+                event_builder.for_game(game)
+                    .r#type(EventType::BecomeTripleThreat)
+                    .category(2)
+                    .description(format!("{} and {} chug a Third Wave of Coffee!\nThey are now Triple Threats!", pitcher_1.player_name, pitcher_2.player_name))
+                    .player_tags(vec![pitcher_1.player_id, pitcher_2.player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(-1)
+                        .children(children)
+                        .build()
+                        .unwrap())
             }
         }
             .build()
