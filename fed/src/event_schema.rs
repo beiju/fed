@@ -330,6 +330,13 @@ pub struct PerkPlayers {
 }
 
 #[derive(Debug, Clone)]
+pub enum ReverbType {
+    Rotation(SubEvent),
+    Lineup(SubEvent),
+    Full(SubEvent),
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -692,6 +699,13 @@ pub enum FedEventData {
         player_id: Uuid,
         player_name: String,
         sub_event: SubEvent,
+    },
+
+    Reverb {
+        game: GameEvent,
+        team_id: Uuid,
+        team_nickname: String,
+        reverb_type: ReverbType,
     },
 }
 
@@ -1701,6 +1715,53 @@ impl FedEvent {
                         .build()
                         .unwrap())
 
+            }
+            FedEventData::Reverb { ref game, team_id, ref team_nickname, ref reverb_type } => {
+                let get_child = |sub_event, event_type, shuffle_location| {
+                    self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(sub_event)
+                        .category(1)
+                        .r#type(event_type)
+                        .description(format!("The {team_nickname} had their {shuffle_location} shuffled in the Reverb!"))
+                        .team_tags(vec![team_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0) // not sure if this is hardcoded
+                            .other(json!({ "parent": self.id }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()
+                };
+
+                match reverb_type {
+                    ReverbType::Rotation(sub_event) => {
+                        event_builder.for_game(&game)
+                            .r#type(EventType::ReverbRosterShuffle)
+                            .category(2)
+                            .description(format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their rotation shuffled in the Reverb!"))
+                            .metadata(make_game_event_metadata_builder(&game)
+                                .children(vec![get_child(sub_event, EventType::ReverbRotationShuffle, "rotation")])
+                                .build()
+                                .unwrap())
+                    }
+                    ReverbType::Lineup(sub_event) => {
+                        event_builder.for_game(&game)
+                            .r#type(EventType::ReverbRosterShuffle)
+                            .category(2)
+                            .description(format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!"))
+                            .metadata(make_game_event_metadata_builder(&game)
+                                .children(vec![get_child(sub_event, EventType::ReverbLineupShuffle, "lineup")])
+                                .build()
+                                .unwrap())
+
+                    }
+                    ReverbType::Full(_) => {
+                        todo!()
+                    }
+                }
             }
         }
             .build()

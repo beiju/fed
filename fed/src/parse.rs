@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -606,9 +606,43 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 player_name: player_name.to_string(),
                 sub_event: SubEvent::from_event(sub_event),
             }))
-
         }
-        EventType::ReverbRosterShuffle => { todo!() }
+        EventType::ReverbRosterShuffle => {
+            let (team_nickname, reverb_type) = run_parser(&event, parse_roster_shuffle)?;
+
+            match reverb_type {
+                ParsedReverbType::Rotation => {
+                    let sub_event = get_one_sub_event(event)?;
+                    Ok(make_fed_event(event, FedEventData::Reverb {
+                        game: GameEvent::try_from_event(event)?,
+                        team_id: get_one_team_id(sub_event)?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Rotation(SubEvent::from_event(sub_event)),
+                    }))
+                }
+                ParsedReverbType::Lineup => {
+                    let sub_event = get_one_sub_event(event)?;
+                    Ok(make_fed_event(event, FedEventData::Reverb {
+                        game: GameEvent::try_from_event(event)?,
+                        team_id: get_one_team_id(sub_event)?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Lineup(SubEvent::from_event(sub_event)),
+                    }))
+                }
+                ParsedReverbType::Full => {
+                    let sub_event = get_one_sub_event(event)?;
+                    Ok(make_fed_event(event, FedEventData::Reverb {
+                        game: GameEvent::try_from_event(event)?,
+                        team_id: get_one_team_id(sub_event)?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Full(SubEvent::from_event(sub_event)),
+                    }))
+                }
+                ParsedReverbType::SeveralPlayers => {
+                    todo!()
+                }
+            }
+        }
         EventType::Blooddrain => { todo!() }
         EventType::BlooddrainSiphon => {
             let (sipper_name, sipped_name, sipped_category, action) = run_parser(&event, parse_blooddrain_siphon)?;
@@ -1731,5 +1765,24 @@ fn parse_bestow_reverberating(input: &str) -> ParserResult<&str> {
     let (input, player_name) = parse_terminated(" is now Reverberating wildly!")(input)?;
 
     Ok((input, player_name))
+}
+
+enum ParsedReverbType {
+    Rotation,
+    Lineup,
+    Full,
+    SeveralPlayers,
+}
+
+fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType)> {
+    let (input, _) = tag("Reverberations are at unsafe levels!\nThe ")(input)?;
+    let (input, result) = alt((
+        parse_terminated(" had their rotation shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Rotation)),
+        parse_terminated(" had their lineup shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Lineup)),
+        parse_terminated(" were shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Full)),
+        parse_terminated(" had several players shuffled in the Reverb!").map(|n| (n, ParsedReverbType::SeveralPlayers)),
+    ))(input)?;
+
+    Ok((input, result))
 }
 
