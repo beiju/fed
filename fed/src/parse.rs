@@ -105,14 +105,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
                     let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
 
-                    // I don't think a walk stops inhabiting because you end up on base
-                    assert!(stopped_inhabiting.is_none());
-
                     Ok(make_fed_event(event, FedEventData::Walk {
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         scores,
+                        stopped_inhabiting,
                         base_instincts,
                     }))
                 }
@@ -1463,9 +1461,9 @@ fn parse_base_instincts(input: &str) -> ParserResult<i32> {
 fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores, Option<i32>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
-    let (input, scores) = parse_scores(" scores!")(input)?;
-
     let (input, base_instincts) = opt(parse_base_instincts)(input)?;
+
+    let (input, scores) = parse_scores(" scores!")(input)?;
 
     Ok((input, (batter_name, scores, base_instincts)))
 }
@@ -1634,7 +1632,7 @@ fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategor
 
 fn parse_category(input: &str) -> ParserResult<AttrCategory> {
     alt((
-        tag("batting").map(|_| AttrCategory::Batting),
+        tag("hitting").map(|_| AttrCategory::Batting),
         tag("baserunning").map(|_| AttrCategory::Baserunning),
         tag("pitching").map(|_| AttrCategory::Pitching),
         tag("defensive").map(|_| AttrCategory::Defense),

@@ -189,7 +189,7 @@ pub enum AttrCategory {
 impl Display for AttrCategory {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AttrCategory::Batting => { write!(f, "batting") }
+            AttrCategory::Batting => { write!(f, "hitting") }
             AttrCategory::Baserunning => { write!(f, "baserunning") }
             AttrCategory::Pitching => { write!(f, "pitching") }
             AttrCategory::Defense => { write!(f, "defensive") }
@@ -200,7 +200,7 @@ impl Display for AttrCategory {
 impl AttrCategory {
     pub fn metadata_type(&self) -> i32 {
         match self {
-            AttrCategory::Batting => { -1 } // TODO
+            AttrCategory::Batting => { 0 }
             AttrCategory::Baserunning => { -1 } // TODO
             AttrCategory::Pitching => { 1 }
             AttrCategory::Defense => { 2 }
@@ -492,6 +492,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         scores: ScoreInfo,
+        stopped_inhabiting: Option<StoppedInhabiting>,
         base_instincts: Option<i32>,
     },
 
@@ -923,32 +924,7 @@ impl FedEvent {
                     self.get_score_data(game, scores, " scores!");
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
-                if let SpicyStatus::RedHot(red_hot) = spicy_status {
-                    children.push(
-                        self.make_event_builder()
-                            .for_game(&game)
-                            .for_sub_event(&red_hot.sub_event)
-                            .category(1)
-                            .r#type(EventType::AddedMod)
-                            .description(format!("{batter_name} is Red Hot!"))
-                            .team_tags(vec![red_hot.team_id])
-                            .player_tags(vec![batter_id])
-                            .metadata(EventMetadataBuilder::default()
-                                .play(game.play)
-                                .sub_play(0) // not sure if this is hardcoded
-                                .other(json!({
-                                    "mod": "ON_FIRE",
-                                    "type": 0, // ?
-                                    "parent": self.id
-                                }))
-                                .build()
-                                .unwrap()
-                            )
-                            .build()
-                            .unwrap()
-                    )
-                }
+                self.push_red_hot(&game, batter_name, batter_id, spicy_status, &mut children);
 
                 let spicy_text = match spicy_status {
                     SpicyStatus::None => String::new(),
@@ -1018,10 +994,11 @@ impl FedEvent {
                 };
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+                self.push_red_hot(&game, batter_name, batter_id, spicy_status, &mut children);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .category(if magmatic.is_some() || !free_refills.is_empty() { 2 } else { 0 })
+                    .category(if magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() { 2 } else { 0 })
                     .description(format!("{}{} hits a {}!{}",
                                          if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
                                          batter_name,
@@ -1113,11 +1090,13 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref base_instincts } => {
-                let (score_text, has_any_refills, children) =
+            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref stopped_inhabiting, ref base_instincts } => {
+                let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
 
-                let suffix = if let Some(base) = base_instincts {
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+
+                let base_instincts_str = if let Some(base) = base_instincts {
                     format!("\nBase Instincts take them directly to {} base!", base_name(*base))
                 } else {
                     String::new()
@@ -1126,7 +1105,7 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::Walk)
                     .category(if has_any_refills || base_instincts.is_some() { 2 } else { 0 })
-                    .description(format!("{} draws a walk.{}{}", batter_name, score_text, suffix))
+                    .description(format!("{} draws a walk.{}{}", batter_name, base_instincts_str, score_text))
                     .player_tags(iter::once(batter_id).chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
@@ -1657,6 +1636,34 @@ impl FedEvent {
         }
             .build()
             .unwrap()
+    }
+
+    fn push_red_hot(&self, game: &GameEvent, player_name: &str, batter_id: Uuid, spicy_status: &SpicyStatus, children: &mut Vec<EventuallyEvent>) {
+        if let SpicyStatus::RedHot(red_hot) = spicy_status {
+            children.push(
+                self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&red_hot.sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedMod)
+                    .description(format!("{player_name} is Red Hot!"))
+                    .team_tags(vec![red_hot.team_id])
+                    .player_tags(vec![batter_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                                    "mod": "ON_FIRE",
+                                    "type": 0, // ?
+                                    "parent": self.id
+                                }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap()
+            )
+        }
     }
 
     fn push_cooled_off(&self, game: &GameEvent, player_name: &str, cooled_off: &Option<ModChangeSubEventWithPlayer>, children: &mut Vec<EventuallyEvent>, player_tags: &mut Vec<Uuid>) -> String {
