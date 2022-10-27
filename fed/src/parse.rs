@@ -770,9 +770,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::EmergencyAlert => { todo!() }
         EventType::ReturnFromElsewhere => { todo!() }
-        EventType::OverUnder => { todo!() }
+        EventType::OverUnder => {
+            let (player_name, on) = run_parser(event, parse_under_over_over_under("Over Under"))?;
+
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::OverUnder {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id: get_one_player_id(sub_event)?,
+                player_name: player_name.to_string(),
+                on,
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+
+        }
         EventType::UnderOver => {
-            let (player_name, on) = run_parser(event, parse_under_over)?;
+            let (player_name, on) = run_parser(event, parse_under_over_over_under("Under Over"))?;
 
             let sub_event = get_one_sub_event(event)?;
             Ok(make_fed_event(event, FedEventData::UnderOver {
@@ -1170,7 +1183,7 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> FedEvent 
     }
 }
 
-fn parse_terminated(tag_content: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
+fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {
         let (input, parsed_value) = verify(take_until1(tag_content), |s: &str| !s.contains('\n'))(input)?;
         let (input, _) = tag(tag_content)(input)?;
@@ -1859,10 +1872,14 @@ fn parse_become_triple_threat(input: &str) -> ParserResult<[&str; 2]> {
     Ok((input, [pitcher1_name, pitcher2_name]))
 }
 
-fn parse_under_over(input: &str) -> ParserResult<(&str, bool)> {
-    alt((
-        parse_terminated(", Under Over, On.").map(|n| (n, true)),
-        parse_terminated(", Under Over, Off.").map(|n| (n, false)),
-    ))(input)
+fn parse_under_over_over_under(mod_text: &str) -> impl Fn(&str) -> ParserResult<(&str, bool)> + '_ {
+    move |input: &str| {
+        // complier told me to do the thing with `x` to make the lifetimes work
+        let x = alt((
+            parse_terminated(&format!(", {mod_text}, On.")).map(|n| (n, true)),
+            parse_terminated(&format!(", {mod_text}, Off.")).map(|n| (n, false)),
+        ))(input);
+        x
+    }
 }
 

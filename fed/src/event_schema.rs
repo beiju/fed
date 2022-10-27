@@ -747,7 +747,16 @@ pub enum FedEventData {
         player_name: String,
         on: bool,
         sub_event: SubEvent,
-    }
+    },
+
+    OverUnder {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        on: bool,
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1902,6 +1911,40 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::UnderOver)
+                    .category(2)
+                    .description(description)
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::OverUnder { ref game, team_id, player_id, ref player_name, on, ref sub_event } => {
+                let description = format!("{player_name}, Over Under, {}.", if on { "On" } else { "Off" });
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(if on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
+                    .description(description.clone())
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "UNDERPERFORMING",
+                            "source": "OVERUNDER",
+                            "type": 0, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::OverUnder)
                     .category(2)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(&game)
