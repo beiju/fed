@@ -694,36 +694,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Undersea => { todo!() }
         EventType::Homebody => { todo!() }
         EventType::Superyummy => {
-            let (mod_add_event, ): (&EventuallyEvent, ) = event.metadata.children.iter()
-                .collect_tuple()
-                .ok_or_else(|| FeedParseError::MissingChild {
-                    event_type: event.r#type,
-                    expected_num_children: 1,
-                })?;
+            let (player_name, peanuts_present) = run_parser(event, parse_superyummy)?;
 
-            let mod_name = get_str_metadata(event, "mod")?;
-
-            let which_performing = if mod_name == "OVERPERFORMING" {
-                true
-            } else if mod_name == "UNDERPERFORMING" {
-                false
-            } else {
-                return Err(FeedParseError::UnexpectedModName {
-                    event_type: event.r#type,
-                    mod_name: mod_name.to_string(),
-                });
-            };
-
-            let player_name = if which_performing {
-                run_parser(event, parse_terminated(" loves Peanuts."))?
-            } else {
-                run_parser(event, parse_terminated(" misses Peanuts."))?
-            };
+            let mod_add_event = get_one_sub_event(event)?;
 
             Ok(make_fed_event(event, FedEventData::SuperyummyGameStart {
                 game: GameEvent::try_from_event(event)?,
                 player_name: player_name.to_string(),
-                peanuts: which_performing,
+                peanuts_present,
                 is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
                 sub_event: SubEvent::from_event(mod_add_event),
                 player_id: get_one_player_id(mod_add_event)?,
@@ -1724,5 +1702,15 @@ fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {
     let (input, names) = separated_list1(tag("\n"), parse_terminated(" Perks up."))(input)?;
 
     Ok((input, names))
+}
+
+
+fn parse_superyummy(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, result) = alt((
+            parse_terminated(" loves Peanuts.").map(|n| (n, true)),
+            parse_terminated(" misses Peanuts.").map(|n| (n, false)),
+        ))(input)?;
+
+    Ok((input, result))
 }
 

@@ -366,7 +366,7 @@ pub enum FedEventData {
         player_id: Uuid,
         team_id: Uuid,
         player_name: String,
-        peanuts: bool,
+        peanuts_present: bool,
         is_first_proc: bool,
         sub_event: SubEvent,
     },
@@ -823,10 +823,11 @@ impl FedEvent {
                             .build()
                             .unwrap())
             }
-            FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
+            FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
                 let description = format!("{} {} Peanuts.", player_name,
                                           if peanuts { "loves" } else { "misses" });
                 let mod_name = if peanuts { "OVERPERFORMING" } else { "UNDERPERFORMING" };
+                let opposite_mod_name = if peanuts { "UNDERPERFORMING" } else { "OVERPERFORMING" };
                 let change_event = if is_first_proc {
                     self.make_event_builder()
                         .for_game(&game)
@@ -851,7 +852,29 @@ impl FedEvent {
                         .build()
                         .unwrap()
                 } else {
-                    todo!()
+                    self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&sub_event)
+                        .category(1)
+                        .r#type(EventType::ChangedModFromOtherMod)
+                        .description(description.clone())
+                        .team_tags(vec![team_id])
+                        .player_tags(vec![player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0) // not sure if this is hardcoded
+                            .other(json!({
+                                "from": opposite_mod_name,
+                                "source": "SUPERYUMMY",
+                                "to": mod_name,
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()
                 };
                 event_builder.for_game(&game)
                     .category(2)
