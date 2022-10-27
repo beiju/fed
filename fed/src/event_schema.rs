@@ -321,6 +321,14 @@ pub struct FeedbackPlayerData {
 }
 
 #[derive(Debug, Clone)]
+pub struct PerkPlayers {
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    pub player_name: String,
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -662,10 +670,7 @@ pub enum FedEventData {
 
     PerkUp {
         game: GameEvent,
-        team_id: Uuid,
-        player_id: Uuid,
-        player_name: String,
-        sub_event: SubEvent,
+        players: Vec<PerkPlayers>,
     },
 
     Feedback {
@@ -1551,36 +1556,39 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::PerkUp { ref game, team_id, player_id, ref player_name, ref sub_event } => {
-                let child = self.make_event_builder()
-                    .for_game(&game)
-                    .for_sub_event(&sub_event)
-                    .category(1)
-                    .r#type(EventType::AddedModFromOtherMod)
-                    .description(format!("{player_name} Perks up."))
-                    .team_tags(vec![team_id])
-                    .player_tags(vec![player_id])
-                    .metadata(EventMetadataBuilder::default()
-                        .play(game.play)
-                        .sub_play(0) // not sure if this is hardcoded
-                        .other(json!({
-                            "mod": "OVERPERFORMING",
-                            "source": "PERK",
-                            "type": 3, // ?
-                            "parent": self.id,
-                        }))
+            FedEventData::PerkUp { ref game, ref players } => {
+                let children = players.iter().enumerate().map(|(sub_play, player)| {
+                    self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&player.sub_event)
+                        .category(1)
+                        .r#type(EventType::AddedModFromOtherMod)
+                        .description(format!("{} Perks up.", player.player_name))
+                        .team_tags(vec![player.team_id])
+                        .player_tags(vec![player.player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(sub_play as i64)
+                            .other(json!({
+                                "mod": "OVERPERFORMING",
+                                "source": "PERK",
+                                "type": 3, // ?
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
                         .build()
                         .unwrap()
-                    )
-                    .build()
-                    .unwrap();
+                })
+                    .collect();
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Perk)
                     .category(2)
-                    .description(format!("{player_name} Perks up."))
+                    .description(players.iter().map(|player| format!("{} Perks up.", player.player_name)).join("\n"))
                     .metadata(make_game_event_metadata_builder(&game)
-                        .children(vec![child])
+                        .children(children)
                         .build()
                         .unwrap())
             }

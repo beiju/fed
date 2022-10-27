@@ -6,13 +6,13 @@ use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, verify};
 use nom::error::convert_error;
-use nom::multi::many0;
+use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PlayerStatChange, PositionType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -731,15 +731,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::Perk => {
-            let player_name = run_parser(event, parse_terminated(" Perks up."))?;
-            let mod_add_event = get_one_sub_event(event)?;
+            let player_names = run_parser(event, parse_perk_up)?;
 
             Ok(make_fed_event(event, FedEventData::PerkUp {
                 game: GameEvent::try_from_event(event)?,
-                player_name: player_name.to_string(),
-                sub_event: SubEvent::from_event(mod_add_event),
-                player_id: get_one_player_id(mod_add_event)?,
-                team_id: get_one_team_id(mod_add_event)?,
+                players: player_names.into_iter().zip_eq(&event.metadata.children)
+                    .map(|(player_name, mod_add_event)| {
+                        assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
+                        Ok(PerkPlayers {
+                            player_name: player_name.to_string(),
+                            sub_event: SubEvent::from_event(mod_add_event),
+                            player_id: get_one_player_id(mod_add_event)?,
+                            team_id: get_one_team_id(mod_add_event)?,
+                        })
+                    })
+                    .collect::<Result<_, _>>()?
             }))
         }
         EventType::Earlbird => { todo!() }
@@ -1703,5 +1709,11 @@ fn parse_feedback(input: &str) -> ParserResult<(&str, &str, PositionType)> {
     let (input, _) = tag(".")(input)?;
 
     Ok((input, (player1_name, player2_name, position)))
+}
+
+fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {
+    let (input, names) = separated_list1(tag("\n"), parse_terminated(" Perks up."))(input)?;
+
+    Ok((input, names))
 }
 
