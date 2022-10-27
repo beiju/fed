@@ -735,7 +735,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::EventHorizonAwaits => { todo!() }
         EventType::SolarPanelsAwait => { todo!() }
         EventType::SolarPanelsActivation => { todo!() }
-        EventType::TarotReading => { todo!() }
+        EventType::TarotReading => {
+            Ok(make_fed_event(event, FedEventData::TarotReading {
+                description: event.description.clone(),
+                metadata: event.metadata.other.clone(),
+                player_tags: event.player_tags.clone(),
+                team_tags: event.team_tags.clone(),
+            }))
+        }
         EventType::EmergencyAlert => { todo!() }
         EventType::ReturnFromElsewhere => { todo!() }
         EventType::OverUnder => { todo!() }
@@ -785,7 +792,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Earlbird => { todo!() }
         EventType::LateToTheParty => { todo!() }
         EventType::ShameDonor => { todo!() }
-        EventType::AddedMod => { todo!() }
+        EventType::AddedMod => {
+            Ok(make_fed_event(event, FedEventData::ModAddedSpontaneously {
+                description: event.description.clone(),
+                team_id: get_one_team_id(event)?,
+                player_id: get_one_player_id(event)?,
+                r#mod: get_str_metadata(event, "mod")?.to_string(),
+            }))
+        }
         EventType::RemovedMod => { todo!() }
         EventType::ModExpires => {
             let (player_name, mod_duration) = run_parser(&event, parse_mod_expires)?;

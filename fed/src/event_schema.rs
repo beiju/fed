@@ -708,6 +708,21 @@ pub enum FedEventData {
         team_nickname: String,
         reverb_type: ReverbType,
     },
+
+    TarotReading {
+        description: String,
+        // Making this vague on purpose to be generic
+        metadata: serde_json::Value,
+        player_tags: Vec<Uuid>,
+        team_tags: Vec<Uuid>,
+    },
+
+    ModAddedSpontaneously {
+        description: String,
+        team_id: Uuid,
+        player_id: Uuid,
+        r#mod: String,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1763,6 +1778,34 @@ impl FedEvent {
                         todo!()
                     }
                 }
+            }
+            FedEventData::TarotReading { description, metadata, player_tags, team_tags } => {
+                event_builder
+                    .r#type(EventType::TarotReading)
+                    .category(1)
+                    .description(description)
+                    .player_tags(player_tags)
+                    .team_tags(team_tags)
+                    .metadata(EventMetadataBuilder::default()
+                        .other(metadata)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::ModAddedSpontaneously { description, team_id, player_id, r#mod } => {
+                event_builder
+                    .r#type(EventType::AddedMod)
+                    .category(1)
+                    .description(description)
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mod": r#mod,
+                            "type": 0, // ?
+                        }))
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
