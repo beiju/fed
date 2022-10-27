@@ -427,7 +427,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 victim_team_nickname: victim_team.to_string(),
             }))
         }
-        EventType::Sun2 => { todo!() }
+        EventType::Sun2 => {
+            let scoring_team= run_parser(&event, parse_sun2)?;
+            assert!(is_known_team_nickname(scoring_team));
+            Ok(make_fed_event(event, FedEventData::Sun2 {
+                game: GameEvent::try_from_event(event)?,
+                team_nickname: scoring_team.to_string(),
+            }))
+
+        }
         EventType::BirdsCircle => {
             parse_fixed_description(event, "The Birds circle ... but they don't find what they're looking for.", FedEventData::BirdsCircle {
                 game: GameEvent::try_from_event(event)?,
@@ -773,6 +781,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GameOver => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
+        EventType::Sun2SetWin => {
+            let team_name = run_parser(&event, parse_sun2_set_win)?;
+            assert!(is_known_team_nickname(team_name));
+            Ok(make_fed_event(event, FedEventData::Sun2SetWin {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_name.to_string(),
+            }))
+        }
         EventType::BlackHoleSwallowedWin => {
             let team_name = run_parser(&event, parse_black_hole_swallowed_win)?;
             assert!(is_known_team_nickname(team_name));
@@ -1595,6 +1611,22 @@ fn parse_black_hole_swallowed_win(input: &str) -> ParserResult<&str> {
     let (input, team_name) = parse_terminated("!")(input)?;
 
     Ok((input, team_name))
+}
+
+fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
+        let (input, _) = tag("Sun 2 set a Win upon the ")(input)?;
+    let (input, team_name) = parse_terminated(".")(input)?;
+
+    Ok((input, team_name))
+}
+
+fn parse_sun2(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, scoring_team) = parse_terminated(" collect 10! Sun 2 smiles.\nSun 2 set a Win upon the ")(input)?;
+    let (input, _) = tag(scoring_team)(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, scoring_team))
 }
 
 fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {

@@ -599,6 +599,16 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
+    Sun2SetWin {
+        team_id: Uuid,
+        team_nickname: String,
+    },
+
+    Sun2 {
+        game: GameEvent,
+        team_nickname: String,
+    },
+
     BlackHole {
         game: GameEvent,
         scoring_team_nickname: String,
@@ -1400,12 +1410,25 @@ impl FedEvent {
                     .description(format!("{pitcher_name} calls upon their Friends!\nA murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
                     .player_tags(vec![pitcher_id, batter_id])
             }
+            FedEventData::Sun2SetWin { team_id, team_nickname } => {
+                event_builder
+                    .r#type(EventType::Sun2SetWin)
+                    .category(3)
+                    .description(format!("Sun 2 set a Win upon the {team_nickname}."))
+                    .team_tags(vec![team_id])
+            }
             FedEventData::BlackHoleSwallowedWin { team_id, team_nickname } => {
                 event_builder
                     .r#type(EventType::BlackHoleSwallowedWin)
                     .category(3)
                     .description(format!("The Black Hole swallowed a Win from the {team_nickname}!"))
                     .team_tags(vec![team_id])
+            }
+            FedEventData::Sun2 { game, team_nickname } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::Sun2)
+                    .category(2)
+                    .description(format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}."))
             }
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
                 event_builder.for_game(&game)

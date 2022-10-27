@@ -266,6 +266,7 @@ pub enum EventType {
     ChangedModFromOtherMod = 148,
     TeamWasShamed = 154,
     TeamDidShame = 155,
+    Sun2SetWin = 156,
     BlackHoleSwallowedWin = 157,
     RunsScored = 209,
     WinCollectedRegular = 214,
