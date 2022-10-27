@@ -432,6 +432,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         scores: ScoreInfo,
+        base_instincts: Option<i32>,
     },
 
     InningEnd {
@@ -1032,14 +1033,20 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores } => {
+            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref base_instincts } => {
                 let (score_text, has_any_refills, children) =
                     self.get_score_data(game, scores, " scores!");
 
+                let suffix = if let Some(base) = base_instincts {
+                    format!("\nBase Instincts take them directly to {} base!", base_name(*base))
+                } else {
+                    String::new()
+                };
+
                 event_builder.for_game(&game)
                     .r#type(EventType::Walk)
-                    .category(if has_any_refills { 2 } else { 0 })
-                    .description(format!("{} draws a walk.{}", batter_name, score_text))
+                    .category(if has_any_refills || base_instincts.is_some() { 2 } else { 0 })
+                    .description(format!("{} draws a walk.{}{}", batter_name, score_text, suffix))
                     .player_tags(iter::once(batter_id).chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)

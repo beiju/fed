@@ -94,7 +94,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Walk => {
             let parsed_walk = run_parser(&event, parse_walk)?;
             match parsed_walk {
-                ParsedWalk::Ordinary((batter_name, scores)) => {
+                ParsedWalk::Ordinary((batter_name, scores, base_instincts)) => {
                     let (&batter_id, scorer_ids) = event.player_tags.split_first()
                         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
                             event_type: event.r#type,
@@ -113,6 +113,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         batter_name: batter_name.to_string(),
                         batter_id,
                         scores,
+                        base_instincts,
                     }))
                 }
                 ParsedWalk::Charm((batter_name, pitcher_name)) => {
@@ -1266,7 +1267,7 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
 }
 
 enum ParsedWalk<'s> {
-    Ordinary((&'s str, ParsedScores<'s>)),
+    Ordinary((&'s str, ParsedScores<'s>, Option<i32>)),
     Charm((&'s str, &'s str)),
 }
 
@@ -1277,12 +1278,26 @@ fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     ))(input)
 }
 
-fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores)> {
+fn parse_base_instincts(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("\nBase Instincts take them directly to ")(input)?;
+    let (input, which) = alt((
+        tag("second").map(|_| 2),
+        tag("third").map(|_| 3),
+        tag("fourth").map(|_| 4), // when fifth base is present
+    ))(input)?;
+    let (input, _) = tag(" base!")(input)?;
+
+    Ok((input, which))
+}
+
+fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores, Option<i32>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.")(input)?;
 
     let (input, scores) = parse_scores(" scores!")(input)?;
 
-    Ok((input, (batter_name, scores)))
+    let (input, base_instincts) = opt(parse_base_instincts)(input)?;
+
+    Ok((input, (batter_name, scores, base_instincts)))
 }
 
 fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
