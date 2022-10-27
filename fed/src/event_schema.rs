@@ -591,6 +591,7 @@ pub enum FedEventData {
         is_siphon: bool,
         sipper: PlayerStatChange,
         sipped: PlayerStatChange,
+        child_order_reversed: bool,
         sipped_category: AttrCategory,
     },
 
@@ -766,6 +767,11 @@ pub enum FedEventData {
         shellee_id: Uuid,
         shellee_name: String,
         sub_event: SubEvent,
+    },
+
+    BatterSkipped {
+        game: GameEvent,
+        batter_name: String,
     },
 }
 
@@ -1655,12 +1661,12 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, sipped_category } => {
-                let children: Vec<_> = [
+            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, child_order_reversed, sipped_category } => {
+                let mut children: Vec<_> = [
                     // why are the sub-events backwards??
-                    (1, 2, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
-                    (0, 2, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name))
-                ].into_iter().map(|(sub_play, metadata_type, change, event_type, description)| {
+                    (1, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
+                    (0, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name))
+                ].into_iter().map(|(sub_play, change, event_type, description)| {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&change.sub_event)
@@ -1673,7 +1679,7 @@ impl FedEvent {
                             .play(game.play)
                             .sub_play(sub_play)
                             .other(json!({
-                                "type": metadata_type, // ?
+                                "type": sipped_category.metadata_type(),
                                 "parent": self.id,
                                 "before": change.rating_before,
                                 "after": change.rating_after,
@@ -1685,6 +1691,10 @@ impl FedEvent {
                         .unwrap()
                 })
                     .collect();
+
+                if child_order_reversed {
+                    children.reverse();
+                }
 
                 let siphon_text = if is_siphon {
                     format!("\n{}'s Siphon activates!", sipper.player_name)
@@ -1995,7 +2005,15 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
-
+            }
+            FedEventData::BatterSkipped { game, batter_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::BatterSkipped)
+                    .category(0)
+                    .description(format!("{batter_name} is Shelled and cannot escape!"))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
             }
         }
             .build()

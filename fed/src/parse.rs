@@ -389,7 +389,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ShamingRun => { todo!() }
         EventType::HomeFieldAdvantage => { todo!() }
         EventType::HitByPitch => { todo!() }
-        EventType::BatterSkipped => { todo!() }
+        EventType::BatterSkipped => {
+            let player_name = run_parser(&event, parse_batter_skipped)?;
+            Ok(make_fed_event(event, FedEventData::BatterSkipped {
+                game: GameEvent::try_from_event(event)?,
+                batter_name: player_name.to_string(),
+            }))
+        }
         EventType::Party => { todo!() }
         EventType::StrikeZapped => {
             parse_fixed_description(event, "The Electricity zaps a strike away!",
@@ -677,7 +683,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             match action {
                 None => {
-                    let (sipper_event, sipped_event) = get_two_sub_events(event)?;
+                    let (sipper_event, sipped_event, reversed) = {
+                        let (a, b) = get_two_sub_events(event)?;
+                        let sipper_text = format!("{sipper_name} drained blood from {sipped_name}.");
+                        let sippee_text = format!("{sipped_name} had blood drained by {sipper_name}.");
+                        if a.description == sipper_text && b.description == sippee_text {
+                            (a, b, false)
+                        } else if b.description == sipper_text && a.description == sippee_text {
+                            (b, a, true)
+                        } else {
+                            return Err(FeedParseError::DescriptionParseError {
+                                event_type: event.r#type,
+                                err: format!("Format didn't match \"{sipper_text}\" nor \"{sippee_text}\"")
+                            })
+                        }
+                    };
 
                     Ok(make_fed_event(event, FedEventData::Blooddrain {
                         game: GameEvent::try_from_event(event)?,
@@ -698,6 +718,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             rating_after: get_float_metadata(sipped_event, "after")?,
                             sub_event: SubEvent::from_event(sipped_event),
                         },
+                        child_order_reversed: reversed,
                         sipped_category,
                     }))
                 }
@@ -1902,5 +1923,11 @@ fn parse_taste_the_infinite(input: &str) -> ParserResult<(&str, &str)> {
     let (input, shellee_name) = parse_terminated(" is Shelled!")(input)?;
 
     Ok((input, (sheller_name, shellee_name)))
+}
+
+fn parse_batter_skipped(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" is Shelled and cannot escape!")(input)?;
+
+    Ok((input, player_name))
 }
 
