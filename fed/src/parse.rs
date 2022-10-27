@@ -493,7 +493,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::FeedbackBlocked => { todo!() }
         EventType::FeedbackSwap => { todo!() }
         EventType::SuperallergicReaction => { todo!() }
-        EventType::AllergicReaction => { todo!() }
+        EventType::AllergicReaction => {
+            let player_name = run_parser(&event, parse_allergic_reaction)?;
+            let player_id = get_one_player_id(event)?;
+            let sub_event = get_one_sub_event(event)?;
+            assert_eq!(player_id, get_one_player_id(sub_event)?);
+            Ok(make_fed_event(event, FedEventData::AllergicReaction {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+                rating_before: get_float_metadata(sub_event, "before")?,
+                rating_after: get_float_metadata(sub_event, "after")?,
+            }))
+        }
         EventType::ReverbBestowsReverberating => { todo!() }
         EventType::ReverbRosterShuffle => { todo!() }
         EventType::Blooddrain => { todo!() }
@@ -1487,5 +1501,12 @@ fn parse_team_was_shamed(input: &str) -> ParserResult<(&str, &str)> {
     let (input, shaming_team) = parse_terminated(".")(input)?;
 
     Ok((input, (shaming_team, shamed_team)))
+}
+
+
+fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" swallowed a stray peanut and had an allergic reaction!")(input)?;
+
+    Ok((input, player_name))
 }
 

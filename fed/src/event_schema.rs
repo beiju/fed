@@ -587,6 +587,16 @@ pub enum FedEventData {
         sub_event: SubEvent,
         team_id: Uuid,
     },
+
+    AllergicReaction {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        sub_event: SubEvent,
+        rating_before: f64,
+        rating_after: f64,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1404,6 +1414,41 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
+            }
+            FedEventData::AllergicReaction { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::PlayerStatDecrease)
+                    .description(format!("{player_name} had an allergic reaction."))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "type": 4, // ?
+                            "before": rating_before,
+                            "after": rating_after,
+                            "parent": self.id
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::AllergicReaction)
+                    .category(2)
+                    .description(format!("{player_name} swallowed a stray peanut and had an allergic reaction!"))
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
