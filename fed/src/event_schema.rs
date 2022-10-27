@@ -425,6 +425,8 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        // In Season 12, Unrun strikeouts were special but didn't have an associated child event
+        is_special: bool,
     },
 
     Walk {
@@ -605,6 +607,14 @@ pub enum FedEventData {
         rating_before: f64,
         rating_after: f64,
     },
+
+    PerkUp {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        sub_event: SubEvent,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -1031,7 +1041,7 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
-                    .category(if free_refill.is_some() { 2 } else { 0 })
+                    .category(if blaserunning || free_refill.is_some() { 2 } else { 0 })
                     .description(format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str))
                     .player_tags(if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] })
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1053,9 +1063,10 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting } => {
+            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
+                    .category(if is_special { 2 } else { 0 })
                     .description(format!("{} strikes out looking.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
@@ -1456,7 +1467,6 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
-
             }
             FedEventData::MildPitchWalk { game, pitcher_id, pitcher_name, batter_id, batter_name } => {
                 event_builder.for_game(&game)
@@ -1468,6 +1478,39 @@ impl FedEvent {
                         .build()
                         .unwrap())
 
+            }
+            FedEventData::PerkUp { ref game, team_id, player_id, ref player_name, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedModFromOtherMod)
+                    .description(format!("{player_name} Perks up."))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "OVERPERFORMING",
+                            "source": "PERK",
+                            "type": 3, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::Perk)
+                    .category(2)
+                    .description(format!("{player_name} Perks up."))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
             }
         }
             .build()

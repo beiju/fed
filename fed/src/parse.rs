@@ -144,6 +144,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
+                        is_special: event.category == 2
                     }))
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
@@ -602,13 +603,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     expected_num_children: 1,
                 })?;
 
-            let mod_name = mod_add_event.metadata.other
-                .as_object()
-                .ok_or_else(|| FeedParseError::NoMetadata { event_type: event.r#type })?
-                .get("mod")
-                .ok_or_else(|| FeedParseError::MissingMetadata { event_type: event.r#type, field: "mod" })?
-                .as_str()
-                .ok_or_else(|| FeedParseError::MissingMetadata { event_type: event.r#type, field: "mod" })?;
+            let mod_name = get_str_metadata(event, "mod")?;
 
             let which_performing = if mod_name == "OVERPERFORMING" {
                 true
@@ -637,7 +632,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_id: get_one_team_id(mod_add_event)?,
             }))
         }
-        EventType::Perk => { todo!() }
+        EventType::Perk => {
+            let player_name = run_parser(event, parse_terminated(" Perks up."))?;
+            let mod_add_event = get_one_sub_event(event)?;
+
+            Ok(make_fed_event(event, FedEventData::PerkUp {
+                game: GameEvent::try_from_event(event)?,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(mod_add_event),
+                player_id: get_one_player_id(mod_add_event)?,
+                team_id: get_one_team_id(mod_add_event)?,
+            }))
+        }
         EventType::Earlbird => { todo!() }
         EventType::LateToTheParty => { todo!() }
         EventType::ShameDonor => { todo!() }
