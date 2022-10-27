@@ -127,15 +127,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "383d29d513d8764dcdc42ea295d979eb99c3c9f00607b3692cf68a431f7dca72"
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -334,6 +325,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-where"
+version = "1.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f22a5b69cac4a8cc6efe0930b5a29ab0a0233e5a131af99191cc892c3aaf8829"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_builder"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -453,13 +455,13 @@ dependencies = [
 name = "fed_api"
 version = "0.1.0"
 dependencies = [
- "bincode",
  "chrono",
  "derive_builder",
  "futures",
  "itertools",
  "log",
  "num_enum",
+ "pot",
  "reqwest",
  "serde",
  "serde_json",
@@ -689,6 +691,12 @@ dependencies = [
  "tokio-util 0.7.3",
  "tracing",
 ]
+
+[[package]]
+name = "half"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
@@ -1236,6 +1244,20 @@ dependencies = [
  "cpufeatures",
  "opaque-debug",
  "universal-hash",
+]
+
+[[package]]
+name = "pot"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10cf38ff394061e10b5769fecc5bd0ccd5b7a7625a9c8cfc98d35510260b30d9"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "derive-where",
+ "half",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

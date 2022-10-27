@@ -4,10 +4,11 @@ use log::{info, warn};
 
 pub use crate::eventually_schema::{EventuallyEvent, EventuallyEventBuilder, EventuallyResponse};
 
-const PAGE_SIZE: usize = 100;
+const PAGE_SIZE: usize = 1000;
+const BUFFER_PAGES: usize = 2;
 
 pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
-    eventually_pages(start)
+    eventually_pages(start, BUFFER_PAGES)
         .flat_map(|vec| stream::iter(vec.into_iter()))
         .scan(HashSet::new(), |seen_ids, mut event| {
             // If this event was already seen as a sibling of a processed event, skip it
@@ -61,78 +62,65 @@ pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
         .flat_map(|maybe_event| stream::iter(maybe_event.into_iter()))
 }
 
-struct EventuallyState {
-    page: usize,
-    stop: bool,
-    cache: sled::Db,
-    client: reqwest::Client,
-}
+fn eventually_pages(start: &'static str, buffer_pages: usize) -> impl Stream<Item=Vec<EventuallyEvent>> {
+    let cache = sled::open("http_cache/eventually/").unwrap();
+    let client = reqwest::Client::new();
 
-fn eventually_pages(start: &'static str) -> impl Stream<Item=Vec<EventuallyEvent>> {
-    let start_state = EventuallyState {
-        page: 0,
-        stop: false,
-        cache: sled::open("http_cache/eventually/").unwrap(),
-        client: reqwest::Client::new(),
-    };
-
-    stream::unfold(start_state, move |state| async move {
-        if state.stop {
-            None
-        } else {
-            Some(eventually_page(start, state).await)
+    stream::unfold(1, move |page| {
+        let cache = cache.clone();
+        let client = client.clone();
+        async move {
+            Some(((page, cache, client), page + 1))
         }
     })
-}
+        // `map` doesn't wait for one future to be ready before starting the next, which is the
+        // desired behavior in this case
+        .map(move |(page, cache, client)| async move {
+            let request = client.get("https://api.sibr.dev/eventually/v2/events")
+                .query(&[
+                    ("limit", PAGE_SIZE),
+                    ("offset", page * PAGE_SIZE),
+                ])
+                .query(&[
+                    ("expand_children", "true"),
+                    ("expand_siblings", "true"),
+                    ("sortby", "{created}"),
+                    ("sortorder", "asc"),
+                    ("after", start)
+                ]);
 
-//noinspection SpellCheckingInspection
-async fn eventually_page(start: &'static str, state: EventuallyState) -> (Vec<EventuallyEvent>, EventuallyState) {
-    let request = state.client.get("https://api.sibr.dev/eventually/v2/events")
-        .query(&[
-            ("limit", PAGE_SIZE),
-            ("offset", state.page * PAGE_SIZE),
-        ])
-        .query(&[
-            ("expand_children", "true"),
-            ("expand_siblings", "true"),
-            ("sortby", "{created}"),
-            ("sortorder", "asc"),
-            ("after", start)
-        ]);
+            let request = request.build().unwrap();
 
-    let request = request.build().unwrap();
+            let cache_key = request.url().to_string();
 
-    let cache_key = request.url().to_string();
+            let response = match cache.get(&cache_key).unwrap() {
+                Some(text) => pot::from_slice(&text).unwrap(),
+                None => {
+                    info!("Fetching page {} of feed events from network", page);
 
-    let response = match state.cache.get(&cache_key).unwrap() {
-        Some(text) => bincode::deserialize(&text).unwrap(),
-        None => {
-            info!("Fetching page {} of feed events from network", state.page);
+                    let text = client
+                        .execute(request).await
+                        .expect("Eventually API call failed")
+                        .text().await
+                        .expect("Failed to decode Eventually API response");
 
-            let text = state.client
-                .execute(request).await
-                .expect("Eventually API call failed")
-                .text().await
-                .expect("Failed to decode Eventually API response");
+                    let response: EventuallyResponse = serde_json::from_str(&text).unwrap();
 
-            state.cache.insert(&cache_key, bincode::serialize(&text).unwrap()).unwrap();
+                    cache.insert(&cache_key, pot::to_vec(&response).unwrap()).unwrap();
 
-            text
-        }
-    };
+                    response
+                }
+            };
 
-    let response: EventuallyResponse = serde_json::from_str(&response).unwrap();
-
-
-    let len = response.len();
-
-    (
-        response.0,
-        EventuallyState {
-            page: state.page + 1,
-            stop: len < PAGE_SIZE,
-            cache: state.cache,
-            client: state.client,
-        }
-    )
+            if response.len() > 0 {
+                Some(response.0)
+            } else {
+                None
+            }
+        })
+        .buffered(buffer_pages)
+        // Scan is apparently one of the few iterators where you can return None to stop the stream
+        // This is necessary because the items are executed in parallel, so each page doesn't know
+        // whether the previous page was empty
+        .scan((), |_, page_opt| future::ready(page_opt))
 }

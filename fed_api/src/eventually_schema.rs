@@ -7,7 +7,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct EventuallyResponse(pub(crate) Vec<EventuallyEvent>);
 
 impl EventuallyResponse {
