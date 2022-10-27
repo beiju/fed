@@ -594,7 +594,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 rating_after: get_float_metadata(sub_event, "after")?,
             }))
         }
-        EventType::ReverbBestowsReverberating => { todo!() }
+        EventType::ReverbBestowsReverberating => {
+            let player_name = run_parser(&event, parse_bestow_reverberating)?;
+            let player_id = get_one_player_id(event)?;
+            let sub_event = get_one_sub_event(event)?;
+            assert_eq!(player_id, get_one_player_id(sub_event)?);
+            Ok(make_fed_event(event, FedEventData::BestowReverberating {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+
+        }
         EventType::ReverbRosterShuffle => { todo!() }
         EventType::Blooddrain => { todo!() }
         EventType::BlooddrainSiphon => {
@@ -1704,7 +1717,6 @@ fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {
     Ok((input, names))
 }
 
-
 fn parse_superyummy(input: &str) -> ParserResult<(&str, bool)> {
     let (input, result) = alt((
             parse_terminated(" loves Peanuts.").map(|n| (n, true)),
@@ -1712,5 +1724,12 @@ fn parse_superyummy(input: &str) -> ParserResult<(&str, bool)> {
         ))(input)?;
 
     Ok((input, result))
+}
+
+fn parse_bestow_reverberating(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Reverberations are at dangerous levels!\n")(input)?;
+    let (input, player_name) = parse_terminated(" is now Reverberating wildly!")(input)?;
+
+    Ok((input, player_name))
 }
 

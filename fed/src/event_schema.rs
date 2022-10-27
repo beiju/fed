@@ -685,6 +685,14 @@ pub enum FedEventData {
         position_type: PositionType,
         sub_event: SubEvent,
     },
+
+    BestowReverberating {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1659,6 +1667,40 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
+            }
+            FedEventData::BestowReverberating { ref game, team_id, player_id, ref player_name, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedMod)
+                    .description(format!("{player_name} is now Reverberating wildly!"))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "REVERBERATING",
+                            "type": 0, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::ReverbBestowsReverberating)
+                    .category(2)
+                    .description(format!("Reverberations are at dangerous levels!\n{player_name} is now Reverberating wildly!"))
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
