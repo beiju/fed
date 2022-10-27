@@ -771,7 +771,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::EmergencyAlert => { todo!() }
         EventType::ReturnFromElsewhere => { todo!() }
         EventType::OverUnder => { todo!() }
-        EventType::UnderOver => { todo!() }
+        EventType::UnderOver => {
+            let (player_name, on) = run_parser(event, parse_under_over)?;
+
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::UnderOver {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id: get_one_player_id(sub_event)?,
+                player_name: player_name.to_string(),
+                on,
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+        }
         EventType::Undersea => { todo!() }
         EventType::Homebody => { todo!() }
         EventType::Superyummy => {
@@ -907,6 +919,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_nickname: team_name.to_string(),
             }))
         }
+        EventType::RemovedModFromOtherMod => { todo!() }
     }
 }
 
@@ -1571,13 +1584,24 @@ fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
     let (input, _) = tag(", ")(input)?;
     let (input, losing_team_name) = take_till(AsChar::is_dec_digit)(input)?;
     let (input, losing_team_score) = float(input)?;
-
+    
+    fn fix_team(name: &str, score: f32) -> (&str, f32) {
+        if let Some(n) = name.strip_suffix(" -") {
+            (n, -score)
+        } else {
+            (name.strip_suffix(" ").unwrap(), score)
+        }
+    }
+    
+    let (winning_team_name, winning_team_score) = fix_team(winning_team_name, winning_team_score.into());
+    let (losing_team_name, losing_team_score) = fix_team(losing_team_name, losing_team_score.into());
+    
     // Just checking that my assumption is correct. It's <= because of 20.3
     assert!(losing_team_score <= winning_team_score);
 
     // The parsers for *_team_name should always leave us with a space at the end
-    Ok((input, ((winning_team_name.strip_suffix(" ").unwrap(), winning_team_score),
-                (losing_team_name.strip_suffix(" ").unwrap(), losing_team_score))))
+    Ok((input, ((winning_team_name, winning_team_score),
+                (losing_team_name, losing_team_score))))
 }
 
 enum MildPitchType<'a> {
@@ -1833,5 +1857,12 @@ fn parse_become_triple_threat(input: &str) -> ParserResult<[&str; 2]> {
     let (input, pitcher2_name) = parse_terminated(" chug a Third Wave of Coffee!\nThey are now Triple Threats!")(input)?;
 
     Ok((input, [pitcher1_name, pitcher2_name]))
+}
+
+fn parse_under_over(input: &str) -> ParserResult<(&str, bool)> {
+    alt((
+        parse_terminated(", Under Over, On.").map(|n| (n, true)),
+        parse_terminated(", Under Over, Off.").map(|n| (n, false)),
+    ))(input)
 }
 

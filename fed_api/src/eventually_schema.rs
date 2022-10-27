@@ -263,6 +263,7 @@ pub enum EventType {
     // At this point I got bored typing them all and only filled in the ones I encountered
     ModChange = 144,
     AddedModFromOtherMod = 146,
+    RemovedModFromOtherMod = 147,
     ChangedModFromOtherMod = 148,
     TeamWasShamed = 154,
     TeamDidShame = 155,
