@@ -44,8 +44,14 @@ pub enum FeedParseError {
         tag2: Uuid,
     },
 
-    #[error("Expected {expected_num_children} children for {event_type:?} event")]
+    #[error("Expected {expected_num_children} children for {event_type:?} event but got fewer")]
     MissingChild {
+        event_type: EventType,
+        expected_num_children: i32,
+    },
+
+    #[error("Expected {expected_num_children} children for {event_type:?} event but got more")]
+    UnexpectedChild {
         event_type: EventType,
         expected_num_children: i32,
     },

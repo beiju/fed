@@ -441,6 +441,7 @@ pub enum FedEventData {
         batter_name: String,
         batter_id: Uuid,
         num_runs: i32,
+        stopped_inhabiting: Option<StoppedInhabiting>,
         free_refills: Vec<FreeRefill>,
         spicy_status: SpicyStatus,
     },
@@ -965,7 +966,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting } => {
                 let suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
@@ -979,7 +980,7 @@ impl FedEvent {
                     SpicyStatus::RedHot { .. } => format!("{suffix}\n{batter_name} is Red Hot!"),
                 };
 
-                let children = if let Some((sub_event, team_id)) = magmatic {
+                let mut children = if let Some((sub_event, team_id)) = magmatic {
                     vec![self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&sub_event)
@@ -1004,6 +1005,8 @@ impl FedEvent {
                 } else {
                     Vec::new()
                 };
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)

@@ -216,13 +216,42 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
-            let mut children = event.metadata.children.iter();
             let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status) = run_parser(&event, parse_hr)?;
             let (remaining_children, spicy_status) = extract_spicy_event(event, spicy_status)?;
-            let magmatic_event = if is_magmatic {
-                Some(get_one_sub_event_from_slice(remaining_children, event.r#type)?)
+            let (remaining_children, magmatic_event) = if is_magmatic {
+                let expected_num_children = event.metadata.children.len() - remaining_children.len() + 1;
+                remaining_children.split_first()
+                    .map(|(magmatic_event, remaining_children)| {
+                        (remaining_children, Some(magmatic_event))
+                    })
+                    .ok_or_else(move || {
+                        FeedParseError::MissingChild {
+                            event_type: event.r#type,
+                            expected_num_children: expected_num_children as i32,
+                        }
+                    })?
             } else {
-                None
+                (remaining_children, None)
+            };
+
+            let (remaining_children, stopped_inhabiting) = if remaining_children.is_empty() {
+                (remaining_children, None)
+            } else if let Some((sub_event, remaining)) = remaining_children.split_last() {
+                run_parser(sub_event, parse_terminated(" stopped Inhabiting."))
+                    .map(|name| {
+                        Ok((remaining, Some(StoppedInhabiting {
+                            sub_event: SubEvent::from_event(sub_event),
+                            inhabiting_player_name: name.to_string(),
+                            inhabiting_player_id: get_one_player_id(sub_event)?,
+                        })))
+                    })
+                    .unwrap_or(Ok((remaining_children, None)))?
+            } else {
+                let expected_num_children = event.metadata.children.len() - remaining_children.len() + 1;
+                Err(FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: expected_num_children as i32,
+                })?
             };
 
             let batter_id = get_one_player_id_advanced(event, !spicy_status.is_none())?;
@@ -234,9 +263,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_name: batter_name.to_string(),
                 batter_id,
                 num_runs,
+                stopped_inhabiting,
                 free_refills: free_refillers.into_iter()
                     .map(|refiller_name| {
-                        make_free_refill(event.r#type, &mut children, refiller_name)
+                        let mut remaining_children = remaining_children.iter();
+                        make_free_refill(event.r#type, &mut remaining_children, refiller_name)
                     })
                     .collect::<Result<_, _>>()?,
                 spicy_status,
