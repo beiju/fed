@@ -134,6 +134,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
+                        is_special: event.category == 2,
                     }))
                 }
                 ParsedStrikeout::Looking(batter_name) => {

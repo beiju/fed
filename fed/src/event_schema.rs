@@ -495,6 +495,8 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        // In Season 12, Unrun strikeouts were special but didn't have an associated child event
+        is_special: bool,
     },
 
     StrikeoutLooking {
@@ -1147,9 +1149,10 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting } => {
+            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
+                    .category(if is_special { 2 } else { 0 })
                     .description(format!("{} strikes out swinging.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
