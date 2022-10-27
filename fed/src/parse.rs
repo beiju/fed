@@ -12,8 +12,8 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PlayerStatChange, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PlayerStatChange, PositionType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -507,7 +507,38 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::FeedbackBlocked => { todo!() }
-        EventType::FeedbackSwap => { todo!() }
+        EventType::FeedbackSwap => {
+            let (player1_name, player2_name, position) = run_parser(&event, parse_feedback)?;
+            let sub_event = get_one_sub_event(event)?;
+
+            macro_rules! get_player_data {
+                ($event:ident, $prefix:literal, $expected_name:ident) => {
+                    {
+                        let team_nickname = get_str_metadata($event, concat!($prefix, "TeamName"))?.to_string();
+                        assert!(is_known_team_nickname(&team_nickname));
+                        let player_name = get_str_metadata($event, concat!($prefix, "PlayerName"))?.to_string();
+                        assert_eq!(player_name, $expected_name);
+                        FeedbackPlayerData {
+                            team_id: get_uuid_metadata($event, concat!($prefix, "TeamId"))?,
+                            team_nickname,
+                            player_id: get_uuid_metadata($event, concat!($prefix, "PlayerId"))?,
+                            player_name,
+                            location: get_int_metadata($event, concat!($prefix, "Location"))?,
+                        }
+                    }
+                };
+            }
+
+            Ok(make_fed_event(event, FedEventData::Feedback {
+                game: GameEvent::try_from_event(event)?,
+                players: (
+                    get_player_data!(sub_event, "a", player1_name),
+                    get_player_data!(sub_event, "b", player2_name),
+                ),
+                position_type: position,
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+        }
         EventType::SuperallergicReaction => { todo!() }
         EventType::AllergicReaction => {
             let player_name = run_parser(&event, parse_allergic_reaction)?;
@@ -1590,10 +1621,24 @@ fn parse_team_was_shamed(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (shaming_team, shamed_team)))
 }
 
-
 fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
     let (input, player_name) = parse_terminated(" swallowed a stray peanut and had an allergic reaction!")(input)?;
 
     Ok((input, player_name))
+}
+
+fn parse_feedback(input: &str) -> ParserResult<(&str, &str, PositionType)> {
+    let (input, _) = tag("Reality flickers. Things look different ...\n")(input)?;
+    let (input, player1_name) = parse_terminated(" and ")(input)?;
+    let (input, player2_name) = parse_terminated(" switch teams in the feedback!\n")(input)?;
+    let (input, _) = tag(player2_name)(input)?;
+    let (input, _) = tag(" is now ")(input)?;
+    let (input, position) = alt((
+        tag("batting").map(|_| PositionType::Batter),
+        tag("pitching").map(|_| PositionType::Pitcher),
+    ))(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, (player1_name, player2_name, position)))
 }
 

@@ -296,6 +296,30 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum PositionType {
+    Batter,
+    Pitcher,
+}
+
+impl Display for PositionType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PositionType::Batter => { write!(f, "batting") }
+            PositionType::Pitcher => { write!(f, "pitching") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FeedbackPlayerData {
+    pub team_id: Uuid,
+    pub team_nickname: String,
+    pub player_id: Uuid,
+    pub player_name: String,
+    pub location: i64,
+}
+
 #[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
@@ -632,6 +656,13 @@ pub enum FedEventData {
         player_name: String,
         sub_event: SubEvent,
     },
+
+    Feedback {
+        game: GameEvent,
+        players: (FeedbackPlayerData, FeedbackPlayerData),
+        position_type: PositionType,
+        sub_event: SubEvent,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -1571,6 +1602,47 @@ impl FedEvent {
                     .player_tags(vec![sipper.player_id, sipped.player_id])
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Feedback { ref game, players: (ref player_a, ref player_b), position_type, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::PlayerTraded)
+                    .description("Reality flickered in the Feedback.".to_string())
+                    .team_tags(vec![player_a.team_id, player_b.team_id])
+                    .player_tags(vec![player_a.player_id, player_b.player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "aLocation": player_a.location,
+                            "aPlayerId": player_a.player_id,
+                            "aPlayerName": player_a.player_name,
+                            "aTeamId": player_a.team_id,
+                            "aTeamName": player_a.team_nickname,
+                            "bLocation": player_b.location,
+                            "bPlayerId": player_b.player_id,
+                            "bPlayerName": player_b.player_name,
+                            "bTeamId": player_b.team_id,
+                            "bTeamName": player_b.team_nickname,
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::FeedbackSwap)
+                    .category(2)
+                    .description(format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {position_type}.", player_a.player_name, player_b.player_name, player_b.player_name))
+                    .player_tags(vec![player_a.player_id, player_b.player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
                         .build()
                         .unwrap())
             }
