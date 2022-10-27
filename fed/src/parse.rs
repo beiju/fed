@@ -170,14 +170,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::FlyOut => {
-            let (batter_name, fielder_name, scores) = run_parser(&event, parse_flyout)?;
-            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+            let (batter_name, fielder_name, scores, cooled_off) = run_parser(&event, parse_flyout)?;
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, cooled_off, &event.player_tags)?;
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             Ok(make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: batter_name.to_string(),
                 fielder_name: fielder_name.to_string(),
                 scores,
                 stopped_inhabiting,
+                cooled_off,
             }))
         }
         EventType::GroundOut => {
@@ -1193,13 +1195,15 @@ fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
+fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores, bool)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
     let (input, scores) = parse_scores(" tags up and scores!")(input)?;
 
-    Ok((input, (batter_name, fielder_name, scores)))
+    let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
+
+    Ok((input, (batter_name, fielder_name, scores, cooled_off)))
 }
 
 enum ParsedGroundOut<'a> {

@@ -406,6 +406,7 @@ pub enum FedEventData {
         fielder_name: String,
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
     GroundOut {
@@ -681,7 +682,7 @@ pub enum FedEventData {
         players: (FeedbackPlayerData, FeedbackPlayerData),
         position_type: PositionType,
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -899,17 +900,19 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting } => {
+            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " tags up and scores!");
+                let mut player_tags = scores.scorer_ids();
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
-                    .category(if has_any_refills { 2 } else { 0 })
-                    .description(format!("{} hit a flyout to {}.{}", batter_name, fielder_name, score_text))
-                    .player_tags(scores.scorer_ids())
+                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .description(format!("{} hit a flyout to {}.{}{}", batter_name, fielder_name, score_text, suffix))
+                    .player_tags(player_tags)
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()
@@ -1047,42 +1050,10 @@ impl FedEvent {
             FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " advances on the sacrifice.");
+                let mut player_tags = scores.scorer_ids();
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
-                if let Some(cooled_off) = cooled_off {
-                    children.push(
-                        self.make_event_builder()
-                            .for_game(&game)
-                            .for_sub_event(&cooled_off.sub_event)
-                            .category(1)
-                            .r#type(EventType::RemovedMod)
-                            .description(format!("{batter_name} cooled off."))
-                            .team_tags(vec![cooled_off.team_id])
-                            .player_tags(vec![cooled_off.player_id])
-                            .metadata(EventMetadataBuilder::default()
-                                .play(game.play)
-                                .sub_play(0) // not sure if this is hardcoded
-                                .other(json!({
-                                    "mod": "ON_FIRE",
-                                    "type": 0, // ?
-                                    "parent": self.id
-                                }))
-                                .build()
-                                .unwrap()
-                            )
-                            .build()
-                            .unwrap()
-                    )
-                }
-
-                let mut player_tags = scores.scorer_ids();
-                let suffix = if let Some(cooled_off) = cooled_off {
-                    player_tags.push(cooled_off.player_id);
-                    format!("\n{batter_name} cooled off.")
-                } else {
-                    String::new()
-                };
+                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
@@ -1686,6 +1657,39 @@ impl FedEvent {
         }
             .build()
             .unwrap()
+    }
+
+    fn push_cooled_off(&self, game: &GameEvent, player_name: &str, cooled_off: &Option<ModChangeSubEventWithPlayer>, children: &mut Vec<EventuallyEvent>, player_tags: &mut Vec<Uuid>) -> String {
+        if let Some(cooled_off) = cooled_off {
+            children.push(
+                self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&cooled_off.sub_event)
+                    .category(1)
+                    .r#type(EventType::RemovedMod)
+                    .description(format!("{player_name} cooled off."))
+                    .team_tags(vec![cooled_off.team_id])
+                    .player_tags(vec![cooled_off.player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                                    "mod": "ON_FIRE",
+                                    "type": 0, // ?
+                                    "parent": self.id
+                                }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap()
+            );
+
+            player_tags.push(cooled_off.player_id);
+            format!("\n{player_name} cooled off.")
+        } else {
+            String::new()
+        }
     }
 
     fn stopped_inhabiting_children(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>) -> Vec<EventuallyEvent> {
