@@ -436,7 +436,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => { todo!() }
-        EventType::GainFreeRefill => { todo!() }
+        EventType::GainFreeRefill => {
+            let (player_name, roast, ingredient1, ingredient2) = run_parser(&event, parse_gain_free_refill)?;
+            let sub_event = get_one_sub_event(event)?;
+            let player_id = get_one_player_id(event)?;
+            // The player ID should match in the sub event
+            assert_eq!(player_id, get_one_player_id(sub_event)?);
+            Ok(make_fed_event(event, FedEventData::GainFreeRefill {
+                game: GameEvent::try_from_event(event)?,
+                player_id,
+                player_name: player_name.to_string(),
+                roast: roast.to_string(),
+                ingredient1: ingredient1.to_string(),
+                ingredient2: ingredient2.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+                team_id: get_one_team_id(sub_event)?,
+            }))
+
+        }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
             let sub_event = get_one_sub_event(event)?;
@@ -1370,6 +1387,16 @@ fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)
     Ok((input, (player_name2, roast, notes, wired, gained)))
 }
 
+fn parse_gain_free_refill(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
+    let (input, player_name) = parse_terminated(" is Poured Over with a ")(input)?;
+    let (input, roast) = parse_terminated(" roast blending ")(input)?;
+    let (input, ingredient1) = parse_terminated(" and ")(input)?;
+    let (input, ingredient2) = parse_terminated("!\n")(input)?;
+    let (input, _) = tag(player_name)(input)?;
+    let (input, _) = tag(" got a Free Refill.")(input)?;
+
+    Ok((input, (player_name, roast, ingredient1, ingredient2)))
+}
 
 fn parse_incineration_blocked(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("Rogue Umpire tried to incinerate ")(input)?;

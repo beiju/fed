@@ -576,6 +576,17 @@ pub enum FedEventData {
         batter_id: Uuid,
         pitcher_name: String,
     },
+
+    GainFreeRefill {
+        game: GameEvent,
+        player_id: Uuid,
+        player_name: String,
+        roast: String,
+        ingredient1: String,
+        ingredient2: String,
+        sub_event: SubEvent,
+        team_id: Uuid,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1360,6 +1371,39 @@ impl FedEvent {
                     .category(2)
                     .description(format!("{batter_name} charms {pitcher_name}!\n{batter_name} walks to first base."))
                     .player_tags(vec![batter_id, batter_id]) // two of them
+            }
+            FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedMod)
+                    .description(format!("{player_name} got a Free Refill."))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "COFFEE_RALLY",
+                            "type": 0, // ?
+                            "parent": self.id
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::GainFreeRefill)
+                    .category(2)
+                    .description(format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!\n{player_name} got a Free Refill."))
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
             }
         }
             .build()
