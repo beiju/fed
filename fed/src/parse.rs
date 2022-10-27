@@ -193,6 +193,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                         stopped_inhabiting,
                         cooled_off,
+                        is_special: event.category == 2,
                     }))
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {

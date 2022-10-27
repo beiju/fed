@@ -415,6 +415,9 @@ pub enum FedEventData {
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
         cooled_off: Option<ModChangeSubEventWithPlayer>,
+        // In Season 12, Tired/Wired scoring ground outs were special but didn't have an associated
+        // child event
+        is_special: bool,
     },
 
     FieldersChoice {
@@ -1041,7 +1044,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
+            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " advances on the sacrifice.");
 
@@ -1083,7 +1086,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .category(if has_any_refills || cooled_off.is_some() || is_special { 2 } else { 0 })
                     .description(format!("{} hit a ground out to {}.{}{}",
                                          batter_name, fielder_name, score_text, suffix))
                     .player_tags(player_tags)
