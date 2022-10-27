@@ -268,7 +268,8 @@ pub struct ModChangeSubEventWithPlayer {
 pub enum SpicyStatus {
     None,
     HeatingUp,
-    RedHot(ModChangeSubEvent),
+    // I don't know why the mod change sub event is sometimes missing, but it is
+    RedHot(Option<ModChangeSubEvent>),
 }
 
 impl SpicyStatus {
@@ -1769,7 +1770,7 @@ impl FedEvent {
     }
 
     fn push_red_hot(&self, game: &GameEvent, player_name: &str, batter_id: Uuid, spicy_status: &SpicyStatus, children: &mut Vec<EventuallyEvent>) {
-        if let SpicyStatus::RedHot(red_hot) = spicy_status {
+        if let SpicyStatus::RedHot(Some(red_hot)) = spicy_status {
             children.push(
                 self.make_event_builder()
                     .for_game(&game)

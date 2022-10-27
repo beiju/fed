@@ -339,9 +339,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 wielding_item: wielding_item.map(|s| s.to_string()),
                 inhabiting: inhabited.map(|inhabited| {
                     let (child, ) = event.metadata.children.iter().collect_tuple()
-                        .ok_or_else(|| FeedParseError::MissingChild {
-                            event_type: event.r#type,
-                            expected_num_children: 1,
+                        .ok_or_else(|| {
+                            FeedParseError::MissingChild {
+                                event_type: event.r#type,
+                                expected_num_children: 1,
+                            }
                         })?;
 
                     // These live on the parent
@@ -900,17 +902,16 @@ fn extract_spicy_event(event: &EventuallyEvent, spicy_status: ParsedSpicyStatus)
         ParsedSpicyStatus::RedHot => {
             // TODO Is the spicy event always the last? first? neither?
             if let Some((spicy_event, children)) = event.metadata.children.split_last() {
-                // TODO Make this assert into a propagated error
-                assert_eq!(spicy_event.r#type, EventType::AddedMod);
-                (children, SpicyStatus::RedHot(ModChangeSubEvent {
-                    sub_event: SubEvent::from_event(spicy_event),
-                    team_id: get_one_team_id(spicy_event)?,
-                }))
+                if spicy_event.r#type == EventType::AddedMod {
+                    (children, SpicyStatus::RedHot(Some(ModChangeSubEvent {
+                        sub_event: SubEvent::from_event(spicy_event),
+                        team_id: get_one_team_id(spicy_event)?,
+                    })))
+                } else {
+                    (&event.metadata.children, SpicyStatus::RedHot(None))
+                }
             } else {
-                Err(FeedParseError::MissingChild {
-                    event_type: event.r#type,
-                    expected_num_children: 1,  // at least one
-                })?
+                (&event.metadata.children, SpicyStatus::RedHot(None))
             }
         }
     })
@@ -1030,9 +1031,11 @@ fn merge_scores_with_ids(
 
 fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
     let child = children.next()
-        .ok_or_else(|| FeedParseError::MissingChild {
-            event_type,
-            expected_num_children: -1, // Unknown at this point in the computation
+        .ok_or_else(|| {
+            FeedParseError::MissingChild {
+                event_type,
+                expected_num_children: -1, // Unknown at this point in the computation
+            }
         })?;
 
     let (&team_id, ) = child.team_tags.iter().collect_tuple()
