@@ -12,8 +12,8 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice};
+use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, PlayerStatChange, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -144,7 +144,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
-                        is_special: event.category == 2
+                        is_special: event.category == 2,
                     }))
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
@@ -469,7 +469,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sub_event: SubEvent::from_event(sub_event),
                 team_id: get_one_team_id(sub_event)?,
             }))
-
         }
         EventType::CoffeeBean => {
             let (player_name, roast, notes, wired, gained) = run_parser(&event, parse_coffee_bean)?;
@@ -532,20 +531,49 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (sipper_name, sipped_name, sipped_category, action) = run_parser(&event, parse_blooddrain_siphon)?;
             let (sipper_id, sipped_id) = get_two_player_ids(event)?;
 
-            let stat_decrease_event = get_one_sub_event(event)?;
-            Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
-                game: GameEvent::try_from_event(event)?,
-                sipper_id,
-                sipped_team_id: get_one_team_id(stat_decrease_event)?,
-                sipper_name: sipper_name.to_string(),
-                sipped_id,
-                sipped_name: sipped_name.to_string(),
-                sipped_category,
-                action,
-                sipped_event: SubEvent::from_event(stat_decrease_event),
-                rating_before: get_float_metadata(stat_decrease_event, "before")?,
-                rating_after: get_float_metadata(stat_decrease_event, "after")?,
-            }))
+            match action {
+                None => {
+                    let (sipper_event, sipped_event) = get_two_sub_events(event)?;
+
+                    Ok(make_fed_event(event, FedEventData::Blooddrain {
+                        game: GameEvent::try_from_event(event)?,
+                        is_siphon: true,
+                        sipper: PlayerStatChange {
+                            team_id: get_one_team_id(sipper_event)?,
+                            player_id: sipper_id,
+                            player_name: sipper_name.to_string(),
+                            rating_before: get_float_metadata(sipper_event, "before")?,
+                            rating_after: get_float_metadata(sipper_event, "after")?,
+                            sub_event: SubEvent::from_event(sipper_event),
+                        },
+                        sipped: PlayerStatChange {
+                            team_id: get_one_team_id(sipped_event)?,
+                            player_id: sipped_id,
+                            player_name: sipped_name.to_string(),
+                            rating_before: get_float_metadata(sipped_event, "before")?,
+                            rating_after: get_float_metadata(sipped_event, "after")?,
+                            sub_event: SubEvent::from_event(sipped_event),
+                        },
+                        sipped_category,
+                    }))
+                }
+                Some(action) => {
+                    let stat_decrease_event = get_one_sub_event(event)?;
+                    Ok(make_fed_event(event, FedEventData::SpecialBlooddrain {
+                        game: GameEvent::try_from_event(event)?,
+                        sipper_id,
+                        sipped_team_id: get_one_team_id(stat_decrease_event)?,
+                        sipper_name: sipper_name.to_string(),
+                        sipped_id,
+                        sipped_name: sipped_name.to_string(),
+                        sipped_category,
+                        action,
+                        sipped_event: SubEvent::from_event(stat_decrease_event),
+                        rating_before: get_float_metadata(stat_decrease_event, "before")?,
+                        rating_after: get_float_metadata(stat_decrease_event, "after")?,
+                    }))
+                }
+            }
         }
         EventType::BlooddrainBlocked => { todo!() }
         EventType::Incineration => { todo!() }
@@ -785,7 +813,7 @@ fn extract_cooled_off_event<'e, 't>(event: &'e EventuallyEvent, cooled_off: bool
                         event_type: event.r#type,
                         tag_type: "player",
                         expected_num: 1, // at least
-                        actual_num: 0
+                        actual_num: 0,
                     })?;
 
                 (children, Some(ModChangeSubEventWithPlayer {
@@ -1471,7 +1499,35 @@ fn parse_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
     Ok((input, (player_name, duration)))
 }
 
-fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, BlooddrainAction)> {
+fn parse_blooddrain_action(drinker_name: &str) -> impl Fn(&str) -> ParserResult<BlooddrainAction> + '_ {
+    move |input: &str| {
+        let (input, _) = tag(drinker_name)(input)?;
+        let (input, action) = alt((
+            // preceded(tag(" increased their "), terminated(parse_category, tag(" ability!"))).map(|ability| BlooddrainAction::IncreaseAbility(ability)),
+            tag(" adds a Ball!").map(|_| BlooddrainAction::AddBall),
+            tag(" removes a Ball!").map(|_| BlooddrainAction::RemoveBall),
+            tag(" adds a Strike!").map(|_| BlooddrainAction::AddStrike),
+            tag(" removes a Strike!").map(|_| BlooddrainAction::RemoveStrike),
+            tag(" adds a Out!").map(|_| BlooddrainAction::AddOut),
+            tag(" removes a Out!").map(|_| BlooddrainAction::RemoveOut),
+        ))(input)?;
+
+        Ok((input, action))
+    }
+}
+
+fn parse_blooddrain_ability<'a>(drinker_name: &'a str, category: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
+    move |input: &str| {
+        let (input, _) = tag(drinker_name)(input)?;
+        let (input, _) = tag(" increased their ")(input)?;
+        let (input, _) = tag(category)(input)?;
+        let (input, _) = tag(" ability!")(input)?;
+
+        Ok((input, ()))
+    }
+}
+
+fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, Option<BlooddrainAction>)> {
     let (input, _) = tag("The Blooddrain gurgled!\n")(input)?;
     let (input, drinker_name) = parse_terminated("'s Siphon activates!\n")(input)?;
     let (input, _) = tag(drinker_name)(input)?;
@@ -1479,15 +1535,9 @@ fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategor
     let (input, drunk_name) = parse_terminated("'s ")(input)?;
     let (input, category) = parse_category(input)?;
     let (input, _) = tag(" ability!\n")(input)?;
-    let (input, _) = tag(drinker_name)(input)?;
     let (input, action) = alt((
-        // preceded(tag(" increased their "), terminated(parse_category, tag(" ability!"))).map(|ability| BlooddrainAction::IncreaseAbility(ability)),
-        tag(" adds a Ball!").map(|_| BlooddrainAction::AddBall),
-        tag(" removes a Ball!").map(|_| BlooddrainAction::RemoveBall),
-        tag(" adds a Strike!").map(|_| BlooddrainAction::AddStrike),
-        tag(" removes a Strike!").map(|_| BlooddrainAction::RemoveStrike),
-        tag(" adds a Out!").map(|_| BlooddrainAction::AddOut),
-        tag(" removes a Out!").map(|_| BlooddrainAction::RemoveOut),
+        parse_blooddrain_action(drinker_name).map(|a| Some(a)),
+        parse_blooddrain_ability(drinker_name, &category.to_string()).map(|()| None),
     ))(input)?;
 
     Ok((input, (drinker_name, drunk_name, category, action)))
@@ -1498,7 +1548,7 @@ fn parse_category(input: &str) -> ParserResult<AttrCategory> {
         tag("batting").map(|_| AttrCategory::Batting),
         tag("baserunning").map(|_| AttrCategory::Baserunning),
         tag("pitching").map(|_| AttrCategory::Pitching),
-        tag("defense").map(|_| AttrCategory::Defense),
+        tag("defensive").map(|_| AttrCategory::Defense),
     ))(input)
 }
 

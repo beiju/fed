@@ -128,7 +128,7 @@ impl ScoreInfo {
 
         output
     }
-    
+
     pub fn scorer_ids(&self) -> Vec<Uuid> {
         self.scoring_players.iter()
             .map(|p| p.player_id)
@@ -178,7 +178,7 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AttrCategory {
     Batting,
     Baserunning,
@@ -192,7 +192,18 @@ impl Display for AttrCategory {
             AttrCategory::Batting => { write!(f, "batting") }
             AttrCategory::Baserunning => { write!(f, "baserunning") }
             AttrCategory::Pitching => { write!(f, "pitching") }
-            AttrCategory::Defense => { write!(f, "defense") }
+            AttrCategory::Defense => { write!(f, "defensive") }
+        }
+    }
+}
+
+impl AttrCategory {
+    pub fn metadata_type(&self) -> i32 {
+        match self {
+            AttrCategory::Batting => { -1 } // TODO
+            AttrCategory::Baserunning => { -1 } // TODO
+            AttrCategory::Pitching => { 1 }
+            AttrCategory::Defense => { 2 }
         }
     }
 }
@@ -226,7 +237,7 @@ pub enum ModDuration {
     Permanent = 0,
     Seasonal = 1,
     Weekly = 2,
-    Game = 3
+    Game = 3,
 }
 
 impl Display for ModDuration {
@@ -273,6 +284,16 @@ impl SpicyStatus {
             _ => false
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerStatChange {
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    pub player_name: String,
+    pub rating_before: f64,
+    pub rating_after: f64,
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone)]
@@ -361,7 +382,7 @@ pub enum FedEventData {
         fielder_name: String,
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
-        cooled_off: Option<ModChangeSubEventWithPlayer>
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
     FieldersChoice {
@@ -507,17 +528,13 @@ pub enum FedEventData {
         mod_add_event: SubEvent,
     },
 
-    // Blooddrain {
-    //     game: GameEvent,
-    //     sipper_id: Uuid,
-    //     sipper_name: String,
-    //     sipped_id: Uuid,
-    //     sipped_name: String,
-    //     is_siphon: bool,
-    //     sipped_category: AttrCategory,
-    //     sipper_event: SubEvent,
-    //     sipped_event: SubEvent,
-    // },
+    Blooddrain {
+        game: GameEvent,
+        is_siphon: bool,
+        sipper: PlayerStatChange,
+        sipped: PlayerStatChange,
+        sipped_category: AttrCategory,
+    },
 
     SpecialBlooddrain {
         game: GameEvent,
@@ -614,7 +631,7 @@ pub enum FedEventData {
         player_id: Uuid,
         player_name: String,
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -883,7 +900,7 @@ impl FedEvent {
                 let spicy_text = match spicy_status {
                     SpicyStatus::None => String::new(),
                     SpicyStatus::HeatingUp => format!("\n{} is Heating Up!", batter_name),
-                    SpicyStatus::RedHot{ .. } => format!("\n{} is Red Hot!", batter_name),
+                    SpicyStatus::RedHot { .. } => format!("\n{} is Red Hot!", batter_name),
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
@@ -1298,7 +1315,7 @@ impl FedEvent {
                         .play(game.play)
                         .sub_play(0) // not sure if this is hardcoded
                         .other(json!({
-                                "type": 1, // ?
+                                "type": sipped_category.metadata_type(), // ?
                                 "parent": self.id,
                                 "before": rating_before,
                                 "after": rating_after,
@@ -1344,7 +1361,6 @@ impl FedEvent {
                     .r#type(EventType::BirdsCircle)
                     .category(2)
                     .description("The Birds circle ... but they don't find what they're looking for.".to_string())
-
             }
             FedEventData::FriendOfCrows { game, batter_id, batter_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)
@@ -1477,7 +1493,6 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
-
             }
             FedEventData::PerkUp { ref game, team_id, player_id, ref player_name, ref sub_event } => {
                 let child = self.make_event_builder()
@@ -1509,6 +1524,53 @@ impl FedEvent {
                     .description(format!("{player_name} Perks up."))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, sipped_category } => {
+                let children: Vec<_> = [
+                    // why are the sub-events backwards??
+                    (1, 2, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
+                    (0, 2, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name))
+                ].into_iter().map(|(sub_play, metadata_type, change, event_type, description)| {
+                    self.make_event_builder()
+                        .for_game(&game)
+                        .for_sub_event(&change.sub_event)
+                        .category(1)
+                        .r#type(event_type)
+                        .description(description)
+                        .team_tags(vec![change.team_id])
+                        .player_tags(vec![change.player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(sub_play)
+                            .other(json!({
+                                "type": metadata_type, // ?
+                                "parent": self.id,
+                                "before": change.rating_before,
+                                "after": change.rating_after,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap()
+                })
+                    .collect();
+
+                let siphon_text = if is_siphon {
+                    format!("\n{}'s Siphon activates!", sipper.player_name)
+                } else {
+                    String::new()
+                };
+
+                event_builder.for_game(&game)
+                    .r#type(if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain })
+                    .category(2)
+                    .description(format!("The Blooddrain gurgled!{siphon_text}\n{} siphoned some of {}'s {sipped_category} ability!\n{} increased their {sipped_category} ability!", sipper.player_name, sipped.player_name, sipper.player_name))
+                    .player_tags(vec![sipper.player_id, sipped.player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }

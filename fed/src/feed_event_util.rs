@@ -12,8 +12,17 @@ pub fn get_one_sub_event_from_slice(children: &[EventuallyEvent], event_type: Ev
     Ok(sub_event)
 }
 
-pub(crate) fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
+pub fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, FeedParseError> {
     get_one_sub_event_from_slice(&event.metadata.children, event.r#type)
+}
+
+pub fn get_two_sub_events(event: &EventuallyEvent) -> Result<(&EventuallyEvent, &EventuallyEvent), FeedParseError> {
+    let (a, b) = event.metadata.children.iter().collect_tuple()
+        .ok_or_else(|| FeedParseError::MissingChild {
+            event_type: event.r#type,
+            expected_num_children: 1,
+        })?;
+    Ok((a, b))
 }
 
 pub fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> Result<&'a str, FeedParseError> {
