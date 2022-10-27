@@ -757,6 +757,16 @@ pub enum FedEventData {
         on: bool,
         sub_event: SubEvent,
     },
+
+    TasteTheInfinite {
+        game: GameEvent,
+        sheller_id: Uuid,
+        sheller_name: String,
+        shellee_team_id: Uuid,
+        shellee_id: Uuid,
+        shellee_name: String,
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1951,6 +1961,41 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
+            }
+            FedEventData::TasteTheInfinite { ref game, sheller_id, ref sheller_name, shellee_team_id, shellee_id, ref shellee_name, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::AddedMod)
+                    .description(format!("{shellee_name} is Shelled!"))
+                    .team_tags(vec![shellee_team_id])
+                    // Yes this makes no sense! but, it appears to be that way
+                    .player_tags(vec![sheller_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "SHELLED",
+                            "type": 0, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::TasteTheInfinite)
+                    .category(2)
+                    .description(format!("{sheller_name} tastes the infinite!\n{shellee_name} is Shelled!"))
+                    .player_tags(vec![sheller_id, shellee_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()

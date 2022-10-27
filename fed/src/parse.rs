@@ -755,7 +755,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 message: event.description.clone(),
             }))
         }
-        EventType::TasteTheInfinite => { todo!() }
+        EventType::TasteTheInfinite => {
+            let (sheller_name, shellee_name) = run_parser(event, parse_taste_the_infinite)?;
+            let (sheller_id, shellee_id) = get_two_player_ids(event)?;
+
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::TasteTheInfinite {
+                game: GameEvent::try_from_event(event)?,
+                sheller_id,
+                sheller_name: sheller_name.to_string(),
+                shellee_team_id: get_one_team_id(sub_event)?,
+                shellee_id,
+                shellee_name: shellee_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+
+        }
         EventType::EventHorizonActivation => { todo!() }
         EventType::EventHorizonAwaits => { todo!() }
         EventType::SolarPanelsAwait => { todo!() }
@@ -782,7 +797,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 on,
                 sub_event: SubEvent::from_event(sub_event),
             }))
-
         }
         EventType::UnderOver => {
             let (player_name, on) = run_parser(event, parse_under_over_over_under("Under Over"))?;
@@ -1881,5 +1895,12 @@ fn parse_under_over_over_under(mod_text: &str) -> impl Fn(&str) -> ParserResult<
         ))(input);
         x
     }
+}
+
+fn parse_taste_the_infinite(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, sheller_name) = parse_terminated(" tastes the infinite!\n")(input)?;
+    let (input, shellee_name) = parse_terminated(" is Shelled!")(input)?;
+
+    Ok((input, (sheller_name, shellee_name)))
 }
 
