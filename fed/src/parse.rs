@@ -274,6 +274,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     })
                     .collect::<Result<_, _>>()?,
                 spicy_status,
+                is_special: event.category == 2,
             }))
         }
         EventType::Hit => {
@@ -589,7 +590,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ).transpose()?,
             }))
         }
-        EventType::FeedbackBlocked => { todo!() }
+        EventType::FeedbackBlocked => {
+            let (resisted_name, tangled_name) = run_parser(&event, parse_feedback_blocked)?;
+            let (resisted_id, tangled_id) = get_two_player_ids(event)?;
+            let sub_event = get_one_sub_event(event)?;
+
+            Ok(make_fed_event(event, FedEventData::FeedbackBlocked {
+                game: GameEvent::try_from_event(event)?,
+                resisted_id,
+                resisted_name: resisted_name.to_string(),
+                tangled_id,
+                tangled_team_id: get_one_team_id(sub_event)?,
+                tangled_name: tangled_name.to_string(),
+                tangled_rating_before: get_float_metadata(sub_event, "before")?,
+                tangled_rating_after: get_float_metadata(sub_event, "after")?,
+                sub_event: SubEvent::from_event(sub_event),
+            }))
+
+        }
         EventType::FeedbackSwap => {
             let (player1_name, player2_name, position) = run_parser(&event, parse_feedback)?;
             let sub_event = get_one_sub_event(event)?;
@@ -1942,5 +1960,13 @@ fn parse_batter_skipped(input: &str) -> ParserResult<&str> {
     let (input, player_name) = parse_terminated(" is Shelled and cannot escape!")(input)?;
 
     Ok((input, player_name))
+}
+
+fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("Reality begins to flicker ...\nBut ")(input)?;
+    let (input, player1_name) = parse_terminated(" resists!\n")(input)?;
+    let (input, player2_name) = parse_terminated(" is tangled in the flicker!")(input)?;
+
+    Ok((input, (player1_name, player2_name)))
 }
 

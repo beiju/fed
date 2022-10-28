@@ -477,6 +477,9 @@ pub enum FedEventData {
         stopped_inhabiting: Option<StoppedInhabiting>,
         free_refills: Vec<FreeRefill>,
         spicy_status: SpicyStatus,
+        // In Season 12, Tired/Wired scoring events were special but didn't have an associated
+        // child event
+        is_special: bool,
     },
 
     StolenBase {
@@ -777,6 +780,18 @@ pub enum FedEventData {
         game: GameEvent,
         batter_name: String,
     },
+
+    FeedbackBlocked {
+        game: GameEvent,
+        resisted_id: Uuid,
+        resisted_name: String,
+        tangled_id: Uuid,
+        tangled_team_id: Uuid,
+        tangled_name: String,
+        tangled_rating_before: f64,
+        tangled_rating_after: f64,
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1069,7 +1084,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special } => {
                 let suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
@@ -1114,7 +1129,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .category(if magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() { 2 } else { 0 })
+                    .category(if magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() || is_special { 2 } else { 0 })
                     .description(format!("{}{} hits a {}!{}",
                                          if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
                                          batter_name,
@@ -2055,6 +2070,41 @@ impl FedEvent {
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
+            }
+            FedEventData::FeedbackBlocked { ref game, resisted_id, ref resisted_name, tangled_id, tangled_team_id, ref tangled_name, tangled_rating_before, tangled_rating_after, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::PlayerStatDecrease)
+                    .description(format!("{tangled_name} is tangled in the flicker!"))
+                    .team_tags(vec![tangled_team_id])
+                    .player_tags(vec![tangled_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0)
+                        .other(json!({
+                            "before": tangled_rating_before,
+                            "after": tangled_rating_after,
+                            "type": 4, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(game)
+                    .r#type(EventType::FeedbackBlocked)
+                    .category(2)
+                    .description(format!("Reality begins to flicker ...\nBut {resisted_name} resists!\n{tangled_name} is tangled in the flicker!"))
+                    .player_tags(vec![resisted_id, tangled_id])
+                    .metadata(make_game_event_metadata_builder(game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()
