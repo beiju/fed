@@ -447,6 +447,7 @@ pub enum FedEventData {
         out_at_base: i32,
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
     DoublePlay {
@@ -1304,18 +1305,20 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting } => {
+            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
+                let mut player_tags = scores.scorer_ids();
 
                 self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills { 2 } else { 0 })
-                    .description(format!("{} out at {} base.{}\n{} reaches on fielder's choice.",
+                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .description(format!("{} out at {} base.{}\n{} reaches on fielder's choice.{suffix}",
                                          runner_out_name, base_name(out_at_base), score_text, batter_name))
-                    .player_tags(scores.scorer_ids())
+                    .player_tags(player_tags)
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
                         .build()

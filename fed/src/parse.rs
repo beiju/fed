@@ -206,6 +206,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         out_at_base: base,
                         scores,
                         stopped_inhabiting,
+                        cooled_off,
                     }))
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
