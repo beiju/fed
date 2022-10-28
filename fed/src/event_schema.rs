@@ -348,6 +348,12 @@ pub enum ReverbType {
 }
 
 #[derive(Debug, Clone)]
+pub enum BatterSkippedReason {
+    Shelled,
+    Elsewhere(Uuid)
+}
+
+#[derive(Debug, Clone)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -781,6 +787,7 @@ pub enum FedEventData {
     BatterSkipped {
         game: GameEvent,
         batter_name: String,
+        reason: BatterSkippedReason,
     },
 
     FeedbackBlocked {
@@ -2067,11 +2074,20 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::BatterSkipped { game, batter_name } => {
+            FedEventData::BatterSkipped { game, batter_name, reason } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterSkipped)
                     .category(0)
-                    .description(format!("{batter_name} is Shelled and cannot escape!"))
+                    .description(match reason {
+                        BatterSkippedReason::Shelled => { format!("{batter_name} is Shelled and cannot escape!") }
+                        BatterSkippedReason::Elsewhere(_) => { format!("{batter_name} is Elsewhere..") }
+                    })
+                    // Bizarrely, the player tag is on elsewhere players but not shelled ones
+                    .player_tags(if let BatterSkippedReason::Elsewhere(id) = reason {
+                        vec![id]
+                    } else {
+                        Vec::new()
+                    })
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())

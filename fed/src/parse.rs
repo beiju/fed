@@ -12,7 +12,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
-use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -395,10 +395,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::HomeFieldAdvantage => { todo!() }
         EventType::HitByPitch => { todo!() }
         EventType::BatterSkipped => {
-            let player_name = run_parser(&event, parse_batter_skipped)?;
+            let (player_name, reason) = run_parser(&event, parse_batter_skipped)?;
             Ok(make_fed_event(event, FedEventData::BatterSkipped {
                 game: GameEvent::try_from_event(event)?,
                 batter_name: player_name.to_string(),
+                reason: match reason {
+                    ParsedBatterSkippedReason::Shelled => { BatterSkippedReason::Shelled }
+                    ParsedBatterSkippedReason::Elsewhere => {
+                        BatterSkippedReason::Elsewhere(get_one_player_id(event)?)
+                    }
+                },
             }))
         }
         EventType::Party => { todo!() }
@@ -2003,10 +2009,18 @@ fn parse_taste_the_infinite(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (sheller_name, shellee_name)))
 }
 
-fn parse_batter_skipped(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = parse_terminated(" is Shelled and cannot escape!")(input)?;
+enum ParsedBatterSkippedReason {
+    Shelled,
+    Elsewhere,
+}
 
-    Ok((input, player_name))
+fn parse_batter_skipped(input: &str) -> ParserResult<(&str, ParsedBatterSkippedReason)> {
+    let (input, result) = alt((
+        parse_terminated(" is Shelled and cannot escape!").map(|n| (n, ParsedBatterSkippedReason::Shelled)),
+        parse_terminated(" is Elsewhere..").map(|n| (n, ParsedBatterSkippedReason::Elsewhere)),
+    ))(input)?;
+
+    Ok((input, result))
 }
 
 fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> {
