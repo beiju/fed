@@ -357,7 +357,7 @@ pub enum FedEventData {
     LetsGo {
         game: GameEvent,
         weather: Weather,
-        stadium_id: Option<Uuid>
+        stadium_id: Option<Uuid>,
     },
 
     PlayBall {
@@ -527,7 +527,7 @@ pub enum FedEventData {
     InningEnd {
         game: GameEvent,
         inning_num: i32,
-        lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>
+        lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
     CharmStrikeout {
@@ -635,7 +635,7 @@ pub enum FedEventData {
         game: GameEvent,
         batter_id: Uuid,
         batter_name: String,
-        pitcher: Option<(Uuid, String)>
+        pitcher: Option<(Uuid, String)>,
     },
 
     BlackHoleSwallowedWin {
@@ -813,7 +813,12 @@ pub enum FedEventData {
         team_nickname: String,
         division_id: Uuid,
         division_name: String,
-    }
+    },
+
+    FloodingSwept {
+        game: GameEvent,
+        swept_elsewhere: Vec<ModChangeSubEventWithNamedPlayer>,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -1279,35 +1284,8 @@ impl FedEvent {
                         .unwrap())
             }
             FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
-                let suffix = lost_triple_threat.iter()
-                    .map(|e| format!("\n{} is no longer a Triple Threat.", e.player_name))
-                    .join("");
-
-                let children = lost_triple_threat.iter()
-                    .map(|e| {
-                        self.make_event_builder()
-                            .for_game(game)
-                            .for_sub_event(&e.sub_event)
-                            .category(1)
-                            .r#type(EventType::RemovedMod)
-                            .description(format!("{} is no longer a Triple Threat.", e.player_name))
-                            .team_tags(vec![e.team_id])
-                            .player_tags(vec![e.player_id])
-                            .metadata(EventMetadataBuilder::default()
-                                .play(game.play)
-                                .sub_play(e.sub_play)
-                                .other(json!({
-                                    "mod": "TRIPLE_THREAT",
-                                    "type": 0, // ?
-                                    "parent": self.id
-                                }))
-                                .build()
-                                .unwrap()
-                            )
-                            .build()
-                            .unwrap()
-                    })
-                    .collect();
+                let (children, suffix) = self.make_mod_change_sub_events(
+                    game, lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
 
                 event_builder.for_game(&game)
                     .r#type(EventType::InningEnd)
@@ -1910,7 +1888,6 @@ impl FedEvent {
                                 .children(vec![get_child(sub_event, EventType::ReverbLineupShuffle, "lineup")])
                                 .build()
                                 .unwrap())
-
                     }
                     ReverbType::Full(_) => {
                         todo!()
@@ -2177,9 +2154,56 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
+            FedEventData::FloodingSwept { ref game, ref swept_elsewhere } => {
+                let (children, suffix) = self.make_mod_change_sub_events(
+                    game, swept_elsewhere, EventType::AddedMod, "is swept Elsewhere!", "ELSEWHERE");
+
+                event_builder.for_game(&game)
+                    .r#type(EventType::FloodingSwept)
+                    .category(2)
+                    .description(format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"))
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
+                        .build()
+                        .unwrap())
+            }
         }
             .build()
             .unwrap()
+    }
+
+    fn make_mod_change_sub_events(&self, game: &GameEvent, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventuallyEvent>, String) {
+        let suffix = mod_changes.iter()
+            .map(|e| format!("\n{} {message}", e.player_name))
+            .join("");
+
+        let children = mod_changes.iter()
+            .map(|e| {
+                self.make_event_builder()
+                    .for_game(game)
+                    .for_sub_event(&e.sub_event)
+                    .category(1)
+                    .r#type(event_type)
+                    .description(format!("{} {message}", e.player_name))
+                    .team_tags(vec![e.team_id])
+                    .player_tags(vec![e.player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(e.sub_play)
+                        .other(json!({
+                                "mod": mod_name,
+                                "type": 0, // ?
+                                "parent": self.id
+                            }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap()
+            })
+            .collect();
+
+        (children, suffix)
     }
 
     fn push_red_hot(&self, game: &GameEvent, player_name: &str, batter_id: Uuid, spicy_status: &SpicyStatus, children: &mut Vec<EventuallyEvent>) {

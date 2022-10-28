@@ -438,20 +438,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::InningEnd => {
             let (inning_num, lost_triple_threat_names) = run_parser(&event, parse_inning_end)?;
-            let lost_triple_threat = lost_triple_threat_names.iter().zip_eq(&event.metadata.children)
-                .map(|(name, sub_event)| Ok(ModChangeSubEventWithNamedPlayer {
-                    sub_event: SubEvent::from_event(sub_event),
-                    team_id: get_one_team_id(sub_event)?,
-                    player_id: get_one_player_id(sub_event)?,
-                    player_name: name.to_string(),
-                    sub_play: get_sub_play(sub_event)?,
-                }))
-                .collect::<Result<_, _>>()?;
 
             Ok(make_fed_event(event, FedEventData::InningEnd {
                 game: GameEvent::try_from_event(event)?,
                 inning_num,
-                lost_triple_threat,
+                lost_triple_threat: zip_mod_change_events(lost_triple_threat_names, &event)?,
             }))
         }
         EventType::BigDeal => {
@@ -802,7 +793,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::DecreePassed => { todo!() }
         EventType::BlessingOrGiftWon => { todo!() }
         EventType::WillRecieved => { todo!() }
-        EventType::FloodingSwept => { todo!() }
+        EventType::FloodingSwept => {
+            let swept_elsewhere_names = run_parser(&event, parse_flooding_swept)?;
+
+            Ok(make_fed_event(event, FedEventData::FloodingSwept {
+                game: GameEvent::try_from_event(event)?,
+                swept_elsewhere: zip_mod_change_events(swept_elsewhere_names, &event)?,
+            }))
+        }
         EventType::SalmonSwim => { todo!() }
         EventType::PolarityShift => { todo!() }
         EventType::EnterSecretBase => { todo!() }
@@ -1031,6 +1029,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::RemovedModFromOtherMod => { todo!() }
     }
+}
+
+fn zip_mod_change_events(names: Vec<&str>, event: &&EventuallyEvent) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
+    names.iter().zip_eq(&event.metadata.children)
+        .map(|(name, sub_event)| Ok(ModChangeSubEventWithNamedPlayer {
+            sub_event: SubEvent::from_event(sub_event),
+            team_id: get_one_team_id(sub_event)?,
+            player_id: get_one_player_id(sub_event)?,
+            player_name: name.to_string(),
+            sub_play: get_sub_play(sub_event)?,
+        }))
+        .collect::<Result<_, _>>()
 }
 
 fn get_one_player_id_advanced(event: &EventuallyEvent, has_extra_id: bool) -> Result<Uuid, FeedParseError> {
@@ -2024,3 +2034,9 @@ fn parse_team_division_move(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (team_nickname, division_name)))
 }
 
+fn parse_flooding_swept(input: &str) -> ParserResult<Vec<&str>> {
+    let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")(input)?;
+    let (input, players_swept_elsewhere) = many0(preceded(tag("\n"), parse_terminated(" is swept Elsewhere!")))(input)?;
+
+    Ok((input, players_swept_elsewhere))
+}
