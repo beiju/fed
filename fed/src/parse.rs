@@ -302,6 +302,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     scores,
                     stopped_inhabiting,
                     spicy_status,
+                    is_special: event.category == 2
                 }))
             } else {
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })

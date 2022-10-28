@@ -463,6 +463,8 @@ pub enum FedEventData {
         scores: ScoreInfo,
         stopped_inhabiting: Option<StoppedInhabiting>,
         spicy_status: SpicyStatus,
+        // in s12 Tired and Wired make an event special without being otherwise observable
+        is_special: bool,
     },
 
     HomeRun {
@@ -1031,7 +1033,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status } => {
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status, is_special } => {
                 let (score_text, has_any_refills, mut children) =
                     self.get_score_data(game, scores, " scores!");
 
@@ -1045,7 +1047,7 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
-                    .category(if has_any_refills || spicy_status.is_special() { 2 } else { 0 })
+                    .category(if has_any_refills || spicy_status.is_special() || is_special { 2 } else { 0 })
                     .description(format!("{} hits a {}!{}{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
