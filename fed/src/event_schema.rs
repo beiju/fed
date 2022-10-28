@@ -744,10 +744,12 @@ pub enum FedEventData {
         team_tags: Vec<Uuid>,
     },
 
+    // TODO make this more specific, ideally not just including the whole description
     ModAddedSpontaneously {
         description: String,
         team_id: Uuid,
-        player_id: Uuid,
+        // The presence of player_id is the only thing that separates a player event from a team one
+        player_id: Option<Uuid>,
         r#mod: String,
     },
 
@@ -1919,11 +1921,11 @@ impl FedEvent {
                     .category(1)
                     .description(description)
                     .team_tags(vec![team_id])
-                    .player_tags(vec![player_id])
+                    .player_tags(player_id.into_iter().collect())
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
                             "mod": r#mod,
-                            "type": 0, // ?
+                            "type": if player_id.is_some() { 0 } else { 1 }, // player vs team, I think
                         }))
                         .build()
                         .unwrap())

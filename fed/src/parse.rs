@@ -930,7 +930,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             Ok(make_fed_event(event, FedEventData::ModAddedSpontaneously {
                 description: event.description.clone(),
                 team_id: get_one_team_id(event)?,
-                player_id: get_one_player_id(event)?,
+                player_id: get_one_player_id(event).ok(),
                 r#mod: get_str_metadata(event, "mod")?.to_string(),
             }))
         }
