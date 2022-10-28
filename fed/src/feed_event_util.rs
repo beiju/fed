@@ -111,6 +111,14 @@ pub fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> 
     get_one_id("team", &event.team_tags, event.r#type)
 }
 
+pub fn get_sub_play(event: &EventuallyEvent) -> Result<i64, FeedParseError> {
+    event.metadata.sub_play
+        .ok_or_else(|| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field: "subPlay"
+        })
+}
+
 fn get_two_ids(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> Result<(Uuid, Uuid), FeedParseError> {
     tags.iter()
         .cloned()

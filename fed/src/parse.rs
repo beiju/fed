@@ -13,7 +13,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -80,6 +80,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             player_name: refiller_name.to_string(),
                             player_id: get_one_player_id(sub_event)?,
                             team_id: get_one_team_id(sub_event)?,
+                            sub_play: get_sub_play(sub_event)?,
                         })
                     }).transpose()?,
                 }))
@@ -440,11 +441,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     team_id: get_one_team_id(sub_event)?,
                     player_id: get_one_player_id(sub_event)?,
                     player_name: name.to_string(),
-                    sub_play: sub_event.metadata.sub_play
-                        .ok_or_else(|| FeedParseError::MissingMetadata {
-                            event_type: sub_event.r#type,
-                            field: "subPlay"
-                        })?,
+                    sub_play: get_sub_play(sub_event)?,
                 }))
                 .collect::<Result<_, _>>()?;
 
@@ -870,11 +867,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event)?,
                 players: event.metadata.children.iter()
                     .map(|mod_add_event| {
-                        let sub_play = mod_add_event.metadata.sub_play
-                            .ok_or_else(|| FeedParseError::MissingMetadata {
-                                event_type: mod_add_event.r#type,
-                                field: "subPlay",
-                            })?;
+                        // TODO Now that the children are sorted, it's guaranteed that they'll be in
+                        //   the same order as the names. This can be replaced with a zip.
+                        let sub_play = get_sub_play(mod_add_event)?;
                         let player_name = player_names[sub_play as usize];
                         assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
                         Ok(PerkPlayers {
@@ -1098,6 +1093,7 @@ fn merge_scores_with_ids(
                         player_name: name.to_string(),
                         player_id: get_one_player_id(event)?,
                         team_id: get_one_team_id(event)?,
+                        sub_play: get_sub_play(event)?,
                     })
                 } else {
                     Err(FeedParseError::UnexpectedDescription {
@@ -1173,6 +1169,7 @@ fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>,
         player_name: refiller_name.to_string(),
         player_id,
         team_id,
+        sub_play: get_sub_play(child)?,
     })
 }
 

@@ -99,6 +99,7 @@ impl SubEvent {
 #[derive(Debug, Clone)]
 pub struct FreeRefill {
     pub sub_event: SubEvent,
+    pub sub_play: i64,
     pub player_name: String,
     pub player_id: Uuid,
     pub team_id: Uuid,
@@ -2189,7 +2190,7 @@ impl FedEvent {
             .player_tags(vec![free_refill.player_id])
             .metadata(EventMetadataBuilder::default()
                 .play(game.play)
-                .sub_play(0) // not sure if this is hardcoded
+                .sub_play(free_refill.sub_play)
                 .other(json!({
                                 "mod": "COFFEE_RALLY",
                                 "type": 0, // ?
