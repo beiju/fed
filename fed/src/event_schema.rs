@@ -828,6 +828,15 @@ pub enum FedEventData {
         game: GameEvent,
         swept_elsewhere: Vec<ModChangeSubEventWithNamedPlayer>,
     },
+
+    ReturnFromElsewhere {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        sub_event: SubEvent,
+        number_of_days: i32,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -2182,6 +2191,39 @@ impl FedEvent {
                     .description(format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::ReturnFromElsewhere { ref game, team_id, player_id, ref player_name, ref sub_event, number_of_days } => {
+                let description = format!("{player_name} has returned from Elsewhere after {number_of_days} days!");
+                let child = self.make_event_builder()
+                    .for_game(game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::RemovedMod)
+                    .description(description.clone())
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0)
+                        .other(json!({
+                            "mod": "ELSEWHERE",
+                            "type": 0, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(game)
+                    .r#type(EventType::ReturnFromElsewhere)
+                    .category(0)
+                    .description(description)
+                    .metadata(make_game_event_metadata_builder(game)
+                        .children(vec![child])
                         .build()
                         .unwrap())
             }

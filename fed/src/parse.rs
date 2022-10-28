@@ -856,7 +856,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_tags: event.team_tags.clone(),
             }))
         }
-        EventType::ReturnFromElsewhere => { todo!() }
+        EventType::ReturnFromElsewhere => {
+            let (player_name, after_days) = run_parser(event, parse_return_from_elsewhere)?;
+
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::ReturnFromElsewhere {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id: get_one_player_id(sub_event)?,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+                number_of_days: after_days,
+            }))
+        }
         EventType::OverUnder => {
             let (player_name, on) = run_parser(event, parse_under_over_over_under("Over Under"))?;
 
@@ -2053,4 +2065,12 @@ fn parse_flooding_swept(input: &str) -> ParserResult<Vec<&str>> {
     let (input, players_swept_elsewhere) = many0(preceded(tag("\n"), parse_terminated(" is swept Elsewhere!")))(input)?;
 
     Ok((input, players_swept_elsewhere))
+}
+
+fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, player_name) = parse_terminated(" has returned from Elsewhere after ")(input)?;
+    let (input, after_days) = parse_whole_number(input)?;
+    let (input, _) = tag(" days!")(input)?;
+
+    Ok((input, (player_name, after_days)))
 }

@@ -227,7 +227,7 @@ pub enum EventType {
     SolarPanelsActivation = 79,
     TarotReading = 81,
     EmergencyAlert = 82,
-    ReturnFromElsewhere = 83,
+    ReturnFromElsewhere = 84,
     OverUnder = 85,
     UnderOver = 86,
     Undersea = 88,
