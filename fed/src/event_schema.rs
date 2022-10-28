@@ -793,6 +793,26 @@ pub enum FedEventData {
         tangled_rating_after: f64,
         sub_event: SubEvent,
     },
+
+    FlagPlanted {
+        team_id: Uuid,
+        team_nickname: String,
+        ballpark_name: String,
+        prefab_name: String,
+        votes: i64,
+    },
+
+    EmergencyAlert {
+        message: String,
+        team_tags: Vec<Uuid>,
+    },
+
+    TeamJoined {
+        team_id: Uuid,
+        team_nickname: String,
+        division_id: Uuid,
+        division_name: String,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -2107,7 +2127,50 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
-
+            }
+            FedEventData::FlagPlanted { team_id, team_nickname, ballpark_name, prefab_name, votes } => {
+                event_builder
+                    .r#type(EventType::FlagPlanted)
+                    .category(1)
+                    .phase(5)
+                    .description(format!("The {team_nickname} break ground on {ballpark_name}, selecting to build the {prefab_name} prefab!\nTHE FLAG IS PLANTED"))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "renoId": "1",
+                            "title": "Ground Broken",
+                            "votes": votes,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::EmergencyAlert { message, team_tags } => {
+                event_builder
+                    .r#type(EventType::EmergencyAlert)
+                    .category(3)
+                    .phase(5)
+                    .description(message)
+                    .team_tags(team_tags)
+                    .metadata(EventMetadataBuilder::default()
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::TeamJoined { team_id, team_nickname, division_id, division_name } => {
+                event_builder
+                    .r#type(EventType::TeamDivisionMove)
+                    .category(1)
+                    .phase(5)
+                    .description(format!("The {team_nickname} have joined the ILB!\nThey will play in the {division_name} division."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "divisionId": division_id,
+                            "divisionName": division_name,
+                            "teamId": team_id,
+                            "teamName": team_nickname,
+                        }))
+                        .build()
+                        .unwrap())
             }
         }
             .build()
@@ -2129,10 +2192,10 @@ impl FedEvent {
                         .play(game.play)
                         .sub_play(0) // not sure if this is hardcoded
                         .other(json!({
-                                    "mod": "ON_FIRE",
-                                    "type": 0, // ?
-                                    "parent": self.id
-                                }))
+                            "mod": "ON_FIRE",
+                            "type": 0, // ?
+                            "parent": self.id
+                        }))
                         .build()
                         .unwrap()
                     )

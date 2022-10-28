@@ -13,7 +13,7 @@ use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent, Weather};
 use crate::error::FeedParseError;
 use crate::event_schema::{AttrCategory, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
-use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_one_sub_event_from_slice, get_two_sub_events, get_uuid_metadata, get_sub_play};
+use crate::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
@@ -784,7 +784,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 mod_add_event: SubEvent::from_event(sub_event),
             }))
         }
-        EventType::FlagPlanted => { todo!() }
+        EventType::FlagPlanted => {
+            let (team_nickname, park_name, prefab_name) = run_parser(&event, parse_flag_planted)?;
+
+            Ok(make_fed_event(event, FedEventData::FlagPlanted {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                ballpark_name: park_name.to_string(),
+                prefab_name: prefab_name.to_string(),
+                votes: get_int_metadata(event, "votes")?,
+            }))
+
+        }
         EventType::RenovationBuilt => { todo!() }
         EventType::LightSwitchToggled => { todo!() }
         EventType::DecreePassed => { todo!() }
@@ -834,7 +845,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_tags: event.team_tags.clone(),
             }))
         }
-        EventType::EmergencyAlert => { todo!() }
+        EventType::EmergencyAlert => {
+            Ok(make_fed_event(event, FedEventData::EmergencyAlert {
+                message: event.description.clone(),
+                team_tags: event.team_tags.clone(),
+            }))
+        }
         EventType::ReturnFromElsewhere => { todo!() }
         EventType::OverUnder => {
             let (player_name, on) = run_parser(event, parse_under_over_over_under("Over Under"))?;
@@ -944,6 +960,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbFullShuffle => { todo!() }
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
+        EventType::TeamDivisionMove => {
+            // For now this only has the breach events, it will need to be updated for s24
+            let (team_nickname, division_name) = run_parser(&event, parse_team_division_move)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(team_nickname, get_str_metadata(event, "teamName")?);
+            assert_eq!(division_name, get_str_metadata(event, "divisionName")?);
+            let team_id = get_one_team_id(event)?;
+            assert_eq!(team_id, get_uuid_metadata(event, "teamId")?);
+
+            Ok(make_fed_event(event, FedEventData::TeamJoined {
+                team_id,
+                team_nickname: team_nickname.to_string(),
+                division_id: get_uuid_metadata(event, "divisionId")?,
+                division_name: division_name.to_string(),
+            }))
+
+        }
         EventType::ModChange => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
         EventType::ChangedModFromOtherMod => { todo!() }
@@ -1197,14 +1230,16 @@ fn is_known_team_name(name: &str) -> bool {
          "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
          "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
-         "Houston Spies", "Charleston Shoe Thieves", "LA Unlimited Tacos",
+         "Houston Spies", "Charleston Shoe Thieves", "LA Unlimited Tacos", "Atlantis Georgias",
+         "Ohio Worms", "Baltimore Crabs", "Core Mechanics",
     ].contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
     vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
          "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
-         "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos",
+         "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms", "Crabs",
+         "Mechanics",
     ].contains(&name)
 }
 
@@ -1969,5 +2004,22 @@ fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> {
     let (input, player2_name) = parse_terminated(" is tangled in the flicker!")(input)?;
 
     Ok((input, (player1_name, player2_name)))
+}
+
+fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" break ground on ")(input)?;
+    let (input, park_name) = parse_terminated(", selecting to build the ")(input)?;
+    let (input, prefab_name) = parse_terminated(" prefab!\nTHE FLAG IS PLANTED")(input)?;
+
+    Ok((input, (team_nickname, park_name, prefab_name)))
+}
+
+fn parse_team_division_move(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" have joined the ILB!\nThey will play in the ")(input)?;
+    let (input, division_name) = parse_terminated(" division.")(input)?;
+
+    Ok((input, (team_nickname, division_name)))
 }
 

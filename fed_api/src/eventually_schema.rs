@@ -261,6 +261,7 @@ pub enum EventType {
     ReverbLineupShuffle = 131,
     ReverbRotationShuffle = 132,
     // At this point I got bored typing them all and only filled in the ones I encountered
+    TeamDivisionMove = 135,
     ModChange = 144,
     AddedModFromOtherMod = 146,
     RemovedModFromOtherMod = 147,

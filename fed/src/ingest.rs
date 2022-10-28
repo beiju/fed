@@ -25,6 +25,7 @@ async fn ingest_main(start: &'static str) {
 
     pin_mut!(event_stream);
 
+    let mut parsed = 0;
     while let Some(feed_event) = event_stream.next().await {
         println!("Parsing {}: {:?}", feed_event.id, feed_event.description);
         // First print it pretty, then unwrap it
@@ -32,8 +33,14 @@ async fn ingest_main(start: &'static str) {
             eprintln!("{err}");
             err
         }).unwrap();
-        println!("Got event: {:?}", parsed_event);
+        // println!("Got event: {:?}", parsed_event);
+        let season = parsed_event.season + 1;
+        let day = parsed_event.day + 1;
         let reconstructed_event = parsed_event.into_feed_event();
         assert_json_diff::assert_json_eq!(feed_event, reconstructed_event);
+        parsed += 1;
+        if parsed % 1000 == 0 {
+            println!("Parsed {parsed} events, up to s{season}d{day}");
+        }
     }
 }
