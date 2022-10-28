@@ -4,8 +4,8 @@ use log::{info, warn};
 
 pub use crate::eventually_schema::{EventuallyEvent, EventuallyEventBuilder, EventuallyResponse};
 
-const PAGE_SIZE: usize = 1000;
-const BUFFER_PAGES: usize = 2;
+const PAGE_SIZE: usize = 500;
+const BUFFER_PAGES: usize = 5;
 
 pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
     eventually_pages(start, BUFFER_PAGES)

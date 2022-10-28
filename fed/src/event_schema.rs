@@ -621,12 +621,12 @@ pub enum FedEventData {
         game: GameEvent,
     },
 
+    // TODO Rename this because it's not just friend of crows, it's any ambush by a murder of crows
     FriendOfCrows {
         game: GameEvent,
         batter_id: Uuid,
         batter_name: String,
-        pitcher_id: Uuid,
-        pitcher_name: String,
+        pitcher: Option<(Uuid, String)>
     },
 
     BlackHoleSwallowedWin {
@@ -1477,12 +1477,17 @@ impl FedEvent {
                     .category(2)
                     .description("The Birds circle ... but they don't find what they're looking for.".to_string())
             }
-            FedEventData::FriendOfCrows { game, batter_id, batter_name, pitcher_id, pitcher_name } => {
+            FedEventData::FriendOfCrows { ref game, batter_id, ref batter_name, ref pitcher } => {
+                let prefix = if let Some((_, pitcher_name)) = pitcher {
+                    format!("{pitcher_name} calls upon their Friends!\n")
+                } else {
+                    String::new()
+                };
                 event_builder.for_game(&game)
                     .r#type(EventType::FriendOfCrows)
                     .category(2)
-                    .description(format!("{pitcher_name} calls upon their Friends!\nA murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
-                    .player_tags(vec![pitcher_id, batter_id])
+                    .description(format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
+                    .player_tags(if let Some((pitcher_id, _)) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] })
             }
             FedEventData::Sun2SetWin { team_id, team_nickname } => {
                 event_builder

@@ -483,20 +483,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FriendOfCrows => {
             let (pitcher_name, batter_name) = run_parser(&event, parse_friend_of_crows)?;
-            let (pitcher_uuid, batter_uuid) = event.player_tags.iter().cloned().collect_tuple()
-                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                    event_type: event.r#type,
-                    tag_type: "player",
-                    expected_num: 2,
-                    actual_num: event.player_tags.len(),
-                })?;
+            let (pitcher, batter_id) = if let Some(name) = pitcher_name {
+                let (pitcher_uuid, batter_uuid) = get_two_player_ids(event)?;
+                (Some((pitcher_uuid, name.to_string())), batter_uuid)
+            } else {
+                (None, get_one_player_id(event)?)
+            };
 
             Ok(make_fed_event(event, FedEventData::FriendOfCrows {
                 game: GameEvent::try_from_event(event)?,
-                pitcher_id: pitcher_uuid,
-                pitcher_name: pitcher_name.to_string(),
-                batter_id: batter_uuid,
+                batter_id,
                 batter_name: batter_name.to_string(),
+                pitcher,
             }))
         }
         EventType::BirdsUnshell => { todo!() }
@@ -1784,8 +1782,9 @@ fn parse_category(input: &str) -> ParserResult<AttrCategory> {
     ))(input)
 }
 
-fn parse_friend_of_crows(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, pitcher_name) = parse_terminated(" calls upon their Friends!\nA murder of Crows ambush ")(input)?;
+fn parse_friend_of_crows(input: &str) -> ParserResult<(Option<&str>, &str)> {
+    let (input, pitcher_name) = opt(parse_terminated(" calls upon their Friends!\n"))(input)?;
+    let (input, _) = tag("A murder of Crows ambush ")(input)?;
     let (input, batter_name) = parse_terminated("!\nThey run to safety, resulting in an out.")(input)?;
 
     Ok((input, (pitcher_name, batter_name)))
