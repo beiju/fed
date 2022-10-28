@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use futures::{future, Stream, stream, StreamExt};
+use itertools::Itertools;
 use log::{info, warn};
 
 pub use crate::eventually_schema::{EventuallyEvent, EventuallyEventBuilder, EventuallyResponse};
@@ -40,10 +41,11 @@ pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
                 .map(|(i, uuid)| (uuid, i))
                 .collect();
 
+            // ... why did I want this?
             event.metadata.siblings.sort_by_key(|event| id_order.get(&event.id).unwrap());
 
             // Parents don't always end up being the first item
-            let parent_event = if let Some(first_sibling) = event.metadata.siblings.first() {
+            let mut parent_event = if let Some(first_sibling) = event.metadata.siblings.first() {
                 if first_sibling.id != event.id {
                     let mut parent_event = first_sibling.clone();
                     parent_event.metadata.siblings = event.metadata.siblings;
@@ -55,11 +57,26 @@ pub fn events(start: &'static str) -> impl Stream<Item=EventuallyEvent> {
                 event
             };
 
+            // Parsing becomes much simpler if children are always in subplay order
+            sort_children(&mut parent_event.metadata.children);
+
             // info!("Yielding event {} from {}", parent_event.description, parent_event.created);
             // Double-option because the outer layer is used by `scan` to terminate the iterator
             future::ready(Some(Some(parent_event)))
         })
         .flat_map(|maybe_event| stream::iter(maybe_event.into_iter()))
+}
+
+fn sort_children(children: &mut Vec<EventuallyEvent>) {
+    children.sort_by_key(|child| child.metadata.sub_play
+        .expect("All child events should have a subPlay"));
+    // verify
+    for (a, b) in children.iter().tuple_windows() {
+        assert!(a.metadata.sub_play != b.metadata.sub_play, "All subPlays should be unique");
+    }
+    for child in children {
+        sort_children(&mut child.metadata.children)
+    }
 }
 
 fn eventually_pages(start: &'static str, buffer_pages: usize) -> impl Stream<Item=Vec<EventuallyEvent>> {
