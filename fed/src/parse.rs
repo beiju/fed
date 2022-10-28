@@ -433,10 +433,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::InningEnd => {
-            let inning_num = run_parser(&event, parse_inning_end)?;
+            let (inning_num, lost_triple_threat_names) = run_parser(&event, parse_inning_end)?;
+            let lost_triple_threat = lost_triple_threat_names.iter().zip_eq(&event.metadata.children)
+                .map(|(name, sub_event)| Ok(ModChangeSubEventWithNamedPlayer {
+                    sub_event: SubEvent::from_event(sub_event),
+                    team_id: get_one_team_id(sub_event)?,
+                    player_id: get_one_player_id(sub_event)?,
+                    player_name: name.to_string(),
+                    sub_play: sub_event.metadata.sub_play
+                        .ok_or_else(|| FeedParseError::MissingMetadata {
+                            event_type: sub_event.r#type,
+                            field: "subPlay"
+                        })?,
+                }))
+                .collect::<Result<_, _>>()?;
+
             Ok(make_fed_event(event, FedEventData::InningEnd {
                 game: GameEvent::try_from_event(event)?,
                 inning_num,
+                lost_triple_threat,
             }))
         }
         EventType::BigDeal => {
@@ -1611,12 +1626,13 @@ fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (batter_name, pitcher_name)))
 }
 
-fn parse_inning_end(input: &str) -> ParserResult<i32> {
+fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
     let (input, _) = tag("Inning ")(input)?;
     let (input, inning_num) = parse_whole_number(input)?;
     let (input, _) = tag(" is now an Outing.")(input)?;
+    let (input, lost_triple_threat) = many0(preceded(tag("\n"), parse_terminated(" is no longer a Triple Threat.")))(input)?;
 
-    Ok((input, inning_num))
+    Ok((input, (inning_num, lost_triple_threat)))
 }
 
 fn parse_stopped_inhabiting(input: &str) -> ParserResult<&str> {

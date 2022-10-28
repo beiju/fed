@@ -78,9 +78,11 @@ pub fn get_int_metadata(event: &EventuallyEvent, field: &'static str) -> Result<
         .as_object()
         .and_then(|obj| obj.get(field))
         .and_then(|to| to.as_i64())
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
+        .ok_or_else(|| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field,
+            }
         })
 }
 

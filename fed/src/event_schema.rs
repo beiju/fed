@@ -521,6 +521,7 @@ pub enum FedEventData {
     InningEnd {
         game: GameEvent,
         inning_num: i32,
+        lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>
     },
 
     CharmStrikeout {
@@ -1235,11 +1236,43 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::InningEnd { game, inning_num } => {
+            FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
+                let suffix = lost_triple_threat.iter()
+                    .map(|e| format!("\n{} is no longer a Triple Threat.", e.player_name))
+                    .join("");
+
+                let children = lost_triple_threat.iter()
+                    .map(|e| {
+                        self.make_event_builder()
+                            .for_game(game)
+                            .for_sub_event(&e.sub_event)
+                            .category(1)
+                            .r#type(EventType::RemovedMod)
+                            .description(format!("{} is no longer a Triple Threat.", e.player_name))
+                            .team_tags(vec![e.team_id])
+                            .player_tags(vec![e.player_id])
+                            .metadata(EventMetadataBuilder::default()
+                                .play(game.play)
+                                .sub_play(e.sub_play)
+                                .other(json!({
+                                    "mod": "TRIPLE_THREAT",
+                                    "type": 0, // ?
+                                    "parent": self.id
+                                }))
+                                .build()
+                                .unwrap()
+                            )
+                            .build()
+                            .unwrap()
+                    })
+                    .collect();
+
                 event_builder.for_game(&game)
                     .r#type(EventType::InningEnd)
-                    .description(format!("Inning {} is now an Outing.", inning_num))
+                    .description(format!("Inning {inning_num} is now an Outing.{suffix}"))
+                    .player_tags(lost_triple_threat.iter().map(|e| e.player_id).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
