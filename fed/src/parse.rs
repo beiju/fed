@@ -42,6 +42,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event)?,
                 weather: Weather::try_from(weather as i32)
                     .map_err(|_| FeedParseError::UnknownWeather(weather))?,
+                stadium_id: get_uuid_metadata(event, "stadium").ok(),
             })
         }
         EventType::PlayBall => {

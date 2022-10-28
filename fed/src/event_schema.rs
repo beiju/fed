@@ -357,6 +357,7 @@ pub enum FedEventData {
     LetsGo {
         game: GameEvent,
         weather: Weather,
+        stadium_id: Option<Uuid>
     },
 
     PlayBall {
@@ -867,18 +868,22 @@ impl FedEvent {
                             .build()
                             .unwrap())
             }
-            FedEventData::LetsGo { game, weather } => {
+            FedEventData::LetsGo { game, weather, stadium_id } => {
                 let weather_id: i32 = weather.into();
+                let mut metadata = json!({
+                    "home": game.home_team,
+                    "away": game.away_team,
+                    "weather": weather_id,
+                });
+                if let Some(id) = stadium_id {
+                    metadata["stadium"] = json!(id);
+                }
                 event_builder.for_game(&game)
                     .r#type(EventType::LetsGo)
                     .description("Let's Go!".to_string())
                     .metadata(
                         make_game_event_metadata_builder(&game)
-                            .other(json!({
-                                "home": game.home_team,
-                                "away": game.away_team,
-                                "weather": weather_id,
-                            }))
+                            .other(metadata)
                             .build()
                             .unwrap())
             }
