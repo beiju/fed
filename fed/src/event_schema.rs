@@ -350,7 +350,7 @@ pub enum ReverbType {
 #[derive(Debug, Clone)]
 pub enum BatterSkippedReason {
     Shelled,
-    Elsewhere(Uuid)
+    Elsewhere(Uuid),
 }
 
 #[derive(Debug, Clone)]
@@ -836,6 +836,18 @@ pub enum FedEventData {
         player_name: String,
         sub_event: SubEvent,
         number_of_days: i32,
+    },
+
+    Incineration {
+        game: GameEvent,
+        team_id: Uuid,
+        team_nickname: String,
+        victim_id: Uuid,
+        victim_name: String,
+        replacement_id: Uuid,
+        replacement_name: String,
+        location: i64,
+        sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
     },
 }
 
@@ -2224,6 +2236,105 @@ impl FedEvent {
                     .description(description)
                     .metadata(make_game_event_metadata_builder(game)
                         .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref sub_events } => {
+                let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
+                let children = vec![
+                    self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(&incin_child)
+                        .category(1)
+                        .r#type(EventType::Incineration)
+                        .description(format!("Rogue Umpire incinerated {victim_name}!"))
+                        .team_tags(vec![team_id])
+                        .player_tags(vec![victim_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0)
+                            .other(json!({
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap(),
+                    self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(&enter_hall_child)
+                        .category(1)
+                        .r#type(EventType::EnterHallOfFlame)
+                        .description(format!("{victim_name} entered the Hall of Flame."))
+                        .player_tags(vec![victim_id])
+                        .team_tags(Vec::new()) // clear teams set by for_game
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(1)
+                            .other(json!({
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap(),
+                    self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(&hatch_child)
+                        .category(1)
+                        .r#type(EventType::PlayerHatched)
+                        .description(format!("{replacement_name} has been hatched from the field of eggs."))
+                        .player_tags(vec![replacement_id])
+                        .team_tags(Vec::new()) // clear teams set by for_game
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(2)
+                            .other(json!({
+                                "id": replacement_id,
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap(),
+                    self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(&replace_child)
+                        .category(1)
+                        .r#type(EventType::PlayerBornFromIncineration)
+                        .description(format!("{replacement_name} replaced the incinerated {victim_name}."))
+                        .player_tags(vec![victim_id, replacement_id])
+                        .team_tags(vec![team_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(3)
+                            .other(json!({
+                                "inPlayerId": replacement_id,
+                                "inPlayerName": replacement_name,
+                                "location": location,
+                                "outPlayerId": victim_id,
+                                "outPlayerName": victim_name,
+                                "teamId": team_id,
+                                "teamName": team_nickname,
+                                "parent": self.id,
+                            }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap(),
+                ];
+
+                event_builder.for_game(game)
+                    .r#type(EventType::Incineration)
+                    .category(2)
+                    .description(format!("Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}."))
+                    .player_tags(vec![victim_id, replacement_id])
+                    .metadata(make_game_event_metadata_builder(game)
+                        .children(children)
                         .build()
                         .unwrap())
             }

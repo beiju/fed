@@ -1,11 +1,11 @@
 use std::slice::Iter;
 use itertools::Itertools;
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_till, take_till1, take_until1};
+use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, verify};
-use nom::error::convert_error;
+use nom::error::{convert_error};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
@@ -769,7 +769,36 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::BlooddrainBlocked => { todo!() }
-        EventType::Incineration => { todo!() }
+        EventType::Incineration => {
+            let (victim_name, replacement_name) = run_parser(&event, parse_incineration)?;
+            let (incin_child, enter_hall_child, hatch_child, replace_child) =
+                event.metadata.children.iter().collect_tuple()
+                    .ok_or_else(|| {
+                        FeedParseError::MissingChild {
+                            event_type: event.r#type,
+                            expected_num_children: 4,
+                        }
+                    })?;
+
+            let team_nickname = get_str_metadata(replace_child, "teamName")?;
+            assert!(is_known_team_nickname(team_nickname));
+            Ok(make_fed_event(event, FedEventData::Incineration {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(incin_child)?,
+                team_nickname: team_nickname.to_string(),
+                victim_id: get_one_player_id(incin_child)?,
+                victim_name: victim_name.to_string(),
+                replacement_id: get_one_player_id(hatch_child)?,
+                replacement_name: replacement_name.to_string(),
+                location: get_int_metadata(replace_child, "location")?,
+                sub_events: (
+                    SubEvent::from_event(incin_child),
+                    SubEvent::from_event(enter_hall_child),
+                    SubEvent::from_event(hatch_child),
+                    SubEvent::from_event(replace_child),
+                )
+            }))
+        }
         EventType::IncinerationBlocked => {
             // For now I only support magmatic, that may have to change
             let player_name = run_parser(&event, parse_incineration_blocked)?;
@@ -977,6 +1006,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbFullShuffle => { todo!() }
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
+        EventType::PlayerHatched => { todo!() }
         EventType::TeamDivisionMove => {
             // For now this only has the breach events, it will need to be updated for s24
             let (team_nickname, division_name) = run_parser(&event, parse_team_division_move)?;
@@ -1272,7 +1302,8 @@ fn is_known_team_nickname(name: &str) -> bool {
     ].contains(&name)
 }
 
-type ParserResult<'a, Out> = IResult<&'a str, Out, nom::error::VerboseError<&'a str>>;
+type ParserError<'a> = nom::error::VerboseError<&'a str>;
+type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
 fn run_parser<'a, F, Out>(event: &'a EventuallyEvent, parser: F) -> Result<Out, FeedParseError>
     where F: Fn(&'a str) -> ParserResult<'a, Out> {
@@ -2073,4 +2104,19 @@ fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag(" days!")(input)?;
 
     Ok((input, (player_name, after_days)))
+}
+
+fn parse_incineration(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("Rogue Umpire incinerated ")(input)?;
+    let (input, victim_name) = parse_terminated("!\nThey're replaced by ")(input)?;
+    // Can't use parse_terminated for this one because the only following character is "." which
+    // can also appear in the name (i.e. Kaj Statter Jr.).
+    let (input, replacement_name_with_dot) = is_not("\n")(input)?;
+    let replacement_name = replacement_name_with_dot.strip_suffix(".")
+        .ok_or_else(|| {
+            // I can't figure out how to make an error myself so I'm just gonna unwrap a fail
+            fail::<_, (), _>(replacement_name_with_dot).unwrap_err()
+        })?;
+
+    Ok((input, (victim_name, replacement_name)))
 }

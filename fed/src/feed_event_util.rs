@@ -23,7 +23,7 @@ pub fn get_two_sub_events(event: &EventuallyEvent) -> Result<(&EventuallyEvent, 
         .ok_or_else(|| {
             FeedParseError::MissingChild {
                 event_type: event.r#type,
-                expected_num_children: 1,
+                expected_num_children: 2,
             }
         })?;
     Ok((a, b))
