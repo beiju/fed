@@ -1,5 +1,3 @@
-#![feature(backtrace)]
-
 mod parse;
 
 use std::fs::File;
@@ -11,11 +9,27 @@ use anyhow::{anyhow, Context};
 
 const NUM_EVENTS: u64 = 8299172;
 
+fn sort_children(event: &mut EventuallyEvent) {
+    event.metadata.children.sort_by_key(|e| e.metadata.sub_play
+        .expect("Any child event should have a sub_event"));
+    for child in event.metadata.children.as_mut_slice() {
+        sort_children(child);
+    }
+}
+
 fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<(String, String)>)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
-    let feed_event: EventuallyEvent = serde_json::from_str(&str)
-        .context(str)
-        .context("Failed to parse ndjson entry into EventuallyEvent")?;
+    let feed_event = {
+        let mut feed_event: EventuallyEvent = serde_json::from_str(&str)
+            .context(str)
+            .context("Failed to parse ndjson entry into EventuallyEvent")?;
+
+        sort_children(&mut feed_event);
+
+        feed_event
+    };
+
+
     let original_event_json = serde_json::to_value(&feed_event)
         .context("Failed to convert original event to serde_json::Value")?;
 
@@ -34,10 +48,19 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
         .map_or_else(|| Ok(()),
                      |str| Err(anyhow!("{str}")))?;
 
-    Ok((i, Some(print, format!("s{season}d{day}"))))
+    Ok((i, Some((print, format!("s{season}d{day}")))))
 }
 
 fn main() -> anyhow::Result<()> {
+    run_test()
+        .map_err(|err| {
+            // Wait until the other threads hopefully clear
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            err
+        })
+}
+
+fn run_test() -> anyhow::Result<()> {
     // If this file doesn't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
@@ -52,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     for item in iter {
         let (i, result) = item?;
         if let Some((printout, status)) = result {
-            progress.println(printout);
+            // progress.println(printout);
             progress.set_message(status);
         }
         progress.set_position(i as u64);

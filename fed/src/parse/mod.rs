@@ -66,7 +66,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batting_team_name: team_name.to_string(),
             }))
         }
-        EventType::PitcherChange => { todo!() }
+        EventType::PitcherChange => {
+            let (victim_name, team_name) = run_parser(&event, parse_pitcher_change)?;
+
+            assert!(is_known_team_nickname(team_name));
+
+            Ok(make_fed_event(event, FedEventData::PitcherChange {
+                game: GameEvent::try_from_event(event)?,
+                team_nickname: team_name.to_string(),
+                pitcher_id: get_one_player_id(event)?,
+                pitcher_name: victim_name.to_string(),
+            }))
+
+        }
         EventType::StolenBase => {
             let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = run_parser(&event, parse_stolen_base)?;
             if is_successful {
@@ -1357,6 +1369,20 @@ fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + 
     }
 }
 
+// This is for use in place of parse_terminated when the only remaining text in the string is ".",
+// and so you can't use parse_terminated because that would improperly cut off names with periods
+// like "Kaj Statter Jr."
+fn parse_until_period_eof(input: &str) -> ParserResult<&str> {
+    let (input, replacement_name_with_dot) = is_not("\n")(input)?;
+    let replacement_name = replacement_name_with_dot.strip_suffix(".")
+        .ok_or_else(|| {
+            // I can't figure out how to make an error myself so I'm just gonna unwrap a fail
+            fail::<_, (), _>(replacement_name_with_dot).unwrap_err()
+        })?;
+
+    Ok((input, replacement_name))
+}
+
 fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {
     let (input, top_of_inning) = alt((
         tag("Top").map(|_| true),
@@ -2114,14 +2140,14 @@ fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, i32)> {
 fn parse_incineration(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("Rogue Umpire incinerated ")(input)?;
     let (input, victim_name) = parse_terminated("!\nThey're replaced by ")(input)?;
-    // Can't use parse_terminated for this one because the only following character is "." which
-    // can also appear in the name (i.e. Kaj Statter Jr.).
-    let (input, replacement_name_with_dot) = is_not("\n")(input)?;
-    let replacement_name = replacement_name_with_dot.strip_suffix(".")
-        .ok_or_else(|| {
-            // I can't figure out how to make an error myself so I'm just gonna unwrap a fail
-            fail::<_, (), _>(replacement_name_with_dot).unwrap_err()
-        })?;
+    let (input, replacement_name) = parse_until_period_eof(input)?;
 
     Ok((input, (victim_name, replacement_name)))
+}
+
+fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, victim_name) = parse_terminated(" is now pitching for the ")(input)?;
+    let (input, team_name) = parse_until_period_eof(input)?;
+
+    Ok((input, (victim_name, team_name)))
 }

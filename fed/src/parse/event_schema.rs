@@ -849,6 +849,13 @@ pub enum FedEventData {
         location: i64,
         sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
     },
+
+    PitcherChange {
+        game: GameEvent,
+        team_nickname: String,
+        pitcher_id: Uuid,
+        pitcher_name: String,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -2335,6 +2342,16 @@ impl FedEvent {
                     .player_tags(vec![victim_id, replacement_id])
                     .metadata(make_game_event_metadata_builder(game)
                         .children(children)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PitcherChange { game, team_nickname: team_name, pitcher_id, pitcher_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::PitcherChange)
+                    .category(0)
+                    .description(format!("{pitcher_name} is now pitching for the {team_name}."))
+                    .player_tags(vec![pitcher_id])
+                    .metadata(make_game_event_metadata_builder(&game)
                         .build()
                         .unwrap())
             }
