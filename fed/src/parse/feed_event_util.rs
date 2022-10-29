@@ -1,7 +1,7 @@
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent};
 use itertools::Itertools;
-use crate::error::FeedParseError;
+use crate::parse::error::FeedParseError;
 
 pub fn get_one_sub_event_from_slice(children: &[EventuallyEvent], event_type: EventType) -> Result<&EventuallyEvent, FeedParseError> {
     let (sub_event, ) = children.iter().collect_tuple()

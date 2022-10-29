@@ -1,8 +1,4 @@
 mod ingest;
-mod event_schema;
-mod parse;
-mod error;
-mod feed_event_util;
 
 #[macro_use] extern crate rocket;
 

@@ -5,6 +5,8 @@ use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
+use chrono::serde::ts_milliseconds;
+
 
 
 #[derive(Deserialize, Serialize)]
@@ -64,6 +66,7 @@ pub struct EventMetadata {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,
+    #[serde(with = "ts_milliseconds")]
     pub created: DateTime<Utc>,
     pub r#type: EventType,
     pub category: i32,
@@ -271,6 +274,7 @@ pub enum EventType {
     TeamDidShame = 155,
     Sun2SetWin = 156,
     BlackHoleSwallowedWin = 157,
+    Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,
     WinCollectedPostseason = 215,

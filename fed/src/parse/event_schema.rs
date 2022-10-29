@@ -7,7 +7,7 @@ use uuid::Uuid;
 use fed_api::{EventMetadata, EventMetadataBuilder, EventType, EventuallyEvent, EventuallyEventBuilder, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
-use crate::error::FeedParseError;
+use crate::parse::error::FeedParseError;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
