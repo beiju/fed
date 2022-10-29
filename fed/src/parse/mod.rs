@@ -423,7 +423,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 },
             }))
         }
-        EventType::Party => { todo!() }
+        EventType::Party => {
+            let player_name = run_parser(&event, parse_party)?;
+            let sub_event = get_one_sub_event(event)?;
+            Ok(make_fed_event(event, FedEventData::Party {
+                game: GameEvent::try_from_event(event)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id: get_one_player_id(sub_event)?,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+                rating_before: get_float_metadata(sub_event, "before")?,
+                rating_after: get_float_metadata(sub_event, "after")?,
+            }))
+        }
         EventType::StrikeZapped => {
             parse_fixed_description(event, "The Electricity zaps a strike away!",
                                     FedEventData::StrikeZapped {
@@ -2132,7 +2144,7 @@ fn parse_flooding_swept(input: &str) -> ParserResult<Vec<&str>> {
 fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, i32)> {
     let (input, player_name) = parse_terminated(" has returned from Elsewhere after ")(input)?;
     let (input, after_days) = parse_whole_number(input)?;
-    let (input, _) = tag(" days!")(input)?;
+    let (input, _) = if after_days == 1 { tag(" day!") } else { tag(" days!") }(input)?;
 
     Ok((input, (player_name, after_days)))
 }
@@ -2150,4 +2162,10 @@ fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {
     let (input, team_name) = parse_until_period_eof(input)?;
 
     Ok((input, (victim_name, team_name)))
+}
+
+fn parse_party(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" is Partying!")(input)?;
+
+    Ok((input, player_name))
 }

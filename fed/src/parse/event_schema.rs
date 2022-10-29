@@ -855,7 +855,17 @@ pub enum FedEventData {
         team_nickname: String,
         pitcher_id: Uuid,
         pitcher_name: String,
-    }
+    },
+
+    Party {
+        game: GameEvent,
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        sub_event: SubEvent,
+        rating_before: f64,
+        rating_after: f64,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -2214,7 +2224,8 @@ impl FedEvent {
                         .unwrap())
             }
             FedEventData::ReturnFromElsewhere { ref game, team_id, player_id, ref player_name, ref sub_event, number_of_days } => {
-                let description = format!("{player_name} has returned from Elsewhere after {number_of_days} days!");
+                let s = if number_of_days == 1 { "" } else { "s" };
+                let description = format!("{player_name} has returned from Elsewhere after {number_of_days} day{s}!");
                 let child = self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&sub_event)
@@ -2352,6 +2363,41 @@ impl FedEvent {
                     .description(format!("{pitcher_name} is now pitching for the {team_name}."))
                     .player_tags(vec![pitcher_id])
                     .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::Party { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
+                let description = format!("{player_name} is Partying!");
+                let child = self.make_event_builder()
+                    .for_game(game)
+                    .for_sub_event(&sub_event)
+                    .category(1)
+                    .r#type(EventType::PlayerStatIncrease)
+                    .description(description.clone())
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0)
+                        .other(json!({
+                            "before": rating_before,
+                            "after": rating_after,
+                            "type": 4, // ?
+                            "parent": self.id,
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(game)
+                    .r#type(EventType::Party)
+                    .category(0)
+                    .description(description)
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(game)
+                        .children(vec![child])
                         .build()
                         .unwrap())
             }

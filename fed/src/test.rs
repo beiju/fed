@@ -46,7 +46,8 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
         .context("Failed to convert reconstructed event to serde_json::Value")?;
     JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
         .map_or_else(|| Ok(()),
-                     |str| Err(anyhow!("{str}")))?;
+                     |str| Err(anyhow!("{str}")))
+        .context("Event not reconstructed exactly")?;
 
     Ok((i, Some((print, format!("s{season}d{day}")))))
 }
@@ -55,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     run_test()
         .map_err(|err| {
             // Wait until the other threads hopefully clear
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_secs(2));
             err
         })
 }
