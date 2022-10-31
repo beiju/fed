@@ -28,6 +28,9 @@ pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedPa
 }
 
 fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
+    // This variable exists just for me to look at in the debugger, because the debugger
+    // representation of the Uuid type is to low-level to copy-paste
+    let _id_string = event.id.to_string();
     match event.r#type {
         EventType::Undefined => { todo!() }
         EventType::LetsGo => {

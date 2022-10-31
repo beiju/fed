@@ -18,7 +18,7 @@ fn sort_children(event: &mut EventuallyEvent) {
     }
 }
 
-fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<(String, String)>)> {
+fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<String>)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
     let feed_event = {
         let mut feed_event: EventuallyEvent = serde_json::from_str(&str)
@@ -34,12 +34,10 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     let original_event_json = serde_json::to_value(&feed_event)
         .context("Failed to convert original event to serde_json::Value")?;
 
-    let print = format!("Parsing {}: {:?}", feed_event.id, feed_event.description);
-    // First print it pretty, then unwrap it
     let parsed_event = parse::parse_feed_event(&feed_event)
-        .with_context(|| print.clone())
+        .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
-    // println!("Got event: {:?}", parsed_event);
+
     let season = parsed_event.season + 1;
     let day = parsed_event.day + 1;
     let reconstructed_event = parsed_event.into_feed_event();
@@ -51,7 +49,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
                      |str| Err(anyhow!("{str}")))
         .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
 
-    Ok((i, Some((print, format!("s{season}d{day}")))))
+    Ok((i, Some(format!("s{season}d{day}"))))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,6 +62,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn run_test() -> anyhow::Result<()> {
+    println!("Test starting...");
+
     // If this file doesn't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
@@ -78,14 +78,10 @@ fn run_test() -> anyhow::Result<()> {
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     for item in iter {
         let (i, result) = item?;
-        if let Some((printout, status)) = result {
-            // progress.println(printout);
+        if let Some(status) = result {
             progress.set_message(status);
         }
-        // Using a prime number to prevent it from being so obvious that i'm throttling it
-        if i % 7297 == 0 {
-            progress.set_position(i as u64);
-        }
+        progress.set_position(i as u64);
     }
 
     progress.finish();
