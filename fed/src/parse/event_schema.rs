@@ -64,14 +64,18 @@ impl GameEvent {
             home_team,
             away_team,
             play: event.metadata.play
-                .ok_or_else(|| FeedParseError::MissingMetadata {
-                    event_type: event.r#type,
-                    field: "play",
+                .ok_or_else(|| {
+                    FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "play",
+                    }
                 })?,
             sub_play: event.metadata.sub_play
-                .ok_or_else(|| FeedParseError::MissingMetadata {
-                    event_type: event.r#type,
-                    field: "sub_play",
+                .ok_or_else(|| {
+                    FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "sub_play",
+                    }
                 })?,
         })
     }
@@ -866,6 +870,49 @@ pub enum FedEventData {
         rating_before: f64,
         rating_after: f64,
     },
+
+    PlayerHatched {
+        player_id: Uuid,
+        player_name: String,
+    },
+
+    PostseasonBirth {
+        team_id: Uuid,
+        team_nickname: String,
+        player_id: Uuid,
+        player_name: String,
+        location: i64,
+    },
+
+    FinalStandings {
+        team_id: Uuid,
+        team_nickname: String,
+        place: i32,
+        division_name: String,
+    },
+
+    TeamLeftPartyTimeForPostseason {
+        team_id: Uuid,
+        team_name: String,
+    },
+
+    EarnedPostseasonSlot {
+        team_id: Uuid,
+        team_nickname: String,
+    },
+
+    PostseasonAdvance {
+        team_id: Uuid,
+        team_nickname: String,
+        round: Option<i32>,
+        season: i32,
+    },
+
+    PostseasonEliminated {
+        team_id: Uuid,
+        team_nickname: String,
+        season: i32,
+    }
 }
 
 #[derive(Debug, Builder)]
@@ -2400,6 +2447,104 @@ impl FedEvent {
                         .children(vec![child])
                         .build()
                         .unwrap())
+            }
+            FedEventData::PlayerHatched { player_id, player_name } => {
+                event_builder
+                    .r#type(EventType::PlayerHatched)
+                    .category(1)
+                    .description(format!("{player_name} has been hatched from the field of eggs."))
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({ "id": player_id }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PostseasonBirth { team_id, team_nickname, player_id, player_name, location } => {
+                event_builder
+                    .r#type(EventType::PlayerAddedToTeam)
+                    .category(1)
+                    .description(format!("The {team_nickname} earn a Postseason Birth!"))
+                    .player_tags(vec![player_id])
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "location": location,
+                            "playerId": player_id,
+                            "playerName": player_name,
+                            "teamId": team_id,
+                            "teamName": team_nickname,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::FinalStandings { team_id, team_nickname, place, division_name } => {
+                let place_str = match place {
+                    0 => "1st".to_string(),
+                    1 => "2nd".to_string(),
+                    2 => "3rd".to_string(),
+                    _ => format!("{}th", place + 1),
+                };
+                event_builder
+                    .r#type(EventType::FinalStandings)
+                    .category(3)
+                    .description(format!("The {team_nickname} finished {place_str} in the {division_name}."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "place": place,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_name } => {
+                event_builder
+                    .r#type(EventType::RemovedMod)
+                    .category(1)
+                    .description(format!("The {team_name} have been removed from Party Time to join the Postseason!"))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mod": "PARTY_TIME",
+                            "type": 1, // ?
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::EarnedPostseasonSlot { team_id, team_nickname } => {
+                event_builder
+                    .r#type(EventType::EarnedPostseasonSlot)
+                    .category(3)
+                    .description(format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PostseasonAdvance { team_id, team_nickname, round, season } => {
+                let round_str = if let Some(round) = round {
+                    format!("Round {round}")
+                } else {
+                    String::from("The Internet Series")
+                };
+                event_builder
+                    .r#type(EventType::PostseasonAdvance)
+                    .category(3)
+                    .description(format!("The {team_nickname} advanced to {round_str} of the Season {season} Postseason."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PostseasonEliminated { team_id, team_nickname, season } => {
+                event_builder
+                    .r#type(EventType::PostseasonEliminated)
+                    .category(3)
+                    .description(format!("The {team_nickname} have been eliminated from the Season {season} Postseason."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .build()
+                        .unwrap())
+
             }
         }
             .build()

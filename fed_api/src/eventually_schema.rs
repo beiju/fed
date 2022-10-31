@@ -266,6 +266,8 @@ pub enum EventType {
     // At this point I got bored typing them all and only filled in the ones I encountered
     TeamDivisionMove = 135,
     PlayerHatched = 137,
+    EarnedPostseasonSlot = 142,
+    FinalStandings = 143,
     ModChange = 144,
     AddedModFromOtherMod = 146,
     RemovedModFromOtherMod = 147,
@@ -274,6 +276,8 @@ pub enum EventType {
     TeamDidShame = 155,
     Sun2SetWin = 156,
     BlackHoleSwallowedWin = 157,
+    PostseasonEliminated = 158,
+    PostseasonAdvance = 159,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,

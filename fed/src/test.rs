@@ -6,6 +6,7 @@ use fed_api::{EventuallyEvent};
 use par_iter_sync::IntoParallelIteratorSync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
+use indicatif::ProgressStyle;
 
 const NUM_EVENTS: u64 = 8299172;
 
@@ -36,6 +37,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     let print = format!("Parsing {}: {:?}", feed_event.id, feed_event.description);
     // First print it pretty, then unwrap it
     let parsed_event = parse::parse_feed_event(&feed_event)
+        .with_context(|| print.clone())
         .context("Failed to parse EventuallyEvent into FedEvent")?;
     // println!("Got event: {:?}", parsed_event);
     let season = parsed_event.season + 1;
@@ -47,7 +49,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
         .map_or_else(|| Ok(()),
                      |str| Err(anyhow!("{str}")))
-        .context("Event not reconstructed exactly")?;
+        .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
 
     Ok((i, Some((print, format!("s{season}d{day}")))))
 }
@@ -73,13 +75,17 @@ fn run_test() -> anyhow::Result<()> {
         .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
 
     let progress = indicatif::ProgressBar::new(NUM_EVENTS);
+    progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     for item in iter {
         let (i, result) = item?;
         if let Some((printout, status)) = result {
             // progress.println(printout);
             progress.set_message(status);
         }
-        progress.set_position(i as u64);
+        // Using a prime number to prevent it from being so obvious that i'm throttling it
+        if i % 7297 == 0 {
+            progress.set_position(i as u64);
+        }
     }
 
     progress.finish();

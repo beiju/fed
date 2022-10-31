@@ -1003,7 +1003,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 r#mod: get_str_metadata(event, "mod")?.to_string(),
             }))
         }
-        EventType::RemovedMod => { todo!() }
+        EventType::RemovedMod => {
+            // this will definitely need multiple alternatives in the future
+            let team_name = run_parser(&event, parse_removed_mod)?;
+
+            Ok(make_fed_event(event, FedEventData::TeamLeftPartyTimeForPostseason {
+                team_id: get_one_team_id(event)?,
+                team_name: team_name.to_string(),
+            }))
+
+        }
         EventType::ModExpires => {
             let (player_name, mod_duration) = run_parser(&event, parse_mod_expires)?;
             let mods = get_str_vec_metadata(event, "mods")?;
@@ -1015,7 +1024,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 mod_duration,
             }))
         }
-        EventType::PlayerAddedToTeam => { todo!() }
+        EventType::PlayerAddedToTeam => {
+            // For now this only parses postseason births, that may need to expand in future
+            let team_nickname = run_parser(&event, parse_player_added_to_team)?;
+
+            Ok(make_fed_event(event, FedEventData::PostseasonBirth {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                player_id: get_one_player_id(event)?,
+                player_name: get_str_metadata(event, "playerName")?.to_string(),
+                location: get_int_metadata(event, "location")?,
+            }))
+        }
         EventType::PlayerReplacedByNecromancy => { todo!() }
         EventType::PlayerReplacesReturned => { todo!() }
         EventType::PlayerRemovedFromTeam => { todo!() }
@@ -1034,7 +1054,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReverbFullShuffle => { todo!() }
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
-        EventType::PlayerHatched => { todo!() }
+        EventType::PlayerHatched => {
+            // For now this only has the breach events, it will need to be updated for s24
+            let player_name = run_parser(&event, parse_player_hatched)?;
+
+            Ok(make_fed_event(event, FedEventData::PlayerHatched {
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string()
+            }))
+        }
         EventType::TeamDivisionMove => {
             // For now this only has the breach events, it will need to be updated for s24
             let (team_nickname, division_name) = run_parser(&event, parse_team_division_move)?;
@@ -1050,7 +1078,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 division_id: get_uuid_metadata(event, "divisionId")?,
                 division_name: division_name.to_string(),
             }))
+        }
+        EventType::EarnedPostseasonSlot => {
+            let (team_nickname, season_num) = run_parser(&event, parse_earned_postseason_slot)?;
+            assert!(is_known_team_nickname(team_nickname));
 
+            Ok(make_fed_event(event, FedEventData::EarnedPostseasonSlot {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+            }))
+
+        }
+        EventType::FinalStandings => {
+            let (team_nickname, place, division_name) = run_parser(&event, parse_final_standings)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            Ok(make_fed_event(event, FedEventData::FinalStandings {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                place,
+                division_name: division_name.to_string(),
+            }))
         }
         EventType::ModChange => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
@@ -1105,6 +1153,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }))
         }
         EventType::RemovedModFromOtherMod => { todo!() }
+        EventType::PostseasonAdvance => {
+            let (team_nickname, round_num, season_num) = run_parser(&event, parse_postseason_advance)?;
+            assert!(is_known_team_nickname(team_nickname));
+            Ok(make_fed_event(event, FedEventData::PostseasonAdvance {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                round: round_num,
+                season: season_num,
+            }))
+        }
+        EventType::PostseasonEliminated => {
+            let (team_nickname, season_num) = run_parser(&event, parse_postseason_eliminated)?;
+            assert!(is_known_team_nickname(team_nickname));
+            Ok(make_fed_event(event, FedEventData::PostseasonEliminated {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                season: season_num,
+            }))
+        }
     }
 }
 
@@ -2168,4 +2235,73 @@ fn parse_party(input: &str) -> ParserResult<&str> {
     let (input, player_name) = parse_terminated(" is Partying!")(input)?;
 
     Ok((input, player_name))
+}
+
+fn parse_player_hatched(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" has been hatched from the field of eggs.")(input)?;
+
+    Ok((input, player_name))
+}
+
+fn parse_player_added_to_team(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" earn a Postseason Birth!")(input)?;
+
+    Ok((input, team_nickname))
+}
+
+fn parse_final_standings(input: &str) -> ParserResult<(&str, i32, &str)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" finished ")(input)?;
+    let (input, place) = parse_whole_number(input)?;
+    let (input, _) = match place {
+        1 => tag("st")(input)?,
+        2 => tag("nd")(input)?,
+        3 => tag("rd")(input)?,
+        _ => tag("th")(input)?,
+    };
+    let (input, _) = tag(" in the ")(input)?;
+    let (input, division_name) = parse_until_period_eof(input)?;
+
+    Ok((input, (team_nickname, place - 1, division_name)))
+}
+
+fn parse_removed_mod(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_name) = parse_terminated(" have been removed from Party Time to join the Postseason!")(input)?;
+
+    Ok((input, team_name))
+}
+
+fn parse_postseason_advance(input: &str) -> ParserResult<(&str, Option<i32>, i32)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" advanced to ")(input)?;
+
+    let (input, round_num) = alt((
+        preceded(tag("Round "), parse_whole_number).map(|n| Some(n)),
+        tag("The Internet Series").map(|_| None),
+    ))(input)?;
+    let (input, _) = tag(" of the Season ")(input)?;
+    let (input, season_num) = parse_whole_number(input)?;
+    let (input, _) = tag(" Postseason.")(input)?;
+
+    Ok((input, (team_nickname, round_num, season_num)))
+}
+
+fn parse_earned_postseason_slot(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" earned a spot in the Season ")(input)?;
+    let (input, season_num) = parse_whole_number(input)?;
+    let (input, _) = tag(" Postseason.")(input)?;
+
+    Ok((input, (team_nickname, season_num)))
+}
+
+fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" have been eliminated from the Season ")(input)?;
+    let (input, season_num) = parse_whole_number(input)?;
+    let (input, _) = tag(" Postseason.")(input)?;
+
+    Ok((input, (team_nickname, season_num)))
 }
