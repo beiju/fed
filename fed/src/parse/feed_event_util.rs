@@ -136,6 +136,6 @@ pub fn get_two_player_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedP
     get_two_ids("player", &event.player_tags, event.r#type)
 }
 
-pub fn get_two_team_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {
-    get_two_ids("team", &event.team_tags, event.r#type)
-}
+// pub fn get_two_team_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {
+//     get_two_ids("team", &event.team_tags, event.r#type)
+// }

@@ -24,13 +24,21 @@ pub enum Being {
     Namerifeht = 6,
 }
 
+/// Game data. Every game event has one of these.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct GameEvent {
+    /// Game uuid
     pub game_id: Uuid,
+
+    /// Home team's uuid
     pub home_team: Uuid,
+
+    /// Away team's uuid
     pub away_team: Uuid,
+
+    /// The play that this event came from. This number is always one lower than the playCount
+    /// field in the corresponding game update.
     pub play: i64,
-    pub sub_play: i64,
 }
 
 
@@ -72,13 +80,6 @@ impl GameEvent {
                         field: "play",
                     }
                 })?,
-            sub_play: event.metadata.sub_play
-                .ok_or_else(|| {
-                    FeedParseError::MissingMetadata {
-                        event_type: event.r#type,
-                        field: "sub_play",
-                    }
-                })?,
         })
     }
 }
@@ -87,8 +88,14 @@ impl GameEvent {
 // and nuts; but not properties that will be the same, like day, season, and tournament.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct SubEvent {
+    /// Uuid of sub-event
     pub id: Uuid,
+
+    /// Date the sub-event was created. This should be very close to the date the parent event was
+    /// created, but will typically not be exactly the same.
     pub created: DateTime<Utc>,
+
+    /// Number of upshells this event has received
     pub nuts: i32,
 }
 
@@ -104,22 +111,38 @@ impl SubEvent {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct FreeRefill {
+    /// Metadata for the sub-event associated with losing the Free Refill mod
     pub sub_event: SubEvent,
+
+    /// Subplay for the sub-event associated with losing the Free Refill mod
     pub sub_play: i64,
+
+    /// Name of the player who used their Free Refill. This may be the batter, a scoring runner, or
+    /// in rare cases, the pitcher.
     pub player_name: String,
+
+    /// Uuid of the player who used their Free Refill
     pub player_id: Uuid,
+
+    /// Uuid of the team of the player who used their Free Refill
     pub team_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ScoringPlayer {
+    /// Player uuid
     pub player_id: Uuid,
+
+    /// Player name
     pub player_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ScoreInfo {
+    /// List of players who scored a Run
     pub scoring_players: Vec<ScoringPlayer>,
+
+    /// List of players who used a Free Refill
     pub free_refills: Vec<FreeRefill>,
 }
 
@@ -145,16 +168,28 @@ impl ScoreInfo {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Inhabiting {
+    /// Metadata for the sub-event associated with adding the Inhabiting modifier
     pub sub_event: SubEvent,
+
+    /// The name of the player who's being inhabited
     pub inhabited_player_name: String,
-    pub inhabiting_player_id: Uuid,
+
+    /// The uuid of the player who's being inhabited
     pub inhabited_player_id: Uuid,
+
+    /// The uuid of the player who's inhabiting
+    pub inhabiting_player_id: Uuid,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct StoppedInhabiting {
+    /// Sub-event associated with losing the Inhabiting mod
     pub sub_event: SubEvent,
+
+    /// Name of inhabiting player
     pub inhabiting_player_name: String,
+
+    /// Uuid of inhabiting player
     pub inhabiting_player_id: Uuid,
 }
 
@@ -241,50 +276,79 @@ impl Display for BlooddrainAction {
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[repr(i32)]
 pub enum ModDuration {
-    Permanent = 0,
+    // Permanent = 0,
     Seasonal = 1,
-    Weekly = 2,
+    // Weekly = 2,
     Game = 3,
 }
 
 impl Display for ModDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ModDuration::Permanent => { write!(f, "permanent") }
+            // ModDuration::Permanent => { write!(f, "permanent") }
             ModDuration::Seasonal => { write!(f, "seasonal") }
-            ModDuration::Weekly => { write!(f, "weekly") }
+            // ModDuration::Weekly => { write!(f, "weekly") }
             ModDuration::Game => { write!(f, "game") }
         }
     }
 }
 
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
+// Which of those it is will come from context. If the od of the player is not present in the
+// containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEvent {
+    /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
+
+    /// Uuid of the team whose player's mod changed
     pub team_id: Uuid,
 }
 
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
+// Which of those it is will come from context. If the name of the player is not present in the
+// containing event, use ModChangeSubEventWithNamedPlayer instead.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEventWithPlayer {
+    /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
+
+    /// Uuid of the team whose player's mod changed
     pub team_id: Uuid,
+
+    /// Uuid of the player whose mod changed
     pub player_id: Uuid,
 }
 
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
+// Which of those it is will come from context. If the name of the player is present in the
+// containing event, use ModChangeSubEventWithPlayer instead.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEventWithNamedPlayer {
+    /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
+
+    /// Uuid of the team whose player's mod changed
     pub team_id: Uuid,
+
+    /// Uuid of the player whose mod changed
     pub player_id: Uuid,
+
+    /// Name of the player whose mod changed
     pub player_name: String,
-    pub sub_play: i64,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum SpicyStatus {
+    /// Nothing Spicy-related is happening
     None,
+
+    /// The batter is Heating Up
     HeatingUp,
-    // I don't know why the mod change sub event is sometimes missing, but it is
+
+    /// The batter is Red Hot. Sometimes this has a sub-event with metadata about the mod change.
+    /// I haven't determined what causes the difference. If anyone else knows, I would appreciate an
+    /// explanation (ideally with evidence), in the github issues or to beiju#9630 in SIBR.
     RedHot(Option<ModChangeSubEvent>),
 }
 
@@ -361,220 +425,474 @@ pub enum BatterSkippedReason {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum FedEventData {
+    /// When a being (a god, Binky, or a similar entity) speaks
     BeingSpeech {
+        /// Which being is speaking
         being: Being,
+        /// The text of the being's message
         message: String,
     },
 
+    /// This is always the first event of every game
     LetsGo {
         game: GameEvent,
+
+        /// Weather for this game
         weather: Weather,
+
+        /// Uuid of the stadium this game is being played in, if any
         stadium_id: Option<Uuid>,
     },
 
+    /// This is always the second of event of every game
     PlayBall {
         game: GameEvent,
     },
 
+    /// Marks the start of a half-inning
     HalfInningStart {
         game: GameEvent,
+
+        /// Whether this is the top of the inning (true) or bottom of the inning (false)
         top_of_inning: bool,
+
+        /// Zero-indexed inning number
         inning: i32,
+
+        /// Full name of the team at bat
         batting_team_name: String,
     },
 
+    /// Marks a new batter stepping up to the plate
     BatterUp {
         game: GameEvent,
+
+        /// Batter's name
         batter_name: String,
+
+        /// Batter's team's name
         team_name: String,
+
+        /// The name of the player's legacy (pre-s15 election) item, if any, otherwise null. This
+        /// should always be null from season 16 onward.
         wielding_item: Option<String>,
+
+        /// Details of the inhabiting player, if any, otherwise null
         inhabiting: Option<Inhabiting>,
+
+        /// True if the player is Repeating
         is_repeating: bool,
     },
 
+    /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
+    /// of the game
     SuperyummyGameStart {
         game: GameEvent,
+
+        /// Uuid of the Superyummy player
         player_id: Uuid,
+
+        /// Uuid of the Superyummy player's team
         team_id: Uuid,
+
+        /// Name of the Superyummy player
         player_name: String,
+
+        /// Whether peanuts are present. Determines whether the player "loves" (true) or "misses"
+        /// (false) peanuts.
         peanuts_present: bool,
+
+        /// Whether this is the first time superyummy has procced. This is necessary for accurate
+        /// reconstruction of the game event.
         is_first_proc: bool,
+
+        /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
         sub_event: SubEvent,
     },
 
+    /// Ball
     Ball {
         game: GameEvent,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count
         strikes: i32,
     },
 
+    /// Foul Ball
     FoulBall {
         game: GameEvent,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count
         strikes: i32,
     },
 
+    /// Strike, swinging
     StrikeSwinging {
         game: GameEvent,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count
         strikes: i32,
     },
 
+    /// Strike, looking
     StrikeLooking {
         game: GameEvent,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count
         strikes: i32,
     },
 
+    /// Strike, flinching
     StrikeFlinching {
         game: GameEvent,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count. Should always be 0, but still present in the data for
+        /// forward-compatibility and convenience.
         strikes: i32,
     },
 
+    /// Flyout
     Flyout {
         game: GameEvent,
+
+        /// Name of the batter that hit the flyout
         batter_name: String,
+
+        /// Name of the batter that caught the out
         fielder_name: String,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
+        /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
+    /// A simple ground out. This includes sacrifices but does not include fielder's choices or
+    /// double plays.
     GroundOut {
         game: GameEvent,
+
+        /// Name of player who hit the ground out
         batter_name: String,
+
+        /// Name of fielder who caught the ground out
         fielder_name: String,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
+        /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
-        // In Season 12, Tired/Wired scoring ground outs were special but didn't have an associated
-        // child event
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
     },
 
+    /// Fielders choice event
     FieldersChoice {
         game: GameEvent,
+
+        /// Name of batter who hit into the fielder's choice
         batter_name: String,
+
+        /// Name of the runner who got out as a result of the fielder's choice
         runner_out_name: String,
+
+        /// Which base the runner was tagged out on. First base is `1`, second is `2`, etc.
         out_at_base: i32,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
+        /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
+    /// Double play event
     DoublePlay {
         game: GameEvent,
+
+        /// Name of batter who hit into the double play
         batter_name: String,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
+    /// Hit event (Single, Double, Triple, or Quadruple)
     Hit {
         game: GameEvent,
+
+        /// Name of hte player who hit the ball
         batter_name: String,
+
+        /// Uuid of the player who hit the ball
         batter_id: Uuid,
+
+        /// Number of bases the batter got. Single is `1`, double is `2`, etc.
         num_bases: i32,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// The Spicy status of the batter
         spicy_status: SpicyStatus,
-        // in s12 Tired and Wired make an event special without being otherwise observable
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
     },
 
+    /// Home run, including Grand Slam
     HomeRun {
         game: GameEvent,
-        magmatic: Option<(SubEvent, Uuid)>,
+
+        /// If this is a Magmatic home run, the metadata for the event where the batter loses the
+        /// Magmatic mod, otherwise null
+        magmatic: Option<ModChangeSubEvent>,
+
+        /// Name of the batter who hit the home run
         batter_name: String,
+
+        /// Uuid of the batter who hit the home run
         batter_id: Uuid,
+
+        /// Number of players who made it home during this home run (minimum 1)
         num_runs: i32,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// List of players who used a Free Refill
         free_refills: Vec<FreeRefill>,
+
+        /// The Spicy status of the batter
         spicy_status: SpicyStatus,
-        // In Season 12, Tired/Wired scoring events were special but didn't have an associated
-        // child event
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
     },
 
+    /// Stolen base
     StolenBase {
         game: GameEvent,
+
+        /// Name of the runner who stole the base
         runner_name: String,
+
+        /// Uuid of the runner who stole the base
         runner_id: Uuid,
+
+        /// Which base they stole
         base_stolen: i32,
+
+        /// Whether this player scored with Blaserunning
         blaserunning: bool,
+
+        /// Free Refill data if one was used, otherwise null
         free_refill: Option<FreeRefill>,
     },
 
+    /// Caught stealing
     CaughtStealing {
         game: GameEvent,
+
+        /// Name of the runner who tried to steal the base
         runner_name: String,
+
+        /// Which base they tried to steal
         base_stolen: i32,
     },
 
+    /// Strikeout swinging
     StrikeoutSwinging {
         game: GameEvent,
+
+        /// Name of batter who struck out swinging
         batter_name: String,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
-        // In Season 12, Unrun strikeouts were special but didn't have an associated child event
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players got Unrun strikeouts the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
     },
 
+    /// Strikeout looking
     StrikeoutLooking {
         game: GameEvent,
+
+        /// Name of batter who struck out looking
         batter_name: String,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
-        // In Season 12, Unrun strikeouts were special but didn't have an associated child event
+
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players got Unrun strikeouts the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
     },
 
+    /// Player drew a walk
     Walk {
         game: GameEvent,
+
+        /// Name of the batter who drew the walk
         batter_name: String,
+
+        /// Uuid of the batter who drew the walk
         batter_id: Uuid,
+
+        #[serde(flatten)]
         scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// If the batter went to a later base with Base Instincts, this is the base number.
+        /// Otherwise null.
         base_instincts: Option<i32>,
     },
 
+    /// Marks the end of the half-inning
     InningEnd {
         game: GameEvent,
+
+        /// Which inning just ended (one-indexed)
         inning_num: i32,
+
+        /// List of pitchers who lost Triple Threat. Should be at most two players.
         lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
+    /// Player struck out by charming the batter
     CharmStrikeout {
         game: GameEvent,
+
+        /// Uuid of player who did the charming
         charmer_id: Uuid,
+
+        /// Name of player who did the charming
         charmer_name: String,
+
+        /// Uuid of player who was charmed
         charmed_id: Uuid,
+
+        /// Name of the player who was charmed
         charmed_name: String,
+
+        /// Number of swings the player was charmed into making. Should be 3 ordinarily and 4 for
+        /// players with The Fourth Strike.
         num_swings: i32,
     },
 
+    /// Zapped a strike
     StrikeZapped {
         game: GameEvent,
     },
 
+    /// Peanut flavor text messages
     PeanutFlavorText {
         game: GameEvent,
+
+        /// The text of the message
         message: String,
     },
 
     GameEnd {
         game: GameEvent,
+
+        /// Uuid of the team who won
         winner_id: Uuid,
+
+        /// Name of the team who won
         winning_team_name: String,
+
+        /// Score of the team who won
         winning_team_score: f32,
+
+        /// Name of the team who lost
         losing_team_name: String,
+
+        /// Score of the team who lost
         losing_team_score: f32,
     },
 
+    /// Mild pitch
     MildPitch {
         game: GameEvent,
+
+        /// Uuid of the pitcher who threw the mild pitch
         pitcher_id: Uuid,
+
+        /// Name of the player who threw the mild pitch
         pitcher_name: String,
+
+        /// Number of balls in the count
         balls: i32,
+
+        /// Number of strikes in the count
         strikes: i32,
+
+        /// Whether runners advance on the pathetic play (I believe runners always advance if there
+        /// are any runners at all)
         runners_advance: bool,
     },
 
@@ -925,16 +1243,69 @@ pub enum FedEventData {
     },
 }
 
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[repr(i32)]
+pub enum SimPhase {
+    GodsDay = 0,
+    Preseason = 1,
+    Earlseason = 2,
+    Earlsiesta = 3,
+    Midseason = 4,
+    Latesiesta = 5,
+    Lateseason = 6,
+    Endseason = 7,
+    PrePostseason = 8,
+    Earlpostseason = 9,
+    EarlpostseasonEnd = 10,
+    Latepostseason = 11,
+    PostseasonEnd = 12,
+    Election = 13,
+    SpecialEvent = 14,
+}
+
+/// Represents the parsed data for any Feed event
 #[derive(Debug, Builder, JsonSchema)]
 pub struct FedEvent {
+    /// Uuid of the event itself
     pub id: Uuid,
+
+    /// Date the event occurred
     pub created: DateTime<Utc>,
+
+    /// Which sim (or universe of Blaseball) this event came from
+    ///
+    /// Notable values are:
+    /// - thisidisstaticyo: All of Beta, during which the ID was indeed static yo
+    /// - gammaN: Any of the Short Circuits universes, including many that were generated by mistake
+    ///   and never visible on the site. Non-empty gammas are gamma5 and gamma7, which just include
+    ///   the event "SIM_GAMMA_LEAGUE became Non-Physical Law.",  and gamma8-gamma10, which were the
+    ///   visible Short Circuits universes.
+    ///
+    /// Unfortunately, it seems that many events in Short Circuits were incorrectly assigned to the
+    /// thisidisstaticyo sim.
     pub sim: String,
+
+    /// In gamma10 in a Title Belt match, tournament indicates which match this is. Otherwise it is
+    /// always -1.
+    ///
+    /// Previously, before the feed, tournament=0 was used in other API responses to indicate the
+    /// Coffee Cup. It's unclear what, if anything, it will be used for in future.
     pub tournament: i32,
+
+    /// Zero-indexed season
     pub season: i32,
+
+    /// Zero-indexed day
     pub day: i32,
-    pub phase: i32,
+
+    /// Phase of the sim. Corresponds to the schedule section on the Blaseball homepage, with a few
+    /// extra entries.
+    pub phase: SimPhase,
+
+    /// The number of times this event has been upshelled
     pub nuts: i32,
+
+    #[serde(flatten)]
     pub data: FedEventData,
 }
 
@@ -1233,7 +1604,7 @@ impl FedEvent {
                     SpicyStatus::RedHot { .. } => format!("{suffix}\n{batter_name} is Red Hot!"),
                 };
 
-                let mut children = if let Some((sub_event, team_id)) = magmatic {
+                let mut children = if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
                     vec![self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&sub_event)
@@ -2025,37 +2396,32 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::BecomeTripleThreat { ref game, pitchers: (ref pitcher_a, ref pitcher_b) } => {
-                // a and b = sub-event order. 1 and 2 = description order
-                let (pitcher_1, pitcher_2) = if pitcher_a.sub_play < pitcher_b.sub_play {
-                    (pitcher_a, pitcher_b)
-                } else {
-                    (pitcher_b, pitcher_a)
-                };
-
-                let children = [pitcher_a, pitcher_b].iter().map(|pitcher| {
-                    self.make_event_builder()
-                        .for_game(&game)
-                        .for_sub_event(&pitcher.sub_event)
-                        .category(1)
-                        .r#type(EventType::AddedMod)
-                        .description(format!("{} is a Triple Threat.", pitcher.player_name))
-                        .team_tags(vec![pitcher.team_id])
-                        .player_tags(vec![pitcher.player_id])
-                        .metadata(EventMetadataBuilder::default()
-                            .play(game.play)
-                            .sub_play(pitcher.sub_play) // not sure if this is hardcoded
-                            .other(json!({
+            FedEventData::BecomeTripleThreat { ref game, pitchers: (ref pitcher_1, ref pitcher_2) } => {
+                let children = [pitcher_1, pitcher_2].iter()
+                    .enumerate()
+                    .map(|(sub_play, pitcher)| {
+                        self.make_event_builder()
+                            .for_game(&game)
+                            .for_sub_event(&pitcher.sub_event)
+                            .category(1)
+                            .r#type(EventType::AddedMod)
+                            .description(format!("{} is a Triple Threat.", pitcher.player_name))
+                            .team_tags(vec![pitcher.team_id])
+                            .player_tags(vec![pitcher.player_id])
+                            .metadata(EventMetadataBuilder::default()
+                                .play(game.play)
+                                .sub_play(sub_play as i64) // not sure if this is hardcoded
+                                .other(json!({
                                 "mod": "TRIPLE_THREAT",
                                 "type": 0, // ?
                                 "parent": self.id,
                             }))
+                                .build()
+                                .unwrap()
+                            )
                             .build()
                             .unwrap()
-                        )
-                        .build()
-                        .unwrap()
-                })
+                    })
                     .collect();
                 event_builder.for_game(game)
                     .r#type(EventType::BecomeTripleThreat)
@@ -2561,6 +2927,7 @@ impl FedEvent {
                     .category(3)
                     .description(format!("{player_name} was Boosted."))
                     .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
                             "before": rating_before,
@@ -2580,7 +2947,8 @@ impl FedEvent {
             .join("");
 
         let children = mod_changes.iter()
-            .map(|e| {
+            .enumerate()
+            .map(|(sub_play, e)| {
                 self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&e.sub_event)
@@ -2591,7 +2959,7 @@ impl FedEvent {
                     .player_tags(vec![e.player_id])
                     .metadata(EventMetadataBuilder::default()
                         .play(game.play)
-                        .sub_play(e.sub_play)
+                        .sub_play(sub_play as i64)
                         .other(json!({
                                 "mod": mod_name,
                                 "type": 0, // ?
@@ -2720,7 +3088,7 @@ impl FedEvent {
             .blurb("".to_string())
             .sim(self.sim.clone())
             .day(self.day)
-            .phase(self.phase)
+            .phase(self.phase.into())
             .season(self.season)
             .tournament(self.tournament)
             .nuts(self.nuts)
@@ -2751,11 +3119,10 @@ impl FedEvent {
     }
 }
 
-
 fn make_game_event_metadata_builder(game: &GameEvent) -> EventMetadataBuilder {
     EventMetadataBuilder::default()
         .play(game.play)
-        .sub_play(game.sub_play)
+        .sub_play(-1) // top-level events always have a sub-play of -1
 }
 
 fn make_game_event_metadata(game: &GameEvent) -> EventMetadata {

@@ -37,5 +37,6 @@ num_enum = "0.5.7"
 derive_builder = "0.11.2"
 indicatif = "0.17.1" # Only needed for test.rs
 json-structural-diff = "0.1.0" # Only needed for test.rs
+par-iter-sync = "0.1.10" # Only needed for test.rs
 anyhow = "1.0.66" # Only needed for test.rs
 schemars = { version = "0.8.11", features = ["chrono", "uuid1"] }

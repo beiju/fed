@@ -61,6 +61,16 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[repr(i32)]
+pub enum EventCategory {
+    Game = 0,
+    Changes = 1,
+    Special = 2,
+    Outcomes = 3,
+    Narrative = 4,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(pattern = "owned")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
