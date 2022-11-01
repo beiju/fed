@@ -282,6 +282,7 @@ pub enum EventType {
     // At this point I got bored typing them all and only filled in the ones I encountered
     TeamDivisionMove = 135,
     PlayerHatched = 137,
+    TeamWonInternetSeries = 141,
     EarnedPostseasonSlot = 142,
     FinalStandings = 143,
     ModChange = 144,

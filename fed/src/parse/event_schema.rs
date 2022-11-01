@@ -389,19 +389,27 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
-pub enum PositionType {
-    Batter,
-    Pitcher,
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[repr(i64)]
+pub enum ActivePositionType {
+    Lineup = 0,
+    Rotation = 1,
 }
 
-impl Display for PositionType {
+impl Display for ActivePositionType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PositionType::Batter => { write!(f, "batting") }
-            PositionType::Pitcher => { write!(f, "pitching") }
+            ActivePositionType::Lineup => { write!(f, "batting") }
+            ActivePositionType::Rotation => { write!(f, "pitching") }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[repr(i64)]
+pub enum ShadowPositionType {
+    Bench = 2,
+    Bullpen = 3,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -414,15 +422,6 @@ pub struct FeedbackPlayerData {
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
-pub struct PerkPlayers {
-    pub team_id: Uuid,
-    pub player_id: Uuid,
-    pub player_name: String,
-    pub sub_event: SubEvent,
-    pub sub_play: i64,
-}
-
-#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
@@ -431,7 +430,12 @@ pub enum ReverbType {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum BatterSkippedReason {
+    /// Batter is Shelled
     Shelled,
+
+    /// Batter is Elsewhere
+    ///
+    /// For whatever reason, this has a player_id while the Shelled variant does not
     Elsewhere(Uuid),
 }
 
@@ -1078,277 +1082,604 @@ pub enum FedEventData {
         pitcher: Option<PlayerInfo>,
     },
 
-    BlackHoleSwallowedWin {
-        team_id: Uuid,
-        team_nickname: String,
-    },
-
+    /// Sun2 set a Win. This version of the event shows up in the Outcomes section and is separate
+    /// from the version that shows up in the game log.
     Sun2SetWin {
+        /// Uuid of team who earned the Win
         team_id: Uuid,
+
+        /// Nickname of team who earned the Win
         team_nickname: String,
     },
 
+    /// Black hole swallowed a win. This version of the event shows up in the Outcomes section and
+    /// is separate from the version that shows up in the game log.
+    BlackHoleSwallowedWin {
+        /// Uuid of team whose Win was swallowed
+        team_id: Uuid,
+
+        /// Nickname of team whose Win was swallowed
+        team_nickname: String,
+    },
+
+    /// Sun2 set a Win. This version of the event shows up in the game log and is separate from the
+    /// version that shows up in the Outcomes section.
     Sun2 {
         game: GameEvent,
+
+        /// Nickname of team who earned the Win
         team_nickname: String,
     },
 
+    /// Black hole swallowed a win. This version of the event shows up in the game log and is
+    /// separate from the version that shows up in the Outcomes section.
     BlackHole {
         game: GameEvent,
+
+        /// Nickname of the team that caused the event
         scoring_team_nickname: String,
+
+        /// Nickname of the team whose Win was swallowed
         victim_team_nickname: String,
     },
 
+    /// Team shamed another team
     TeamDidShame {
+        /// Uuid of the team that did the shaming
         shaming_team_id: Uuid,
+
+        /// Nickname of the team that did the shaming
         shaming_team_nickname: String,
+
+        /// Nickname of the team that was shamed
         shamed_team_nickname: String,
+
+        /// Number of shames that the shaming team has performed
         total_shames: i64,
+
+        /// Number of shames that the shaming team has received
         total_shamings: i64,
     },
 
+    /// Team was shamed
     TeamWasShamed {
+        /// Uuid of the team that was shamed
         shamed_team_id: Uuid,
-        shaming_team_nickname: String,
+
+        /// Nickname of the team that was shamed
         shamed_team_nickname: String,
+
+        /// Nickname of the team that did the shaming
+        shaming_team_nickname: String,
+
+        /// Number of shames that the shamed team has performed
         total_shames: i64,
+
+        /// Number of shames that the shamed team has received
         total_shamings: i64,
     },
 
+    /// Walk as a result of Charm
     CharmWalk {
         game: GameEvent,
-        batter_name: String,
+
+        /// Uuid of the batter that did the charming
         batter_id: Uuid,
+
+        /// Name of the batter that did the charming
+        batter_name: String,
+
+        /// Name of the pitcher that was charmed
         pitcher_name: String,
     },
 
+    /// Player gained a Free Refill
     GainFreeRefill {
         game: GameEvent,
-        player_id: Uuid,
-        player_name: String,
-        roast: String,
-        ingredient1: String,
-        ingredient2: String,
-        sub_event: SubEvent,
+
+        /// Uuid of the team of the player who gained the Free Refill
         team_id: Uuid,
+
+        /// Uuid of player who gained the Free Refill
+        player_id: Uuid,
+
+        /// Name of player who gained the Free Refill
+        player_name: String,
+
+        /// Roast of the coffee that bestowed the Free Refill
+        roast: String,
+
+        /// First ingredient of the coffee that bestowed the Free Refill
+        ingredient1: String,
+
+        /// Second ingredient of the coffee that bestowed the Free Refill
+        ingredient2: String,
+
+        /// Metadata for the sub-event associated with the Free Refill mod-added event
+        sub_event: SubEvent,
     },
 
+    /// Player suffered an allergic reaction (note: yummy reactions and the Feed never coexisted,
+    /// so all peanut reactions in the Feed were allergic)
     AllergicReaction {
         game: GameEvent,
+
+        /// Uuid of the team of the player who suffered the allergic reaction
         team_id: Uuid,
+
+        /// Uuid of the player who suffered the allergic reaction
         player_id: Uuid,
+
+        /// Name of the player who suffered the allergic reaction
         player_name: String,
+
+        /// Metadata for the sub-event associated with the player stat change event
         sub_event: SubEvent,
+
+        /// Player rating before the stat change
         rating_before: f64,
+
+        /// Player rating after the stat change
         rating_after: f64,
     },
 
+    /// Player perked up at start of game
     PerkUp {
         game: GameEvent,
-        players: Vec<PerkPlayers>,
+
+        /// Players who gained Overperforming as a result of Perk
+        players: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
+    /// Feedback
     Feedback {
         game: GameEvent,
+
+        /// The two players involved in the feedback. I believe the first is always the initiator,
+        /// as indicated by Flickering, but I'm not sure.
         players: (FeedbackPlayerData, FeedbackPlayerData),
-        position_type: PositionType,
+
+        /// The position of the players that were swapped
+        position_type: ActivePositionType,
+
+        /// Metadata for the `PlayerTraded` sub-event
         sub_event: SubEvent,
     },
 
+    /// Reverb bestows the Reverberating mod
     BestowReverberating {
         game: GameEvent,
+
+        /// Uuid of team of player who was given Reverberating
         team_id: Uuid,
+
+        /// Uuid of player who was given Reverberating
         player_id: Uuid,
+
+        /// Name of player who was given Reverberating
         player_name: String,
+
+        /// Sub-event associated with the `AddedMod` event
         sub_event: SubEvent,
     },
 
+    /// Reverb swap
     Reverb {
         game: GameEvent,
+
+        /// Uuid of team who got reverbed
         team_id: Uuid,
+
+        /// Nickname of team who got reverbed
         team_nickname: String,
+
+        /// Type of reverb that happened, with metadata for the associated `ReverbRosterShuffle`
+        /// sub-event
         reverb_type: ReverbType,
     },
 
+    /// Tarot readings
     TarotReading {
+        /// Tarot reading description
         description: String,
-        // Making this vague on purpose to be generic
+
+        /// Metadata associated with the tarot reading. This is vague on purpose to be generic.
         metadata: serde_json::Value,
+
+        /// Uuids of players involved in this tarot reading. This is vague on purpose to be generic.
         player_tags: Vec<Uuid>,
+
+        /// Uuids of teams involved in this tarot reading. This is vague on purpose to be generic.
         team_tags: Vec<Uuid>,
     },
 
-    // TODO make this more specific, ideally not just including the whole description
-    ModAddedSpontaneously {
-        description: String,
+    /// Added "Over Under" mod. This happened as a result of the tarot reading.
+    AddedOverUnder {
+        /// Uuid of team of player who gained Over Under
         team_id: Uuid,
-        // The presence of player_id is the only thing that separates a player event from a team one
-        player_id: Option<Uuid>,
-        r#mod: String,
+
+        /// Uuid player who gained Over Under
+        player_id: Uuid,
+
+        /// Name of player who gained Over Under
+        player_name: String,
     },
 
+    /// Added "Under Over" mod. This happened as a result of the tarot reading.
+    AddedUnderOver {
+        /// Uuid of team of player who gained Under Over
+        team_id: Uuid,
+
+        /// Uuid player who gained Under Over
+        player_id: Uuid,
+
+        /// Name of player who gained Under Over
+        player_name: String,
+    },
+
+    /// Team entered Party Time!
+    TeamEnteredPartyTime {
+        /// Uuid of team who just entered Party Time
+        team_id: Uuid,
+
+        /// Nickname of team who just entered Party Time
+        team_nickname: String,
+    },
+
+    /// Player becomes Triple Threat at start of game
     BecomeTripleThreat {
         game: GameEvent,
+
+        /// Add mod events for the players who became Triple Threat
         pitchers: (ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithNamedPlayer),
     },
 
+    /// Under Over procced
     UnderOver {
         game: GameEvent,
+
+        /// Team uuid of player whose Under Over procced
         team_id: Uuid,
+
+        /// Uuid of player whose Under Over procced
         player_id: Uuid,
+
+        /// Name of player whose Under Over procced
         player_name: String,
+
+        /// Whether Over Under turned on or off
         on: bool,
+
+        /// Metadata for the sub-event associated with adding or removing Overperforming
         sub_event: SubEvent,
     },
 
+    /// Over Under procced
     OverUnder {
         game: GameEvent,
+
+        /// Team uuid of player whose Over Under procced
         team_id: Uuid,
+
+        /// Uuid of player whose Over Under procced
         player_id: Uuid,
+
+        /// Name of player whose Over Under procced
         player_name: String,
+
+        /// Whether Over Under turned on or off
         on: bool,
+
+        /// Metadata for the sub-event associated with adding or removing Underperforming
         sub_event: SubEvent,
     },
 
+    /// Player tastes the infinite and Shells another player
     TasteTheInfinite {
         game: GameEvent,
+
+        /// Uuid of player who shelled the other player
         sheller_id: Uuid,
+
+        /// Name of player who shelled the other player
         sheller_name: String,
+
+        /// Team uuid of player who was shelled
         shellee_team_id: Uuid,
+
+        /// Uuid of player who was shelled
         shellee_id: Uuid,
+
+        /// Name of player who was shelled
         shellee_name: String,
+
+        /// Metadata for the sub-event associated with adding the Shelled mod
         sub_event: SubEvent,
     },
 
+    /// Batter skipped event
     BatterSkipped {
         game: GameEvent,
+
+        /// Name of batter who got skipped
         batter_name: String,
+
+        /// Reason the batter was skipped
         reason: BatterSkippedReason,
     },
 
+    /// Feedback failed and initiator was tangled in the feedback
     FeedbackBlocked {
         game: GameEvent,
+
+        /// Uuid of player who resisted feedback
         resisted_id: Uuid,
+
+        /// Name of player who resisted feedback
         resisted_name: String,
+
+        /// Uuid of player who attempted feedback, failed, and was tangled
         tangled_id: Uuid,
+
+        /// Team uuid of player who attempted feedback, failed, and was tangled
         tangled_team_id: Uuid,
+
+        /// Name of player who attempted feedback, failed, and was tangled
         tangled_name: String,
+
+        /// Rating of player who attempted feedback before the event
         tangled_rating_before: f64,
+
+        /// Rating of player who attempted feedback after the event
         tangled_rating_after: f64,
+
+        /// Metadata for sub-event associated with player stat change event
         sub_event: SubEvent,
     },
 
+    /// Team breaks ground on ballpark and ground is broken
     FlagPlanted {
+        /// Uuid of team who broke ground
         team_id: Uuid,
+
+        /// Nickname of team who broke ground
         team_nickname: String,
+
+        /// Name of newly created ballpark
         ballpark_name: String,
+
+        /// Name of prefab used for newly created ballpark
         prefab_name: String,
+
+        /// Number of votes team spent on the ballpark
         votes: i64,
     },
 
+    /// Emergency Alerty
     EmergencyAlert {
+        /// Message of emergency alert
         message: String,
+
+        /// Teams involved in emergency alert
         team_tags: Vec<Uuid>,
     },
 
+    /// Team was added to ILB
     TeamJoined {
+        /// Uuid of newly added team
         team_id: Uuid,
+
+        /// Nickname of newly added team
         team_nickname: String,
+
+        /// Uuid of division to which team was added
         division_id: Uuid,
+
+        /// Name of division to which team was added
         division_name: String,
     },
 
+    /// Players swept off base by Flooding
     FloodingSwept {
         game: GameEvent,
+
+        /// List of players who were swept Elsewhere
         swept_elsewhere: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
+    /// Player returned from Elsewhere
     ReturnFromElsewhere {
         game: GameEvent,
+
+        /// Team uuid of player who returned from Elsewhere
         team_id: Uuid,
+
+        /// Uuid of player who returned from Elsewhere
         player_id: Uuid,
+
+        /// Name of player who returned from Elsewhere
         player_name: String,
+
+        /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
+
+        /// Number of days the player was Elsewhere
+        // This will need to be modified for seasons later
         number_of_days: i32,
     },
 
+    /// Player was incinerated
     Incineration {
         game: GameEvent,
+
+        /// Uuid of team whose player who was incinerated
         team_id: Uuid,
+
+        /// Nickname of team whose player was incinerated
         team_nickname: String,
+
+        /// Uuid of player who was incinerated
         victim_id: Uuid,
+
+        /// Name of player who was incinerated
         victim_name: String,
+
+        /// Uuid of replacement player
         replacement_id: Uuid,
+
+        /// Name of replacement player
         replacement_name: String,
-        location: i64,
+
+        /// Location of incinerated and replacement player
+        location: ActivePositionType,
+
+        /// Metadata for the incineration sub-event, the enters-hall sub-event, the hatch sub-event,
+        /// and the replacement sub-event, in that order
         sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
     },
 
+    /// Pitcher change event. This happens automatically when something incapacitates the active
+    /// pitcher (e.g. the player is shelled by Taste the Infinite)
     PitcherChange {
         game: GameEvent,
+
+        /// Nickname of team whose pitcher changed
         team_nickname: String,
+
+        /// Uuid of new pitcher
         pitcher_id: Uuid,
+
+        /// Name of new pitcher
         pitcher_name: String,
     },
 
+    /// Team partied
     Party {
         game: GameEvent,
+
+        /// Uuid of team who partied
         team_id: Uuid,
+
+        /// Uuid of player who partied
         player_id: Uuid,
+
+        /// Name of player who partied
         player_name: String,
+
+        /// Metadata for sub-event associated with player stat change
         sub_event: SubEvent,
+
+        /// Player's rating before the party
+        ///
+        /// TODO I think SIBR figured out how this rating works. Look that up
         rating_before: f64,
+
+        /// Player's rating after the party
         rating_after: f64,
     },
 
+    /// Player was hatched from the Field of Eggs
     PlayerHatched {
+        /// Uuid of newly hatched player
         player_id: Uuid,
+
+        /// Name of newly hatched player
         player_name: String,
     },
 
+    /// Team received a postseason birth. I believe this is always preceded by a PlayerHatched event
     PostseasonBirth {
+        /// Uuid of team who received the birth
         team_id: Uuid,
+
+        /// Nickname of team who received the birth
         team_nickname: String,
+
+        /// Player who was birthed onto the team
         player_id: Uuid,
+
+        /// Name of player who was birthed onto the team
         player_name: String,
-        location: i64,
+
+        /// Position of the new birth within the shadows
+        location: ShadowPositionType,
     },
 
+    /// Place of team in the final standings
     FinalStandings {
+        /// Uuid of team
         team_id: Uuid,
+
+        /// Nickname of team
         team_nickname: String,
+
+        /// Place of team within the division
         place: i32,
+
+        /// Name of division
         division_name: String,
     },
 
+    /// Event indicating when a team leaves Party Time because it's been drafted into the postseason
     TeamLeftPartyTimeForPostseason {
+        /// Uuid of team who left Party Time
         team_id: Uuid,
+
+        /// Name of team who left Party Time
         team_name: String,
     },
 
+    /// Team earned a slot in the postseason
     EarnedPostseasonSlot {
+        /// Uuid of team who earned a slot in the postseason
         team_id: Uuid,
+
+        /// Nickname of team who earned a slot in the postseason
         team_nickname: String,
     },
 
+    /// Team advanced to next round of the postseason
     PostseasonAdvance {
+        /// Uuid of team who advanced in the postseason
         team_id: Uuid,
+
+        /// Nickname of team who advanced in the postseason
         team_nickname: String,
+
+        /// Round to which the team advanced, or null for the Internet Series
         round: Option<i32>,
+
+        /// One-indexed season number
         season: i32,
     },
 
+    /// Team was eliminated from the postseason
     PostseasonEliminated {
+        /// Uuid of team who was eliminated from the postseason
         team_id: Uuid,
+
+        /// Nickname of team who was eliminated from the postseason
         team_nickname: String,
+
+        /// One-indexed season number
         season: i32,
     },
 
+    /// Player was boosted during election
     PlayerBoosted {
+        /// Uuid of team whose player was boosted
         team_id: Uuid,
+
+        /// Uuid of player who was boosted
         player_id: Uuid,
+
+        /// Name of player who was boosted
         player_name: String,
+
+        /// Player rating before being boosted
         rating_before: f64,
+
+        /// Player rating after being boosted
         rating_after: f64,
     },
 }
@@ -2270,7 +2601,9 @@ impl FedEvent {
                         .unwrap())
             }
             FedEventData::PerkUp { ref game, ref players } => {
-                let children = players.iter().map(|player| {
+                let children = players.iter()
+                    .enumerate()
+                    .map(|(sub_play, player)| {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&player.sub_event)
@@ -2281,7 +2614,7 @@ impl FedEvent {
                         .player_tags(vec![player.player_id])
                         .metadata(EventMetadataBuilder::default()
                             .play(game.play)
-                            .sub_play(player.sub_play)
+                            .sub_play(sub_play as i64)
                             .other(json!({
                                 "mod": "OVERPERFORMING",
                                 "source": "PERK",
@@ -2300,7 +2633,6 @@ impl FedEvent {
                     .r#type(EventType::Perk)
                     .category(EventCategory::Special)
                     .description(players.iter()
-                        .sorted_by_key(|player| player.sub_play)
                         .map(|player| format!("{} Perks up.", player.player_name))
                         .join("\n"))
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2486,17 +2818,32 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::ModAddedSpontaneously { description, team_id, player_id, r#mod } => {
+            FedEventData::AddedUnderOver { team_id, player_id, player_name } => {
                 event_builder
                     .r#type(EventType::AddedMod)
                     .category(EventCategory::Changes)
-                    .description(description)
+                    .description(format!("UNDER OVER, {player_name}"))
                     .team_tags(vec![team_id])
-                    .player_tags(player_id.into_iter().collect())
+                    .player_tags(vec![player_id])
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
-                            "mod": r#mod,
-                            "type": if player_id.is_some() { 0 } else { 1 }, // player vs team, I think
+                            "mod": "UNDEROVER",
+                            "type": 0, // player
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::AddedOverUnder { team_id, player_id, player_name } => {
+                event_builder
+                    .r#type(EventType::AddedMod)
+                    .category(EventCategory::Changes)
+                    .description(format!("OVER UNDER, {player_name}"))
+                    .team_tags(vec![team_id])
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mod": "OVERUNDER",
+                            "type": 0, // player
                         }))
                         .build()
                         .unwrap())
@@ -2785,6 +3132,7 @@ impl FedEvent {
             }
             FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref sub_events } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
+                let location_int: i64 = location.into();
                 let children = vec![
                     self.make_event_builder()
                         .for_game(game)
@@ -2858,7 +3206,7 @@ impl FedEvent {
                             .other(json!({
                                 "inPlayerId": replacement_id,
                                 "inPlayerName": replacement_name,
-                                "location": location,
+                                "location": location_int,
                                 "outPlayerId": victim_id,
                                 "outPlayerName": victim_name,
                                 "teamId": team_id,
@@ -2937,6 +3285,7 @@ impl FedEvent {
                         .unwrap())
             }
             FedEventData::PostseasonBirth { team_id, team_nickname, player_id, player_name, location } => {
+                let location_int: i64 = location.into();
                 event_builder
                     .r#type(EventType::PlayerAddedToTeam)
                     .category(EventCategory::Changes)
@@ -2945,7 +3294,7 @@ impl FedEvent {
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
-                            "location": location,
+                            "location": location_int,
                             "playerId": player_id,
                             "playerName": player_name,
                             "teamId": team_id,
@@ -3033,6 +3382,20 @@ impl FedEvent {
                         .other(json!({
                             "before": rating_before,
                             "after": rating_after,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::TeamEnteredPartyTime { team_id, team_nickname } => {
+                event_builder
+                    .r#type(EventType::AddedMod)
+                    .category(EventCategory::Changes)
+                    .description(format!("The {team_nickname} have entered Party Time!"))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mod": "PARTY_TIME",
+                            "type": 1
                         }))
                         .build()
                         .unwrap())

@@ -16,7 +16,7 @@ use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
 use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerInfo, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -803,7 +803,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 victim_name: victim_name.to_string(),
                 replacement_id: get_one_player_id(hatch_child)?,
                 replacement_name: replacement_name.to_string(),
-                location: get_int_metadata(replace_child, "location")?,
+                location: get_int_metadata(replace_child, "location")?
+                    .try_into()
+                    .map_err(|_| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "location"
+                    })?,
                 sub_events: (
                     SubEvent::from_event(incin_child),
                     SubEvent::from_event(enter_hall_child),
@@ -958,18 +963,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::PerkUp {
                 game: GameEvent::try_from_event(event)?,
                 players: event.metadata.children.iter()
-                    .map(|mod_add_event| {
-                        // TODO Now that the children are sorted, it's guaranteed that they'll be in
-                        //   the same order as the names. This can be replaced with a zip.
-                        let sub_play = get_sub_play(mod_add_event)?;
-                        let player_name = player_names[sub_play as usize];
+                    .zip(player_names)
+                    .map(|(mod_add_event, player_name)| {
                         assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
-                        Ok(PerkPlayers {
+                        Ok(ModChangeSubEventWithNamedPlayer {
                             player_name: player_name.to_string(),
                             sub_event: SubEvent::from_event(mod_add_event),
                             player_id: get_one_player_id(mod_add_event)?,
                             team_id: get_one_team_id(mod_add_event)?,
-                            sub_play,
                         })
                     })
                     .collect::<Result<_, _>>()?,
@@ -979,12 +980,30 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::LateToTheParty => { todo!() }
         EventType::ShameDonor => { todo!() }
         EventType::AddedMod => {
-            make_fed_event(event, FedEventData::ModAddedSpontaneously {
-                description: event.description.clone(),
-                team_id: get_one_team_id(event)?,
-                player_id: get_one_player_id(event).ok(),
-                r#mod: get_str_metadata(event, "mod")?.to_string(),
-            })
+            match run_parser(&event, parse_added_mod)? {
+                ParsedAddedMod::OverUnder(name) => {
+                    make_fed_event(event, FedEventData::AddedOverUnder {
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: name.to_string(),
+                    })
+                }
+                ParsedAddedMod::UnderOver(name) => {
+                    make_fed_event(event, FedEventData::AddedUnderOver {
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: name.to_string(),
+                    })
+                }
+                ParsedAddedMod::EnteredPartyTime(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    make_fed_event(event, FedEventData::TeamEnteredPartyTime {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
+                }
+            }
+
         }
         EventType::RemovedMod => {
             // this will definitely need multiple alternatives in the future
@@ -1015,7 +1034,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_nickname: team_nickname.to_string(),
                 player_id: get_one_player_id(event)?,
                 player_name: get_str_metadata(event, "playerName")?.to_string(),
-                location: get_int_metadata(event, "location")?,
+                location: get_int_metadata(event, "location")?
+                    .try_into()
+                    .map_err(|_| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "location"
+                    })?,
             })
         }
         EventType::PlayerReplacedByNecromancy => { todo!() }
@@ -1072,6 +1096,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 division_name: division_name.to_string(),
             })
         }
+        EventType::TeamWonInternetSeries => { todo!() }
         EventType::EarnedPostseasonSlot => {
             let (team_nickname, season_num) = run_parser(&event, parse_earned_postseason_slot)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -2076,15 +2101,15 @@ fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-fn parse_feedback(input: &str) -> ParserResult<(&str, &str, PositionType)> {
+fn parse_feedback(input: &str) -> ParserResult<(&str, &str, ActivePositionType)> {
     let (input, _) = tag("Reality flickers. Things look different ...\n")(input)?;
     let (input, player1_name) = parse_terminated(" and ")(input)?;
     let (input, player2_name) = parse_terminated(" switch teams in the feedback!\n")(input)?;
     let (input, _) = tag(player2_name)(input)?;
     let (input, _) = tag(" is now ")(input)?;
     let (input, position) = alt((
-        tag("batting").map(|_| PositionType::Batter),
-        tag("pitching").map(|_| PositionType::Pitcher),
+        tag("batting").map(|_| ActivePositionType::Lineup),
+        tag("pitching").map(|_| ActivePositionType::Rotation),
     ))(input)?;
     let (input, _) = tag(".")(input)?;
 
@@ -2266,6 +2291,22 @@ fn parse_removed_mod(input: &str) -> ParserResult<&str> {
     let (input, team_name) = parse_terminated(" have been removed from Party Time to join the Postseason!")(input)?;
 
     Ok((input, team_name))
+}
+
+enum ParsedAddedMod<'a> {
+    OverUnder(&'a str),
+    UnderOver(&'a str),
+    EnteredPartyTime(&'a str),
+}
+
+fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
+    let (input, result) = alt((
+        preceded(tag("OVER UNDER, "), is_not("\n")).map(|n| ParsedAddedMod::OverUnder(n)),
+        preceded(tag("UNDER OVER, "), is_not("\n")).map(|n| ParsedAddedMod::UnderOver(n)),
+        preceded(tag("The "), parse_terminated(" have entered Party Time!")).map(|n| ParsedAddedMod::EnteredPartyTime(n)),
+    ))(input)?;
+
+    Ok((input, result))
 }
 
 fn parse_postseason_advance(input: &str) -> ParserResult<(&str, Option<i32>, i32)> {
