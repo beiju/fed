@@ -2,14 +2,16 @@ use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
+use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
 use fed_api::{EventMetadata, EventMetadataBuilder, EventType, EventuallyEvent, EventuallyEventBuilder, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
+use schemars::JsonSchema;
 use crate::parse::error::FeedParseError;
 
-#[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Being {
     EmergencyAlert = -1,
@@ -22,7 +24,7 @@ pub enum Being {
     Namerifeht = 6,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct GameEvent {
     pub game_id: Uuid,
     pub home_team: Uuid,
@@ -83,7 +85,7 @@ impl GameEvent {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct SubEvent {
     pub id: Uuid,
     pub created: DateTime<Utc>,
@@ -100,7 +102,7 @@ impl SubEvent {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct FreeRefill {
     pub sub_event: SubEvent,
     pub sub_play: i64,
@@ -109,13 +111,13 @@ pub struct FreeRefill {
     pub team_id: Uuid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ScoringPlayer {
     pub player_id: Uuid,
     pub player_name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ScoreInfo {
     pub scoring_players: Vec<ScoringPlayer>,
     pub free_refills: Vec<FreeRefill>,
@@ -141,7 +143,7 @@ impl ScoreInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Inhabiting {
     pub sub_event: SubEvent,
     pub inhabited_player_name: String,
@@ -149,14 +151,14 @@ pub struct Inhabiting {
     pub inhabited_player_id: Uuid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct StoppedInhabiting {
     pub sub_event: SubEvent,
     pub inhabiting_player_name: String,
     pub inhabiting_player_id: Uuid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum CoffeeBeanMod {
     Wired,
     Tired,
@@ -183,7 +185,7 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
 pub enum AttrCategory {
     Batting,
     Pitching,
@@ -213,7 +215,7 @@ impl AttrCategory {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
@@ -236,7 +238,7 @@ impl Display for BlooddrainAction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[repr(i32)]
 pub enum ModDuration {
     Permanent = 0,
@@ -256,20 +258,20 @@ impl Display for ModDuration {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEvent {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEventWithPlayer {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
     pub player_id: Uuid,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ModChangeSubEventWithNamedPlayer {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
@@ -278,7 +280,7 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub sub_play: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum SpicyStatus {
     None,
     HeatingUp,
@@ -301,7 +303,7 @@ impl SpicyStatus {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct PlayerStatChange {
     pub team_id: Uuid,
     pub player_id: Uuid,
@@ -311,7 +313,7 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
 pub enum PositionType {
     Batter,
     Pitcher,
@@ -326,7 +328,7 @@ impl Display for PositionType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct FeedbackPlayerData {
     pub team_id: Uuid,
     pub team_nickname: String,
@@ -335,7 +337,7 @@ pub struct FeedbackPlayerData {
     pub location: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct PerkPlayers {
     pub team_id: Uuid,
     pub player_id: Uuid,
@@ -344,20 +346,20 @@ pub struct PerkPlayers {
     pub sub_play: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
     Full(SubEvent),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum BatterSkippedReason {
     Shelled,
     Elsewhere(Uuid),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub enum FedEventData {
     BeingSpeech {
         being: Being,
@@ -923,7 +925,7 @@ pub enum FedEventData {
     },
 }
 
-#[derive(Debug, Builder)]
+#[derive(Debug, Builder, JsonSchema)]
 pub struct FedEvent {
     pub id: Uuid,
     pub created: DateTime<Utc>,

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use chrono::serde::ts_milliseconds;
-
+use schemars::JsonSchema;
 
 
 #[derive(Deserialize, Serialize)]
@@ -122,7 +122,7 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone, Copy, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Weather {
     Void = 0,
