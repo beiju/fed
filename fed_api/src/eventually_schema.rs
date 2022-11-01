@@ -61,7 +61,7 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize_repr, Deserialize_repr, PartialEq)]
 #[repr(i32)]
 pub enum EventCategory {
     Game = 0,
@@ -69,6 +69,12 @@ pub enum EventCategory {
     Special = 2,
     Outcomes = 3,
     Narrative = 4,
+}
+
+impl EventCategory {
+    pub fn special_if(cond: bool) -> Self {
+        if cond { EventCategory::Special } else { EventCategory::Game }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder)]
@@ -79,7 +85,7 @@ pub struct EventuallyEvent {
     #[serde(with = "ts_milliseconds")]
     pub created: DateTime<Utc>,
     pub r#type: EventType,
-    pub category: i32,
+    pub category: EventCategory,
     // Some event types have "metadata: null", this replaces that with a default EventMetadata
     #[serde(deserialize_with = "deserialize_null_default")]
     #[builder(default)] pub metadata: EventMetadata,
@@ -200,7 +206,7 @@ pub enum EventType {
     BlackHole = 30,
     Sun2 = 31,
     BirdsCircle = 33,
-    FriendOfCrows = 34,
+    AmbushedByCrows = 34,
     BirdsUnshell = 35,
     BecomeTripleThreat = 36,
     GainFreeRefill = 37,

@@ -14,9 +14,9 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{preceded, terminated};
 use uuid::Uuid;
-use fed_api::{EventType, EventuallyEvent, Weather};
+use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PerkPlayers, PlayerInfo, PlayerStatChange, PositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -154,7 +154,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
-                        is_special: event.category == 2,
+                        is_special: event.category == EventCategory::Special,
                     })
                 }
                 ParsedStrikeout::Looking(batter_name) => {
@@ -163,7 +163,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: GameEvent::try_from_event(event)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
-                        is_special: event.category == 2,
+                        is_special: event.category == EventCategory::Special,
                     })
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
@@ -214,7 +214,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                         stopped_inhabiting,
                         cooled_off,
-                        is_special: event.category == 2,
+                        is_special: event.category == EventCategory::Special,
                     })
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -297,7 +297,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     })
                     .collect::<Result<_, _>>()?,
                 spicy_status,
-                is_special: event.category == 2,
+                is_special: event.category == EventCategory::Special,
             })
         }
         EventType::Hit => {
@@ -327,7 +327,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     scores,
                     stopped_inhabiting,
                     spicy_status,
-                    is_special: event.category == 2
+                    is_special: event.category == EventCategory::Special
                 })
             } else {
                 Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
@@ -527,16 +527,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event)?,
             })
         }
-        EventType::FriendOfCrows => {
+        EventType::AmbushedByCrows => {
             let (pitcher_name, batter_name) = run_parser(&event, parse_friend_of_crows)?;
             let (pitcher, batter_id) = if let Some(name) = pitcher_name {
                 let (pitcher_uuid, batter_uuid) = get_two_player_ids(event)?;
-                (Some((pitcher_uuid, name.to_string())), batter_uuid)
+                (Some(PlayerInfo { player_id: pitcher_uuid, player_name: name.to_string() }), batter_uuid)
             } else {
                 (None, get_one_player_id(event)?)
             };
 
-            make_fed_event(event, FedEventData::FriendOfCrows {
+            make_fed_event(event, FedEventData::AmbushedByCrows {
                 game: GameEvent::try_from_event(event)?,
                 batter_id,
                 batter_name: batter_name.to_string(),
@@ -739,21 +739,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             match action {
                 None => {
-                    let (sipper_event, sipped_event, reversed) = {
-                        let (a, b) = get_two_sub_events(event)?;
-                        let sipper_text = format!("{sipper_name} drained blood from {sipped_name}.");
-                        let sippee_text = format!("{sipped_name} had blood drained by {sipper_name}.");
-                        if a.description == sipper_text && b.description == sippee_text {
-                            (a, b, false)
-                        } else if b.description == sipper_text && a.description == sippee_text {
-                            (b, a, true)
-                        } else {
-                            return Err(FeedParseError::DescriptionParseError {
-                                event_type: event.r#type,
-                                err: format!("Format didn't match \"{sipper_text}\" nor \"{sippee_text}\"")
-                            })
-                        }
-                    };
+                    let (sipped_event, sipper_event) = get_two_sub_events(event)?;
 
                     make_fed_event(event, FedEventData::Blooddrain {
                         game: GameEvent::try_from_event(event)?,
@@ -774,7 +760,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             rating_after: get_float_metadata(sipped_event, "after")?,
                             sub_event: SubEvent::from_event(sipped_event),
                         },
-                        child_order_reversed: reversed,
                         sipped_category,
                     })
                 }

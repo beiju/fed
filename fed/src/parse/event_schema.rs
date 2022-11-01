@@ -5,7 +5,7 @@ use itertools::Itertools;
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventMetadata, EventMetadataBuilder, EventType, EventuallyEvent, EventuallyEventBuilder, Weather};
+use fed_api::{EventMetadata, EventMetadataBuilder, EventType, EventCategory, EventuallyEvent, EventuallyEventBuilder, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use schemars::JsonSchema;
@@ -369,11 +369,23 @@ impl SpicyStatus {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct PlayerStatChange {
+    /// Team uuid of player whose stats changed
     pub team_id: Uuid,
+
+    /// Uuid of player whose stats changed
     pub player_id: Uuid,
+
+    /// Name of player whose stats changed
     pub player_name: String,
+
+    /// Player's rating before the stats changed. The rating category is stored externally. Rating
+    /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
     pub rating_before: f64,
+
+    /// Player's rating after the stats changed
     pub rating_after: f64,
+
+    /// Metadata for the sub-event associated with the player stat change event
     pub sub_event: SubEvent,
 }
 
@@ -421,6 +433,15 @@ pub enum ReverbType {
 pub enum BatterSkippedReason {
     Shelled,
     Elsewhere(Uuid),
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct PlayerInfo {
+    /// Player uuid
+    pub player_id: Uuid,
+
+    /// Player name
+    pub player_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -875,7 +896,7 @@ pub enum FedEventData {
         losing_team_score: f32,
     },
 
-    /// Mild pitch
+    /// Mild pitch that does not result in a walk
     MildPitch {
         game: GameEvent,
 
@@ -896,76 +917,165 @@ pub enum FedEventData {
         runners_advance: bool,
     },
 
+    /// Mild pitch that results in a walk
     MildPitchWalk {
         game: GameEvent,
+
+        /// Uuid of the pitcher who threw the mild pitch
         pitcher_id: Uuid,
+
+        /// Name of the pitcher who threw the mild pitch
         pitcher_name: String,
+
+        /// Uuid of the batter who drew the walk
         batter_id: Uuid,
+
+        /// Name of the batter who drew the walk
         batter_name: String,
     },
 
+    /// Player is Beaned with a Tired or Wired
     CoffeeBean {
         game: GameEvent,
+
+        /// Uuid of player who was Beaned
         player_id: Uuid,
+
+        /// Name of player who was Beaned
         player_name: String,
+
+        /// Type of roast of the coffee that Beaned
         roast: String,
+
+        /// Notes of the coffee that Beaned
         notes: String,
+
+        /// Which mod the player was Beaned by
         which_mod: CoffeeBeanMod,
+
+        /// Whether the player already has the mod (if it is, the mod will be removed)
         has_mod: bool,
+
+        /// Metadata of the sub-event associated with adding or removing the Tired/Wired mod
         sub_event: SubEvent,
+
+        /// Uuid for the team whose player was Beaned
         team_id: Uuid,
+
+        /// The mod this player previously had, if any. This isn't visible in the text of the event
+        /// but it is in the metadata.
         previous: Option<CoffeeBeanMod>,
     },
 
+    /// Player became magmatic
     BecameMagmatic {
         game: GameEvent,
+
+        /// Uuid of player who became magmatic
         player_id: Uuid,
+
+        /// Name of player who became magmatic
         player_name: String,
+
+        /// Team uuid of player who became magmatic
         team_id: Uuid,
+
+        /// Metadata of sub-event associated with player gaining the Magmatic mod
         mod_add_event: SubEvent,
     },
 
+    /// Blooddrain event that results in player gaining the stolen blood (as opposed to using it to
+    /// add/remove an out, strike. etc.), whether siphon or not
     Blooddrain {
         game: GameEvent,
+
+        /// Whether this was the result of a Siphon
         is_siphon: bool,
-        sipper: PlayerStatChange,
-        sipped: PlayerStatChange,
-        child_order_reversed: bool,
+
+        /// Attribute category that was sipped
         sipped_category: AttrCategory,
+
+        /// Player who did the sippy
+        sipper: PlayerStatChange,
+
+        /// Player who was sipped
+        sipped: PlayerStatChange,
     },
 
+    /// Blooddrain event that results in a special action (add/remove an out, strike, etc.)
     SpecialBlooddrain {
         game: GameEvent,
+
+        /// Uuid of player who did the sippy
         sipper_id: Uuid,
+
+        /// Name of player who did the sippy
         sipper_name: String,
+
+        /// Uuid of player who was sipped
         sipped_id: Uuid,
+
+        /// Team uuid of player who was sipped
         sipped_team_id: Uuid,
+
+        /// Name of player who was sipped
         sipped_name: String,
+
+        /// Attribute category that was sipped
         sipped_category: AttrCategory,
+
+        /// What the drained blood was used for
         action: BlooddrainAction,
+
+        /// Metadata for the sub-event associated with the player stat change event
         sipped_event: SubEvent,
+
+        /// Player's rating before the stats changed. The rating category is stored externally. Rating
+        /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
         rating_before: f64,
+
+        /// Player's rating after the stats changed
         rating_after: f64,
     },
 
+    /// Mod expired after set time period (game, week, or season)
     ModExpires {
+        /// Uuid of the team for the player whose mod(s) expired
         team_id: Uuid,
+
+        /// Uuid of the player whose mod(s) expired
         player_id: Uuid,
+
+        /// Name of the player whose mod(s) expired
         player_name: String,
+
+        /// The mod(s) that were removed
         mods: Vec<String>,
+
+        /// Duration after which the mod(s) were removed (game, week, or season)
         mod_duration: ModDuration,
     },
 
+    /// Birds Circle event. This event always has the same text ("The Birds circle ... but they
+    /// don't find what they're looking for") and almost no metadata
     BirdsCircle {
         game: GameEvent,
     },
 
-    // TODO Rename this because it's not just friend of crows, it's any ambush by a murder of crows
-    FriendOfCrows {
+    /// Batter is ambushed by crows, leading to an out. This can happen randomly or as a result of
+    /// the Friend of Crows mod
+    AmbushedByCrows {
         game: GameEvent,
+
+        /// Uuid of batter who was ambushed
         batter_id: Uuid,
+
+        /// Name of batter who was ambushed
         batter_name: String,
-        pitcher: Option<(Uuid, String)>,
+
+        /// If this is a Friends of Crows proc, the uuid and name of the pitcher who called upon
+        /// their friends
+        pitcher: Option<PlayerInfo>,
     },
 
     BlackHoleSwallowedWin {
@@ -1317,7 +1427,7 @@ trait GameEventForBuilder {
 impl GameEventForBuilder for EventuallyEventBuilder {
     fn for_game(self, game: &GameEvent) -> Self {
         self
-            .category(0)
+            .category(EventCategory::Game)
             .game_tags(vec![game.game_id])
             .team_tags(vec![game.away_team, game.home_team])
             .metadata(make_game_event_metadata(&game))
@@ -1340,7 +1450,7 @@ impl FedEvent {
                 let being_id: i32 = being.into();
                 event_builder
                     .r#type(EventType::BigDeal)
-                    .category(4)
+                    .category(EventCategory::Narrative)
                     .description(message)
                     .metadata(
                         EventMetadataBuilder::default()
@@ -1393,7 +1503,7 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterUp)
-                    .category(if inhabiting.is_some() || is_repeating { 2 } else { 0 })
+                    .category(EventCategory::special_if(inhabiting.is_some() || is_repeating))
                     .description(if let Some(inhabiting) = &inhabiting {
                         format!("{prefix}{} is Inhabiting {}!\n{} batting for the {}{}.", batter_name,
                                 inhabiting.inhabited_player_name, batter_name, team_name, item_suffix)
@@ -1412,7 +1522,7 @@ impl FedEvent {
                                     self.make_event_builder()
                                         .for_game(&game)
                                         .for_sub_event(&inhabiting.sub_event)
-                                        .category(1)
+                                        .category(EventCategory::Changes)
                                         .r#type(EventType::AddedMod)
                                         .description(format!("{} is Inhabiting {}!",
                                                              batter_name, inhabiting.inhabited_player_name))
@@ -1445,7 +1555,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::AddedModFromOtherMod)
                         .description(description.clone())
                         .team_tags(vec![team_id])
@@ -1468,7 +1578,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::ChangedModFromOtherMod)
                         .description(description.clone())
                         .team_tags(vec![team_id])
@@ -1490,7 +1600,7 @@ impl FedEvent {
                         .unwrap()
                 };
                 event_builder.for_game(&game)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .r#type(EventType::Superyummy)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1548,7 +1658,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FlyOut)
-                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills || cooled_off.is_some()))
                     .description(format!("{} hit a flyout to {}.{}{}", batter_name, fielder_name, score_text, suffix))
                     .player_tags(player_tags)
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1570,7 +1680,7 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::Hit)
-                    .category(if has_any_refills || spicy_status.is_special() || is_special { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills || spicy_status.is_special() || is_special))
                     .description(format!("{} hits a {}!{}{}", batter_name, match num_bases {
                         1 => "Single",
                         2 => "Double",
@@ -1608,7 +1718,7 @@ impl FedEvent {
                     vec![self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::RemovedMod)
                         .description(format!("{batter_name} hit a Magmatic home run!"))
                         .team_tags(vec![*team_id])
@@ -1635,7 +1745,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::HomeRun)
-                    .category(if magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() || is_special { 2 } else { 0 })
+                    .category(EventCategory::special_if(magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() || is_special))
                     .description(format!("{}{} hits a {}!{}",
                                          if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
                                          batter_name,
@@ -1671,7 +1781,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills || cooled_off.is_some() || is_special { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills || cooled_off.is_some() || is_special))
                     .description(format!("{} hit a ground out to {}.{}{}",
                                          batter_name, fielder_name, score_text, suffix))
                     .player_tags(player_tags)
@@ -1695,7 +1805,7 @@ impl FedEvent {
                 };
                 event_builder.for_game(&game)
                     .r#type(EventType::StolenBase)
-                    .category(if blaserunning || free_refill.is_some() { 2 } else { 0 })
+                    .category(EventCategory::special_if(blaserunning || free_refill.is_some()))
                     .description(format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str))
                     .player_tags(if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] })
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1711,7 +1821,7 @@ impl FedEvent {
             FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
-                    .category(if is_special { 2 } else { 0 })
+                    .category(EventCategory::special_if(is_special))
                     .description(format!("{} strikes out swinging.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
@@ -1721,7 +1831,7 @@ impl FedEvent {
             FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
-                    .category(if is_special { 2 } else { 0 })
+                    .category(EventCategory::special_if(is_special))
                     .description(format!("{} strikes out looking.", batter_name))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
@@ -1742,7 +1852,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Walk)
-                    .category(if has_any_refills || base_instincts.is_some() { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills || base_instincts.is_some()))
                     .description(format!("{} draws a walk.{}{}", batter_name, base_instincts_str, score_text))
                     .player_tags(iter::once(batter_id).chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1774,7 +1884,7 @@ impl FedEvent {
             FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, num_swings } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Strikeout)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{} charmed {}!\n{} swings {} times to strike out willingly!",
                                          charmer_name, charmed_name, charmed_name, num_swings))
                     // I do not know why the charmer appears twice, but that seems to be accurate
@@ -1793,7 +1903,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills || cooled_off.is_some() { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills || cooled_off.is_some()))
                     .description(format!("{} out at {} base.{}\n{} reaches on fielder's choice.{suffix}",
                                          runner_out_name, base_name(out_at_base), score_text, batter_name))
                     .player_tags(player_tags)
@@ -1805,7 +1915,7 @@ impl FedEvent {
             FedEventData::StrikeZapped { game } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::StrikeZapped)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description("The Electricity zaps a strike away!".to_string())
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
@@ -1814,7 +1924,7 @@ impl FedEvent {
             FedEventData::PeanutFlavorText { game, message } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::PeanutFlavorText)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(message)
                     .metadata(make_game_event_metadata_builder(&game)
                         .build()
@@ -1828,7 +1938,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GroundOut)
-                    .category(if has_any_refills { 2 } else { 0 })
+                    .category(EventCategory::special_if(has_any_refills))
                     .description(format!("{} hit into a double play!{}", batter_name, score_text))
                     .player_tags(scores.scorer_ids())
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1839,7 +1949,7 @@ impl FedEvent {
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::GameEnd)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("{} {}, {} {}", winning_team_name, winning_team_score, losing_team_name, losing_team_score))
                     .team_tags(vec![
                         // For some reason the teams are repeated like this? idk why
@@ -1859,7 +1969,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::MildPitch)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{} throws a Mild pitch!\nBall, {}-{}.{}", pitcher_name, balls, strikes, runners_advance_str))
                     .player_tags(vec![pitcher_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1876,7 +1986,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(if previous.is_some() { EventType::ModChange } else { EventType::AddedMod })
                     .description(format!("{} {} {}", player_name, change_str, mod_str))
                     .team_tags(vec![team_id])
@@ -1907,7 +2017,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::CoffeeBean)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{} is Beaned by a {} roast with {}.\n{} {} {}",
                                          player_name, roast, notes, player_name, change_str, mod_str))
                     .player_tags(vec![player_id])
@@ -1920,7 +2030,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&mod_add_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::AddedMod)
                     .description(format!("{} ate some flame.", player_name))
                     .team_tags(vec![team_id])
@@ -1940,7 +2050,7 @@ impl FedEvent {
                     .unwrap();
                 event_builder.for_game(&game)
                     .r#type(EventType::IncinerationBlocked)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("Rogue Umpire tried to incinerate {}, but {} ate the flame! They became Magmatic!",
                                          player_name, player_name))
                     .player_tags(vec![player_id])
@@ -1953,7 +2063,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sipped_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::PlayerStatDecrease)
                     .description(format!("{sipped_name} had blood drained by {sipper_name}."))
                     .team_tags(vec![sipped_team_id])
@@ -1974,7 +2084,7 @@ impl FedEvent {
                     .unwrap();
                 event_builder.for_game(&game)
                     .r#type(EventType::BlooddrainSiphon)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}!"))
                     .player_tags(vec![sipper_id, sipped_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -1991,7 +2101,7 @@ impl FedEvent {
                 let duration_str = mod_duration.to_string();
                 event_builder
                     .r#type(EventType::ModExpires)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(format!("{player_name_possessive} {duration_str} mods wore off."))
                     .team_tags(vec![team_id])
                     .player_tags(vec![player_id])
@@ -2006,51 +2116,51 @@ impl FedEvent {
             FedEventData::BirdsCircle { game } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::BirdsCircle)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description("The Birds circle ... but they don't find what they're looking for.".to_string())
             }
-            FedEventData::FriendOfCrows { ref game, batter_id, ref batter_name, ref pitcher } => {
-                let prefix = if let Some((_, pitcher_name)) = pitcher {
-                    format!("{pitcher_name} calls upon their Friends!\n")
+            FedEventData::AmbushedByCrows { ref game, batter_id, ref batter_name, ref pitcher } => {
+                let prefix = if let Some(PlayerInfo { player_name, .. }) = pitcher {
+                    format!("{player_name} calls upon their Friends!\n")
                 } else {
                     String::new()
                 };
                 event_builder.for_game(&game)
-                    .r#type(EventType::FriendOfCrows)
-                    .category(2)
+                    .r#type(EventType::AmbushedByCrows)
+                    .category(EventCategory::Special)
                     .description(format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."))
-                    .player_tags(if let Some((pitcher_id, _)) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] })
+                    .player_tags(if let Some(PlayerInfo { player_id, .. }) = pitcher { vec![*player_id, batter_id] } else { vec![batter_id] })
             }
             FedEventData::Sun2SetWin { team_id, team_nickname } => {
                 event_builder
                     .r#type(EventType::Sun2SetWin)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("Sun 2 set a Win upon the {team_nickname}."))
                     .team_tags(vec![team_id])
             }
             FedEventData::BlackHoleSwallowedWin { team_id, team_nickname } => {
                 event_builder
                     .r#type(EventType::BlackHoleSwallowedWin)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The Black Hole swallowed a Win from the {team_nickname}!"))
                     .team_tags(vec![team_id])
             }
             FedEventData::Sun2 { game, team_nickname } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Sun2)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}."))
             }
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::BlackHole)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("The {scoring_team_nickname} collect 10!\nThe Black Hole swallows the Runs and a {victim_team_nickname} Win."))
             }
             FedEventData::TeamDidShame { shaming_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
                 event_builder
                     .r#type(EventType::TeamDidShame)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {shaming_team_nickname} shamed the {shamed_team_nickname}."))
                     .team_tags(vec![shaming_team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2064,7 +2174,7 @@ impl FedEvent {
             FedEventData::TeamWasShamed { shamed_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
                 event_builder
                     .r#type(EventType::TeamWasShamed)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {shamed_team_nickname} were shamed by the {shaming_team_nickname}."))
                     .team_tags(vec![shamed_team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2078,7 +2188,7 @@ impl FedEvent {
             FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::Walk)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{batter_name} charms {pitcher_name}!\n{batter_name} walks to first base."))
                     .player_tags(vec![batter_id, batter_id]) // two of them
             }
@@ -2086,7 +2196,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::AddedMod)
                     .description(format!("{player_name} got a Free Refill."))
                     .team_tags(vec![team_id])
@@ -2107,7 +2217,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::GainFreeRefill)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!\n{player_name} got a Free Refill."))
                     .player_tags(vec![player_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2119,7 +2229,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::PlayerStatDecrease)
                     .description(format!("{player_name} had an allergic reaction."))
                     .team_tags(vec![team_id])
@@ -2141,7 +2251,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::AllergicReaction)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{player_name} swallowed a stray peanut and had an allergic reaction!"))
                     .player_tags(vec![player_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2152,7 +2262,7 @@ impl FedEvent {
             FedEventData::MildPitchWalk { game, pitcher_id, pitcher_name, batter_id, batter_name } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::MildPitch)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."))
                     .player_tags(vec![pitcher_id, batter_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2164,7 +2274,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&player.sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::AddedModFromOtherMod)
                         .description(format!("{} Perks up.", player.player_name))
                         .team_tags(vec![player.team_id])
@@ -2188,7 +2298,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::Perk)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(players.iter()
                         .sorted_by_key(|player| player.sub_play)
                         .map(|player| format!("{} Perks up.", player.player_name))
@@ -2198,16 +2308,15 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, child_order_reversed, sipped_category } => {
-                let mut children: Vec<_> = [
-                    // why are the sub-events backwards??
+            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, sipped_category } => {
+                let children: Vec<_> = [
+                    (0, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name)),
                     (1, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
-                    (0, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name))
                 ].into_iter().map(|(sub_play, change, event_type, description)| {
                     self.make_event_builder()
                         .for_game(&game)
                         .for_sub_event(&change.sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(event_type)
                         .description(description)
                         .team_tags(vec![change.team_id])
@@ -2229,10 +2338,6 @@ impl FedEvent {
                 })
                     .collect();
 
-                if child_order_reversed {
-                    children.reverse();
-                }
-
                 let siphon_text = if is_siphon {
                     format!("\n{}'s Siphon activates!", sipper.player_name)
                 } else {
@@ -2241,7 +2346,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain })
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("The Blooddrain gurgled!{siphon_text}\n{} siphoned some of {}'s {sipped_category} ability!\n{} increased their {sipped_category} ability!", sipper.player_name, sipped.player_name, sipper.player_name))
                     .player_tags(vec![sipper.player_id, sipped.player_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2253,7 +2358,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::PlayerTraded)
                     .description("Reality flickered in the Feedback.".to_string())
                     .team_tags(vec![player_a.team_id, player_b.team_id])
@@ -2282,7 +2387,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FeedbackSwap)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {position_type}.", player_a.player_name, player_b.player_name, player_b.player_name))
                     .player_tags(vec![player_a.player_id, player_b.player_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2294,7 +2399,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::AddedMod)
                     .description(format!("{player_name} is now Reverberating wildly!"))
                     .team_tags(vec![team_id])
@@ -2315,7 +2420,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::ReverbBestowsReverberating)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("Reverberations are at dangerous levels!\n{player_name} is now Reverberating wildly!"))
                     .player_tags(vec![player_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2328,7 +2433,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(game)
                         .for_sub_event(sub_event)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(event_type)
                         .description(format!("The {team_nickname} had their {shuffle_location} shuffled in the Reverb!"))
                         .team_tags(vec![team_id])
@@ -2347,7 +2452,7 @@ impl FedEvent {
                     ReverbType::Rotation(sub_event) => {
                         event_builder.for_game(&game)
                             .r#type(EventType::ReverbRosterShuffle)
-                            .category(2)
+                            .category(EventCategory::Special)
                             .description(format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their rotation shuffled in the Reverb!"))
                             .metadata(make_game_event_metadata_builder(&game)
                                 .children(vec![get_child(sub_event, EventType::ReverbRotationShuffle, "rotation")])
@@ -2357,7 +2462,7 @@ impl FedEvent {
                     ReverbType::Lineup(sub_event) => {
                         event_builder.for_game(&game)
                             .r#type(EventType::ReverbRosterShuffle)
-                            .category(2)
+                            .category(EventCategory::Special)
                             .description(format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!"))
                             .metadata(make_game_event_metadata_builder(&game)
                                 .children(vec![get_child(sub_event, EventType::ReverbLineupShuffle, "lineup")])
@@ -2372,7 +2477,7 @@ impl FedEvent {
             FedEventData::TarotReading { description, metadata, player_tags, team_tags } => {
                 event_builder
                     .r#type(EventType::TarotReading)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(description)
                     .player_tags(player_tags)
                     .team_tags(team_tags)
@@ -2384,7 +2489,7 @@ impl FedEvent {
             FedEventData::ModAddedSpontaneously { description, team_id, player_id, r#mod } => {
                 event_builder
                     .r#type(EventType::AddedMod)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(description)
                     .team_tags(vec![team_id])
                     .player_tags(player_id.into_iter().collect())
@@ -2403,7 +2508,7 @@ impl FedEvent {
                         self.make_event_builder()
                             .for_game(&game)
                             .for_sub_event(&pitcher.sub_event)
-                            .category(1)
+                            .category(EventCategory::Changes)
                             .r#type(EventType::AddedMod)
                             .description(format!("{} is a Triple Threat.", pitcher.player_name))
                             .team_tags(vec![pitcher.team_id])
@@ -2425,7 +2530,7 @@ impl FedEvent {
                     .collect();
                 event_builder.for_game(game)
                     .r#type(EventType::BecomeTripleThreat)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{} and {} chug a Third Wave of Coffee!\nThey are now Triple Threats!", pitcher_1.player_name, pitcher_2.player_name))
                     .player_tags(vec![pitcher_1.player_id, pitcher_2.player_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2440,7 +2545,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(if on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
                     .description(description.clone())
                     .team_tags(vec![team_id])
@@ -2462,7 +2567,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::UnderOver)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
@@ -2474,7 +2579,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(if on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
                     .description(description.clone())
                     .team_tags(vec![team_id])
@@ -2496,7 +2601,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::OverUnder)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(vec![child])
@@ -2507,7 +2612,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::AddedMod)
                     .description(format!("{shellee_name} is Shelled!"))
                     .team_tags(vec![shellee_team_id])
@@ -2529,7 +2634,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::TasteTheInfinite)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("{sheller_name} tastes the infinite!\n{shellee_name} is Shelled!"))
                     .player_tags(vec![sheller_id, shellee_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2540,7 +2645,6 @@ impl FedEvent {
             FedEventData::BatterSkipped { game, batter_name, reason } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::BatterSkipped)
-                    .category(0)
                     .description(match reason {
                         BatterSkippedReason::Shelled => { format!("{batter_name} is Shelled and cannot escape!") }
                         BatterSkippedReason::Elsewhere(_) => { format!("{batter_name} is Elsewhere..") }
@@ -2559,7 +2663,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::PlayerStatDecrease)
                     .description(format!("{tangled_name} is tangled in the flicker!"))
                     .team_tags(vec![tangled_team_id])
@@ -2581,7 +2685,7 @@ impl FedEvent {
 
                 event_builder.for_game(game)
                     .r#type(EventType::FeedbackBlocked)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("Reality begins to flicker ...\nBut {resisted_name} resists!\n{tangled_name} is tangled in the flicker!"))
                     .player_tags(vec![resisted_id, tangled_id])
                     .metadata(make_game_event_metadata_builder(game)
@@ -2592,7 +2696,7 @@ impl FedEvent {
             FedEventData::FlagPlanted { team_id, team_nickname, ballpark_name, prefab_name, votes } => {
                 event_builder
                     .r#type(EventType::FlagPlanted)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .phase(5)
                     .description(format!("The {team_nickname} break ground on {ballpark_name}, selecting to build the {prefab_name} prefab!\nTHE FLAG IS PLANTED"))
                     .team_tags(vec![team_id])
@@ -2608,7 +2712,7 @@ impl FedEvent {
             FedEventData::EmergencyAlert { message, team_tags } => {
                 event_builder
                     .r#type(EventType::EmergencyAlert)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .phase(5)
                     .description(message)
                     .team_tags(team_tags)
@@ -2619,7 +2723,7 @@ impl FedEvent {
             FedEventData::TeamJoined { team_id, team_nickname, division_id, division_name } => {
                 event_builder
                     .r#type(EventType::TeamDivisionMove)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .phase(5)
                     .description(format!("The {team_nickname} have joined the ILB!\nThey will play in the {division_name} division."))
                     .team_tags(vec![team_id])
@@ -2639,7 +2743,7 @@ impl FedEvent {
 
                 event_builder.for_game(&game)
                     .r#type(EventType::FloodingSwept)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"))
                     .metadata(make_game_event_metadata_builder(&game)
                         .children(children)
@@ -2652,7 +2756,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::RemovedMod)
                     .description(description.clone())
                     .team_tags(vec![team_id])
@@ -2673,7 +2777,6 @@ impl FedEvent {
 
                 event_builder.for_game(game)
                     .r#type(EventType::ReturnFromElsewhere)
-                    .category(0)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(game)
                         .children(vec![child])
@@ -2686,7 +2789,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(game)
                         .for_sub_event(&incin_child)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::Incineration)
                         .description(format!("Rogue Umpire incinerated {victim_name}!"))
                         .team_tags(vec![team_id])
@@ -2705,7 +2808,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(game)
                         .for_sub_event(&enter_hall_child)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::EnterHallOfFlame)
                         .description(format!("{victim_name} entered the Hall of Flame."))
                         .player_tags(vec![victim_id])
@@ -2724,7 +2827,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(game)
                         .for_sub_event(&hatch_child)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::PlayerHatched)
                         .description(format!("{replacement_name} has been hatched from the field of eggs."))
                         .player_tags(vec![replacement_id])
@@ -2744,7 +2847,7 @@ impl FedEvent {
                     self.make_event_builder()
                         .for_game(game)
                         .for_sub_event(&replace_child)
-                        .category(1)
+                        .category(EventCategory::Changes)
                         .r#type(EventType::PlayerBornFromIncineration)
                         .description(format!("{replacement_name} replaced the incinerated {victim_name}."))
                         .player_tags(vec![victim_id, replacement_id])
@@ -2771,7 +2874,7 @@ impl FedEvent {
 
                 event_builder.for_game(game)
                     .r#type(EventType::Incineration)
-                    .category(2)
+                    .category(EventCategory::Special)
                     .description(format!("Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}."))
                     .player_tags(vec![victim_id, replacement_id])
                     .metadata(make_game_event_metadata_builder(game)
@@ -2782,7 +2885,6 @@ impl FedEvent {
             FedEventData::PitcherChange { game, team_nickname: team_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)
                     .r#type(EventType::PitcherChange)
-                    .category(0)
                     .description(format!("{pitcher_name} is now pitching for the {team_name}."))
                     .player_tags(vec![pitcher_id])
                     .metadata(make_game_event_metadata_builder(&game)
@@ -2794,7 +2896,7 @@ impl FedEvent {
                 let child = self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::PlayerStatIncrease)
                     .description(description.clone())
                     .team_tags(vec![team_id])
@@ -2816,7 +2918,6 @@ impl FedEvent {
 
                 event_builder.for_game(game)
                     .r#type(EventType::Party)
-                    .category(0)
                     .description(description)
                     .player_tags(vec![player_id])
                     .metadata(make_game_event_metadata_builder(game)
@@ -2827,7 +2928,7 @@ impl FedEvent {
             FedEventData::PlayerHatched { player_id, player_name } => {
                 event_builder
                     .r#type(EventType::PlayerHatched)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(format!("{player_name} has been hatched from the field of eggs."))
                     .player_tags(vec![player_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2838,7 +2939,7 @@ impl FedEvent {
             FedEventData::PostseasonBirth { team_id, team_nickname, player_id, player_name, location } => {
                 event_builder
                     .r#type(EventType::PlayerAddedToTeam)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(format!("The {team_nickname} earn a Postseason Birth!"))
                     .player_tags(vec![player_id])
                     .team_tags(vec![team_id])
@@ -2862,7 +2963,7 @@ impl FedEvent {
                 };
                 event_builder
                     .r#type(EventType::FinalStandings)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {team_nickname} finished {place_str} in the {division_name}."))
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2875,7 +2976,7 @@ impl FedEvent {
             FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_name } => {
                 event_builder
                     .r#type(EventType::RemovedMod)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .description(format!("The {team_name} have been removed from Party Time to join the Postseason!"))
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2889,7 +2990,7 @@ impl FedEvent {
             FedEventData::EarnedPostseasonSlot { team_id, team_nickname } => {
                 event_builder
                     .r#type(EventType::EarnedPostseasonSlot)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1))
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2904,7 +3005,7 @@ impl FedEvent {
                 };
                 event_builder
                     .r#type(EventType::PostseasonAdvance)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {team_nickname} advanced to {round_str} of the Season {season} Postseason."))
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2914,7 +3015,7 @@ impl FedEvent {
             FedEventData::PostseasonEliminated { team_id, team_nickname, season } => {
                 event_builder
                     .r#type(EventType::PostseasonEliminated)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("The {team_nickname} have been eliminated from the Season {season} Postseason."))
                     .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
@@ -2924,7 +3025,7 @@ impl FedEvent {
             FedEventData::PlayerBoosted { team_id, player_id, player_name, rating_before, rating_after } => {
                 event_builder
                     .r#type(EventType::PlayerStatIncrease)
-                    .category(3)
+                    .category(EventCategory::Outcomes)
                     .description(format!("{player_name} was Boosted."))
                     .team_tags(vec![team_id])
                     .player_tags(vec![player_id])
@@ -2952,7 +3053,7 @@ impl FedEvent {
                 self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&e.sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(event_type)
                     .description(format!("{} {message}", e.player_name))
                     .team_tags(vec![e.team_id])
@@ -2982,7 +3083,7 @@ impl FedEvent {
                 self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&red_hot.sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::AddedMod)
                     .description(format!("{player_name} is Red Hot!"))
                     .team_tags(vec![red_hot.team_id])
@@ -3010,7 +3111,7 @@ impl FedEvent {
                 self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&cooled_off.sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::RemovedMod)
                     .description(format!("{player_name} cooled off."))
                     .team_tags(vec![cooled_off.team_id])
@@ -3049,7 +3150,7 @@ impl FedEvent {
                 self.make_event_builder()
                     .for_game(&game)
                     .for_sub_event(&inh.sub_event)
-                    .category(1)
+                    .category(EventCategory::Changes)
                     .r#type(EventType::RemovedMod)
                     .description(format!("{} stopped Inhabiting.", inh.inhabiting_player_name))
                     .team_tags(vec![])
@@ -3098,7 +3199,7 @@ impl FedEvent {
         self.make_event_builder()
             .for_game(&game)
             .for_sub_event(&free_refill.sub_event)
-            .category(1)
+            .category(EventCategory::Changes)
             .r#type(EventType::RemovedMod)
             .description(format!("{} used their Free Refill.", free_refill.player_name))
             .team_tags(vec![free_refill.team_id])
