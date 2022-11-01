@@ -1045,7 +1045,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PlayerTraded => { todo!() }
         EventType::PlayerSwap => { todo!() }
         EventType::PlayerBornFromIncineration => { todo!() }
-        EventType::PlayerStatIncrease => { todo!() }
+        EventType::PlayerStatIncrease => {
+            // For now this only parses election boosts, that may need to expand in future
+            let player_name = run_parser(&event, parse_player_stat_increase)?;
+
+            Ok(make_fed_event(event, FedEventData::PlayerBoosted {
+                team_id: get_one_team_id(event)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+                rating_before: get_float_metadata(event, "before")?,
+                rating_after: get_float_metadata(event, "after")?,
+            }))
+        }
         EventType::PlayerStatDecrease => { todo!() }
         EventType::PlayerStatReroll => { todo!() }
         EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
@@ -2307,4 +2318,10 @@ fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag(" Postseason.")(input)?;
 
     Ok((input, (team_nickname, season_num)))
+}
+
+fn parse_player_stat_increase(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" was boosted.")(input)?;
+
+    Ok((input, player_name))
 }

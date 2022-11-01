@@ -912,7 +912,15 @@ pub enum FedEventData {
         team_id: Uuid,
         team_nickname: String,
         season: i32,
-    }
+    },
+
+    PlayerBoosted {
+        team_id: Uuid,
+        player_id: Uuid,
+        player_name: String,
+        rating_before: f64,
+        rating_after: f64,
+    },
 }
 
 #[derive(Debug, Builder)]
@@ -2544,7 +2552,20 @@ impl FedEvent {
                     .metadata(EventMetadataBuilder::default()
                         .build()
                         .unwrap())
-
+            }
+            FedEventData::PlayerBoosted { team_id, player_id, player_name, rating_before, rating_after } => {
+                event_builder
+                    .r#type(EventType::PlayerStatIncrease)
+                    .category(3)
+                    .description(format!("{player_name} was Boosted."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "before": rating_before,
+                            "after": rating_after,
+                        }))
+                        .build()
+                        .unwrap())
             }
         }
             .build()
