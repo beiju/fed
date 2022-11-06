@@ -1,6 +1,7 @@
 #[allow(unused)]
 mod parse;
 
+use itertools::Itertools;
 use schemars::{
     schema::SchemaObject,
     visit::Visitor,
@@ -28,16 +29,21 @@ impl Visitor for SurfaceEnumTitle {
                                     if let Some(values) = &mut obj.enum_values {
                                         values
                                     } else {
-                                        continue
+                                        continue;
                                     }
                                 } else {
-                                    continue
+                                    continue;
                                 }
+                            } else if let Some((name, _)) = properties.properties.iter().exactly_one().ok() {
+                                if let Some(metadata) = &mut obj.metadata {
+                                    metadata.title.get_or_insert(name.to_string());
+                                }
+                                continue;
                             } else {
-                                continue
+                                continue;
                             }
                         } else {
-                            continue
+                            continue;
                         };
                         if let Some(first_value) = values.first() {
                             if let Some(name) = first_value.as_str() {
