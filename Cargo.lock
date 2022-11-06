@@ -1686,6 +1686,7 @@ checksum = "2a5fb6c61f29e723026dc8e923d94c694313212abbecbbe5f55a7748eec5b307"
 dependencies = [
  "chrono",
  "dyn-clone",
+ "indexmap",
  "schemars_derive",
  "serde",
  "serde_json",
