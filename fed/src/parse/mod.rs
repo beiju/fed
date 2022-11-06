@@ -116,11 +116,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             match parsed_walk {
                 ParsedWalk::Ordinary((batter_name, scores, base_instincts)) => {
                     let (&batter_id, scorer_ids) = event.player_tags.split_first()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type: event.r#type,
-                            tag_type: "player",
-                            expected_num: 1 + scores.scorers.len(),
-                            actual_num: event.player_tags.len(),
+                        .ok_or_else(|| {
+                            FeedParseError::WrongNumberOfTags {
+                                event_type: event.r#type,
+                                tag_type: "player",
+                                expected_num: 1 + scores.scorers.len(),
+                                actual_num: event.player_tags.len(),
+                            }
                         })?;
 
                     let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
@@ -305,11 +307,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             if let Some((&batter_id, scorer_ids)) = event.player_tags.split_first() {
                 let scorer_ids = if spicy_status != ParsedSpicyStatus::None {
                     scorer_ids.split_last()
-                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                            event_type: event.r#type,
-                            tag_type: "player",
-                            expected_num: scores.scorers.len() + 2, // i think
-                            actual_num: scorer_ids.len(),
+                        .ok_or_else(|| {
+                            FeedParseError::WrongNumberOfTags {
+                                event_type: event.r#type,
+                                tag_type: "player",
+                                expected_num: scores.scorers.len() + 2, // i think
+                                actual_num: scorer_ids.len(),
+                            }
                         })?
                         .1
                 } else {
@@ -449,20 +453,40 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::WeatherChange => { todo!() }
         EventType::MildPitch => {
-            let (pitcher_name, pitch_type, runners_advance) = run_parser(&event, parse_mild_pitch)?;
+            let (pitcher_name, pitch_type, runners_advance, scores) = run_parser(&event, parse_mild_pitch)?;
+            let (&pitcher_id, rest_player_ids) = event.player_tags.split_first()
+                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                    event_type: event.r#type,
+                    tag_type: "player",
+                    expected_num: 1,
+                    actual_num: event.player_tags.len(),
+                })?;
+
             match pitch_type {
                 MildPitchType::Ball((balls, strikes)) => {
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &event.metadata.children, event.r#type, 1)?;
+
                     make_fed_event(event, FedEventData::MildPitch {
                         game: GameEvent::try_from_event(event)?,
-                        pitcher_id: get_one_player_id(event)?,
+                        pitcher_id,
                         pitcher_name: pitcher_name.to_string(),
                         balls,
                         strikes,
                         runners_advance,
+                        scores,
+                        stopped_inhabiting,
                     })
                 }
                 MildPitchType::Walk(batter_name) => {
-                    let (pitcher_id, batter_id) = get_two_player_ids(event)?;
+                    let (&batter_id, rest_player_ids) = rest_player_ids.split_first()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: event.player_tags.len(),
+                        })?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &event.metadata.children, event.r#type, 2)?;
+
                     // I don't believe this should be possible
                     assert!(!runners_advance, "Runners \"advanced on the pathetic play\" on a mild pitch that was also a walk");
                     make_fed_event(event, FedEventData::MildPitchWalk {
@@ -471,6 +495,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         pitcher_name: pitcher_name.to_string(),
                         batter_id,
                         batter_name: batter_name.to_string(),
+                        scores,
+                        stopped_inhabiting,
                     })
                 }
             }
@@ -2032,10 +2058,8 @@ fn parse_mild_pitch_ball(input: &str) -> ParserResult<MildPitchType> {
     Ok((input, MildPitchType::Ball(count)))
 }
 
-fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType, bool)> {
+fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType, bool, ParsedScores)> {
     let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n")(input)?;
-
-    // TODO: scoring
 
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
     let (input, pitch_type) = alt((
@@ -2045,7 +2069,9 @@ fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType, bool)> {
 
     let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!"))(input)?;
 
-    Ok((input, (pitcher_name, pitch_type, runners_advance.is_some())))
+    let (input, scores) = parse_scores(" scores!")(input)?;
+
+    Ok((input, (pitcher_name, pitch_type, runners_advance.is_some(), scores)))
 }
 
 fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {

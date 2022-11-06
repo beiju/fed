@@ -928,6 +928,14 @@ pub enum FedEventData {
         /// Whether runners advance on the pathetic play (I believe runners always advance if there
         /// are any runners at all)
         runners_advance: bool,
+
+
+        #[serde(flatten)]
+        scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Mild pitch that results in a walk
@@ -945,6 +953,13 @@ pub enum FedEventData {
 
         /// Name of the batter who drew the walk
         batter_name: String,
+
+        #[serde(flatten)]
+        scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Player is Beaned with a Tired or Wired
@@ -2438,7 +2453,12 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes, runners_advance } => {
+            FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores, ref stopped_inhabiting } => {
+                let (score_text, _, mut children) =
+                    self.get_score_data(game, scores, " scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+
                 let runners_advance_str = if runners_advance {
                     "\nRunners advance on the pathetic play!"
                 } else {
@@ -2448,9 +2468,10 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .r#type(EventType::MildPitch)
                     .category(EventCategory::Special)
-                    .description(format!("{} throws a Mild pitch!\nBall, {}-{}.{}", pitcher_name, balls, strikes, runners_advance_str))
-                    .player_tags(vec![pitcher_id])
+                    .description(format!("{pitcher_name} throws a Mild pitch!\nBall, {balls}-{strikes}.{runners_advance_str}{score_text}"))
+                    .player_tags(iter::once(pitcher_id).chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
@@ -2745,13 +2766,19 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::MildPitchWalk { game, pitcher_id, pitcher_name, batter_id, batter_name } => {
+            FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores, ref stopped_inhabiting } => {
+                let (score_text, _, mut children) =
+                    self.get_score_data(game, scores, " scores!");
+
+                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
+
                 event_builder.for_game(&game)
                     .r#type(EventType::MildPitch)
                     .category(EventCategory::Special)
-                    .description(format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."))
-                    .player_tags(vec![pitcher_id, batter_id])
+                    .description(format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk.{score_text}"))
+                    .player_tags([pitcher_id, batter_id].into_iter().chain(scores.scorer_ids()).collect())
                     .metadata(make_game_event_metadata_builder(&game)
+                        .children(children)
                         .build()
                         .unwrap())
             }
