@@ -6,7 +6,7 @@ use fed_api::{EventuallyEvent};
 use par_iter_sync::IntoParallelIteratorSync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
-use indicatif::ProgressStyle;
+use indicatif::{ProgressDrawTarget, ProgressStyle};
 
 const NUM_EVENTS: u64 = 8299172;
 
@@ -76,6 +76,7 @@ fn run_test() -> anyhow::Result<()> {
 
     let progress = indicatif::ProgressBar::new(NUM_EVENTS);
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
+    progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     for item in iter {
         let (i, result) = item?;
         if let Some(status) = result {

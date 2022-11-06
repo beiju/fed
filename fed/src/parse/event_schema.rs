@@ -1045,7 +1045,7 @@ pub enum FedEventData {
     },
 
     /// Mod expired after set time period (game, week, or season)
-    ModExpires {
+    PlayerModExpires {
         /// Uuid of the team for the player whose mod(s) expired
         team_id: Uuid,
 
@@ -1054,6 +1054,21 @@ pub enum FedEventData {
 
         /// Name of the player whose mod(s) expired
         player_name: String,
+
+        /// The mod(s) that were removed
+        mods: Vec<String>,
+
+        /// Duration after which the mod(s) were removed (game, week, or season)
+        mod_duration: ModDuration,
+    },
+
+    /// Mod expired after set time period (game, week, or season)
+    TeamModExpires {
+        /// Uuid of the team whose mod(s) expired
+        team_id: Uuid,
+
+        /// Nickname the team whose mod(s) expired
+        team_nickname: String,
 
         /// The mod(s) that were removed
         mods: Vec<String>,
@@ -1684,6 +1699,47 @@ pub enum FedEventData {
         /// Player rating after being boosted
         rating_after: f64,
     },
+
+    /// Team won the Internet Series
+    TeamWonInternetSeries {
+        /// Uuid of team who won the series
+        team_id: Uuid,
+
+        /// Name of team who won the series
+        team_nickname: String,
+
+        /// Number of championships the team now has
+        championships: i64,
+    },
+
+    /// Bottom Dwellers team mod procs
+    BottomDwellers {
+        /// Uuid of team whose bottom dwellers procced
+        team_id: Uuid,
+
+        /// Nickname of team whose bottom dwellers procced
+        team_nickname: String,
+
+        /// Team rating before Bottom Dwellers
+        rating_before: f64,
+
+        /// Team rating after Bottom Dwellers
+        rating_after: f64,
+    },
+
+    /// Team received a Will. This event is currently minimally parsed, with metadata simply
+    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
+    /// useful please let us know in the SIBR discord.
+    WillReceived {
+        /// Uuid of team who received the Will
+        team_id: Uuid,
+
+        /// Title of Will that was earned. This may be redundant with the title in `metadata`
+        will_title: String,
+
+        /// Event metadata exactly as it appears in the Feed event
+        metadata: EventMetadata,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -1773,6 +1829,14 @@ impl GameEventForBuilder for EventuallyEventBuilder {
             .id(sub.id)
             .created(sub.created)
             .nuts(sub.nuts)
+    }
+}
+
+fn possessive(player_name: String) -> String {
+    if player_name.chars().last().unwrap() == 's' {
+        player_name + "'"
+    } else {
+        player_name + "'s"
     }
 }
 
@@ -2427,19 +2491,27 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::ModExpires { team_id, player_id, player_name, mods, mod_duration } => {
-                let player_name_possessive = if player_name.chars().last().unwrap() == 's' {
-                    player_name + "'"
-                } else {
-                    player_name + "'s"
-                };
-                let duration_str = mod_duration.to_string();
+            FedEventData::PlayerModExpires { team_id, player_id, player_name, mods, mod_duration } => {
                 event_builder
                     .r#type(EventType::ModExpires)
                     .category(EventCategory::Changes)
-                    .description(format!("{player_name_possessive} {duration_str} mods wore off."))
+                    .description(format!("{} {} mods wore off.", possessive(player_name), mod_duration.to_string()))
                     .team_tags(vec![team_id])
                     .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "mods": mods,
+                            "type": mod_duration as i32
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::TeamModExpires { team_id, team_nickname, mods, mod_duration } => {
+                event_builder
+                    .r#type(EventType::ModExpires)
+                    .category(EventCategory::Changes)
+                    .description(format!("The {} {} mods wore off.", possessive(team_nickname), mod_duration.to_string()))
+                    .team_tags(vec![team_id])
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
                             "mods": mods,
@@ -3378,14 +3450,15 @@ impl FedEvent {
             FedEventData::PlayerBoosted { team_id, player_id, player_name, rating_before, rating_after } => {
                 event_builder
                     .r#type(EventType::PlayerStatIncrease)
-                    .category(EventCategory::Outcomes)
-                    .description(format!("{player_name} was Boosted."))
+                    .category(EventCategory::Changes)
+                    .description(format!("{player_name} was boosted."))
                     .team_tags(vec![team_id])
                     .player_tags(vec![player_id])
                     .metadata(EventMetadataBuilder::default()
                         .other(json!({
                             "before": rating_before,
                             "after": rating_after,
+                            "type": 4, // ?
                         }))
                         .build()
                         .unwrap())
@@ -3403,6 +3476,42 @@ impl FedEvent {
                         }))
                         .build()
                         .unwrap())
+            }
+            FedEventData::TeamWonInternetSeries { team_id, team_nickname, championships } => {
+                event_builder
+                    .r#type(EventType::TeamWonInternetSeries)
+                    .category(EventCategory::Outcomes)
+                    .description(format!("The {team_nickname} won the Season {} Internet Series!", self.season + 1))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "championships": championships,
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::BottomDwellers { team_id, team_nickname, rating_before, rating_after } => {
+                event_builder
+                    .r#type(EventType::PlayerStatIncrease)
+                    .category(EventCategory::Changes)
+                    .description(format!("The {team_nickname} are Bottom Dwellers."))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({
+                            "before": rating_before,
+                            "after": rating_after,
+                            "type": 5, // ?
+                        }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::WillReceived { team_id, will_title, metadata } => {
+                event_builder
+                    .r#type(EventType::WillRecieved)
+                    .category(EventCategory::Outcomes)
+                    .description(format!("Will Received: {will_title}"))
+                    .team_tags(vec![team_id])
+                    .metadata(metadata)
             }
         }
             .build()

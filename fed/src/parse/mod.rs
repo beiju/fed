@@ -844,7 +844,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::LightSwitchToggled => { todo!() }
         EventType::DecreePassed => { todo!() }
         EventType::BlessingOrGiftWon => { todo!() }
-        EventType::WillRecieved => { todo!() }
+        EventType::WillRecieved => {
+            let will_title = run_parser(&event, parse_will_received)?;
+
+            make_fed_event(event, FedEventData::WillReceived {
+                team_id: get_one_team_id(event)?,
+                will_title: will_title.to_string(),
+                metadata: event.metadata.clone(),
+            })
+        }
         EventType::FloodingSwept => {
             let swept_elsewhere_names = run_parser(&event, parse_flooding_swept)?;
 
@@ -1015,15 +1023,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::ModExpires => {
-            let (player_name, mod_duration) = run_parser(&event, parse_mod_expires)?;
-            let mods = get_str_vec_metadata(event, "mods")?;
-            make_fed_event(event, FedEventData::ModExpires {
-                team_id: get_one_team_id(event)?,
-                player_id: get_one_player_id(event)?,
-                player_name: player_name.to_string(),
-                mods: mods.into_iter().map(String::from).collect(),
-                mod_duration,
-            })
+            if event.player_tags.is_empty() {
+                let (team_nickname, mod_duration) = run_parser(&event, parse_team_mod_expires)?;
+                assert!(is_known_team_nickname(team_nickname));
+                let mods = get_str_vec_metadata(event, "mods")?;
+                make_fed_event(event, FedEventData::TeamModExpires {
+                    team_id: get_one_team_id(event)?,
+                    team_nickname: team_nickname.to_string(),
+                    mods: mods.into_iter().map(String::from).collect(),
+                    mod_duration,
+                })
+            } else {
+                let (player_name, mod_duration) = run_parser(&event, parse_player_mod_expires)?;
+                let mods = get_str_vec_metadata(event, "mods")?;
+                make_fed_event(event, FedEventData::PlayerModExpires {
+                    team_id: get_one_team_id(event)?,
+                    player_id: get_one_player_id(event)?,
+                    player_name: player_name.to_string(),
+                    mods: mods.into_iter().map(String::from).collect(),
+                    mod_duration,
+                })
+            }
         }
         EventType::PlayerAddedToTeam => {
             // For now this only parses postseason births, that may need to expand in future
@@ -1049,16 +1069,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PlayerSwap => { todo!() }
         EventType::PlayerBornFromIncineration => { todo!() }
         EventType::PlayerStatIncrease => {
-            // For now this only parses election boosts, that may need to expand in future
-            let player_name = run_parser(&event, parse_player_stat_increase)?;
+            match run_parser(&event, parse_player_stat_increase)? {
+                ParsedPlayerStatIncrease::PlayerBoosted(player_name) => {
+                    make_fed_event(event, FedEventData::PlayerBoosted {
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: player_name.to_string(),
+                        rating_before: get_float_metadata(event, "before")?,
+                        rating_after: get_float_metadata(event, "after")?,
+                    })
 
-            make_fed_event(event, FedEventData::PlayerBoosted {
-                team_id: get_one_team_id(event)?,
-                player_id: get_one_player_id(event)?,
-                player_name: player_name.to_string(),
-                rating_before: get_float_metadata(event, "before")?,
-                rating_after: get_float_metadata(event, "after")?,
-            })
+                }
+                ParsedPlayerStatIncrease::BottomDwellers(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    make_fed_event(event, FedEventData::BottomDwellers {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                        rating_before: get_float_metadata(event, "before")?,
+                        rating_after: get_float_metadata(event, "after")?,
+                    })
+                }
+            }
         }
         EventType::PlayerStatDecrease => { todo!() }
         EventType::PlayerStatReroll => { todo!() }
@@ -1096,7 +1127,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 division_name: division_name.to_string(),
             })
         }
-        EventType::TeamWonInternetSeries => { todo!() }
+        EventType::TeamWonInternetSeries => {
+            let (team_nickname, season_num) = run_parser(&event, parse_team_won_internet_series)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(season_num, event.season + 1);
+
+            make_fed_event(event, FedEventData::TeamWonInternetSeries {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                championships: get_int_metadata(event, "championships")?,
+            })
+        }
         EventType::EarnedPostseasonSlot => {
             let (team_nickname, season_num) = run_parser(&event, parse_earned_postseason_slot)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1973,7 +2014,22 @@ fn parse_incineration_blocked(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-fn parse_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+    // This message treats possessives of names ending in s correctly
+    let (input, player_name) = alt((
+        parse_terminated("'s "),
+        parse_terminated("' ")
+    ))(input)?;
+    let (input, duration) = alt((
+        tag("game").map(|_| ModDuration::Game),
+        tag("seasonal").map(|_| ModDuration::Seasonal),
+    ))(input)?;
+    let (input, _) = tag(" mods wore off.")(input)?;
+    Ok((input, (player_name, duration)))
+}
+
+fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+    let (input, _) = tag("The ")(input)?;
     // This message treats possessives of names ending in s correctly
     let (input, player_name) = alt((
         parse_terminated("'s "),
@@ -2342,8 +2398,38 @@ fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i32)> {
     Ok((input, (team_nickname, season_num)))
 }
 
-fn parse_player_stat_increase(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = parse_terminated(" was boosted.")(input)?;
+enum ParsedPlayerStatIncrease<'a> {
+    PlayerBoosted(&'a str),
+    BottomDwellers(&'a str),
+}
 
-    Ok((input, player_name))
+fn parse_player_stat_increase(input: &str) -> ParserResult<ParsedPlayerStatIncrease> {
+    alt((
+        parse_terminated(" was boosted.").map(|name| ParsedPlayerStatIncrease::PlayerBoosted(name)),
+        parse_bottom_dweller.map(|name| ParsedPlayerStatIncrease::BottomDwellers(name)),
+    ))(input)
+}
+
+fn parse_bottom_dweller(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_name) = parse_terminated(" are Bottom Dwellers.")(input)?;
+
+    Ok((input, team_name))
+}
+
+fn parse_team_won_internet_series(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" won the Season ")(input)?;
+    let (input, season_num) = parse_whole_number(input)?;
+    let (input, _) = tag(" Internet Series!")(input)?;
+
+    Ok((input, (team_nickname, season_num)))
+}
+
+fn parse_will_received(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Will Received: ")(input)?;
+    // This should take the rest because there shouldn't be any newlines
+    let (input, will_name) = take_till1(|c| c != '\n')(input)?;
+
+    Ok((input, will_name))
 }

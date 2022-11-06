@@ -37,7 +37,7 @@ fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder, JsonSchema)]
 #[builder(default, pattern = "owned", setter(strip_option))]
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
@@ -61,7 +61,7 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Serialize_repr, Deserialize_repr, PartialEq)]
+#[derive(Clone, Debug, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
 #[repr(i32)]
 pub enum EventCategory {
     Game = 0,
@@ -77,12 +77,13 @@ impl EventCategory {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder, JsonSchema)]
 #[builder(pattern = "owned")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,
     #[serde(with = "ts_milliseconds")]
+    #[schemars(with = "DateTime<Utc>")]
     pub created: DateTime<Utc>,
     pub r#type: EventType,
     pub category: EventCategory,
@@ -173,7 +174,7 @@ pub enum Weather {
 }
 
 //noinspection SpellCheckingInspection
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Copy, Clone)]
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Copy, Clone, JsonSchema)]
 #[repr(i32)]
 pub enum EventType {
     Undefined = -1,
