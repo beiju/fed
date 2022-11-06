@@ -11,9 +11,9 @@ use schemars::schema::Schema::Object;
 use crate::parse::event_schema::FedEvent;
 
 #[derive(Debug, Clone)]
-pub struct SurfaceTaggedEnumTitle;
+pub struct SurfaceEnumTitle;
 
-impl Visitor for SurfaceTaggedEnumTitle {
+impl Visitor for SurfaceEnumTitle {
     fn visit_schema_object(&mut self, schema: &mut SchemaObject) {
         // this is good coding
         if let Some(subschemas) = &mut schema.subschemas {
@@ -59,7 +59,7 @@ impl Visitor for SurfaceTaggedEnumTitle {
 
 fn main() {
     let schema = SchemaSettings::default()
-        .with_visitor(SurfaceTaggedEnumTitle)
+        .with_visitor(SurfaceEnumTitle)
         .into_generator()
         .into_root_schema_for::<FedEvent>();
 
