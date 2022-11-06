@@ -11,8 +11,10 @@ use indicatif::{ProgressDrawTarget, ProgressStyle};
 const NUM_EVENTS: u64 = 8299172;
 
 fn sort_children(event: &mut EventuallyEvent) {
-    event.metadata.children.sort_by_key(|e| e.metadata.sub_play
-        .expect("Any child event should have a sub_event"));
+    if event.metadata.children.iter().all(|child| child.metadata.sub_play.is_some()) {
+        event.metadata.children.sort_by_key(|e| e.metadata.sub_play
+            .expect("Shouldn't get here if sub_play is None"));
+    }
     for child in event.metadata.children.as_mut_slice() {
         sort_children(child);
     }

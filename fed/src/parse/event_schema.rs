@@ -449,9 +449,17 @@ pub struct PlayerInfo {
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct Scattered {
+    /// Name of player after being Scattered
+    pub scattered_name: String,
+
+    /// Sub-event associated with adding the Scattered mod
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[serde(tag = "type")]
 pub enum FedEventData {
-    /// # BeingSpeech
     /// When a being (a god, Binky, or a similar entity) speaks
     BeingSpeech {
         /// Which being is speaking
@@ -807,7 +815,6 @@ pub enum FedEventData {
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
-
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players got Unrun strikeouts the event was
@@ -1482,7 +1489,7 @@ pub enum FedEventData {
     },
 
     /// Team was added to ILB
-    TeamJoined {
+    TeamJoinedILB {
         /// Uuid of newly added team
         team_id: Uuid,
 
@@ -1520,9 +1527,12 @@ pub enum FedEventData {
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 
-        /// Number of days the player was Elsewhere
-        // This will need to be modified for seasons later
-        number_of_days: i32,
+        /// Number of days the player was Elsewhere, or null if the player was elsewhere for one
+        /// season. No player has ever returned after more than one season
+        number_of_days: Option<i32>,
+
+        /// Scattered sub-event, if the player was scattered, or null otherwise
+        scattered: Option<Scattered>,
     },
 
     /// Player was incinerated
@@ -1739,6 +1749,75 @@ pub enum FedEventData {
 
         /// Event metadata exactly as it appears in the Feed event
         metadata: EventMetadata,
+    },
+
+    /// Team won a Blessing. This event is currently minimally parsed, with metadata simply
+    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
+    /// useful please let us know in the SIBR discord.
+    BlessingWon {
+        /// Uuid of team who won the Blessing
+        team_id: Uuid,
+
+        /// Title of Blessing that was won. This may be redundant with the title in `metadata`
+        blessing_title: String,
+
+        /// Event metadata exactly as it appears in the Feed event
+        metadata: EventMetadata,
+    },
+
+    /// Earlbirds mod procs at the beginning of Earlseason
+    Earlbirds {
+        game: GameEvent,
+
+        /// Uuid of Earlbird team
+        team_id: Uuid,
+
+        /// Name of Earlbird team
+        team_nickname: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        sub_event: SubEvent,
+    },
+
+    /// Decree passed. This event is currently minimally parsed, with metadata simply included
+    /// as-is. If you have a use-case where thoroughly parsing this event type would be useful
+    /// please let us know in the SIBR discord.
+    DecreePassed {
+        /// Title of Decree that passesd. This may be redundant with the title in `metadata`
+        decree_title: String,
+
+        /// Event metadata exactly as it appears in the Feed event
+        metadata: EventMetadata,
+    },
+
+    /// Player was added to ILB
+    PlayerJoinedILB {
+        /// Uuid of newly added player
+        player_id: Uuid,
+
+        /// Name of newly added player
+        player_name: String,
+    },
+
+    /// A Returned player was permitted to stay (not called back to the Hall at the end of the
+    /// season)
+    PlayerPermittedToStay {
+        /// Uuid of player who was permitted to stay
+        player_id: Uuid,
+
+        /// Name of player who was permitted to stay
+        player_name: String,
+    },
+
+    /// Umpire tried to incinerate the player, but the player was Fireproof
+    FireproofIncineration {
+        game: GameEvent,
+
+        /// Uuid of fireproof player
+        player_id: Uuid,
+
+        /// Name of fireproof player
+        player_name: String,
     }
 }
 
@@ -2680,29 +2759,29 @@ impl FedEvent {
                 let children = players.iter()
                     .enumerate()
                     .map(|(sub_play, player)| {
-                    self.make_event_builder()
-                        .for_game(&game)
-                        .for_sub_event(&player.sub_event)
-                        .category(EventCategory::Changes)
-                        .r#type(EventType::AddedModFromOtherMod)
-                        .description(format!("{} Perks up.", player.player_name))
-                        .team_tags(vec![player.team_id])
-                        .player_tags(vec![player.player_id])
-                        .metadata(EventMetadataBuilder::default()
-                            .play(game.play)
-                            .sub_play(sub_play as i64)
-                            .other(json!({
+                        self.make_event_builder()
+                            .for_game(&game)
+                            .for_sub_event(&player.sub_event)
+                            .category(EventCategory::Changes)
+                            .r#type(EventType::AddedModFromOtherMod)
+                            .description(format!("{} Perks up.", player.player_name))
+                            .team_tags(vec![player.team_id])
+                            .player_tags(vec![player.player_id])
+                            .metadata(EventMetadataBuilder::default()
+                                .play(game.play)
+                                .sub_play(sub_play as i64)
+                                .other(json!({
                                 "mod": "OVERPERFORMING",
                                 "source": "PERK",
                                 "type": 3, // ?
                                 "parent": self.id,
                             }))
+                                .build()
+                                .unwrap()
+                            )
                             .build()
                             .unwrap()
-                        )
-                        .build()
-                        .unwrap()
-                })
+                    })
                     .collect();
 
                 event_builder.for_game(&game)
@@ -3143,7 +3222,7 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::TeamJoined { team_id, team_nickname, division_id, division_name } => {
+            FedEventData::TeamJoinedILB { team_id, team_nickname, division_id, division_name } => {
                 event_builder
                     .r#type(EventType::TeamDivisionMove)
                     .category(EventCategory::Changes)
@@ -3173,10 +3252,14 @@ impl FedEvent {
                         .build()
                         .unwrap())
             }
-            FedEventData::ReturnFromElsewhere { ref game, team_id, player_id, ref player_name, ref sub_event, number_of_days } => {
-                let s = if number_of_days == 1 { "" } else { "s" };
-                let description = format!("{player_name} has returned from Elsewhere after {number_of_days} day{s}!");
-                let child = self.make_event_builder()
+            FedEventData::ReturnFromElsewhere { ref game, team_id, player_id, ref player_name, ref sub_event, number_of_days, ref scattered } => {
+                let description = if let Some(days) = number_of_days {
+                    let s = if days == 1 { "" } else { "s" };
+                    format!("{player_name} has returned from Elsewhere after {days} day{s}!")
+                } else {
+                    format!("{player_name} has returned from Elsewhere after one season!")
+                };
+                let elsewhere_child = self.make_event_builder()
                     .for_game(game)
                     .for_sub_event(&sub_event)
                     .category(EventCategory::Changes)
@@ -3186,7 +3269,7 @@ impl FedEvent {
                     .player_tags(vec![player_id])
                     .metadata(EventMetadataBuilder::default()
                         .play(game.play)
-                        .sub_play(0)
+                        .sub_play(if scattered.is_some() { 1 } else { 0 })
                         .other(json!({
                             "mod": "ELSEWHERE",
                             "type": 0, // ?
@@ -3198,11 +3281,39 @@ impl FedEvent {
                     .build()
                     .unwrap();
 
+                let children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
+                    let scattered_child = self.make_event_builder()
+                        .for_game(game)
+                        .for_sub_event(&sub_event)
+                        .category(EventCategory::Changes)
+                        .r#type(EventType::AddedMod)
+                        .description(format!("{scattered_name} was Scattered..."))
+                        .team_tags(vec![team_id])
+                        .player_tags(vec![player_id])
+                        .metadata(EventMetadataBuilder::default()
+                            .play(game.play)
+                            .sub_play(0)
+                            .other(json!({
+                            "mod": "SCATTERED",
+                            "type": 0, // ?
+                            "parent": self.id,
+                        }))
+                            .build()
+                            .unwrap()
+                        )
+                        .build()
+                        .unwrap();
+
+                    vec![scattered_child, elsewhere_child]
+                } else {
+                    vec![elsewhere_child]
+                };
+
                 event_builder.for_game(game)
                     .r#type(EventType::ReturnFromElsewhere)
                     .description(description)
                     .metadata(make_game_event_metadata_builder(game)
-                        .children(vec![child])
+                        .children(children)
                         .build()
                         .unwrap())
             }
@@ -3512,6 +3623,84 @@ impl FedEvent {
                     .description(format!("Will Received: {will_title}"))
                     .team_tags(vec![team_id])
                     .metadata(metadata)
+            }
+            FedEventData::BlessingWon { team_id, blessing_title, metadata } => {
+                event_builder
+                    .r#type(EventType::BlessingOrGiftWon)
+                    .category(EventCategory::Outcomes)
+                    .description(format!("Blessing Won: {blessing_title}"))
+                    .team_tags(vec![team_id])
+                    .metadata(metadata)
+            }
+            FedEventData::Earlbirds { ref game, team_id, ref team_nickname, ref sub_event } => {
+                let child = self.make_event_builder()
+                    .for_game(&game)
+                    .for_sub_event(&sub_event)
+                    .category(EventCategory::Changes)
+                    .r#type(EventType::AddedModFromOtherMod)
+                    .description(format!("The {team_nickname} are Earlbirds!"))
+                    .team_tags(vec![team_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .play(game.play)
+                        .sub_play(0) // not sure if this is hardcoded
+                        .other(json!({
+                            "mod": "OVERPERFORMING",
+                            "parent": self.id,
+                            "source": "EARLBIRDS",
+                            "type": 0, // ?
+                        }))
+                        .build()
+                        .unwrap()
+                    )
+                    .build()
+                    .unwrap();
+
+                event_builder.for_game(game)
+                    .r#type(EventType::Earlbird)
+                    .category(EventCategory::Special)
+                    .description(format!("Happy Earlseason!\nThe {team_nickname} are Earlbirds!"))
+                    .metadata(make_game_event_metadata_builder(game)
+                        .children(vec![child])
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::DecreePassed { decree_title, metadata } => {
+                event_builder
+                    .r#type(EventType::DecreePassed)
+                    .category(EventCategory::Outcomes)
+                    .description(format!("Decree Passed: {decree_title}"))
+                    .metadata(metadata)
+            }
+            FedEventData::PlayerJoinedILB { player_id, player_name } => {
+                event_builder
+                    .r#type(EventType::PlayerDivisionMove)
+                    .category(EventCategory::Changes)
+                    .phase(13)
+                    .description(format!("{player_name} has joined the ILB."))
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadataBuilder::default()
+                        .other(json!({ "id": player_id }))
+                        .build()
+                        .unwrap())
+            }
+            FedEventData::PlayerPermittedToStay { player_id, player_name } => {
+                event_builder
+                    .r#type(EventType::PlayerPermittedToStay)
+                    .category(EventCategory::Special)
+                    .phase(13)
+                    .description(format!("{player_name} has been permitted to stay."))
+                    .player_tags(vec![player_id])
+                    .metadata(EventMetadata::default())
+            }
+            FedEventData::FireproofIncineration { game, player_id, player_name } => {
+                event_builder.for_game(&game)
+                    .r#type(EventType::IncinerationBlocked)
+                    .category(EventCategory::Special)
+                    .description(format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"))
+                    .player_tags(vec![player_id])
+                    .metadata(make_game_event_metadata_builder(&game)
+                        .build()
+                        .unwrap())
             }
         }
             .build()
