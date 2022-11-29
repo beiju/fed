@@ -9,7 +9,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{eof, fail, map_res, opt, verify};
+use nom::combinator::{eof, fail, map_res, opt, recognize, verify};
 use nom::error::{convert_error};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
@@ -1790,7 +1790,15 @@ fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> Result<Fe
 
 fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {
-        let (input, parsed_value) = verify(take_until1(tag_content), |s: &str| !s.contains('\n'))(input)?;
+        let (input, parsed_value) = if tag_content == "." {
+            alt((
+                // The Kaj Statter Jr. rule
+                verify(recognize(terminated(take_until1(".."), tag("."))), |s: &str| !s.contains('\n')),
+                verify(take_until1(tag_content), |s: &str| !s.contains('\n')),
+            ))(input)
+        } else {
+            verify(take_until1(tag_content), |s: &str| !s.contains('\n'))(input)
+        }?;
         let (input, _) = tag(tag_content)(input)?;
 
         Ok((input, parsed_value))
