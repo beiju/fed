@@ -80,7 +80,7 @@ impl EventBuilderChildFull {
         EventBuilderChildFullWithMetadata {
             common: self.common,
             update: self.update,
-            metadata: BuilderMetadata::Full(EventMetadata::default()),
+            metadata: BuilderMetadata::OnlyOther(serde_json::json!({})),
         }
     }
 }
@@ -118,7 +118,7 @@ impl EventBuilderForGame {
             common: self.common,
             game: Some(self.game),
             update,
-            children: Vec::new()
+            children: Vec::new(),
         }
     }
 }
@@ -134,7 +134,7 @@ impl Into<EventBuilderChildFinished> for EventBuilderChildFull {
         EventBuilderChildFinished {
             common: self.common,
             update: self.update,
-            metadata: BuilderMetadata::Full(Default::default()),
+            metadata: BuilderMetadata::OnlyOther(serde_json::json!({})),
         }
     }
 }
@@ -204,7 +204,7 @@ impl EventBuilderFull {
             common: self.common,
             game: self.game,
             update: self.update,
-            metadata: BuilderMetadata::Full(EventMetadata::default()),
+            metadata: BuilderMetadata::OnlyOther(serde_json::json!({})),
             children: self.children,
         }.build()
     }
@@ -212,7 +212,7 @@ impl EventBuilderFull {
 
 pub enum BuilderMetadata {
     OnlyOther(serde_json::Value),
-    Full(EventMetadata)
+    Full(EventMetadata),
 }
 
 pub struct EventBuilderFullWithMetadata {
@@ -248,34 +248,67 @@ impl EventBuilderFullWithMetadata {
         }
     }
     pub fn build(self) -> EventuallyEvent {
-        let children = self.children.into_iter()
-            .map(|_child| {
-                todo!()
-            })
-            .collect();
+        let metadata = match self.metadata {
+            BuilderMetadata::OnlyOther(other) => {
+                let children = self.children.into_iter()
+                    .enumerate()
+                    .map(|(sub_play, child)| {
+                        let child_metadata = match child.metadata {
+                            BuilderMetadata::OnlyOther(other) => {
+                                EventMetadata {
+                                    children: vec![],
+                                    siblings: vec![],
+                                    ingest_time: None,
+                                    ingest_source: None,
+                                    play: self.game.as_ref().map(|game| game.play),
+                                    sub_play: Some(sub_play as i64),
+                                    sibling_ids: None,
+                                    parent: Some(self.common.id),
+                                    other,
+                                }
+                            }
+                            BuilderMetadata::Full(full) => { full }
+                        };
+
+                        EventuallyEvent {
+                            id: child.common.id,
+                            created: child.common.created,
+                            r#type: child.update.r#type,
+                            category: child.update.category,
+                            metadata: child_metadata,
+                            blurb: "".to_string(),
+                            description: child.update.description,
+                            player_tags: child.update.player_tags,
+                            game_tags: self.game.as_ref().map_or_else(|| Vec::new(), |g| vec![g.game_id]),
+                            team_tags: child.update.team_tags,
+                            sim: self.common.sim.clone(),
+                            day: self.common.day,
+                            season: self.common.season,
+                            tournament: self.common.tournament,
+                            phase: self.common.phase,
+                            nuts: child.common.nuts,
+                        }
+                    })
+                    .collect();
+                EventMetadata {
+                    play: self.game.as_ref().map(|game| game.play),
+                    // Root events of games are always -1, non-games are null
+                    sub_play: self.game.as_ref().map(|_| -1),
+                    children,
+                    other,
+                    ..Default::default()
+                }
+            }
+            BuilderMetadata::Full(metadata) => {
+                metadata
+            }
+        };
         EventuallyEvent {
             id: self.common.id,
             created: self.common.created,
             r#type: self.update.r#type,
             category: self.update.category,
-            metadata: match self.metadata {
-                BuilderMetadata::OnlyOther(other) => {
-                    EventMetadata {
-                        children,
-                        siblings: vec![],
-                        ingest_time: None,
-                        ingest_source: None,
-                        play: self.game.as_ref().map(|g| g.play),
-                        sub_play: None,
-                        sibling_ids: None,
-                        parent: None,
-                        other,
-                    }
-                }
-                BuilderMetadata::Full(metadata) => {
-                    metadata
-                }
-            },
+            metadata,
             blurb: "".to_string(),
             description: self.update.description,
             player_tags: self.update.player_tags,
@@ -288,7 +321,7 @@ impl EventBuilderFullWithMetadata {
             season: self.common.season,
             tournament: self.common.tournament,
             phase: self.common.phase,
-            nuts: self.common.nuts
+            nuts: self.common.nuts,
         }
     }
 }
