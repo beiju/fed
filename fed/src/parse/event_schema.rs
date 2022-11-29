@@ -5,11 +5,12 @@ use itertools::Itertools;
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather, builder::*};
+use fed_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use crate::parse::error::FeedParseError;
+use crate::parse::builder::*;
 
 #[derive(Debug, Clone, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -97,7 +98,7 @@ impl Into<EventBuilderGame> for &GameEvent {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
 pub struct SubEvent {
     /// Uuid of sub-event
     pub id: Uuid,
@@ -116,16 +117,6 @@ impl SubEvent {
             id: event.id,
             created: event.created,
             nuts: event.nuts,
-        }
-    }
-}
-
-impl Into<EventBuilderChildCommon> for &SubEvent {
-    fn into(self) -> EventBuilderChildCommon {
-        EventBuilderChildCommon {
-            id: self.id,
-            created: self.created,
-            nuts: self.nuts,
         }
     }
 }
@@ -184,6 +175,10 @@ impl ScoreInfo {
         self.scoring_players.iter()
             .map(|p| p.player_id)
             .collect()
+    }
+
+    pub fn used_refill(&self) -> bool {
+        !self.free_refills.is_empty()
     }
 }
 
@@ -1939,13 +1934,22 @@ fn possessive(player_name: String) -> String {
 
 impl FedEvent {
     pub fn into_feed_event(self) -> EventuallyEvent {
-        let event_builder = self.make_event_builder();
+        let event_builder = EventBuilderCommon {
+            id: self.id,
+            created: self.created,
+            sim: self.sim.clone(),
+            day: self.day,
+            phase: self.phase.into(),
+            season: self.season,
+            tournament: self.tournament,
+            nuts: self.nuts,
+        };
 
         match self.data {
             FedEventData::BeingSpeech { being, message } => {
                 let being_id: i32 = being.into();
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BigDeal,
                         category: EventCategory::Narrative,
                         description: message,
@@ -2007,7 +2011,7 @@ impl FedEvent {
 
                 let children = inhabiting.iter()
                     .map(|inhabiting| {
-                        EventBuilder::child(&inhabiting.sub_event)
+                        EventBuilderChild::new(&inhabiting.sub_event)
                             .update(EventBuilderUpdate {
                                 r#type: EventType::AddedMod,
                                 category: EventCategory::Changes,
@@ -2049,13 +2053,14 @@ impl FedEvent {
                 let mod_name = if peanuts { "OVERPERFORMING" } else { "UNDERPERFORMING" };
                 let opposite_mod_name = if peanuts { "UNDERPERFORMING" } else { "OVERPERFORMING" };
                 let change_event = if is_first_proc {
-                    EventBuilder::child(sub_event)
+                    EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::AddedModFromOtherMod,
                             description: description.clone(),
                             team_tags: vec![team_id],
                             player_tags: vec![player_id],
+                            ..Default::default()
                         })
                         .metadata(json!({
                             "mod": mod_name,
@@ -2063,13 +2068,14 @@ impl FedEvent {
                             "type": 0, // ?
                         }))
                 } else {
-                    EventBuilder::child(sub_event)
+                    EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             r#type: EventType::ChangedModFromOtherMod,
                             category: EventCategory::Changes,
                             description: description.clone(),
                             team_tags: vec![team_id],
                             player_tags: vec![player_id],
+                            ..Default::default()
                         })
                         .metadata(json!({
                             "from": opposite_mod_name,
@@ -2134,41 +2140,24 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " tags up and scores!");
-                let mut player_tags = scores.scorer_ids();
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
-                        category: EventCategory::special_if(has_any_refills || cooled_off.is_some()),
-                        description: format!("{batter_name} hit a flyout to {fielder_name}.{score_text}{suffix}"),
-                        player_tags,
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
+                        description: format!("{batter_name} hit a flyout to {fielder_name}."),
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " tags up and scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
+                    .cooled_off(cooled_off, batter_name)
                     .build()
             }
             FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status, is_special } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-                self.push_red_hot(&game, batter_name, batter_id, spicy_status, &mut children);
-
-                let spicy_text = match spicy_status {
-                    SpicyStatus::None => String::new(),
-                    SpicyStatus::HeatingUp => format!("\n{} is Heating Up!", batter_name),
-                    SpicyStatus::RedHot { .. } => format!("\n{} is Red Hot!", batter_name),
-                };
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::Hit,
-                        category: EventCategory::special_if(has_any_refills || spicy_status.is_special() || is_special),
-                        description: format!("{batter_name} hits a {}!{score_text}{spicy_text}", match num_bases {
+                        category: EventCategory::special_if(scores.used_refill() || spicy_status.is_special() || is_special),
+                        description: format!("{batter_name} hits a {}!", match num_bases {
                             1 => "Single",
                             2 => "Double",
                             3 => "Triple",
@@ -2176,13 +2165,12 @@ impl FedEvent {
                             // TODO Turn this into a Result error
                             _ => panic!("Unknown hit type")
                         }),
-                        player_tags: iter::once(batter_id)
-                            .chain(scores.scorer_ids())
-                            .chain(if spicy_status.is_none() { None } else { Some(batter_id) }.into_iter())
-                            .collect(),
+                        player_tags: vec![batter_id],
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
+                    .spicy(spicy_status, batter_id, batter_name)
                     .build()
             }
             FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special } => {
@@ -2193,14 +2181,8 @@ impl FedEvent {
                     })
                     .join("");
 
-                let suffix = match spicy_status {
-                    SpicyStatus::None => suffix,
-                    SpicyStatus::HeatingUp => format!("{suffix}\n{batter_name} is Heating Up!"),
-                    SpicyStatus::RedHot { .. } => format!("{suffix}\n{batter_name} is Red Hot!"),
-                };
-
                 let mut children = if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
-                    vec![EventBuilder::child(sub_event)
+                    vec![EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             r#type: EventType::RemovedMod,
                             category: EventCategory::Changes,
@@ -2218,9 +2200,6 @@ impl FedEvent {
                     Vec::new()
                 };
 
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-                self.push_red_hot(&game, batter_name, batter_id, spicy_status, &mut children);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::HomeRun,
@@ -2235,34 +2214,30 @@ impl FedEvent {
                                                  // TODO Turn this into a Result error
                                                  _ => panic!("Unknown num runs in home run")
                                              }),
-                        player_tags: if spicy_status.is_none() { vec![batter_id] } else { vec![batter_id, batter_id] },
+                        player_tags: vec![batter_id],
                         ..Default::default()
                     })
+                    .stopped_inhabiting(stopped_inhabiting)
+                    .spicy(spicy_status, batter_id, batter_name)
                     .children(
+                        // TODO just do a mutable vec here
                         free_refills.iter()
-                            .map(|free_refill| self.make_free_refill_child(&game, free_refill))
+                            .map(|free_refill| make_free_refill_child(free_refill))
                             .chain(children.into_iter())
                     )
                     .build()
             }
             FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " advances on the sacrifice.");
-                let mut player_tags = scores.scorer_ids();
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(has_any_refills || cooled_off.is_some() || is_special),
-                        description: format!("{} hit a ground out to {}.{}{}",
-                                             batter_name, fielder_name, score_text, suffix),
-                        player_tags,
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
+                        description: format!("{batter_name} hit a ground out to {fielder_name}."),
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " advances on the sacrifice.")
+                    .stopped_inhabiting(stopped_inhabiting)
+                    .cooled_off(cooled_off, batter_name)
                     .build()
             }
             FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill } => {
@@ -2288,7 +2263,7 @@ impl FedEvent {
                     })
                     .children(
                         free_refill.as_ref()
-                            .map(|free_refill| self.make_free_refill_child(&game, free_refill))
+                            .map(|free_refill| make_free_refill_child(free_refill))
                             .into_iter()
                     )
                     .build()
@@ -2301,7 +2276,7 @@ impl FedEvent {
                         description: format!("{} strikes out swinging.", batter_name),
                         ..Default::default()
                     })
-                    .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
+                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
@@ -2312,15 +2287,10 @@ impl FedEvent {
                         description: format!("{} strikes out looking.", batter_name),
                         ..Default::default()
                     })
-                    .children(self.stopped_inhabiting_children(&game, &stopped_inhabiting))
+                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref stopped_inhabiting, ref base_instincts } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
                 let base_instincts_str = if let Some(base) = base_instincts {
                     format!("\nBase Instincts take them directly to {} base!", base_name(*base))
                 } else {
@@ -2330,12 +2300,13 @@ impl FedEvent {
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::Walk,
-                        category: EventCategory::special_if(has_any_refills || base_instincts.is_some()),
-                        description: format!("{} draws a walk.{}{}", batter_name, base_instincts_str, score_text),
-                        player_tags: iter::once(batter_id).chain(scores.scorer_ids()).collect(),
+                        category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some()),
+                        description: format!("{batter_name} draws a walk.{base_instincts_str}"),
+                        player_tags: vec![batter_id],
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
@@ -2376,22 +2347,18 @@ impl FedEvent {
                     .build()
             }
             FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-                let mut player_tags = scores.scorer_ids();
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-                let suffix = self.push_cooled_off(&game, batter_name, cooled_off, &mut children, &mut player_tags);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(has_any_refills || cooled_off.is_some()),
-                        description: format!("{runner_out_name} out at {} base.{score_text}\n{batter_name} reaches on fielder's choice.{suffix}",
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
+                        description: format!("{runner_out_name} out at {} base.",
                                              base_name(out_at_base)),
-                        player_tags,
+                        description_after_score: format!("\n{batter_name} reaches on fielder's choice."),
                         ..Default::default()
                     })
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
+                    .cooled_off(cooled_off, batter_name)
                     .build()
             }
             FedEventData::StrikeZapped { game } => {
@@ -2415,43 +2382,34 @@ impl FedEvent {
                     .build()
             }
             FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting } => {
-                let (score_text, has_any_refills, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(has_any_refills),
-                        description: format!("{} hit into a double play!{}", batter_name, score_text),
-                        player_tags: scores.scorer_ids(),
+                        category: EventCategory::special_if(scores.used_refill()),
+                        description: format!("{batter_name} hit into a double play!", ),
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
+                    // .cooled_off(cooled_off, batter_name)
                     .build()
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
                 event_builder.for_game(&game)
                     .update(EventBuilderUpdate {
-                        r#type: EventType::GroundOut,
+                        r#type: EventType::GameEnd,
                         category: EventCategory::Outcomes,
                         description: format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"),
-                        team_tags: vec![
-                            // For some reason the teams are repeated like this? idk why
-                            game.away_team, game.home_team, game.home_team, game.away_team,
-                        ],
+                        team_tags: vec![game.home_team, game.away_team],
+                        // This is the default value but I'm stating it just to convey that yes, I
+                        // do mean to repeat the team tags. That's how the events are.
+                        override_team_tags: false,
                         ..Default::default()
                     })
                     .metadata(json!({ "winner": winner_id }))
                     .build()
             }
             FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores, ref stopped_inhabiting } => {
-                let (score_text, _, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
                 let runners_advance_str = if runners_advance {
                     "\nRunners advance on the pathetic play!"
                 } else {
@@ -2462,11 +2420,12 @@ impl FedEvent {
                     .update(EventBuilderUpdate {
                         r#type: EventType::MildPitch,
                         category: EventCategory::Special,
-                        description: format!("{pitcher_name} throws a Mild pitch!\nBall, {balls}-{strikes}.{runners_advance_str}{score_text}"),
-                        player_tags: iter::once(pitcher_id).chain(scores.scorer_ids()).collect(),
+                        description: format!("{pitcher_name} throws a Mild pitch!\nBall, {balls}-{strikes}.{runners_advance_str}"),
+                        player_tags: vec![pitcher_id],
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, has_mod, ref sub_event, team_id, ref previous } => {
@@ -2476,7 +2435,7 @@ impl FedEvent {
                     CoffeeBeanMod::Tired => { "Tired." }
                 };
                 let mod_id = which_mod.to_str();
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: if previous.is_some() { EventType::ModChange } else { EventType::AddedMod },
                         category: EventCategory::Changes,
@@ -2513,7 +2472,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::BecameMagmatic { ref game, player_id, ref player_name, team_id, ref mod_add_event } => {
-                let child = EventBuilder::child(mod_add_event)
+                let child = EventBuilderChild::new(mod_add_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
@@ -2538,7 +2497,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, ref sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
-                let child = EventBuilder::child(sipped_event)
+                let child = EventBuilderChild::new(sipped_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::PlayerStatDecrease,
                         category: EventCategory::Changes,
@@ -2565,9 +2524,9 @@ impl FedEvent {
             }
             FedEventData::PlayerModExpires { team_id, player_id, player_name, mods, mod_duration } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::ModExpires,
-                        category: EventCategory::Special,
+                        category: EventCategory::Changes,
                         description: format!("{} {} mods wore off.", possessive(player_name), mod_duration.to_string()),
                         team_tags: vec![team_id],
                         player_tags: vec![player_id],
@@ -2581,7 +2540,7 @@ impl FedEvent {
             }
             FedEventData::TeamModExpires { team_id, team_nickname, mods, mod_duration } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::ModExpires,
                         category: EventCategory::Changes,
                         description: format!("The {} {mod_duration} mods wore off.", possessive(team_nickname)),
@@ -2622,7 +2581,7 @@ impl FedEvent {
             }
             FedEventData::Sun2SetWin { team_id, team_nickname } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Sun2SetWin,
                         category: EventCategory::Outcomes,
                         description: format!("Sun 2 set a Win upon the {team_nickname}."),
@@ -2633,7 +2592,7 @@ impl FedEvent {
             }
             FedEventData::BlackHoleSwallowedWin { team_id, team_nickname } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BlackHoleSwallowedWin,
                         category: EventCategory::Outcomes,
                         description: format!("The Black Hole swallowed a Win from the {team_nickname}!"),
@@ -2664,7 +2623,7 @@ impl FedEvent {
             }
             FedEventData::TeamDidShame { shaming_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TeamDidShame,
                         category: EventCategory::Outcomes,
                         description: format!("The {shaming_team_nickname} shamed the {shamed_team_nickname}."),
@@ -2679,7 +2638,7 @@ impl FedEvent {
             }
             FedEventData::TeamWasShamed { shamed_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TeamWasShamed,
                         category: EventCategory::Outcomes,
                         description: format!("The {shamed_team_nickname} were shamed by the {shaming_team_nickname}."),
@@ -2704,7 +2663,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
@@ -2730,7 +2689,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::AllergicReaction { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::PlayerStatDecrease,
                         category: EventCategory::Changes,
@@ -2757,27 +2716,22 @@ impl FedEvent {
                     .build()
             }
             FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores, ref stopped_inhabiting } => {
-                let (score_text, _, mut children) =
-                    self.get_score_data(game, scores, " scores!");
-
-                self.push_stopped_inhabiting(game, stopped_inhabiting, &mut children);
-
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::MildPitch,
                         category: EventCategory::Special,
-                        description: format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk.{score_text}"),
-                        player_tags: [pitcher_id, batter_id].into_iter().chain(scores.scorer_ids()).collect(),
+                        description: format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."),
+                        player_tags: vec![pitcher_id, batter_id],
                         ..Default::default()
                     })
-                    .children(children)
+                    .scores(scores, " scores!")
+                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::PerkUp { ref game, ref players } => {
                 let children = players.iter()
-                    .enumerate()
-                    .map(|(sub_play, player)| {
-                        EventBuilder::child(&player.sub_event)
+                    .map(|player| {
+                        EventBuilderChild::new(&player.sub_event)
                             .update(EventBuilderUpdate {
                                 r#type: EventType::AddedModFromOtherMod,
                                 category: EventCategory::Changes,
@@ -2810,7 +2764,7 @@ impl FedEvent {
                     (0, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name)),
                     (1, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
                 ].into_iter().map(|(sub_play, change, event_type, description)| {
-                    EventBuilder::child(&change.sub_event)
+                    EventBuilderChild::new(&change.sub_event)
                         .update(EventBuilderUpdate {
                             r#type: event_type,
                             category: EventCategory::Changes,
@@ -2845,7 +2799,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Feedback { ref game, players: (ref player_a, ref player_b), position_type, ref sub_event } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::PlayerTraded,
                         category: EventCategory::Changes,
@@ -2879,7 +2833,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::BestowReverberating { ref game, team_id, player_id, ref player_name, ref sub_event } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
@@ -2906,7 +2860,7 @@ impl FedEvent {
             }
             FedEventData::Reverb { ref game, team_id, ref team_nickname, ref reverb_type } => {
                 let get_child = |sub_event, event_type, shuffle_location| {
-                    EventBuilder::child(sub_event)
+                    EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             r#type: event_type,
                             category: EventCategory::Changes,
@@ -2947,10 +2901,12 @@ impl FedEvent {
             }
             FedEventData::TarotReading { description, metadata, player_tags, team_tags } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TarotReading,
                         category: EventCategory::Changes,
                         description,
+                        player_tags,
+                        team_tags,
                         ..Default::default()
                     })
                     .metadata(metadata)
@@ -2958,7 +2914,7 @@ impl FedEvent {
             }
             FedEventData::AddedUnderOver { team_id, player_id, player_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
                         description: format!("UNDER OVER, {player_name}"),
@@ -2974,7 +2930,7 @@ impl FedEvent {
             }
             FedEventData::AddedOverUnder { team_id, player_id, player_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
                         description: format!("OVER UNDER, {player_name}"),
@@ -2992,7 +2948,7 @@ impl FedEvent {
                 let children = [pitcher_1, pitcher_2].iter()
                     .enumerate()
                     .map(|(sub_play, pitcher)| {
-                        EventBuilder::child(&pitcher.sub_event)
+                        EventBuilderChild::new(&pitcher.sub_event)
                             .update(EventBuilderUpdate {
                                 category: EventCategory::Changes,
                                 r#type: EventType::AddedMod,
@@ -3020,7 +2976,7 @@ impl FedEvent {
             }
             FedEventData::UnderOver { ref game, team_id, player_id, ref player_name, on, ref sub_event } => {
                 let description = format!("{player_name}, Under Over, {}.", if on { "On" } else { "Off" });
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: if on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod },
@@ -3037,7 +2993,7 @@ impl FedEvent {
 
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
+                        category: EventCategory::Special,
                         r#type: EventType::UnderOver,
                         description,
                         ..Default::default()
@@ -3047,7 +3003,7 @@ impl FedEvent {
             }
             FedEventData::OverUnder { ref game, team_id, player_id, ref player_name, on, ref sub_event } => {
                 let description = format!("{player_name}, Over Under, {}.", if on { "On" } else { "Off" });
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: if on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod },
@@ -3073,7 +3029,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::TasteTheInfinite { ref game, sheller_id, ref sheller_name, shellee_team_id, shellee_id, ref shellee_name, ref sub_event } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: EventType::AddedMod,
@@ -3082,7 +3038,11 @@ impl FedEvent {
                         // Yes this makes no sense! but, it appears to be that way
                         player_tags: vec![sheller_id],
                         ..Default::default()
-                    });
+                    })
+                    .metadata(json!({
+                        "mod": "SHELLED",
+                        "type": 0, // ?
+                    }));
 
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
@@ -3099,7 +3059,6 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::BatterSkipped,
-                        category: EventCategory::Special,
                         description: match reason {
                             BatterSkippedReason::Shelled => { format!("{batter_name} is Shelled and cannot escape!") }
                             BatterSkippedReason::Elsewhere(_) => { format!("{batter_name} is Elsewhere..") }
@@ -3115,7 +3074,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::FeedbackBlocked { ref game, resisted_id, ref resisted_name, tangled_id, tangled_team_id, ref tangled_name, tangled_rating_before, tangled_rating_after, ref sub_event } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: EventType::PlayerStatDecrease,
@@ -3143,7 +3102,7 @@ impl FedEvent {
             }
             FedEventData::FlagPlanted { team_id, team_nickname, ballpark_name, prefab_name, votes } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FlagPlanted,
                         category: EventCategory::Changes,
                         description: format!("The {team_nickname} break ground on {ballpark_name}, selecting to build the {prefab_name} prefab!\nTHE FLAG IS PLANTED"),
@@ -3159,7 +3118,7 @@ impl FedEvent {
             }
             FedEventData::EmergencyAlert { message, team_tags } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::EmergencyAlert,
                         category: EventCategory::Outcomes,
                         description: message,
@@ -3170,7 +3129,7 @@ impl FedEvent {
             }
             FedEventData::TeamJoinedILB { team_id, team_nickname, division_id, division_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TeamDivisionMove,
                         category: EventCategory::Changes,
                         description: format!("The {team_nickname} have joined the ILB!\nThey will play in the {division_name} division."),
@@ -3206,7 +3165,7 @@ impl FedEvent {
                 } else {
                     format!("{player_name} has returned from Elsewhere after one season!")
                 };
-                let elsewhere_child = EventBuilder::child(sub_event)
+                let elsewhere_child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: EventType::RemovedMod,
@@ -3221,7 +3180,7 @@ impl FedEvent {
                     }));
 
                 let children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
-                    let scattered_child = EventBuilder::child(sub_event)
+                    let scattered_child = EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::AddedMod,
@@ -3242,7 +3201,6 @@ impl FedEvent {
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::ReturnFromElsewhere,
-                        category: EventCategory::Special,
                         description,
                         ..Default::default()
                     })
@@ -3253,7 +3211,7 @@ impl FedEvent {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
                 let location_int: i64 = location.into();
                 let children = vec![
-                    EventBuilder::child(incin_child)
+                    EventBuilderChild::new(incin_child)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::Incineration,
@@ -3261,18 +3219,16 @@ impl FedEvent {
                             team_tags: vec![team_id],
                             player_tags: vec![victim_id],
                             ..Default::default()
-                        })
-                        .no_metadata(),
-                    EventBuilder::child(enter_hall_child)
+                        }),
+                    EventBuilderChild::new(enter_hall_child)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::EnterHallOfFlame,
                             description: format!("{victim_name} entered the Hall of Flame."),
                             player_tags: vec![victim_id],
                             ..Default::default()
-                        })
-                        .no_metadata(),
-                    EventBuilder::child(hatch_child)
+                        }),
+                    EventBuilderChild::new(hatch_child)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::PlayerHatched,
@@ -3281,7 +3237,7 @@ impl FedEvent {
                             ..Default::default()
                         })
                         .metadata(json!({ "id": replacement_id })),
-                    EventBuilder::child(replace_child)
+                    EventBuilderChild::new(replace_child)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
                             r#type: EventType::PlayerBornFromIncineration,
@@ -3316,7 +3272,6 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::PitcherChange,
-                        category: EventCategory::Special,
                         description: format!("{pitcher_name} is now pitching for the {team_name}."),
                         player_tags: vec![pitcher_id],
                         ..Default::default()
@@ -3325,7 +3280,7 @@ impl FedEvent {
             }
             FedEventData::Party { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
                 let description = format!("{player_name} is Partying!");
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
                         r#type: EventType::PlayerStatIncrease,
@@ -3352,8 +3307,9 @@ impl FedEvent {
             }
             FedEventData::PlayerHatched { player_id, player_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerHatched,
+                        category: EventCategory::Changes,
                         description: format!("{player_name} has been hatched from the field of eggs."),
                         player_tags: vec![player_id],
                         ..Default::default()
@@ -3364,8 +3320,9 @@ impl FedEvent {
             FedEventData::PostseasonBirth { team_id, team_nickname, player_id, player_name, location } => {
                 let location_int: i64 = location.into();
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerAddedToTeam,
+                        category: EventCategory::Changes,
                         description: format!("The {team_nickname} earn a Postseason Birth!"),
                         player_tags: vec![player_id],
                         team_tags: vec![team_id],
@@ -3388,8 +3345,9 @@ impl FedEvent {
                     _ => format!("{}th", place + 1),
                 };
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FinalStandings,
+                        category: EventCategory::Outcomes,
                         description: format!("The {team_nickname} finished {place_str} in the {division_name}."),
                         team_tags: vec![team_id],
                         ..Default::default()
@@ -3399,8 +3357,9 @@ impl FedEvent {
             }
             FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
                         description: format!("The {team_name} have been removed from Party Time to join the Postseason!"),
                         team_tags: vec![team_id],
                         ..Default::default()
@@ -3413,7 +3372,7 @@ impl FedEvent {
             }
             FedEventData::EarnedPostseasonSlot { team_id, team_nickname } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::EarnedPostseasonSlot,
                         category: EventCategory::Outcomes,
                         description: format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1),
@@ -3429,7 +3388,7 @@ impl FedEvent {
                     String::from("The Internet Series")
                 };
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PostseasonAdvance,
                         category: EventCategory::Outcomes,
                         description: format!("The {team_nickname} advanced to {round_str} of the Season {season} Postseason."),
@@ -3440,7 +3399,7 @@ impl FedEvent {
             }
             FedEventData::PostseasonEliminated { team_id, team_nickname, season } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PostseasonEliminated,
                         category: EventCategory::Outcomes,
                         description: format!("The {team_nickname} have been eliminated from the Season {season} Postseason."),
@@ -3451,8 +3410,9 @@ impl FedEvent {
             }
             FedEventData::PlayerBoosted { team_id, player_id, player_name, rating_before, rating_after } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerStatIncrease,
+                        category: EventCategory::Changes,
                         description: format!("{player_name} was boosted."),
                         team_tags: vec![team_id],
                         player_tags: vec![player_id],
@@ -3467,8 +3427,9 @@ impl FedEvent {
             }
             FedEventData::TeamEnteredPartyTime { team_id, team_nickname } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
                         description: format!("The {team_nickname} have entered Party Time!"),
                         team_tags: vec![team_id],
                         ..Default::default()
@@ -3481,7 +3442,7 @@ impl FedEvent {
             }
             FedEventData::TeamWonInternetSeries { team_id, team_nickname, championships } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TeamWonInternetSeries,
                         category: EventCategory::Outcomes,
                         description: format!("The {team_nickname} won the Season {} Internet Series!", self.season + 1),
@@ -3495,8 +3456,9 @@ impl FedEvent {
             }
             FedEventData::BottomDwellers { team_id, team_nickname, rating_before, rating_after } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerStatIncrease,
+                        category: EventCategory::Changes,
                         description: format!("The {team_nickname} are Bottom Dwellers."),
                         team_tags: vec![team_id],
                         ..Default::default()
@@ -3510,7 +3472,7 @@ impl FedEvent {
             }
             FedEventData::WillReceived { team_id, will_title, metadata } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::WillRecieved,
                         category: EventCategory::Outcomes,
                         description: format!("Will Received: {will_title}"),
@@ -3522,7 +3484,7 @@ impl FedEvent {
             }
             FedEventData::BlessingWon { team_id, blessing_title, metadata } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BlessingOrGiftWon,
                         category: EventCategory::Outcomes,
                         description: format!("Blessing Won: {blessing_title}"),
@@ -3533,7 +3495,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Earlbirds { ref game, team_id, ref team_nickname, ref sub_event } => {
-                let child = EventBuilder::child(sub_event)
+                let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedModFromOtherMod,
                         category: EventCategory::Changes,
@@ -3552,7 +3514,6 @@ impl FedEvent {
                         r#type: EventType::Earlbird,
                         category: EventCategory::Special,
                         description: format!("Happy Earlseason!\nThe {team_nickname} are Earlbirds!"),
-                        team_tags: vec![team_id],
                         ..Default::default()
                     })
                     .child(child)
@@ -3560,7 +3521,7 @@ impl FedEvent {
             }
             FedEventData::DecreePassed { decree_title, metadata } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::DecreePassed,
                         category: EventCategory::Outcomes,
                         description: format!("Decree Passed: {decree_title}"),
@@ -3571,8 +3532,9 @@ impl FedEvent {
             }
             FedEventData::PlayerJoinedILB { player_id, player_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerDivisionMove,
+                        category: EventCategory::Changes,
                         description: format!("{player_name} has joined the ILB."),
                         player_tags: vec![player_id],
                         ..Default::default()
@@ -3582,7 +3544,7 @@ impl FedEvent {
             }
             FedEventData::PlayerPermittedToStay { player_id, player_name } => {
                 event_builder
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerPermittedToStay,
                         category: EventCategory::Special,
                         description: format!("{player_name} has been permitted to stay."),
@@ -3605,7 +3567,7 @@ impl FedEvent {
         }
     }
 
-    fn make_mod_change_sub_events(&self, game: &GameEvent, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFullWithMetadata>, String) {
+    fn make_mod_change_sub_events(&self, game: &GameEvent, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
         let suffix = mod_changes.iter()
             .map(|e| format!("\n{} {message}", e.player_name))
             .join("");
@@ -3613,9 +3575,10 @@ impl FedEvent {
         let children = mod_changes.iter()
             .enumerate()
             .map(|(sub_play, e)| {
-                EventBuilder::child(&e.sub_event)
+                EventBuilderChild::new(&e.sub_event)
                     .update(EventBuilderUpdate {
                         r#type: event_type,
+                        category: EventCategory::Changes,
                         description: format!("{} {message}", e.player_name),
                         team_tags: vec![e.team_id],
                         player_tags: vec![e.player_id],
@@ -3629,114 +3592,6 @@ impl FedEvent {
             .collect();
 
         (children, suffix)
-    }
-
-    fn push_red_hot(&self, game: &GameEvent, player_name: &str, batter_id: Uuid, spicy_status: &SpicyStatus, children: &mut Vec<EventBuilderChildFullWithMetadata>) {
-        if let SpicyStatus::RedHot(Some(red_hot)) = spicy_status {
-            children.push(
-                EventBuilder::child(&red_hot.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} is Red Hot!"),
-                        team_tags: vec![red_hot.team_id],
-                        player_tags: vec![batter_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "ON_FIRE",
-                        "type": 0, // ?
-                    })),
-            )
-        }
-    }
-
-    fn push_cooled_off(&self, game: &GameEvent, player_name: &str, cooled_off: &Option<ModChangeSubEventWithPlayer>, children: &mut Vec<EventBuilderChildFullWithMetadata>, player_tags: &mut Vec<Uuid>) -> String {
-        if let Some(cooled_off) = cooled_off {
-            children.push(
-                EventBuilder::child(&cooled_off.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::RemovedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} cooled off."),
-                        team_tags: vec![cooled_off.team_id],
-                        player_tags: vec![cooled_off.player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "ON_FIRE",
-                        "type": 0, // ?
-                    }))
-            );
-
-            player_tags.push(cooled_off.player_id);
-            format!("\n{player_name} cooled off.")
-        } else {
-            String::new()
-        }
-    }
-
-    fn stopped_inhabiting_children(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>) -> Vec<EventBuilderChildFullWithMetadata> {
-        let mut vec = Vec::new();
-        self.push_stopped_inhabiting(game, stopped_inhabiting, &mut vec);
-        vec
-    }
-
-    fn push_stopped_inhabiting(&self, game: &GameEvent, stopped_inhabiting: &Option<StoppedInhabiting>, children: &mut Vec<EventBuilderChildFullWithMetadata>) {
-        if let Some(inh) = stopped_inhabiting {
-            children.push(
-                EventBuilder::child(&inh.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::RemovedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{} stopped Inhabiting.", inh.inhabiting_player_name),
-                        player_tags: vec![inh.inhabiting_player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "INHABITING",
-                        "type": 0, // ?
-                    }))
-            )
-        }
-    }
-
-    fn get_score_data(&self, game: &GameEvent, scores: &ScoreInfo, score_text: &str) -> (String, bool, Vec<EventBuilderChildFullWithMetadata>) {
-        let score_text = scores.to_description(score_text);
-        let has_any_refills = !scores.free_refills.is_empty();
-        let children: Vec<_> = scores.free_refills.iter()
-            .map(|free_refill| self.make_free_refill_child(game, free_refill))
-            .collect();
-        (score_text, has_any_refills, children)
-    }
-
-    fn make_event_builder(&self) -> EventBuilderCommon {
-        EventBuilderCommon {
-            id: self.id,
-            created: self.created,
-            sim: self.sim.clone(),
-            day: self.day,
-            phase: self.phase.into(),
-            season: self.season,
-            tournament: self.tournament,
-            nuts: self.nuts,
-        }
-    }
-
-    fn make_free_refill_child(&self, game: &GameEvent, free_refill: &FreeRefill) -> EventBuilderChildFullWithMetadata {
-        EventBuilder::child(&free_refill.sub_event)
-            .update(EventBuilderUpdate {
-                r#type: EventType::RemovedMod,
-                category: EventCategory::Changes,
-                description: format!("{} used their Free Refill.", free_refill.player_name),
-                team_tags: vec![free_refill.team_id],
-                player_tags: vec![free_refill.player_id],
-                ..Default::default()
-            })
-            .metadata(json!({
-                "mod": "COFFEE_RALLY",
-                "type": 0, // ?
-            }))
     }
 }
 

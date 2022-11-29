@@ -1,6 +1,7 @@
 pub mod error;
 pub mod event_schema;
 mod feed_event_util;
+pub mod builder;
 
 use std::slice::Iter;
 use itertools::Itertools;
