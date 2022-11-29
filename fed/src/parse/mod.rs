@@ -18,7 +18,7 @@ use uuid::Uuid;
 use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, Scattered, Unscatter};
-use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
+use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play, get_one_or_zero_sub_events};
 
 const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
@@ -961,17 +961,29 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::FlagPlanted => {
-            let (team_nickname, park_name, prefab_name) = run_parser(&event, parse_flag_planted)?;
+            let (team_nickname, park_name, prefab_name, is_first) = run_parser(&event, parse_flag_planted)?;
 
             make_fed_event(event, FedEventData::FlagPlanted {
                 team_id: get_one_team_id(event)?,
                 team_nickname: team_nickname.to_string(),
                 ballpark_name: park_name.to_string(),
                 prefab_name: prefab_name.to_string(),
+                renovation_id: get_str_metadata(event, "renoId")?.to_string(),
+                votes: get_int_metadata(event, "votes")?,
+                is_first,
+            })
+        }
+        EventType::RenovationBuilt => {
+            // It may be valuable to parse which reno is built, but there isn't one unified syntax
+            // so I'm not going to put in the work now. Contributions welcome.
+            make_fed_event(event, FedEventData::RenovationBuilt {
+                team_id: get_one_team_id(event)?,
+                description: event.description.clone(),
+                renovation_id: get_str_metadata(event, "renoId")?.to_string(),
+                renovation_title: get_str_metadata(event, "title")?.to_string(),
                 votes: get_int_metadata(event, "votes")?,
             })
         }
-        EventType::RenovationBuilt => { todo!() }
         EventType::LightSwitchToggled => { todo!() }
         EventType::DecreePassed => {
             let decree_title = run_parser(&event, parse_decree_passed)?;
@@ -1163,7 +1175,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Earlbird => {
             match run_parser(event, parse_earlbird)? {
-                EarlbirdsChange::Added(team_nickname) => {
+                PartSeasonModChange::Added(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let sub_event = get_one_sub_event(event)?;
@@ -1174,7 +1186,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: SubEvent::from_event(sub_event),
                     })
                 }
-                EarlbirdsChange::Removed => {
+                PartSeasonModChange::Removed => {
                     let sub_event = get_one_sub_event(event)?;
                     make_fed_event(event, FedEventData::EarlbirdsRemoved {
                         game: GameEvent::try_from_event(event, unscatter)?,
@@ -1184,7 +1196,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
             }
         }
-        EventType::LateToTheParty => { todo!() }
+        EventType::LateToTheParty => {
+            match run_parser(event, parse_late_to_the_party)? {
+                PartSeasonModChange::Added(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    let sub_event = get_one_or_zero_sub_events(event)?;
+                    make_fed_event(event, FedEventData::LateToThePartyAdded {
+                        game: GameEvent::try_from_event(event, unscatter)?,
+                        team_id: sub_event.map(|e| get_one_team_id(e)).transpose()?,
+                        team_nickname: team_nickname.to_string(),
+                        sub_event: sub_event.map(SubEvent::from_event),
+                    })
+                }
+                PartSeasonModChange::Removed => {
+                    todo!()
+                    // let sub_event = get_one_sub_event(event)?;
+                    // make_fed_event(event, FedEventData::EarlbirdsRemoved {
+                    //     game: GameEvent::try_from_event(event, unscatter)?,
+                    //     team_id: get_one_team_id(sub_event)?,
+                    //     sub_event: SubEvent::from_event(sub_event),
+                    // })
+                }
+            }
+
+        }
         EventType::ShameDonor => { todo!() }
         EventType::AddedMod => {
             match run_parser(&event, parse_added_mod)? {
@@ -2560,13 +2596,18 @@ fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (player1_name, player2_name)))
 }
 
-fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str)> {
+fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str, bool)> {
     let (input, _) = tag("The ")(input)?;
     let (input, team_nickname) = parse_terminated(" break ground on ")(input)?;
     let (input, park_name) = parse_terminated(", selecting to build the ")(input)?;
-    let (input, prefab_name) = parse_terminated(" prefab!\nTHE FLAG IS PLANTED")(input)?;
+    let (input, prefab_name) = parse_terminated(" prefab")(input)?;
 
-    Ok((input, (team_nickname, park_name, prefab_name)))
+    let (input, is_first) = alt((
+        tag("!\nTHE FLAG IS PLANTED").map(|_| true),
+        tag(".\nAnother flag is planted!").map(|_| false),
+        ))(input)?;
+
+    Ok((input, (team_nickname, park_name, prefab_name, is_first)))
 }
 
 fn parse_team_division_move(input: &str) -> ParserResult<(&str, &str)> {
@@ -2761,16 +2802,26 @@ fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
-enum EarlbirdsChange<'a> {
+enum PartSeasonModChange<'a> {
     Added(&'a str),
     Removed, // This one says [object Object]. lol & lmao
 }
 
-fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
+fn parse_earlbird(input: &str) -> ParserResult<PartSeasonModChange> {
     let (input, _) = tag("Happy Earlseason!\n")(input)?;
     let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::Added(n)),
-        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::Removed),
+        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| PartSeasonModChange::Added(n)),
+        tag("Earlbirds wears off for the [object Object].").map(|_| PartSeasonModChange::Removed),
+    ))(input)?;
+
+    Ok((input, result))
+}
+
+fn parse_late_to_the_party(input: &str) -> ParserResult<PartSeasonModChange> {
+    let (input, _) = tag("Late to the Party!\n")(input)?;
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Late to the Party!")).map(|n| PartSeasonModChange::Added(n)),
+        tag("Late to the Party wears off for the [object Object].").map(|_| PartSeasonModChange::Removed),
     ))(input)?;
 
     Ok((input, result))

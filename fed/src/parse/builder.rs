@@ -108,7 +108,7 @@ pub enum SpicyChange<'s> {
 }
 
 impl EventBuilderForGame {
-    pub fn update(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static> {
+    pub fn fill(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static> {
         EventBuilderFull {
             common: self.common,
             game: Some(self.game),

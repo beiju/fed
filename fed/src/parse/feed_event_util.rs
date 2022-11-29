@@ -18,6 +18,14 @@ pub fn get_one_sub_event(event: &EventuallyEvent) -> Result<&EventuallyEvent, Fe
     get_one_sub_event_from_slice(&event.metadata.children, event.r#type)
 }
 
+pub fn get_one_or_zero_sub_events(event: &EventuallyEvent) -> Result<Option<&EventuallyEvent>, FeedParseError> {
+    if event.metadata.children.is_empty() {
+        Ok(None)
+    } else {
+        get_one_sub_event_from_slice(&event.metadata.children, event.r#type).map(|v| Some(v))
+    }
+}
+
 pub fn get_two_sub_events(event: &EventuallyEvent) -> Result<(&EventuallyEvent, &EventuallyEvent), FeedParseError> {
     let (a, b) = event.metadata.children.iter().collect_tuple()
         .ok_or_else(|| {

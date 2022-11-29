@@ -1536,8 +1536,15 @@ pub enum FedEventData {
         /// Name of prefab used for newly created ballpark
         prefab_name: String,
 
+        /// Internal renovation ID. TODO: Does this correspond to the prefab?
+        renovation_id: String,
+
         /// Number of votes team spent on the ballpark
         votes: i64,
+
+        /// Whether this was the first ballpark. There was a slightly different message for the
+        /// first one.
+        is_first: bool,
     },
 
     /// Emergency Alerty
@@ -1934,7 +1941,46 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event that adds the Overperforming mod
         sub_event: SubEvent,
-    }
+    },
+
+    /// Renovation was built at a Ballpark
+    RenovationBuilt {
+        /// Uuid of team who owns the Ballpark
+        team_id: Uuid,
+
+        /// Flavor text for building the renovation
+        description: String,
+
+        /// Internal ID for the renovation
+        renovation_id: String,
+
+        /// User-visible name of the renovation
+        renovation_title: String,
+
+        /// Number of votes cast for this renovation
+        votes: i64,
+    },
+
+    /// Late to the Party mod procs at the beginning of Lateseason
+    LateToThePartyAdded {
+        game: GameEvent,
+
+        /// Uuid of Late to the Party team
+        ///
+        /// It seems that there's one event that has the sub-event and team Uuid and then another
+        /// that doesn't. Shrug emoji.
+        team_id: Option<Uuid>,
+
+        /// Name of Late to the Party team
+        team_nickname: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        ///
+        /// It seems that there's one event that has the sub-event and team Uuid and then another
+        /// that doesn't. Shrug emoji.
+        sub_event: Option<SubEvent>,
+    },
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2055,7 +2101,7 @@ impl FedEvent {
                     metadata["stadium"] = json!(id);
                 }
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::LetsGo,
                         description: "Let's Go!".to_string(),
                         ..Default::default()
@@ -2065,7 +2111,7 @@ impl FedEvent {
             }
             FedEventData::PlayBall { game } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PlayBall,
                         description: "Play ball!".to_string(),
                         ..Default::default()
@@ -2074,7 +2120,7 @@ impl FedEvent {
             }
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::HalfInning,
                         description: format!("{} of {inning}, {batting_team_name} batting.",
                                              if top_of_inning { "Top" } else { "Bottom" }),
@@ -2114,7 +2160,7 @@ impl FedEvent {
                     });
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BatterUp,
                         category: EventCategory::special_if(inhabiting.is_some() || is_repeating),
                         description: if let Some(inhabiting) = &inhabiting {
@@ -2171,7 +2217,7 @@ impl FedEvent {
                         }))
                 };
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
                         r#type: EventType::Superyummy,
                         description,
@@ -2182,7 +2228,7 @@ impl FedEvent {
             }
             FedEventData::Ball { game, balls, strikes } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Ball,
                         description: format!("Ball. {}-{}", balls, strikes),
                         ..Default::default()
@@ -2191,7 +2237,7 @@ impl FedEvent {
             }
             FedEventData::StrikeSwinging { game, balls, strikes } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, swinging. {balls}-{strikes}"),
                         ..Default::default()
@@ -2200,7 +2246,7 @@ impl FedEvent {
             }
             FedEventData::StrikeLooking { game, balls, strikes } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, looking. {balls}-{strikes}"),
                         ..Default::default()
@@ -2209,7 +2255,7 @@ impl FedEvent {
             }
             FedEventData::StrikeFlinching { game, balls, strikes } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, flinching. {balls}-{strikes}"),
                         ..Default::default()
@@ -2218,7 +2264,7 @@ impl FedEvent {
             }
             FedEventData::FoulBall { game, balls, strikes } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FoulBall,
                         description: format!("Foul Ball. {balls}-{strikes}"),
                         ..Default::default()
@@ -2227,7 +2273,7 @@ impl FedEvent {
             }
             FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
                         description: format!("{batter_name} hit a flyout to {fielder_name}."),
@@ -2240,7 +2286,7 @@ impl FedEvent {
             }
             FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status, is_special } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Hit,
                         category: EventCategory::special_if(scores.used_refill() || spicy_status.is_special() || is_special),
                         description: format!("{batter_name} hits a {}!", match num_bases {
@@ -2290,7 +2336,7 @@ impl FedEvent {
                 }
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::HomeRun,
                         category: EventCategory::special_if(magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() || is_special),
                         description: format!("{}{batter_name} hits a {}!{suffix}",
@@ -2313,7 +2359,7 @@ impl FedEvent {
             }
             FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
                         description: format!("{batter_name} hit a ground out to {fielder_name}."),
@@ -2338,7 +2384,7 @@ impl FedEvent {
                     String::new()
                 };
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::StolenBase,
                         category: EventCategory::special_if(blaserunning || free_refill.is_some()),
                         description: format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str),
@@ -2354,7 +2400,7 @@ impl FedEvent {
             }
             FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strikeout,
                         category: EventCategory::special_if(is_special),
                         description: format!("{} strikes out swinging.", batter_name),
@@ -2365,7 +2411,7 @@ impl FedEvent {
             }
             FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strikeout,
                         category: EventCategory::special_if(is_special),
                         description: format!("{} strikes out looking.", batter_name),
@@ -2382,7 +2428,7 @@ impl FedEvent {
                 };
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
                         category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some()),
                         description: format!("{batter_name} draws a walk.{base_instincts_str}"),
@@ -2395,7 +2441,7 @@ impl FedEvent {
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::StolenBase,
                         description: format!("{} gets caught stealing {} base.", runner_name, base_name(base_stolen)),
                         player_tags: vec![],
@@ -2408,7 +2454,7 @@ impl FedEvent {
                 let (children, suffix) = self.make_mod_change_sub_events(lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::InningEnd,
                         description: format!("Inning {inning_num} is now an Outing.{suffix}"),
                         player_tags: lost_triple_threat.iter().map(|e| e.player_id).collect(),
@@ -2419,7 +2465,7 @@ impl FedEvent {
             }
             FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, num_swings } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Strikeout,
                         category: EventCategory::Special,
                         description: format!("{charmer_name} charmed {charmed_name}!\n{charmed_name} swings {num_swings} times to strike out willingly!"),
@@ -2431,7 +2477,7 @@ impl FedEvent {
             }
             FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
                         description: format!("{runner_out_name} out at {} base.",
@@ -2446,7 +2492,7 @@ impl FedEvent {
             }
             FedEventData::StrikeZapped { game } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::StrikeZapped,
                         category: EventCategory::Special,
                         description: "The Electricity zaps a strike away!".to_string(),
@@ -2456,7 +2502,7 @@ impl FedEvent {
             }
             FedEventData::PeanutFlavorText { game, message } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PeanutFlavorText,
                         category: EventCategory::Special,
                         description: message,
@@ -2466,7 +2512,7 @@ impl FedEvent {
             }
             FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
                         description: format!("{batter_name} hit into a double play!"),
@@ -2479,7 +2525,7 @@ impl FedEvent {
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::GameEnd,
                         category: EventCategory::Outcomes,
                         description: format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"),
@@ -2500,7 +2546,7 @@ impl FedEvent {
                 };
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::MildPitch,
                         category: EventCategory::Special,
                         description: format!("{pitcher_name} throws a Mild pitch!\nBall, {balls}-{strikes}.{runners_advance_str}"),
@@ -2544,7 +2590,7 @@ impl FedEvent {
                     );
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::CoffeeBean,
                         category: EventCategory::Special,
                         description: format!("{player_name} is Beaned by a {roast} roast with {notes}.\n{player_name} {change_str} {mod_str}"),
@@ -2569,7 +2615,7 @@ impl FedEvent {
                         "type": 0, // ?
                     }));
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::IncinerationBlocked,
                         category: EventCategory::Special,
                         description: format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"),
@@ -2595,7 +2641,7 @@ impl FedEvent {
                         "after": rating_after,
                     }));
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BlooddrainSiphon,
                         category: EventCategory::Special,
                         description: format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}"),
@@ -2638,7 +2684,7 @@ impl FedEvent {
             }
             FedEventData::BirdsCircle { game } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BirdsCircle,
                         category: EventCategory::Special,
                         description: "The Birds circle ... but they don't find what they're looking for.".to_string(),
@@ -2653,7 +2699,7 @@ impl FedEvent {
                     String::new()
                 };
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::AmbushedByCrows,
                         category: EventCategory::Special,
                         description: format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."),
@@ -2686,7 +2732,7 @@ impl FedEvent {
             }
             FedEventData::Sun2 { game, team_nickname } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Sun2,
                         category: EventCategory::Special,
                         description: format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}."),
@@ -2696,7 +2742,7 @@ impl FedEvent {
             }
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BlackHole,
                         category: EventCategory::Special,
                         description: format!("The {scoring_team_nickname} collect 10!\nThe Black Hole swallows the Runs and a {victim_team_nickname} Win."),
@@ -2736,7 +2782,7 @@ impl FedEvent {
             }
             FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, scores, stopped_inhabiting } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
                         category: EventCategory::Special,
                         description: format!("{batter_name} charms {pitcher_name}!\n{batter_name} walks to first base."),
@@ -2763,7 +2809,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::GainFreeRefill,
                         category: EventCategory::Special,
                         description: format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!\n{player_name} got a Free Refill."),
@@ -2790,7 +2836,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::AllergicReaction,
                         category: EventCategory::Special,
                         description: format!("{player_name} swallowed a stray peanut and had an allergic reaction!"),
@@ -2802,7 +2848,7 @@ impl FedEvent {
             }
             FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores, ref stopped_inhabiting } => {
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::MildPitch,
                         category: EventCategory::Special,
                         description: format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."),
@@ -2833,7 +2879,7 @@ impl FedEvent {
                     });
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Perk,
                         category: EventCategory::Special,
                         description: players.iter()
@@ -2873,7 +2919,7 @@ impl FedEvent {
                 };
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain },
                         category: EventCategory::Special,
                         description: format!("The Blooddrain gurgled!{siphon_text}\n{} siphoned some of {}'s {sipped_category} ability!\n{} increased their {sipped_category} ability!", sipper.player_name, sipped.player_name, sipper.player_name),
@@ -2907,7 +2953,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FeedbackSwap,
                         category: EventCategory::Special,
                         description: format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {position_type}.", player_a.player_name, player_b.player_name, player_b.player_name),
@@ -2933,7 +2979,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::ReverbBestowsReverberating,
                         category: EventCategory::Special,
                         description: format!("Reverberations are at dangerous levels!\n{player_name} is now Reverberating wildly!"),
@@ -2967,7 +3013,7 @@ impl FedEvent {
                 match reverb_type {
                     ReverbType::Lineup(sub_event) => {
                         event_builder.for_game(game)
-                            .update(EventBuilderUpdate {
+                            .fill(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
                                 description: format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!{gravity_suffix}"),
@@ -2979,7 +3025,7 @@ impl FedEvent {
                     }
                     ReverbType::Rotation(sub_event) => {
                         event_builder.for_game(game)
-                            .update(EventBuilderUpdate {
+                            .fill(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
                                 description: format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their rotation shuffled in the Reverb!{gravity_suffix}"),
@@ -2991,7 +3037,7 @@ impl FedEvent {
                     }
                     ReverbType::Full(sub_event) => {
                         event_builder.for_game(game)
-                            .update(EventBuilderUpdate {
+                            .fill(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
                                 description: format!("Reverberations are at dangerous levels!\nThe {team_nickname} were shuffled in the Reverb!{gravity_suffix}"),
@@ -3066,7 +3112,7 @@ impl FedEvent {
                             }))
                     });
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BecomeTripleThreat,
                         category: EventCategory::Special,
                         description: if let Some((pitcher_1, pitcher_2)) = pitchers.iter().collect_tuple() {
@@ -3100,7 +3146,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
                         r#type: EventType::UnderOver,
                         description,
@@ -3127,7 +3173,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
                         r#type: EventType::OverUnder,
                         description,
@@ -3153,7 +3199,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::TasteTheInfinite,
                         category: EventCategory::Special,
                         description: format!("{sheller_name} tastes the infinite!\n{shellee_name} is Shelled!"),
@@ -3165,7 +3211,7 @@ impl FedEvent {
             }
             FedEventData::BatterSkipped { game, batter_name, reason } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::BatterSkipped,
                         description: match reason {
                             BatterSkippedReason::Shelled => { format!("{batter_name} is Shelled and cannot escape!") }
@@ -3198,7 +3244,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FeedbackBlocked,
                         category: EventCategory::Special,
                         description: format!("Reality begins to flicker ...\nBut {resisted_name} resists!\n{tangled_name} is tangled in the flicker!"),
@@ -3208,17 +3254,22 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::FlagPlanted { team_id, team_nickname, ballpark_name, prefab_name, votes } => {
+            FedEventData::FlagPlanted { team_id, team_nickname, ballpark_name, prefab_name, renovation_id, votes, is_first } => {
+                let flag_planted_str = if is_first {
+                    "!\nTHE FLAG IS PLANTED"
+                } else {
+                    ".\nAnother flag is planted!"
+                };
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlagPlanted,
                         category: EventCategory::Changes,
-                        description: format!("The {team_nickname} break ground on {ballpark_name}, selecting to build the {prefab_name} prefab!\nTHE FLAG IS PLANTED"),
+                        description: format!("The {team_nickname} break ground on {ballpark_name}, selecting to build the {prefab_name} prefab{flag_planted_str}"),
                         team_tags: vec![team_id],
                         ..Default::default()
                     })
                     .metadata(json!({
-                        "renoId": "1",
+                        "renoId": renovation_id,
                         "title": "Ground Broken",
                         "votes": votes,
                     }))
@@ -3259,7 +3310,7 @@ impl FedEvent {
                     suffix = format!("{suffix}\n{} uses their Flippers to slingshot home!", player.player_name);
                 }
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::FloodingSwept,
                         category: EventCategory::Special,
                         description: format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"),
@@ -3310,7 +3361,7 @@ impl FedEvent {
                     vec![elsewhere_child]
                 };
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::ReturnFromElsewhere,
                         description,
                         ..Default::default()
@@ -3369,7 +3420,7 @@ impl FedEvent {
                 ];
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Incineration,
                         category: EventCategory::Special,
                         description: format!("Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}."),
@@ -3381,7 +3432,7 @@ impl FedEvent {
             }
             FedEventData::PitcherChange { game, team_nickname: team_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::PitcherChange,
                         description: format!("{pitcher_name} is now pitching for the {team_name}."),
                         player_tags: vec![pitcher_id],
@@ -3407,7 +3458,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Party,
                         description,
                         player_tags: vec![player_id],
@@ -3621,7 +3672,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Earlbird,
                         category: EventCategory::Special,
                         description: format!("Happy Earlseason!\nThe {team_nickname} are Earlbirds!"),
@@ -3666,7 +3717,7 @@ impl FedEvent {
             }
             FedEventData::FireproofIncineration { game, player_id, player_name } => {
                 event_builder.for_game(&game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::IncinerationBlocked,
                         category: EventCategory::Special,
                         description: format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"),
@@ -3732,7 +3783,7 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Earlbird,
                         category: EventCategory::Special,
                         description: format!("Happy Earlseason!\nEarlbirds wears off for the [object Object]."),
@@ -3758,12 +3809,58 @@ impl FedEvent {
                     }));
 
                 event_builder.for_game(game)
-                    .update(EventBuilderUpdate {
+                    .fill(EventBuilderUpdate {
                         r#type: EventType::Undersea,
                         description,
                         ..Default::default()
                     })
                     .child(child)
+                    .build()
+            }
+
+            FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::RenovationBuilt,
+                        category: EventCategory::Changes,
+                        description,
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "renoId": renovation_id,
+                        "title": renovation_title,
+                        "votes": votes,
+                    }))
+                    .build()
+            }
+            FedEventData::LateToThePartyAdded { ref game, team_id, ref team_nickname, ref sub_event } => {
+                let children = if let Some(sub_event) = sub_event {
+                    vec![EventBuilderChild::new(sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::AddedModFromOtherMod,
+                            category: EventCategory::Changes,
+                            description: format!("The {team_nickname} are Late to the Party!"),
+                            team_tags: team_id.into_iter().collect(),
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                        "mod": "OVERPERFORMING",
+                        "source": "LATE_TO_PARTY",
+                        "type": 0, // ?
+                    }))]
+                } else {
+                    vec![]
+                };
+
+                event_builder.for_game(game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::LateToTheParty,
+                        category: EventCategory::Special,
+                        description: format!("Late to the Party!\nThe {team_nickname} are Late to the Party!"),
+                        ..Default::default()
+                    })
+                    .children(children)
                     .build()
             }
 
