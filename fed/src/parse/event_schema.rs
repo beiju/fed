@@ -1357,6 +1357,9 @@ pub enum FedEventData {
         /// Type of reverb that happened, with metadata for the associated `ReverbRosterShuffle`
         /// sub-event
         reverb_type: ReverbType,
+
+        /// Players who were kept in place with Gravity
+        gravity_players: Vec<PlayerInfo>,
     },
 
     /// Tarot readings
@@ -2940,18 +2943,26 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Reverb { ref game, team_id, ref team_nickname, ref reverb_type } => {
+            FedEventData::Reverb { ref game, team_id, ref team_nickname, ref reverb_type, ref gravity_players } => {
                 let get_child = |sub_event, event_type, shuffle_location| {
                     EventBuilderChild::new(sub_event)
                         .update(EventBuilderUpdate {
                             r#type: event_type,
                             category: EventCategory::Changes,
-                            description: format!("The {team_nickname} had their {shuffle_location} shuffled in the Reverb!"),
+                            description: format!("The {team_nickname} {shuffle_location} shuffled in the Reverb!"),
                             team_tags: vec![team_id],
                             ..Default::default()
                         })
                         .metadata(json!({ "parent": self.id }))
                 };
+
+                let gravity_suffix = gravity_players.iter()
+                    .map(|player| format!("\n{}'s Gravity kept them in place!", player.player_name))
+                    .join("");
+
+                let player_tags = gravity_players.iter()
+                    .map(|player| player.player_id)
+                    .collect();
 
                 match reverb_type {
                     ReverbType::Lineup(sub_event) => {
@@ -2959,10 +2970,11 @@ impl FedEvent {
                             .update(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
-                                description: format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!"),
+                                description: format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!{gravity_suffix}"),
+                                player_tags,
                                 ..Default::default()
                             })
-                            .child(get_child(sub_event, EventType::ReverbLineupShuffle, "lineup"))
+                            .child(get_child(sub_event, EventType::ReverbLineupShuffle, "had their lineup"))
                             .build()
                     }
                     ReverbType::Rotation(sub_event) => {
@@ -2970,14 +2982,24 @@ impl FedEvent {
                             .update(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
-                                description: format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their rotation shuffled in the Reverb!"),
+                                description: format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their rotation shuffled in the Reverb!{gravity_suffix}"),
+                                player_tags,
                                 ..Default::default()
                             })
-                            .child(get_child(sub_event, EventType::ReverbRotationShuffle, "rotation"))
+                            .child(get_child(sub_event, EventType::ReverbRotationShuffle, "had their rotation"))
                             .build()
                     }
-                    ReverbType::Full(_) => {
-                        todo!()
+                    ReverbType::Full(sub_event) => {
+                        event_builder.for_game(game)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::ReverbRosterShuffle,
+                                category: EventCategory::Special,
+                                description: format!("Reverberations are at dangerous levels!\nThe {team_nickname} were shuffled in the Reverb!{gravity_suffix}"),
+                                player_tags,
+                                ..Default::default()
+                            })
+                            .child(get_child(sub_event, EventType::ReverbFullShuffle, "were"))
+                            .build()
                     }
                 }
             }

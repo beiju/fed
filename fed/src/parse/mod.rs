@@ -776,7 +776,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::ReverbRosterShuffle => {
-            let (team_nickname, reverb_type) = run_parser(&event, parse_roster_shuffle)?;
+            let (team_nickname, reverb_type, gravity_player_names) = run_parser(&event, parse_roster_shuffle)?;
+
+            let gravity_players = zip_eq(gravity_player_names, &event.player_tags)
+                .map(|(player_name, &player_id)| PlayerInfo { player_id, player_name: player_name.to_string() })
+                .collect();
 
             match reverb_type {
                 ParsedReverbType::Rotation => {
@@ -786,6 +790,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         team_id: get_one_team_id(sub_event)?,
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Rotation(SubEvent::from_event(sub_event)),
+                        gravity_players,
                     })
                 }
                 ParsedReverbType::Lineup => {
@@ -795,6 +800,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         team_id: get_one_team_id(sub_event)?,
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Lineup(SubEvent::from_event(sub_event)),
+                        gravity_players,
                     })
                 }
                 ParsedReverbType::Full => {
@@ -804,6 +810,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         team_id: get_one_team_id(sub_event)?,
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Full(SubEvent::from_event(sub_event)),
+                        gravity_players,
                     })
                 }
                 ParsedReverbType::SeveralPlayers => {
@@ -2465,16 +2472,30 @@ enum ParsedReverbType {
     SeveralPlayers,
 }
 
-fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType)> {
+fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    alt((parse_roster_shuffle_unsafe, parse_roster_shuffle_dangerous))(input)
+}
+
+fn parse_roster_shuffle_unsafe(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
     let (input, _) = tag("Reverberations are at unsafe levels!\nThe ")(input)?;
-    let (input, result) = alt((
+    let (input, (team_name, reverb_type)) = alt((
         parse_terminated(" had their rotation shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Rotation)),
         parse_terminated(" had their lineup shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Lineup)),
-        parse_terminated(" were shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Full)),
         parse_terminated(" had several players shuffled in the Reverb!").map(|n| (n, ParsedReverbType::SeveralPlayers)),
     ))(input)?;
 
-    Ok((input, result))
+    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!")))(input)?;
+
+    Ok((input, (team_name, reverb_type, gravity_players)))
+}
+
+fn parse_roster_shuffle_dangerous(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    let (input, _) = tag("Reverberations are at dangerous levels!\nThe ")(input)?;
+    let (input, team_name) = parse_terminated(" were shuffled in the Reverb!")(input)?;
+
+    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!")))(input)?;
+
+    Ok((input, (team_name, ParsedReverbType::Full, gravity_players)))
 }
 
 fn parse_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
