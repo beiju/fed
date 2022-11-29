@@ -35,9 +35,6 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     };
 
 
-    let original_event_json = serde_json::to_value(&feed_event)
-        .context("Failed to convert original event to serde_json::Value")?;
-
     let parsed_event = parse::parse_feed_event(&feed_event)
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
@@ -46,13 +43,18 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     let day = parsed_event.day + 1;
     let reconstructed_event = parsed_event.into_feed_event();
 
-    let reconstructed_event_json = serde_json::to_value(reconstructed_event)
-        .context("Failed to convert reconstructed event to serde_json::Value")?;
-    JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
-        .map_or_else(|| Ok(()),
-                     |str| Err(anyhow!("{str}")))
-        .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
+    // JsonDiff is expensive. Only run it if the events don't compare equal.
+    if feed_event != reconstructed_event {
+        let original_event_json = serde_json::to_value(&feed_event)
+            .context("Failed to convert original event to serde_json::Value")?;
 
+        let reconstructed_event_json = serde_json::to_value(reconstructed_event)
+            .context("Failed to convert reconstructed event to serde_json::Value")?;
+        JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
+            .map_or_else(|| Ok(()),
+                         |str| Err(anyhow!("{str}")))
+            .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
+    }
     Ok((i, Some(format!("s{season}d{day}"))))
 }
 
