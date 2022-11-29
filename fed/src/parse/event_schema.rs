@@ -270,7 +270,7 @@ impl AttrCategory {
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
-    AddStrike,
+    AddStrike(Option<String>), // if there's a strikeout looking, there's a name here
     RemoveStrike,
     AddOut,
     RemoveOut,
@@ -279,12 +279,15 @@ pub enum BlooddrainAction {
 impl Display for BlooddrainAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BlooddrainAction::AddBall => { write!(f, "adds a Ball") }
-            BlooddrainAction::RemoveBall => { write!(f, "removes a Ball") }
-            BlooddrainAction::AddStrike => { write!(f, "adds a Strike") }
-            BlooddrainAction::RemoveStrike => { write!(f, "removes a Strike") }
-            BlooddrainAction::AddOut => { write!(f, "adds a Out") }
-            BlooddrainAction::RemoveOut => { write!(f, "removes a Out") }
+            BlooddrainAction::AddBall => { write!(f, "adds a Ball!") }
+            BlooddrainAction::RemoveBall => { write!(f, "removes a Ball!") }
+            BlooddrainAction::AddStrike(None) => { write!(f, "adds a Strike!") }
+            BlooddrainAction::AddStrike(Some(player_struck_out_name)) => {
+                write!(f, "adds a Strike!\n{player_struck_out_name} strikes out looking.")
+            }
+            BlooddrainAction::RemoveStrike => { write!(f, "removes a Strike!") }
+            BlooddrainAction::AddOut => { write!(f, "adds a Out!") }
+            BlooddrainAction::RemoveOut => { write!(f, "removes a Out!") }
         }
     }
 }
@@ -1225,6 +1228,13 @@ pub enum FedEventData {
 
         /// Name of the pitcher that was charmed
         pitcher_name: String,
+
+        #[serde(flatten)]
+        scores: ScoreInfo,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Player gained a Free Refill
@@ -2515,7 +2525,7 @@ impl FedEvent {
                     .update(EventBuilderUpdate {
                         r#type: EventType::BlooddrainSiphon,
                         category: EventCategory::Special,
-                        description: format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}!"),
+                        description: format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}"),
                         player_tags: vec![sipper_id, sipped_id],
                         ..Default::default()
                     })
@@ -2651,7 +2661,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name } => {
+            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, scores, stopped_inhabiting } => {
                 event_builder.for_game(&game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::Walk,
@@ -2660,6 +2670,8 @@ impl FedEvent {
                         player_tags: vec![batter_id, batter_id], // two of them
                         ..Default::default()
                     })
+                    .scores(&scores, " scores!")
+                    .stopped_inhabiting(&stopped_inhabiting)
                     .build()
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {

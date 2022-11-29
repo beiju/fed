@@ -155,14 +155,32 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         base_instincts,
                     })
                 }
-                ParsedWalk::Charm((batter_name, pitcher_name)) => {
-                    let (batter_id, charmer_id) = get_two_player_ids(event)?;
+                ParsedWalk::Charm((batter_name, pitcher_name, scores)) => {
+                    let (&batter_id, rest_ids) = event.player_tags.split_first()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: event.player_tags.len(),
+                        })?;
+                    let (&charmer_id, rest_ids) = rest_ids.split_first()
+                        .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: event.player_tags.len(),
+                        })?;
                     assert_eq!(batter_id, charmer_id);
+
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_ids, &event.metadata.children, event.r#type, 0)?;
+
                     make_fed_event(event, FedEventData::CharmWalk {
                         game: GameEvent::try_from_event(event, unscatter)?,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         pitcher_name: pitcher_name.to_string(),
+                        scores,
+                        stopped_inhabiting,
                     })
                 }
             }
@@ -818,7 +836,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sipped_id,
                         sipped_name: sipped_name.to_string(),
                         sipped_category,
-                        action,
+                        action: match action {
+                            ParsedBlooddrainAction::AddBall => { BlooddrainAction::AddBall }
+                            ParsedBlooddrainAction::RemoveBall => { BlooddrainAction::RemoveBall }
+                            ParsedBlooddrainAction::AddStrike(name) => { BlooddrainAction::AddStrike(name.map(|s| s.to_string())) }
+                            ParsedBlooddrainAction::RemoveStrike => { BlooddrainAction::RemoveStrike }
+                            ParsedBlooddrainAction::AddOut => { BlooddrainAction::AddOut }
+                            ParsedBlooddrainAction::RemoveOut => { BlooddrainAction::RemoveOut }
+                        },
                         sipped_event: SubEvent::from_event(stat_decrease_event),
                         rating_before: get_float_metadata(stat_decrease_event, "before")?,
                         rating_after: get_float_metadata(stat_decrease_event, "after")?,
@@ -1986,7 +2011,7 @@ fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
 
 enum ParsedWalk<'s> {
     Ordinary((&'s str, ParsedScores<'s>, Option<i32>)),
-    Charm((&'s str, &'s str)),
+    Charm((&'s str, &'s str, ParsedScores<'s>)),
 }
 
 fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -2018,14 +2043,16 @@ fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores, Option<
     Ok((input, (batter_name, scores, base_instincts)))
 }
 
-fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
+fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
     // This will need to be updated if anyone charms in a run
     let (input, batter_name) = parse_terminated(" charms ")(input)?;
     let (input, pitcher_name) = parse_terminated("!\n")(input)?;
     let (input, _) = tag(batter_name)(input)?;
     let (input, _) = tag(" walks to first base.")(input)?;
 
-    Ok((input, (batter_name, pitcher_name)))
+    let (input, scores) = parse_scores(" scores!")(input)?;
+
+    Ok((input, (batter_name, pitcher_name, scores)))
 }
 
 fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
@@ -2170,17 +2197,28 @@ fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
     Ok((input, (player_name, duration)))
 }
 
-fn parse_blooddrain_action(drinker_name: &str) -> impl Fn(&str) -> ParserResult<BlooddrainAction> + '_ {
+pub enum ParsedBlooddrainAction<'s> {
+    AddBall,
+    RemoveBall,
+    AddStrike(Option<&'s str>),
+    // if there's a strikeout looking, there's a name here
+    RemoveStrike,
+    AddOut,
+    RemoveOut,
+}
+
+fn parse_blooddrain_action(drinker_name: &str) -> impl Fn(&str) -> ParserResult<ParsedBlooddrainAction> + '_ {
     move |input: &str| {
         let (input, _) = tag(drinker_name)(input)?;
         let (input, action) = alt((
             // preceded(tag(" increased their "), terminated(parse_category, tag(" ability!"))).map(|ability| BlooddrainAction::IncreaseAbility(ability)),
-            tag(" adds a Ball!").map(|_| BlooddrainAction::AddBall),
-            tag(" removes a Ball!").map(|_| BlooddrainAction::RemoveBall),
-            tag(" adds a Strike!").map(|_| BlooddrainAction::AddStrike),
-            tag(" removes a Strike!").map(|_| BlooddrainAction::RemoveStrike),
-            tag(" adds a Out!").map(|_| BlooddrainAction::AddOut),
-            tag(" removes a Out!").map(|_| BlooddrainAction::RemoveOut),
+            tag(" adds a Ball!").map(|_| ParsedBlooddrainAction::AddBall),
+            tag(" removes a Ball!").map(|_| ParsedBlooddrainAction::RemoveBall),
+            preceded(tag(" adds a Strike!\n"), parse_terminated(" strikes out looking.")).map(|name| ParsedBlooddrainAction::AddStrike(Some(name))),
+            tag(" adds a Strike!").map(|_| ParsedBlooddrainAction::AddStrike(None)),
+            tag(" removes a Strike!").map(|_| ParsedBlooddrainAction::RemoveStrike),
+            tag(" adds a Out!").map(|_| ParsedBlooddrainAction::AddOut),
+            tag(" removes a Out!").map(|_| ParsedBlooddrainAction::RemoveOut),
         ))(input)?;
 
         Ok((input, action))
@@ -2198,7 +2236,7 @@ fn parse_blooddrain_ability<'a>(drinker_name: &'a str, category: &'a str) -> imp
     }
 }
 
-fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, Option<BlooddrainAction>)> {
+fn parse_blooddrain_siphon(input: &str) -> ParserResult<(&str, &str, AttrCategory, Option<ParsedBlooddrainAction>)> {
     let (input, _) = tag("The Blooddrain gurgled!\n")(input)?;
     let (input, drinker_name) = parse_terminated("'s Siphon activates!\n")(input)?;
     let (input, _) = tag(drinker_name)(input)?;
