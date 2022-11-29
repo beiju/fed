@@ -1883,12 +1883,17 @@ fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedSc
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.")(input)?;
 
-    let (input, scores) = parse_scores(" scores!")(input)?;
-    let (input, _) = tag("\n")(input)?;
+    // Scores and free refills are split by fielder's choice text
+    let (input, scorers) = many0(parse_score(" scores!"))(input)?;
 
+    let (input, _) = tag("\n")(input)?;
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.")(input)?;
 
+    let (input, refillers) = many0(parse_free_refill)(input)?;
+
     let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
+
+    let scores = ParsedScores { scorers, refillers };
 
     Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores, cooled_off)))
 }

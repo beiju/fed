@@ -254,13 +254,14 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
         }
 
         if let Some((scores, score_text)) = self.scores {
-            suffix += &*scores.to_description(score_text);
+            suffix += &*scores.to_description_with_text_between(score_text,
+                                                                &self.update.description_after_score);
             children_builders.extend(scores.free_refills.iter()
                 .map(|free_refill| make_free_refill_child(free_refill)));
             player_tags.extend(scores.scorer_ids());
+        } else {
+            suffix += &*self.update.description_after_score;
         }
-
-        suffix += &*self.update.description_after_score;
 
         if let Some(inh) = self.stopped_inhabiting {
             children_builders.push(

@@ -159,11 +159,14 @@ pub struct ScoreInfo {
 }
 
 impl ScoreInfo {
-    pub fn to_description(&self, score_text: &str) -> String {
+    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
         let mut output = String::new();
         for score in &self.scoring_players {
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
         }
+
+        write!(output, "{}", text_between).unwrap();
+
         for refill in &self.free_refills {
             write!(output, "\n{} used their Free Refill.\n{} Refills the In!", refill.player_name, refill.player_name).unwrap();
         }
