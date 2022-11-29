@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::json;
 use uuid::Uuid;
 use fed_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::parse::event_schema::{FreeRefill, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
     pub id: Uuid,
@@ -29,10 +29,11 @@ impl EventBuilderCommon {
         }
     }
 
-    pub fn for_game(self, game: impl Into<EventBuilderGame>) -> EventBuilderForGame {
+    pub fn for_game(self, game: &GameEvent) -> EventBuilderForGame {
         EventBuilderForGame {
             common: self,
-            game: game.into(),
+            // TODO don't clone
+            game: game.clone(),
         }
     }
 }
@@ -83,16 +84,9 @@ pub struct EventBuilderUpdate {
     pub override_team_tags: bool,
 }
 
-pub struct EventBuilderGame {
-    pub game_id: Uuid,
-    pub away_team_id: Uuid,
-    pub home_team_id: Uuid,
-    pub play: i64,
-}
-
 pub struct EventBuilderForGame {
     pub common: EventBuilderCommon,
-    pub game: EventBuilderGame,
+    pub game: GameEvent,
 }
 
 pub enum SpicyChange<'s> {
@@ -130,7 +124,7 @@ impl EventBuilderForGame {
 
 pub struct EventBuilderFull<'s, 'i, 'c> {
     pub common: EventBuilderCommon,
-    pub game: Option<EventBuilderGame>,
+    pub game: Option<GameEvent>,
     pub update: EventBuilderUpdate,
     pub children: Vec<EventBuilderChildFull>,
     pub metadata: serde_json::Value,
@@ -240,6 +234,24 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
         let mut children_builders = Vec::new();
         let mut suffix = String::new();
         let mut player_tags = Vec::new();
+
+        if let Some(unscatter) = self.game.as_ref().and_then(|game| game.unscatter.as_ref()) {
+            children_builders.push(
+                EventBuilderChild::new(&unscatter.sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{} was Unscattered.", unscatter.player_name),
+                        player_tags: vec![unscatter.player_id],
+                        team_tags: vec![unscatter.team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "SCATTERED",
+                        "type": 0, // ?
+                    }))
+            );
+        }
 
         if let Some((scores, score_text)) = self.scores {
             suffix += &*scores.to_description(score_text);
@@ -389,7 +401,7 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
 
 pub struct EventBuilderWithFullMetadata {
     pub common: EventBuilderCommon,
-    pub game: Option<EventBuilderGame>,
+    pub game: Option<GameEvent>,
     pub update: EventBuilderUpdate,
     pub metadata: EventMetadata,
 }
@@ -402,7 +414,7 @@ impl EventBuilderWithFullMetadata {
 
 fn build_final(
     common: EventBuilderCommon,
-    game: Option<EventBuilderGame>,
+    game: Option<GameEvent>,
     update: EventBuilderUpdate,
     metadata: EventMetadata,
     suffix: &str,
@@ -411,7 +423,7 @@ fn build_final(
     let team_tags = if update.override_team_tags {
         update.team_tags
     } else if let Some(ref g) = game {
-        [g.away_team_id, g.home_team_id].into_iter()
+        [g.away_team, g.home_team].into_iter()
             .chain(update.team_tags)
             .collect()
     } else {

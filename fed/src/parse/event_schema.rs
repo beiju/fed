@@ -24,6 +24,14 @@ pub enum Being {
     Namerifeht = 6,
 }
 
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct Unscatter {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    pub player_name: String,
+}
+
 /// Game data. Every game event has one of these.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct GameEvent {
@@ -39,11 +47,14 @@ pub struct GameEvent {
     /// The play that this event came from. This number is always one lower than the playCount
     /// field in the corresponding game update.
     pub play: i64,
+
+    /// If a player got unscattered this tick, contains information about their unscattering.
+    pub unscatter: Option<Unscatter>,
 }
 
 
 impl GameEvent {
-    pub fn try_from_event(event: &EventuallyEvent) -> Result<Self, FeedParseError> {
+    pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>) -> Result<Self, FeedParseError> {
         let (&game_id, ) = event.game_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
 
@@ -51,10 +62,10 @@ impl GameEvent {
         let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
 
-        Self::try_from_event_with_teams(event, game_id, away_team, home_team)
+        Self::try_from_event_with_teams(event, unscatter, game_id, away_team, home_team)
     }
 
-    pub fn try_from_event_extra_teams(event: &EventuallyEvent) -> Result<Self, FeedParseError> {
+    pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>) -> Result<Self, FeedParseError> {
         let (&game_id, ) = event.game_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
 
@@ -65,10 +76,10 @@ impl GameEvent {
         assert_eq!(away_team, away_team2);
         assert_eq!(home_team, home_team2);
 
-        Self::try_from_event_with_teams(event, game_id, away_team, home_team)
+        Self::try_from_event_with_teams(event, unscatter, game_id, away_team, home_team)
     }
 
-    fn try_from_event_with_teams(event: &EventuallyEvent, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
+    fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
         Ok(Self {
             game_id,
             home_team,
@@ -80,18 +91,8 @@ impl GameEvent {
                         field: "play",
                     }
                 })?,
+            unscatter,
         })
-    }
-}
-
-impl Into<EventBuilderGame> for &GameEvent {
-    fn into(self) -> EventBuilderGame {
-        EventBuilderGame {
-            game_id: self.game_id,
-            home_team_id: self.home_team,
-            away_team_id: self.away_team,
-            play: self.play,
-        }
     }
 }
 

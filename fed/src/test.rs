@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 mod parse;
 
 use std::fs::File;

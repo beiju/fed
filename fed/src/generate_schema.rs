@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 #[allow(unused)]
 mod parse;
 
