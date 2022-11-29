@@ -41,8 +41,7 @@ fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Builder, JsonSchema)]
-#[builder(default, pattern = "owned", setter(strip_option))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used
@@ -60,6 +59,7 @@ pub struct EventMetadata {
     pub play: Option<i64>,
     pub sub_play: Option<i64>,
     pub sibling_ids: Option<Vec<Uuid>>,
+    pub parent: Option<Uuid>,
 
     #[serde(flatten)]
     pub other: Value,
