@@ -14,17 +14,26 @@ use nom::error::{convert_error};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
-use uuid::Uuid;
+use uuid::{Uuid, uuid};
 use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, Scattered, Unscatter};
-use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play, get_one_or_zero_sub_events};
+use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play, get_one_or_zero_sub_events, get_one_or_zero_player_ids};
 
 const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
     "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
     "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms", "Crabs",
     "Mechanics",
+];
+
+const TAROT_EVENTS: [Uuid; 6] = [
+    uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
+    uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
+    uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
+    uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
+    uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
+    uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
 ];
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -159,6 +168,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                         stopped_inhabiting,
                         base_instincts,
+                        is_special: event.category == EventCategory::Special,
                     })
                 }
                 ParsedWalk::Charm((batter_name, pitcher_name, scores)) => {
@@ -271,6 +281,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                         stopped_inhabiting,
                         cooled_off,
+                        is_special: event.category == EventCategory::Special,
                     })
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
@@ -1251,49 +1262,32 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::ShameDonor => { todo!() }
         EventType::AddedMod => {
-            match run_parser(&event, parse_added_mod)? {
-                ParsedAddedMod::OverUnder(name) => {
-                    make_fed_event(event, FedEventData::AddedOverUnder {
-                        team_id: get_one_team_id(event)?,
-                        player_id: get_one_player_id(event)?,
-                        player_name: name.to_string(),
-                    })
-                }
-                ParsedAddedMod::UnderOver(name) => {
-                    make_fed_event(event, FedEventData::AddedUnderOver {
-                        team_id: get_one_team_id(event)?,
-                        player_id: get_one_player_id(event)?,
-                        player_name: name.to_string(),
-                    })
-                }
-                ParsedAddedMod::EnteredPartyTime(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    make_fed_event(event, FedEventData::TeamEnteredPartyTime {
-                        team_id: get_one_team_id(event)?,
-                        team_nickname: team_nickname.to_string(),
-                    })
-                }
-                ParsedAddedMod::SinkingShip(team_nickname) => {
-                    assert!(is_known_team_nickname_uppercase(team_nickname));
-                    make_fed_event(event, FedEventData::TeamGainedSinkingShip {
-                        team_id: get_one_team_id(event)?,
-                        team_nickname: team_nickname.to_string(),
-                    })
-                }
-                ParsedAddedMod::BaseDealing(team_nickname) => {
-                    assert!(is_known_team_nickname_uppercase(team_nickname));
-                    make_fed_event(event, FedEventData::TeamGainedBaseDealing {
-                        team_id: get_one_team_id(event)?,
-                        team_nickname: team_nickname.to_string(),
-                    })
-                }
-                ParsedAddedMod::MVP(player_name) => {
-                    make_fed_event(event, FedEventData::PlayerNamedMvp {
-                        team_id: get_one_team_id(event)?,
-                        player_id: get_one_player_id(event)?,
-                        player_name: player_name.to_string(),
-                        r#mod: get_str_metadata(event, "mod")?.to_string(),
-                    })
+            if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                // Then it's a tarot event and we can forget parsing. Thankfully
+                make_fed_event(event, FedEventData::TarotReadingAddedMod {
+                    team_id: get_one_team_id(event)?,
+                    player_id: get_one_or_zero_player_ids(event)?,
+                    description: event.description.clone(),
+                    r#mod: get_str_metadata(event, "mod")?.to_string(),
+                    mod_duration: get_int_metadata(event, "type")?,
+                })
+            } else {
+                match run_parser(&event, parse_added_mod)? {
+                    ParsedAddedMod::EnteredPartyTime(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        make_fed_event(event, FedEventData::TeamEnteredPartyTime {
+                            team_id: get_one_team_id(event)?,
+                            team_nickname: team_nickname.to_string(),
+                        })
+                    }
+                    ParsedAddedMod::MVP(player_name) => {
+                        make_fed_event(event, FedEventData::PlayerNamedMvp {
+                            team_id: get_one_team_id(event)?,
+                            player_id: get_one_player_id(event)?,
+                            player_name: player_name.to_string(),
+                            r#mod: get_str_metadata(event, "mod")?.to_string(),
+                        })
+                    }
                 }
             }
         }
@@ -1840,10 +1834,6 @@ fn is_known_team_name(name: &str) -> bool {
 
 fn is_known_team_nickname(name: &str) -> bool {
     KNOWN_TEAM_NICKNAMES.contains(&name)
-}
-
-fn is_known_team_nickname_uppercase(name: &str) -> bool {
-    KNOWN_TEAM_NICKNAMES.iter().any(|known| known.to_ascii_uppercase() == name)
 }
 
 type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -2835,21 +2825,13 @@ fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
 }
 
 enum ParsedAddedMod<'a> {
-    OverUnder(&'a str),
-    UnderOver(&'a str),
     EnteredPartyTime(&'a str),
-    SinkingShip(&'a str),
-    BaseDealing(&'a str),
     MVP(&'a str),
 }
 
 fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
     let (input, result) = alt((
-        preceded(tag("OVER UNDER, "), is_not("\n")).map(|n| ParsedAddedMod::OverUnder(n)),
-        preceded(tag("UNDER OVER, "), is_not("\n")).map(|n| ParsedAddedMod::UnderOver(n)),
         preceded(tag("The "), parse_terminated(" have entered Party Time!")).map(|n| ParsedAddedMod::EnteredPartyTime(n)),
-        parse_terminated(" GOING UNDER").map(|n| ParsedAddedMod::SinkingShip(n)),
-        parse_terminated(" GETTING OVER").map(|n| ParsedAddedMod::BaseDealing(n)),
         parse_terminated(" is named an MVP.").map(|n| ParsedAddedMod::MVP(n)),
     ))(input)?;
 

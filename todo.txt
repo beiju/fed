@@ -1,0 +1,2 @@
+- Figure out if the is_special field always designates Wired/Tired/Triple Threat, and if so, rename it to indicate that
+- Figure out and properly taxonify the various "type" integers in the metadata

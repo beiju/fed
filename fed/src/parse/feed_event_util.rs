@@ -115,6 +115,14 @@ pub fn get_one_player_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError
     get_one_id("player", &event.player_tags, event.r#type)
 }
 
+pub fn get_one_or_zero_player_ids(event: &EventuallyEvent) -> Result<Option<Uuid>, FeedParseError> {
+    Ok(if event.player_tags.is_empty() {
+        None
+    } else {
+        Some(get_one_id("player", &event.player_tags, event.r#type)?)
+    })
+}
+
 pub fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
     get_one_id("team", &event.team_tags, event.r#type)
 }

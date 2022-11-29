@@ -707,6 +707,12 @@ pub enum FedEventData {
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
         /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
+        is_special: bool,
     },
 
     /// Double play event
@@ -879,6 +885,12 @@ pub enum FedEventData {
         /// If the batter went to a later base with Base Instincts, this is the base number.
         /// Otherwise null.
         base_instincts: Option<i32>,
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
+        is_special: bool,
     },
 
     /// Marks the end of the half-inning
@@ -1377,28 +1389,22 @@ pub enum FedEventData {
         team_tags: Vec<Uuid>,
     },
 
-    /// Added "Over Under" mod. This happened as a result of the tarot reading.
-    AddedOverUnder {
-        /// Uuid of team of player who gained Over Under
+    /// Added a mod as a result of a Tarot reading
+    TarotReadingAddedMod {
+        /// Uuid of team who gained the mod or team of player who gained the mod
         team_id: Uuid,
 
-        /// Uuid player who gained Over Under
-        player_id: Uuid,
+        /// Uuid of player who gained the mod, if it was a player. Null if it was a team.
+        player_id: Option<Uuid>,
 
-        /// Name of player who gained Over Under
-        player_name: String,
-    },
+        /// Description of the event that added the mod
+        description: String,
 
-    /// Added "Under Over" mod. This happened as a result of the tarot reading.
-    AddedUnderOver {
-        /// Uuid of team of player who gained Under Over
-        team_id: Uuid,
+        /// Internal ID of the mod that was gained
+        r#mod: String,
 
-        /// Uuid player who gained Under Over
-        player_id: Uuid,
-
-        /// Name of player who gained Under Over
-        player_name: String,
+        /// I'm pretty sure this indicates mod duration. TODO: Make this an enum
+        mod_duration: i64,
     },
 
     /// Team entered Party Time!
@@ -1894,24 +1900,6 @@ pub enum FedEventData {
 
         /// Name of fireproof player
         player_name: String,
-    },
-
-    /// Team gained Sinking Ship (this happened once as a part of a Tarot reading)
-    TeamGainedSinkingShip {
-        /// Uuid of team who just gained Sinking Ship
-        team_id: Uuid,
-
-        /// Nickname of team who just gained Sinking Ship
-        team_nickname: String,
-    },
-
-    /// Team gained Base Dealing (this happened once as a part of a Tarot reading)
-    TeamGainedBaseDealing {
-        /// Uuid of team who just gained Base Dealing
-        team_id: Uuid,
-
-        /// Nickname of team who gained Base Dealing
-        team_nickname: String,
     },
 
     /// Team's lineup was sorted as a result of gaining Base Dealing
@@ -2569,7 +2557,7 @@ impl FedEvent {
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
-            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref stopped_inhabiting, ref base_instincts } => {
+            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref stopped_inhabiting, ref base_instincts, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
                     format!("\nBase Instincts take them directly to {} base!", base_name(*base))
                 } else {
@@ -2579,7 +2567,7 @@ impl FedEvent {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
-                        category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some()),
+                        category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special),
                         description: format!("{batter_name} draws a walk.{base_instincts_str}"),
                         player_tags: vec![batter_id],
                         ..Default::default()
@@ -2624,11 +2612,11 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off } => {
+            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
                         description: format!("{runner_out_name} out at {} base.",
                                              base_name(out_at_base)),
                         description_after_score: format!("\n{batter_name} reaches on fielder's choice."),
@@ -3211,35 +3199,19 @@ impl FedEvent {
                     .metadata(metadata)
                     .build()
             }
-            FedEventData::AddedUnderOver { team_id, player_id, player_name } => {
+            FedEventData::TarotReadingAddedMod { team_id, player_id, description, r#mod, mod_duration } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
-                        description: format!("UNDER OVER, {player_name}"),
+                        description,
                         team_tags: vec![team_id],
-                        player_tags: vec![player_id],
+                        player_tags: player_id.into_iter().collect(),
                         ..Default::default()
                     })
                     .metadata(json!({
-                        "mod": "UNDEROVER",
-                        "type": 0, // player
-                    }))
-                    .build()
-            }
-            FedEventData::AddedOverUnder { team_id, player_id, player_name } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("OVER UNDER, {player_name}"),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "OVERUNDER",
-                        "type": 0, // player
+                        "mod": r#mod,
+                        "type": mod_duration,
                     }))
                     .build()
             }
@@ -3880,36 +3852,6 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::TeamGainedSinkingShip { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{team_nickname} GOING UNDER"),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "SINKING_SHIP",
-                        "type": 0,
-                    }))
-                    .build()
-            }
-            FedEventData::TeamGainedBaseDealing { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{team_nickname} GETTING OVER"),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "BASE_DEALING",
-                        "type": 1,
-                    }))
-                    .build()
-            }
             FedEventData::LineupSorted { team_id, team_nickname } => {
                 event_builder
                     .fill(EventBuilderUpdate {
@@ -4176,7 +4118,7 @@ impl FedEvent {
                 let description = if is_on {
                     format!("The pressure is on! The {team_nickname} are Overperforming.")
                 } else {
-                    format!("The pressure is off! The {team_nickname} are no longer Overperforming.")
+                    format!("The pressure is off. The {team_nickname} are no longer Overperforming.")
                 };
 
                 let child = EventBuilderChild::new(&sub_event)
