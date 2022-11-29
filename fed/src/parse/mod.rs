@@ -795,7 +795,34 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
             }
         }
-        EventType::Blooddrain => { todo!() }
+        EventType::Blooddrain => {
+            let (sipper_name, sipped_name, sipped_category) = run_parser(&event, parse_blooddrain)?;
+            let (sipper_id, sipped_id) = get_two_player_ids(event)?;
+
+            let (sipped_event, sipper_event) = get_two_sub_events(event)?;
+
+            make_fed_event(event, FedEventData::Blooddrain {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                is_siphon: false,
+                sipper: PlayerStatChange {
+                    team_id: get_one_team_id(sipper_event)?,
+                    player_id: sipper_id,
+                    player_name: sipper_name.to_string(),
+                    rating_before: get_float_metadata(sipper_event, "before")?,
+                    rating_after: get_float_metadata(sipper_event, "after")?,
+                    sub_event: SubEvent::from_event(sipper_event),
+                },
+                sipped: PlayerStatChange {
+                    team_id: get_one_team_id(sipped_event)?,
+                    player_id: sipped_id,
+                    player_name: sipped_name.to_string(),
+                    rating_before: get_float_metadata(sipped_event, "before")?,
+                    rating_after: get_float_metadata(sipped_event, "after")?,
+                    sub_event: SubEvent::from_event(sipped_event),
+                },
+                sipped_category,
+            })
+        }
         EventType::BlooddrainSiphon => {
             let (sipper_name, sipped_name, sipped_category, action) = run_parser(&event, parse_blooddrain_siphon)?;
             let (sipper_id, sipped_id) = get_two_player_ids(event)?;
@@ -2635,4 +2662,15 @@ fn parse_decree_passed(input: &str) -> ParserResult<&str> {
     let (input, decree_title) = take_till1(|c| c == '\n')(input)?;
 
     Ok((input, decree_title))
+}
+
+fn parse_blooddrain(input: &str) -> ParserResult<(&str, &str, AttrCategory)> {
+    let (input, _) = tag("The Blooddrain gurgled!\n")(input)?;
+    let (input, drinker_name) = parse_terminated(" siphoned some of ")(input)?;
+    let (input, drunk_name) = parse_terminated("'s ")(input)?;
+    let (input, category) = parse_category(input)?;
+    let (input, _) = tag(" ability!\n")(input)?;
+    let (input, _) = parse_blooddrain_ability(drinker_name, &category.to_string())(input)?;
+
+    Ok((input, (drinker_name, drunk_name, category)))
 }
