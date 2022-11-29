@@ -271,6 +271,7 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
                         category: EventCategory::Changes,
                         description: format!("{} stopped Inhabiting.", inh.inhabiting_player_name),
                         player_tags: vec![inh.inhabiting_player_id],
+                        team_tags: inh.inhabiting_player_team_id.into_iter().collect(),
                         ..Default::default()
                     })
                     .metadata(json!({

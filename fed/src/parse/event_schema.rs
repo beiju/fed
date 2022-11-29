@@ -198,6 +198,11 @@ pub struct Inhabiting {
 
     /// The uuid of the player who's inhabiting
     pub inhabiting_player_id: Uuid,
+
+    /// The last known team uuid of the player who's inhabiting, if known.
+    ///
+    /// The game didn't start saving last known team ids until somewhere around the Coffee Cup
+    pub inhabiting_player_team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -210,6 +215,11 @@ pub struct StoppedInhabiting {
 
     /// Uuid of inhabiting player
     pub inhabiting_player_id: Uuid,
+
+    /// The last known team uuid of the player who's inhabiting, if known.
+    ///
+    /// The game didn't start saving last known team ids until somewhere around the Coffee Cup
+    pub inhabiting_player_team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -1401,8 +1411,9 @@ pub enum FedEventData {
     BecomeTripleThreat {
         game: GameEvent,
 
-        /// Add mod events for the players who became Triple Threat
-        pitchers: (ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithNamedPlayer),
+        /// Add mod events for the players who became Triple Threat. This array will be either 1 or
+        /// 2 entries.
+        pitchers: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
     /// Under Over procced
@@ -2068,8 +2079,8 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, wielding_item: ref wielding_item_name, ref inhabiting, is_repeating } => {
-                let item_suffix = if let Some(item_name) = wielding_item_name {
+            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, ref wielding_item, ref inhabiting, is_repeating } => {
+                let item_suffix = if let Some(item_name) = wielding_item {
                     format!(", wielding {}", item_name)
                 } else {
                     String::default()
@@ -2090,7 +2101,7 @@ impl FedEvent {
                                 description: format!("{} is Inhabiting {}!",
                                                      batter_name, inhabiting.inhabited_player_name),
                                 player_tags: vec![inhabiting.inhabiting_player_id],
-                                team_tags: vec![], // need to clear it
+                                team_tags: inhabiting.inhabiting_player_team_id.iter().cloned().collect(),
                                 ..Default::default()
                             })
                             .metadata(json!({
@@ -3015,8 +3026,8 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::BecomeTripleThreat { ref game, pitchers: (ref pitcher_1, ref pitcher_2) } => {
-                let children = [pitcher_1, pitcher_2].iter()
+            FedEventData::BecomeTripleThreat { ref game, ref pitchers } => {
+                let children = pitchers.iter()
                     .map(|pitcher| {
                         EventBuilderChild::new(&pitcher.sub_event)
                             .update(EventBuilderUpdate {
@@ -3031,14 +3042,19 @@ impl FedEvent {
                                 "mod": "TRIPLE_THREAT",
                                 "type": 0, // ?
                             }))
-                    })
-                    .collect::<Vec<_>>(); // Collect needed because of borrowing rules
+                    });
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::BecomeTripleThreat,
                         category: EventCategory::Special,
-                        description: format!("{} and {} chug a Third Wave of Coffee!\nThey are now Triple Threats!", pitcher_1.player_name, pitcher_2.player_name),
-                        player_tags: vec![pitcher_1.player_id, pitcher_2.player_id],
+                        description: if let Some((pitcher_1, pitcher_2)) = pitchers.iter().collect_tuple() {
+                            format!("{} and {} chug a Third Wave of Coffee!\nThey are now Triple Threats!", pitcher_1.player_name, pitcher_2.player_name)
+                        } else if let Some((pitcher,)) = pitchers.iter().collect_tuple() {
+                            format!("{} chugs a Third Wave of Coffee!\nThey are now a Triple Threat!", pitcher.player_name)
+                        } else {
+                            panic!("There should either be one or two pitchers here")
+                        },
+                        player_tags: pitchers.iter().map(|pitcher| pitcher.player_id).collect(),
                         ..Default::default()
                     })
                     .children(children)

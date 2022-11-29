@@ -4,7 +4,7 @@ mod feed_event_util;
 pub mod builder;
 
 use std::slice::Iter;
-use itertools::Itertools;
+use itertools::{Itertools, zip_eq};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, Finish, IResult, Parser};
@@ -313,6 +313,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             sub_event: SubEvent::from_event(sub_event),
                             inhabiting_player_name: name.to_string(),
                             inhabiting_player_id: get_one_player_id(sub_event)?,
+                            inhabiting_player_team_id: if sub_event.team_tags.is_empty() {
+                                None
+                            } else {
+                                Some(get_one_team_id(sub_event)?)
+                            },
                         })))
                     })
                     .unwrap_or(Ok((remaining_children, None)))?
@@ -430,6 +435,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
                         inhabited_player_id,
+                        inhabiting_player_team_id: if child.team_tags.is_empty() {
+                            None
+                        } else {
+                            Some(get_one_team_id(child)?)
+                        },
                     })
                 }).transpose()?,
                 is_repeating,
@@ -616,24 +626,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::BirdsUnshell => { todo!() }
         EventType::BecomeTripleThreat => {
-            let (pitcher1_name, pitcher2_name) = run_parser(&event, parse_become_triple_threat)?;
-            let (event1, event2) = get_two_sub_events(event)?;
+            let names = run_parser(&event, parse_become_triple_threat)?;
 
-            let mod_event = |event: &EventuallyEvent, pitcher_name: &str| {
-                Ok(ModChangeSubEventWithNamedPlayer {
-                    sub_event: SubEvent::from_event(event),
-                    team_id: get_one_team_id(event)?,
-                    player_id: get_one_player_id(event)?,
-                    player_name: pitcher_name.to_string(),
+            let pitchers = zip_eq(&event.metadata.children, names)
+                .map(|(event, pitcher_name)| {
+                    Ok(ModChangeSubEventWithNamedPlayer {
+                        sub_event: SubEvent::from_event(event),
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: pitcher_name.to_string(),
+                    })
                 })
-            };
+                .collect::<Result<_, _>>()?;
 
             make_fed_event(event, FedEventData::BecomeTripleThreat {
                 game: GameEvent::try_from_event(event, unscatter)?,
-                pitchers: (
-                    mod_event(event1, pitcher1_name)?,
-                    mod_event(event2, pitcher2_name)?,
-                ),
+                pitchers,
             })
         }
         EventType::GainFreeRefill => {
@@ -1110,7 +1118,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_name: team_name.to_string(),
                 sub_event: SubEvent::from_event(mod_add_event),
             })
-
         }
         EventType::Homebody => { todo!() }
         EventType::Superyummy => {
@@ -1619,6 +1626,11 @@ fn merge_scores_with_ids(
                 sub_event: SubEvent::from_event(extra_child),
                 inhabiting_player_name: name.to_string(),
                 inhabiting_player_id: get_one_player_id(extra_child)?,
+                inhabiting_player_team_id: if extra_child.team_tags.is_empty() {
+                    None
+                } else {
+                    Some(get_one_team_id(extra_child)?)
+                },
             })))
         } else {
             Err(FeedParseError::MissingChild {
@@ -2465,11 +2477,26 @@ fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType)> {
     Ok((input, result))
 }
 
-fn parse_become_triple_threat(input: &str) -> ParserResult<(&str, &str)> {
+fn parse_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
+    let (input, names) = alt((
+        parse_double_become_triple_threat,
+        parse_single_become_triple_threat,
+    ))(input)?;
+
+    Ok((input, names))
+}
+
+fn parse_double_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
     let (input, pitcher1_name) = parse_terminated(" and ")(input)?;
     let (input, pitcher2_name) = parse_terminated(" chug a Third Wave of Coffee!\nThey are now Triple Threats!")(input)?;
 
-    Ok((input, (pitcher1_name, pitcher2_name)))
+    Ok((input, vec![pitcher1_name, pitcher2_name]))
+}
+
+fn parse_single_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
+    let (input, pitcher1_name) = parse_terminated(" chugs a Third Wave of Coffee!\nThey are now a Triple Threat!")(input)?;
+
+    Ok((input, vec![pitcher1_name]))
 }
 
 fn parse_under_over_over_under(mod_text: &str) -> impl Fn(&str) -> ParserResult<(&str, bool)> + '_ {
@@ -2723,7 +2750,7 @@ fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
     let (input, result) = alt((
         preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::Added(n)),
         tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::Removed),
-        ))(input)?;
+    ))(input)?;
 
     Ok((input, result))
 }
