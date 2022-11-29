@@ -1578,7 +1578,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             })
         }
-        EventType::HighPressure => { todo!() }
+        EventType::HighPressure => {
+            let (team_nickname, is_on) = run_parser(&event, parse_high_pressure)?;
+            assert!(is_known_team_nickname(team_nickname));
+            let sub_event = get_one_sub_event(event)?;
+            make_fed_event(event, FedEventData::HighPressure {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_id: get_one_team_id(sub_event)?,
+                team_nickname: team_nickname.to_string(),
+                is_on,
+                sub_event: SubEvent::from_event(sub_event),
+            })
+
+        }
         EventType::LineupSorted => {
             // This happened as a top-level event exactly once (and really it should have been a
             // child of the lovers' getting Base Dealing)
@@ -2988,4 +3000,17 @@ fn parse_player_replaces_returned(input: &str) -> ParserResult<&str> {
     let (input, team_nickname) = parse_terminated(" cut a player and promoted another from the shadows.")(input)?;
 
     Ok((input, team_nickname))
+}
+
+fn parse_high_pressure(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, _) = tag("The pressure is ")(input)?;
+    let (input, is_on) = alt((tag("on!").map(|_| true), tag("off.").map(|_| false)))(input)?;
+    let (input, _) = tag(" The ")(input)?;
+    let (input, team_nickname) = if is_on {
+        parse_terminated(" are Overperforming.")(input)?
+    } else {
+        parse_terminated(" are no longer Overperforming.")(input)?
+    };
+
+    Ok((input, (team_nickname, is_on)))
 }

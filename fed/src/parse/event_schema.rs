@@ -2109,6 +2109,24 @@ pub enum FedEventData {
         /// Investigation progress message (event description)
         message: String,
     },
+
+    /// High Pressure status messages from Season 14. They were removed in the following season,
+    /// presumably for occurring too often and cluttering up the Feed.
+    HighPressure {
+        game: GameEvent,
+
+        /// Uuid of team with High Pressure
+        team_id: Uuid,
+
+        /// Nickname of team with High Pressure
+        team_nickname: String,
+
+        /// Whether High Pressure just turned on (true) or off (false)
+        is_on: bool,
+
+        /// Metadata for sub-event for adding or removing Overperforming
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -4134,7 +4152,6 @@ impl FedEvent {
                     }))
                     .build()
             }
-
             FedEventData::Investigation { player_id, message } => {
                 event_builder
                     .fill(EventBuilderUpdate {
@@ -4144,6 +4161,37 @@ impl FedEvent {
                         player_tags: vec![player_id],
                         ..Default::default()
                     })
+                    .build()
+
+            }
+            FedEventData::HighPressure { game, team_id, team_nickname, is_on, sub_event } => {
+                let description = if is_on {
+                    format!("The pressure is on! The {team_nickname} are Overperforming.")
+                } else {
+                    format!("The pressure is off! The {team_nickname} are no longer Overperforming.")
+                };
+
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: if is_on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod },
+                        category: EventCategory::Changes,
+                        description: description.clone(),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "OVERPERFORMING",
+                        "source": "HIGH_PRESSURE",
+                        "type": 3, // ?
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::HighPressure,
+                        description,
+                        ..Default::default()
+                    })
+                    .child(child)
                     .build()
 
             }
