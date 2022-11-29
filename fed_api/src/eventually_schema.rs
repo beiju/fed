@@ -1,3 +1,5 @@
+pub mod builder;
+
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
@@ -6,7 +8,9 @@ use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use chrono::serde::ts_milliseconds;
+use schemars::gen::SchemaGenerator;
 use schemars::JsonSchema;
+use schemars::schema::Schema;
 
 
 #[derive(Deserialize, Serialize)]
@@ -61,9 +65,10 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
 #[repr(i32)]
 pub enum EventCategory {
+    #[default]
     Game = 0,
     Changes = 1,
     Special = 2,
@@ -77,13 +82,12 @@ impl EventCategory {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(pattern = "owned")]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,
     #[serde(with = "ts_milliseconds")]
-    #[schemars(with = "DateTime<Utc>")]
     pub created: DateTime<Utc>,
     pub r#type: EventType,
     pub category: EventCategory,
@@ -174,9 +178,10 @@ pub enum Weather {
 }
 
 //noinspection SpellCheckingInspection
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Copy, Clone, JsonSchema)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema)]
 #[repr(i32)]
 pub enum EventType {
+    #[default]
     Undefined = -1,
     LetsGo = 0,
     PlayBall = 1,
@@ -309,4 +314,14 @@ pub enum EventType {
     GameOver = 216,
     StormWarning = 263,
     Snowflakes = 264,
+}
+
+impl JsonSchema for EventuallyEvent {
+    fn schema_name() -> String {
+        todo!()
+    }
+
+    fn json_schema(_gen: &mut SchemaGenerator) -> Schema {
+        todo!()
+    }
 }
