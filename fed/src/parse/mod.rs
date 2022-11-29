@@ -1181,7 +1181,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Earlbird => {
             match run_parser(event, parse_earlbird)? {
-                PartSeasonModChange::Added(team_nickname) => {
+                EarlbirdsChange::Added(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let sub_event = get_one_sub_event(event)?;
@@ -1192,7 +1192,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: SubEvent::from_event(sub_event),
                     })
                 }
-                PartSeasonModChange::Removed => {
+                EarlbirdsChange::Removed => {
                     let sub_event = get_one_sub_event(event)?;
                     make_fed_event(event, FedEventData::EarlbirdsRemoved {
                         game: GameEvent::try_from_event(event, unscatter)?,
@@ -1204,7 +1204,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::LateToTheParty => {
             match run_parser(event, parse_late_to_the_party)? {
-                PartSeasonModChange::Added(team_nickname) => {
+                LateToThePartyChange::Added(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let sub_event = get_one_or_zero_sub_events(event)?;
@@ -1215,14 +1215,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: sub_event.map(SubEvent::from_event),
                     })
                 }
-                PartSeasonModChange::Removed => {
-                    todo!()
-                    // let sub_event = get_one_sub_event(event)?;
-                    // make_fed_event(event, FedEventData::EarlbirdsRemoved {
-                    //     game: GameEvent::try_from_event(event, unscatter)?,
-                    //     team_id: get_one_team_id(sub_event)?,
-                    //     sub_event: SubEvent::from_event(sub_event),
-                    // })
+                LateToThePartyChange::Removed(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    make_fed_event(event, FedEventData::LateToThePartyRemoved {
+                        game: GameEvent::try_from_event(event, unscatter)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
                 }
             }
 
@@ -1263,6 +1262,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     make_fed_event(event, FedEventData::TeamGainedBaseDealing {
                         team_id: get_one_team_id(event)?,
                         team_nickname: team_nickname.to_string(),
+                    })
+                }
+                ParsedAddedMod::MVP(player_name) => {
+                    make_fed_event(event, FedEventData::PlayerNamedMvp {
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: player_name.to_string(),
+                        r#mod: get_str_metadata(event, "mod")?.to_string(),
                     })
                 }
             }
@@ -2725,6 +2732,7 @@ enum ParsedAddedMod<'a> {
     EnteredPartyTime(&'a str),
     SinkingShip(&'a str),
     BaseDealing(&'a str),
+    MVP(&'a str),
 }
 
 fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
@@ -2734,6 +2742,7 @@ fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
         preceded(tag("The "), parse_terminated(" have entered Party Time!")).map(|n| ParsedAddedMod::EnteredPartyTime(n)),
         parse_terminated(" GOING UNDER").map(|n| ParsedAddedMod::SinkingShip(n)),
         parse_terminated(" GETTING OVER").map(|n| ParsedAddedMod::BaseDealing(n)),
+        parse_terminated(" is named an MVP.").map(|n| ParsedAddedMod::MVP(n)),
     ))(input)?;
 
     Ok((input, result))
@@ -2816,26 +2825,31 @@ fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
-enum PartSeasonModChange<'a> {
+enum EarlbirdsChange<'a> {
     Added(&'a str),
     Removed, // This one says [object Object]. lol & lmao
 }
 
-fn parse_earlbird(input: &str) -> ParserResult<PartSeasonModChange> {
+fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
     let (input, _) = tag("Happy Earlseason!\n")(input)?;
     let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| PartSeasonModChange::Added(n)),
-        tag("Earlbirds wears off for the [object Object].").map(|_| PartSeasonModChange::Removed),
+        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::Added(n)),
+        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::Removed),
     ))(input)?;
 
     Ok((input, result))
 }
 
-fn parse_late_to_the_party(input: &str) -> ParserResult<PartSeasonModChange> {
+enum LateToThePartyChange<'a> {
+    Added(&'a str),
+    Removed(&'a str), // This one does not say [object Object]
+}
+
+fn parse_late_to_the_party(input: &str) -> ParserResult<LateToThePartyChange> {
     let (input, _) = tag("Late to the Party!\n")(input)?;
     let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Late to the Party!")).map(|n| PartSeasonModChange::Added(n)),
-        tag("Late to the Party wears off for the [object Object].").map(|_| PartSeasonModChange::Removed),
+        preceded(tag("The "), parse_terminated(" are Late to the Party!")).map(|n| LateToThePartyChange::Added(n)),
+        preceded(tag("Late to the Party wears off for the "), parse_terminated(".")).map(|n| LateToThePartyChange::Removed(n)),
     ))(input)?;
 
     Ok((input, result))

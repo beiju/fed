@@ -1990,8 +1990,30 @@ pub enum FedEventData {
 
         /// Name of player who got Misted
         player_name: String,
+    },
 
-    }
+    /// Player was named an MVP
+    PlayerNamedMvp {
+        /// Uuid of team of player who was named an MVP
+        team_id: Uuid,
+
+        /// Uuid of player who was named an MVP
+        player_id: Uuid,
+
+        /// Name of player who was named an MVP
+        player_name: String,
+
+        /// Which mod this player gained (i.e. which level of Ego)
+        r#mod: String,
+    },
+
+    /// Late to the Party wore off for the team
+    LateToThePartyRemoved {
+        game: GameEvent,
+
+        /// Nickname of team whose Late to the Party wore off
+        team_nickname: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -3885,6 +3907,33 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .build()
+            }
+            FedEventData::PlayerNamedMvp { team_id, player_id, player_name, r#mod } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} is named an MVP."),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": r#mod,
+                        "type": 0,
+                    }))
+                    .build()
+            }
+            FedEventData::LateToThePartyRemoved { game, team_nickname } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::LateToTheParty,
+                        category: EventCategory::Special,
+                        description: format!("Late to the Party!\nLate to the Party wears off for the {team_nickname}."),
+                        ..Default::default()
+                    })
+                    .build()
+
             }
         }
     }
