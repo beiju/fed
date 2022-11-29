@@ -1,5 +1,4 @@
 use std::fmt::{Display, Formatter, Write};
-use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde::Serialize;
@@ -2181,24 +2180,27 @@ impl FedEvent {
                     })
                     .join("");
 
-                let mut children = if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
-                    vec![EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::RemovedMod,
-                            category: EventCategory::Changes,
-                            description: format!("{batter_name} hit a Magmatic home run!"),
-                            player_tags: vec![batter_id],
-                            team_tags: vec![*team_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
+                let mut children: Vec<_> = free_refills.iter()
+                    .map(make_free_refill_child)
+                    .collect();
+
+                if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
+                    children.push(
+                        EventBuilderChild::new(sub_event)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::RemovedMod,
+                                category: EventCategory::Changes,
+                                description: format!("{batter_name} hit a Magmatic home run!"),
+                                player_tags: vec![batter_id],
+                                team_tags: vec![*team_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
                             "mod": "MAGMATIC",
                             "type": 0, // ?
                         }))
-                    ]
-                } else {
-                    Vec::new()
-                };
+                    );
+                }
 
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
@@ -2219,12 +2221,7 @@ impl FedEvent {
                     })
                     .stopped_inhabiting(stopped_inhabiting)
                     .spicy(spicy_status, batter_id, batter_name)
-                    .children(
-                        // TODO just do a mutable vec here
-                        free_refills.iter()
-                            .map(|free_refill| make_free_refill_child(free_refill))
-                            .chain(children.into_iter())
-                    )
+                    .children(children)
                     .build()
             }
             FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
@@ -2321,8 +2318,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
-                let (children, suffix) = self.make_mod_change_sub_events(
-                    game, lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
+                let (children, suffix) = self.make_mod_change_sub_events(lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
 
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
@@ -2761,9 +2757,9 @@ impl FedEvent {
             }
             FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, sipped_category } => {
                 let children: Vec<_> = [
-                    (0, sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name)),
-                    (1, sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
-                ].into_iter().map(|(sub_play, change, event_type, description)| {
+                    (sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name)),
+                    (sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
+                ].into_iter().map(|(change, event_type, description)| {
                     EventBuilderChild::new(&change.sub_event)
                         .update(EventBuilderUpdate {
                             r#type: event_type,
@@ -2946,8 +2942,7 @@ impl FedEvent {
             }
             FedEventData::BecomeTripleThreat { ref game, pitchers: (ref pitcher_1, ref pitcher_2) } => {
                 let children = [pitcher_1, pitcher_2].iter()
-                    .enumerate()
-                    .map(|(sub_play, pitcher)| {
+                    .map(|pitcher| {
                         EventBuilderChild::new(&pitcher.sub_event)
                             .update(EventBuilderUpdate {
                                 category: EventCategory::Changes,
@@ -3145,8 +3140,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::FloodingSwept { ref game, ref swept_elsewhere } => {
-                let (children, suffix) = self.make_mod_change_sub_events(
-                    game, swept_elsewhere, EventType::AddedMod, "is swept Elsewhere!", "ELSEWHERE");
+                let (children, suffix) = self.make_mod_change_sub_events(swept_elsewhere, EventType::AddedMod, "is swept Elsewhere!", "ELSEWHERE");
 
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
@@ -3567,14 +3561,13 @@ impl FedEvent {
         }
     }
 
-    fn make_mod_change_sub_events(&self, game: &GameEvent, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
+    fn make_mod_change_sub_events(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
         let suffix = mod_changes.iter()
             .map(|e| format!("\n{} {message}", e.player_name))
             .join("");
 
         let children = mod_changes.iter()
-            .enumerate()
-            .map(|(sub_play, e)| {
+            .map(|e| {
                 EventBuilderChild::new(&e.sub_event)
                     .update(EventBuilderUpdate {
                         r#type: event_type,

@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
-use rocket::http::hyper::body::Buf;
 use serde_json::json;
 use uuid::Uuid;
 use fed_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::parse::event_schema::{FreeRefill, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::parse::event_schema::{FreeRefill, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
     pub id: Uuid,
@@ -71,20 +70,6 @@ impl EventBuilderChildFull {
             ..self
         }
     }
-
-    pub fn full_metadata(self, metadata: EventMetadata) -> EventBuilderChildWithFullMetadata {
-        EventBuilderChildWithFullMetadata {
-            common: self.common,
-            update: self.update,
-            metadata,
-        }
-    }
-}
-
-pub struct EventBuilderChildWithFullMetadata {
-    pub common: SubEvent,
-    pub update: EventBuilderUpdate,
-    pub metadata: EventMetadata,
 }
 
 #[derive(Default)]
