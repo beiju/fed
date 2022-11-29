@@ -305,6 +305,7 @@ pub enum EventType {
     BlackHoleSwallowedWin = 157,
     PostseasonEliminated = 158,
     PostseasonAdvance = 159,
+    LineupSorted = 166,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,

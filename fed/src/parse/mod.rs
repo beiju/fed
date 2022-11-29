@@ -20,6 +20,13 @@ use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, Scattered, Unscatter};
 use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play};
 
+const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
+    "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
+    "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
+    "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms", "Crabs",
+    "Mechanics",
+];
+
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
         parse_single_feed_event(feed_event)
@@ -273,6 +280,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         batter_name: batter_name.to_string(),
                         scores,
                         stopped_inhabiting,
+                        cooled_off,
                     })
                 }
             }
@@ -1127,16 +1135,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::Earlbird => {
-            let team_nickname = run_parser(event, parse_earlbird)?;
-            assert!(is_known_team_nickname(team_nickname));
+            match run_parser(event, parse_earlbird)? {
+                EarlbirdsChange::Added(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
 
-            let sub_event = get_one_sub_event(event)?;
-            make_fed_event(event, FedEventData::Earlbirds {
-                game: GameEvent::try_from_event(event, unscatter)?,
-                team_id: get_one_team_id(sub_event)?,
-                team_nickname: team_nickname.to_string(),
-                sub_event: SubEvent::from_event(sub_event),
-            })
+                    let sub_event = get_one_sub_event(event)?;
+                    make_fed_event(event, FedEventData::EarlbirdsAdded {
+                        game: GameEvent::try_from_event(event, unscatter)?,
+                        team_id: get_one_team_id(sub_event)?,
+                        team_nickname: team_nickname.to_string(),
+                        sub_event: SubEvent::from_event(sub_event),
+                    })
+                }
+                EarlbirdsChange::Removed => {
+                    let sub_event = get_one_sub_event(event)?;
+                    make_fed_event(event, FedEventData::EarlbirdsRemoved {
+                        game: GameEvent::try_from_event(event, unscatter)?,
+                        team_id: get_one_team_id(sub_event)?,
+                        sub_event: SubEvent::from_event(sub_event),
+                    })
+                }
+            }
         }
         EventType::LateToTheParty => { todo!() }
         EventType::ShameDonor => { todo!() }
@@ -1159,6 +1178,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedAddedMod::EnteredPartyTime(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
                     make_fed_event(event, FedEventData::TeamEnteredPartyTime {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
+                }
+                ParsedAddedMod::SinkingShip(team_nickname) => {
+                    assert!(is_known_team_nickname_uppercase(team_nickname));
+                    make_fed_event(event, FedEventData::TeamGainedSinkingShip {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
+                }
+                ParsedAddedMod::BaseDealing(team_nickname) => {
+                    assert!(is_known_team_nickname_uppercase(team_nickname));
+                    make_fed_event(event, FedEventData::TeamGainedBaseDealing {
                         team_id: get_one_team_id(event)?,
                         team_nickname: team_nickname.to_string(),
                     })
@@ -1394,6 +1427,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             })
         }
+        EventType::LineupSorted => {
+            // This happened as a top-level event exactly once (and really it should have been a
+            // child of the lovers' getting Base Dealing)
+            parse_fixed_description(event, "The Lovers' lineup has been optimized.",
+                                    FedEventData::LineupSorted {
+                                        team_id: get_one_team_id(event)?,
+                                        team_nickname: "Lovers".to_string(),
+                                    })
+        }
         EventType::PostseasonEliminated => {
             let (team_nickname, season_num) = run_parser(&event, parse_postseason_eliminated)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1621,11 +1663,11 @@ fn is_known_team_name(name: &str) -> bool {
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
-    vec!["Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
-         "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
-         "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms", "Crabs",
-         "Mechanics",
-    ].contains(&name)
+    KNOWN_TEAM_NICKNAMES.contains(&name)
+}
+
+fn is_known_team_nickname_uppercase(name: &str) -> bool {
+    KNOWN_TEAM_NICKNAMES.iter().any(|known| known.to_ascii_uppercase() == name)
 }
 
 type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -2560,6 +2602,8 @@ enum ParsedAddedMod<'a> {
     OverUnder(&'a str),
     UnderOver(&'a str),
     EnteredPartyTime(&'a str),
+    SinkingShip(&'a str),
+    BaseDealing(&'a str),
 }
 
 fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
@@ -2567,6 +2611,8 @@ fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
         preceded(tag("OVER UNDER, "), is_not("\n")).map(|n| ParsedAddedMod::OverUnder(n)),
         preceded(tag("UNDER OVER, "), is_not("\n")).map(|n| ParsedAddedMod::UnderOver(n)),
         preceded(tag("The "), parse_terminated(" have entered Party Time!")).map(|n| ParsedAddedMod::EnteredPartyTime(n)),
+        parse_terminated(" GOING UNDER").map(|n| ParsedAddedMod::SinkingShip(n)),
+        parse_terminated(" GETTING OVER").map(|n| ParsedAddedMod::BaseDealing(n)),
     ))(input)?;
 
     Ok((input, result))
@@ -2649,11 +2695,19 @@ fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
-fn parse_earlbird(input: &str) -> ParserResult<&str> {
-    let (input, _) = tag("Happy Earlseason!\nThe ")(input)?;
-    let (input, team_nickname) = parse_terminated(" are Earlbirds!")(input)?;
+enum EarlbirdsChange<'a> {
+    Added(&'a str),
+    Removed, // This one says [object Object]. lol & lmao
+}
 
-    Ok((input, team_nickname))
+fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
+    let (input, _) = tag("Happy Earlseason!\n")(input)?;
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::Added(n)),
+        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::Removed),
+        ))(input)?;
+
+    Ok((input, result))
 }
 
 fn parse_decree_passed(input: &str) -> ParserResult<&str> {

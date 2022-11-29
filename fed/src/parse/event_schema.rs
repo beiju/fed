@@ -709,6 +709,10 @@ pub enum FedEventData {
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
+        /// Hot mod, otherwise null.
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
     },
 
     /// Hit event (Single, Double, Triple, or Quadruple)
@@ -1809,7 +1813,7 @@ pub enum FedEventData {
     },
 
     /// Earlbirds mod procs at the beginning of Earlseason
-    Earlbirds {
+    EarlbirdsAdded {
         game: GameEvent,
 
         /// Uuid of Earlbird team
@@ -1861,6 +1865,44 @@ pub enum FedEventData {
 
         /// Name of fireproof player
         player_name: String,
+    },
+
+    /// Team gained Sinking Ship (this happened once as a part of a Tarot reading)
+    TeamGainedSinkingShip {
+        /// Uuid of team who just gained Sinking Ship
+        team_id: Uuid,
+
+        /// Nickname of team who just gained Sinking Ship
+        team_nickname: String,
+    },
+
+    /// Team gained Base Dealing (this happened once as a part of a Tarot reading)
+    TeamGainedBaseDealing {
+        /// Uuid of team who just gained Base Dealing
+        team_id: Uuid,
+
+        /// Nickname of team who gained Base Dealing
+        team_nickname: String,
+    },
+
+    /// Team's lineup was sorted as a result of gaining Base Dealing
+    LineupSorted {
+        /// Uuid of team whose lineup was just sorted
+        team_id: Uuid,
+
+        /// Nickname of team whose lineup was just sorted
+        team_nickname: String,
+    },
+
+    /// Earlbirds mod is removed at the end of Earlseason
+    EarlbirdsRemoved {
+        game: GameEvent,
+
+        /// Uuid of Earlbird team
+        team_id: Uuid,
+
+        /// Metadata for the sub-event that removes the Overperforming mod
+        sub_event: SubEvent,
     },
 }
 
@@ -1937,11 +1979,11 @@ trait GameEventForBuilder {
     fn for_sub_event(self, sub: &SubEvent) -> Self;
 }
 
-fn possessive(player_name: String) -> String {
-    if player_name.chars().last().unwrap() == 's' {
-        player_name + "'"
+fn possessive(name: String) -> String {
+    if name.chars().last().unwrap() == 's' {
+        name + "'"
     } else {
-        player_name + "'s"
+        name + "'s"
     }
 }
 
@@ -2391,17 +2433,17 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting } => {
+            FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 event_builder.for_game(game)
                     .update(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(scores.used_refill()),
-                        description: format!("{batter_name} hit into a double play!", ),
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
+                        description: format!("{batter_name} hit into a double play!"),
                         ..Default::default()
                     })
                     .scores(scores, " scores!")
                     .stopped_inhabiting(stopped_inhabiting)
-                    // .cooled_off(cooled_off, batter_name)
+                    .cooled_off(cooled_off, batter_name)
                     .build()
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
@@ -3508,7 +3550,7 @@ impl FedEvent {
                     .full_metadata(metadata)
                     .build()
             }
-            FedEventData::Earlbirds { ref game, team_id, ref team_nickname, ref sub_event } => {
+            FedEventData::EarlbirdsAdded { ref game, team_id, ref team_nickname, ref sub_event } => {
                 let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedModFromOtherMod,
@@ -3578,6 +3620,73 @@ impl FedEvent {
                     })
                     .build()
             }
+            FedEventData::TeamGainedSinkingShip { team_id, team_nickname } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{team_nickname} GOING UNDER"),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "SINKING_SHIP",
+                        "type": 0,
+                    }))
+                    .build()
+            }
+            FedEventData::TeamGainedBaseDealing { team_id, team_nickname } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{team_nickname} GETTING OVER"),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "BASE_DEALING",
+                        "type": 1,
+                    }))
+                    .build()
+            }
+            FedEventData::LineupSorted { team_id, team_nickname } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::LineupSorted,
+                        category: EventCategory::Changes,
+                        description: format!("The {} lineup has been optimized.", possessive(team_nickname)),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::EarlbirdsRemoved { ref game, team_id, ref sub_event } => {
+                let child = EventBuilderChild::new(sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::RemovedModFromOtherMod,
+                        category: EventCategory::Changes,
+                        description: format!("Earlbirds wears off for the [object Object]."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "OVERPERFORMING",
+                        "source": "EARLBIRDS",
+                        "type": 0, // ?
+                    }));
+
+                event_builder.for_game(game)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::Earlbird,
+                        category: EventCategory::Special,
+                        description: format!("Happy Earlseason!\nEarlbirds wears off for the [object Object]."),
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+
         }
     }
 
