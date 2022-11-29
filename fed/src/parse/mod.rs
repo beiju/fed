@@ -41,20 +41,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     let _id_string = event.id.to_string();
 
     // This can happen on the majority of events, so I handle it outside
-    // TODO Pop the child somehow, probably requires separate holding of children array
-    let unscatter = if let Some(first_child) = event.metadata.children.first() &&
+    let (unscatter, children) = if let Some(first_child) = event.metadata.children.first() &&
         first_child.r#type == EventType::RemovedMod &&
         get_str_metadata(first_child, "mod").map_or(false, |m| m == "SCATTERED") {
         let player_name = run_parser(first_child, parse_terminated(" was Unscattered."))?;
 
-        Some(Unscatter {
+        (Some(Unscatter {
             sub_event: SubEvent::from_event(first_child),
             team_id: get_one_team_id(first_child)?,
             player_id: get_one_player_id(first_child)?,
             player_name: player_name.to_string(),
-        })
+        }), &event.metadata.children.as_slice()[1..])
     } else {
-        None
+        (None, event.metadata.children.as_slice())
     };
 
     match event.r#type {
@@ -151,7 +150,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             }
                         })?;
 
-                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &event.metadata.children, event.r#type, 0)?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &children, event.r#type, 0)?;
 
                     make_fed_event(event, FedEventData::Walk {
                         game: GameEvent::try_from_event(event, unscatter)?,
@@ -179,7 +178,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         })?;
                     assert_eq!(batter_id, charmer_id);
 
-                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_ids, &event.metadata.children, event.r#type, 0)?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_ids, &children, event.r#type, 0)?;
 
                     make_fed_event(event, FedEventData::CharmWalk {
                         game: GameEvent::try_from_event(event, unscatter)?,
@@ -195,7 +194,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Strikeout => {
             match run_parser(&event, parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
-                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &children, event.r#type, 0)?;
                     make_fed_event(event, FedEventData::StrikeoutSwinging {
                         game: GameEvent::try_from_event(event, unscatter)?,
                         batter_name: batter_name.to_string(),
@@ -204,7 +203,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     })
                 }
                 ParsedStrikeout::Looking(batter_name) => {
-                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &event.metadata.children, event.r#type, 0)?;
+                    let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &event.player_tags, &children, event.r#type, 0)?;
                     make_fed_event(event, FedEventData::StrikeoutLooking {
                         game: GameEvent::try_from_event(event, unscatter)?,
                         batter_name: batter_name.to_string(),
@@ -236,7 +235,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores, cooled_off) = run_parser(&event, parse_flyout)?;
-            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, cooled_off, &event.player_tags)?;
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, &event.player_tags)?;
             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event, unscatter)?,
@@ -249,7 +248,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::GroundOut => {
             let (parsed_out, scores, cooled_off) = run_parser(&event, parse_ground_out)?;
-            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, cooled_off, &event.player_tags)?;
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, &event.player_tags)?;
             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             match parsed_out {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
@@ -287,9 +286,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::HomeRun => {
             let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status) = run_parser(&event, parse_hr)?;
-            let (remaining_children, spicy_status) = extract_spicy_event(event, spicy_status)?;
+            let (remaining_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
             let (remaining_children, magmatic_event) = if is_magmatic {
-                let expected_num_children = event.metadata.children.len() - remaining_children.len() + 1;
+                let expected_num_children = children.len() - remaining_children.len() + 1;
                 remaining_children.split_first()
                     .map(|(magmatic_event, remaining_children)| {
                         (remaining_children, Some(magmatic_event))
@@ -322,7 +321,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     })
                     .unwrap_or(Ok((remaining_children, None)))?
             } else {
-                let expected_num_children = event.metadata.children.len() - remaining_children.len() + 1;
+                let expected_num_children = children.len() - remaining_children.len() + 1;
                 Err(FeedParseError::MissingChild {
                     event_type: event.r#type,
                     expected_num_children: expected_num_children as i32,
@@ -370,7 +369,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     scorer_ids
                 };
 
-                let (score_children, spicy_status) = extract_spicy_event(event, spicy_status)?;
+                let (score_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
                 let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, score_children, event.r#type, 1)?;
 
                 make_fed_event(event, FedEventData::Hit {
@@ -419,7 +418,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_name: team_name.to_string(),
                 wielding_item: wielding_item.map(|s| s.to_string()),
                 inhabiting: inhabited.map(|inhabited| {
-                    let (child, ) = event.metadata.children.iter().collect_tuple()
+                    let (child, ) = children.iter().collect_tuple()
                         .ok_or_else(|| {
                             FeedParseError::MissingChild {
                                 event_type: event.r#type,
@@ -519,7 +518,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             match pitch_type {
                 MildPitchType::Ball((balls, strikes)) => {
-                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &event.metadata.children, event.r#type, 1)?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &children, event.r#type, 1)?;
 
                     make_fed_event(event, FedEventData::MildPitch {
                         game: GameEvent::try_from_event(event, unscatter)?,
@@ -540,7 +539,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             expected_num: 2,
                             actual_num: event.player_tags.len(),
                         })?;
-                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &event.metadata.children, event.r#type, 2)?;
+                    let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &children, event.r#type, 2)?;
 
                     // I don't believe this should be possible
                     assert!(!runners_advance, "Runners \"advanced on the pathetic play\" on a mild pitch that was also a walk");
@@ -562,7 +561,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::InningEnd {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 inning_num,
-                lost_triple_threat: zip_mod_change_events(lost_triple_threat_names, &event)?,
+                lost_triple_threat: zip_mod_change_events(lost_triple_threat_names, children)?,
             })
         }
         EventType::BigDeal => {
@@ -628,7 +627,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::BecomeTripleThreat => {
             let names = run_parser(&event, parse_become_triple_threat)?;
 
-            let pitchers = zip_eq(&event.metadata.children, names)
+            let pitchers = zip_eq(children, names)
                 .map(|(event, pitcher_name)| {
                     Ok(ModChangeSubEventWithNamedPlayer {
                         sub_event: SubEvent::from_event(event),
@@ -905,7 +904,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Incineration => {
             let (victim_name, replacement_name) = run_parser(&event, parse_incineration)?;
             let (incin_child, enter_hall_child, hatch_child, replace_child) =
-                event.metadata.children.iter().collect_tuple()
+                children.iter().collect_tuple()
                     .ok_or_else(|| {
                         FeedParseError::MissingChild {
                             event_type: event.r#type,
@@ -1016,7 +1015,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             make_fed_event(event, FedEventData::FloodingSwept {
                 game: GameEvent::try_from_event(event, unscatter)?,
-                swept_elsewhere: zip_mod_change_events(swept_elsewhere_names, &event)?,
+                swept_elsewhere: zip_mod_change_events(swept_elsewhere_names, children)?,
                 slingshot_home: itertools::zip_eq(flippered_home_names, &event.player_tags)
                     .map(|(player_name, &player_id)| PlayerInfo {
                         player_id,
@@ -1076,7 +1075,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ReturnFromElsewhere => {
             let (player_name, after_days) = run_parser(event, parse_return_from_elsewhere)?;
 
-            let (return_sub_event, scattered) = if event.metadata.children.len() == 2 {
+            let (return_sub_event, scattered) = if children.len() == 2 {
                 let (scattered_sub_event, return_sub_event) = get_two_sub_events(event)?;
                 let scattered_name = run_parser(scattered_sub_event, parse_terminated(" was Scattered..."))?;
 
@@ -1159,7 +1158,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             make_fed_event(event, FedEventData::PerkUp {
                 game: GameEvent::try_from_event(event, unscatter)?,
-                players: event.metadata.children.iter()
+                players: children.iter()
                     .zip(player_names)
                     .map(|(mod_add_event, player_name)| {
                         assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
@@ -1511,8 +1510,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn zip_mod_change_events(names: Vec<&str>, event: &&EventuallyEvent) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
-    names.iter().zip_eq(&event.metadata.children)
+fn zip_mod_change_events(names: Vec<&str>, children: &[EventuallyEvent]) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
+    names.iter().zip_eq(children)
         .map(|(name, sub_event)| Ok(ModChangeSubEventWithNamedPlayer {
             sub_event: SubEvent::from_event(sub_event),
             team_id: get_one_team_id(sub_event)?,
@@ -1546,34 +1545,34 @@ fn get_one_player_id_advanced(event: &EventuallyEvent, has_extra_id: bool) -> Re
     }
 }
 
-fn extract_spicy_event(event: &EventuallyEvent, spicy_status: ParsedSpicyStatus) -> Result<(&[EventuallyEvent], SpicyStatus), FeedParseError> {
+fn extract_spicy_event(children: &[EventuallyEvent], spicy_status: ParsedSpicyStatus) -> Result<(&[EventuallyEvent], SpicyStatus), FeedParseError> {
     Ok(match spicy_status {
-        ParsedSpicyStatus::None => { (event.metadata.children.as_slice(), SpicyStatus::None) }
-        ParsedSpicyStatus::HeatingUp => { (event.metadata.children.as_slice(), SpicyStatus::HeatingUp) }
+        ParsedSpicyStatus::None => { (children, SpicyStatus::None) }
+        ParsedSpicyStatus::HeatingUp => { (children, SpicyStatus::HeatingUp) }
         ParsedSpicyStatus::RedHot => {
             // TODO Is the spicy event always the last? first? neither?
-            if let Some((spicy_event, children)) = event.metadata.children.split_last() {
+            if let Some((spicy_event, children)) = children.split_last() {
                 if spicy_event.r#type == EventType::AddedMod {
                     (children, SpicyStatus::RedHot(Some(ModChangeSubEvent {
                         sub_event: SubEvent::from_event(spicy_event),
                         team_id: get_one_team_id(spicy_event)?,
                     })))
                 } else {
-                    (&event.metadata.children, SpicyStatus::RedHot(None))
+                    (&children, SpicyStatus::RedHot(None))
                 }
             } else {
-                (&event.metadata.children, SpicyStatus::RedHot(None))
+                (&children, SpicyStatus::RedHot(None))
             }
         }
     })
 }
 
-fn extract_cooled_off_event<'e, 't>(event: &'e EventuallyEvent, cooled_off: bool, player_tags: &'t [Uuid]) -> Result<(&'e [EventuallyEvent], Option<ModChangeSubEventWithPlayer>, &'t [Uuid]), FeedParseError> {
+fn extract_cooled_off_event<'e, 't>(event: &'e EventuallyEvent, children: &'e [EventuallyEvent], cooled_off: bool, player_tags: &'t [Uuid]) -> Result<(&'e [EventuallyEvent], Option<ModChangeSubEventWithPlayer>, &'t [Uuid]), FeedParseError> {
     Ok(match cooled_off {
-        false => { (event.metadata.children.as_slice(), None, player_tags) }
+        false => { (children, None, player_tags) }
         true => {
             // TODO Is the spicy event always the last? first? neither?
-            if let Some((cooled_off_event, children)) = event.metadata.children.split_last() {
+            if let Some((cooled_off_event, children)) = children.split_last() {
                 // TODO Make this assert into a propagated error
                 assert_eq!(cooled_off_event.r#type, EventType::RemovedMod);
                 let (&player_id, remaining_tags) = player_tags.split_last()
