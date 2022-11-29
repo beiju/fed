@@ -1907,6 +1907,20 @@ pub enum FedEventData {
         /// Metadata for the sub-event that removes the Overperforming mod
         sub_event: SubEvent,
     },
+
+    /// Team went Undersea
+    Undersea {
+        game: GameEvent,
+
+        /// Uuid of team who went Undersea
+        team_id: Uuid,
+
+        /// Uuid of team who went Undersea
+        team_name: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        sub_event: SubEvent,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -3684,6 +3698,31 @@ impl FedEvent {
                         r#type: EventType::Earlbird,
                         category: EventCategory::Special,
                         description: format!("Happy Earlseason!\nEarlbirds wears off for the [object Object]."),
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+            FedEventData::Undersea { ref game, ref team_name, team_id, ref sub_event } => {
+                let description = format!("The {team_name} go Undersea. They're now Overperforming!");
+                let child = EventBuilderChild::new(sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::AddedModFromOtherMod,
+                        category: EventCategory::Changes,
+                        description: description.clone(),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "OVERPERFORMING",
+                        "source": "UNDERSEA",
+                        "type": 3, // ?
+                    }));
+
+                event_builder.for_game(game)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::Undersea,
+                        description,
                         ..Default::default()
                     })
                     .child(child)

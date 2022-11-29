@@ -1098,7 +1098,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sub_event: SubEvent::from_event(sub_event),
             })
         }
-        EventType::Undersea => { todo!() }
+        EventType::Undersea => {
+            let team_name = run_parser(event, parse_undersea)?;
+            assert!(is_known_team_name(team_name));
+
+            let mod_add_event = get_one_sub_event(event)?;
+
+            make_fed_event(event, FedEventData::Undersea {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_id: get_one_team_id(mod_add_event)?,
+                team_name: team_name.to_string(),
+                sub_event: SubEvent::from_event(mod_add_event),
+            })
+
+        }
         EventType::Homebody => { todo!() }
         EventType::Superyummy => {
             let (player_name, peanuts_present) = run_parser(event, parse_superyummy)?;
@@ -2732,4 +2745,11 @@ fn parse_blooddrain(input: &str) -> ParserResult<(&str, &str, AttrCategory)> {
     let (input, _) = parse_blooddrain_ability(drinker_name, &category.to_string())(input)?;
 
     Ok((input, (drinker_name, drunk_name, category)))
+}
+
+fn parse_undersea(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_name) = parse_terminated(" go Undersea. They're now Overperforming!")(input)?;
+
+    Ok((input, team_name))
 }
