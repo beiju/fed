@@ -1032,7 +1032,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::EchoChamber => { todo!() }
         EventType::GrindRail => { todo!() }
         EventType::TunnelsUsed => { todo!() }
-        EventType::PeanutMister => { todo!() }
+        EventType::PeanutMister => {
+            let player_name = run_parser(event, parse_peanut_mister)?;
+            make_fed_event(event, FedEventData::PeanutMister {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+            })
+        }
         EventType::PeanutFlavorText => {
             make_fed_event(event, FedEventData::PeanutFlavorText {
                 game: GameEvent::try_from_event(event, unscatter)?,
@@ -2850,4 +2857,11 @@ fn parse_undersea(input: &str) -> ParserResult<&str> {
     let (input, team_name) = parse_terminated(" go Undersea. They're now Overperforming!")(input)?;
 
     Ok((input, team_name))
+}
+
+fn parse_peanut_mister(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The Peanut Mister activates!\n")(input)?;
+    let (input, player_name) = parse_terminated(" has been cured of their peanut allergy!")(input)?;
+
+    Ok((input, player_name))
 }

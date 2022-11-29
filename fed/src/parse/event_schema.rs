@@ -1981,6 +1981,17 @@ pub enum FedEventData {
         sub_event: Option<SubEvent>,
     },
 
+    /// The peanut mister activates and cures a player's peanut allergy
+    PeanutMister {
+        game: GameEvent,
+
+        /// Uuid of player who got Misted
+        player_id: Uuid,
+
+        /// Name of player who got Misted
+        player_name: String,
+
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -3864,6 +3875,17 @@ impl FedEvent {
                     .build()
             }
 
+            FedEventData::PeanutMister { game, player_id, player_name } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PeanutMister,
+                        category: EventCategory::Special,
+                        description: format!("The Peanut Mister activates!\n{player_name} has been cured of their peanut allergy!"),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .build()
+            }
         }
     }
 
