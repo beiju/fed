@@ -1724,7 +1724,7 @@ pub enum FedEventData {
         team_id: Uuid,
 
         /// Name of team who left Party Time
-        team_name: String,
+        team_nickname: String,
     },
 
     /// Team earned a slot in the postseason
@@ -1826,8 +1826,10 @@ pub enum FedEventData {
     /// included as-is. If you have a use-case where thoroughly parsing this event type would be
     /// useful please let us know in the SIBR discord.
     BlessingWon {
-        /// Uuid of team who won the Blessing
-        team_id: Uuid,
+        /// Team tags of the Blessing event. This is often the Uuid of the team who won the
+        /// blessing, but not always. For example, the Pitching Flotation Bubble has the Uuids of
+        /// all affected teams.
+        team_tags: Vec<Uuid>,
 
         /// Title of Blessing that was won. This may be redundant with the title in `metadata`
         blessing_title: String,
@@ -2013,6 +2015,99 @@ pub enum FedEventData {
 
         /// Nickname of team whose Late to the Party wore off
         team_nickname: String,
+    },
+
+    /// The birds circle and peck a Shelled player free
+    BirdsUnshell {
+        game: GameEvent,
+
+        /// Team Uuid of player who got pecked free
+        team_id: Uuid,
+
+        /// Uuid of player who got pecked free
+        player_id: Uuid,
+
+        /// Name of player who got pecked free
+        player_name: String,
+
+        /// Metadata for the sub-event about being pecked free
+        pecked_free_event: SubEvent,
+
+        /// Metadata for the sub-event about gaining a Superallergy
+        superallergy_event: SubEvent,
+    },
+
+    /// A Returned player on this Team was called back to the Hall and replaced by a newly-promoted
+    /// player from the Shadows
+    ReplaceReturnedPlayerFromShadows {
+        /// Uuid of team whose players were moved around
+        team_id: Uuid,
+
+        /// Nickname of team whose players were moved around
+        team_nickname: String,
+
+        /// Uuid of player who was promoted
+        promoted_player_id: Uuid,
+
+        /// Name of player who was promoted
+        promoted_player_name: String,
+
+        /// Previous location of the player who was promoted
+        promoted_location: ShadowPositionType,
+
+        /// Uuid of player who was removed
+        removed_player_id: Uuid,
+
+        /// Name of player who was removed
+        removed_player_name: String,
+
+        /// Previous location of the player who was removed
+        removed_location: ActivePositionType,
+    },
+
+    /// Player was called back to the Hall at the end of the Season
+    PlayerCalledBackToHall {
+        /// Uuid of player who was called back to the Hall
+        player_id: Uuid,
+
+        /// Name of player who was called back to the Hall
+        player_name: String,
+    },
+
+    /// Team used their Free Will
+    TeamUsedFreeWill {
+        /// Uuid of team who used their Free Will
+        team_id: Uuid,
+
+        /// Name of team who used their Free Will
+        team_nickname: String,
+    },
+
+    /// Player lost a mod
+    PlayerLostMod {
+        /// Team uuid of player who lost the mod
+        team_id: Uuid,
+
+        /// Uuid of player who lost the mod
+        player_id: Uuid,
+
+        /// Name of player who lost the mod
+        player_name: String,
+
+        /// Internal ID of the mod that was lost
+        r#mod: String,
+
+        /// User-facing name of the mod that was lost
+        mod_name: String,
+    },
+
+    /// Investigation progress. This could be parsed further, contributions welcome.
+    Investigation {
+        /// Uuid of player doing the investigating
+        player_id: Uuid,
+
+        /// Investigation progress message (event description)
+        message: String,
     },
 }
 
@@ -3550,12 +3645,12 @@ impl FedEvent {
                     .metadata(json!({ "place": place }))
                     .build()
             }
-            FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_name } => {
+            FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_nickname } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::RemovedMod,
                         category: EventCategory::Changes,
-                        description: format!("The {team_name} have been removed from Party Time to join the Postseason!"),
+                        description: format!("The {team_nickname} have been removed from Party Time to join the Postseason!"),
                         team_tags: vec![team_id],
                         ..Default::default()
                     })
@@ -3677,13 +3772,13 @@ impl FedEvent {
                     .full_metadata(metadata)
                     .build()
             }
-            FedEventData::BlessingWon { team_id, blessing_title, metadata } => {
+            FedEventData::BlessingWon { team_tags, blessing_title, metadata } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::BlessingOrGiftWon,
                         category: EventCategory::Outcomes,
                         description: format!("Blessing Won: {blessing_title}"),
-                        team_tags: vec![team_id],
+                        team_tags,
                         ..Default::default()
                     })
                     .full_metadata(metadata)
@@ -3930,6 +4025,123 @@ impl FedEvent {
                         r#type: EventType::LateToTheParty,
                         category: EventCategory::Special,
                         description: format!("Late to the Party!\nLate to the Party wears off for the {team_nickname}."),
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::BirdsUnshell { game, team_id, player_id, player_name, pecked_free_event, superallergy_event } => {
+                let pecked_free_child = EventBuilderChild::new(&pecked_free_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
+                        description: format!("The Birds pecked {player_name} free!"),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "SHELLED",
+                        "type": 0, // ?
+                    }));
+
+                let superallergy_child = EventBuilderChild::new(&superallergy_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} emerges from the shell with a Superallergy!"),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "SUPERALLERGIC",
+                        "type": 0, // ?
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::BirdsUnshell,
+                        category: EventCategory::Special,
+                        description: format!("The Birds circle...\nThe Birds pecked {player_name} free!"),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .child(pecked_free_child)
+                    .child(superallergy_child)
+                    .build()
+            }
+            FedEventData::ReplaceReturnedPlayerFromShadows { team_id, team_nickname, promoted_player_id, promoted_player_name, promoted_location, removed_player_id, removed_player_name, removed_location } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PlayerReplacesReturned,
+                        category: EventCategory::Changes,
+                        description: format!("The {team_nickname} cut a player and promoted another from the shadows."),
+                        player_tags: vec![removed_player_id, promoted_player_id],
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "promoteLocation": promoted_location as i64,
+                        "promotePlayerId": promoted_player_id,
+                        "promotePlayerName": promoted_player_name,
+                        "removeLocation": removed_location as i64,
+                        "removePlayerId": removed_player_id,
+                        "removePlayerName": removed_player_name,
+                        "teamId": team_id,
+                        "teamName": team_nickname,
+                    }))
+                    .build()
+            }
+            FedEventData::PlayerCalledBackToHall { player_id, player_name } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EnterHallOfFlame,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} entered the Hall of Flame."),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::TeamUsedFreeWill { team_id, team_nickname } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
+                        description: format!("The {team_nickname} used their Free Will."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "FREE_WILL",
+                        "type": 0, // ?
+                    }))
+                    .build()
+            }
+            FedEventData::PlayerLostMod { team_id, player_id, player_name, r#mod, mod_name } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} lost the {mod_name} mod."),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": r#mod,
+                        "type": 0, // ?
+                    }))
+                    .build()
+            }
+
+            FedEventData::Investigation { player_id, message } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Investigation,
+                        category: EventCategory::Special,
+                        description: message,
+                        player_tags: vec![player_id],
                         ..Default::default()
                     })
                     .build()

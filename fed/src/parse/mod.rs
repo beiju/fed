@@ -623,7 +623,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 pitcher,
             })
         }
-        EventType::BirdsUnshell => { todo!() }
+        EventType::BirdsUnshell => {
+            let player_name = run_parser(&event, parse_birds_unshell)?;
+
+            let (pecked_free, superallergy) = get_two_sub_events(event)?;
+            let team_id = get_one_team_id(pecked_free)?;
+            assert_eq!(team_id, get_one_team_id(superallergy)?);
+            let player_id = get_one_player_id(pecked_free)?;
+            assert_eq!(player_id, get_one_player_id(superallergy)?);
+
+            make_fed_event(event, FedEventData::BirdsUnshell {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_id,
+                player_id,
+                player_name: player_name.to_string(),
+                pecked_free_event: SubEvent::from_event(pecked_free),
+                superallergy_event: SubEvent::from_event(superallergy),
+            })
+        }
         EventType::BecomeTripleThreat => {
             let names = run_parser(&event, parse_become_triple_threat)?;
 
@@ -996,7 +1013,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let blessing_title = run_parser(&event, parse_blessing_won)?;
 
             make_fed_event(event, FedEventData::BlessingWon {
-                team_id: get_one_team_id(event)?,
+                team_tags: event.team_tags.clone(),
                 blessing_title: blessing_title.to_string(),
                 metadata: event.metadata.clone(),
             })
@@ -1224,7 +1241,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     })
                 }
             }
-
         }
         EventType::ShameDonor => { todo!() }
         EventType::AddedMod => {
@@ -1275,13 +1291,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::RemovedMod => {
-            // this will definitely need multiple alternatives in the future
-            let team_name = run_parser(&event, parse_removed_mod)?;
-
-            make_fed_event(event, FedEventData::TeamLeftPartyTimeForPostseason {
-                team_id: get_one_team_id(event)?,
-                team_name: team_name.to_string(),
-            })
+            match run_parser(&event, parse_removed_mod)? {
+                ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    make_fed_event(event, FedEventData::TeamLeftPartyTimeForPostseason {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
+                }
+                ParsedRemovedMod::TeamUsedFreeWill(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    make_fed_event(event, FedEventData::TeamUsedFreeWill {
+                        team_id: get_one_team_id(event)?,
+                        team_nickname: team_nickname.to_string(),
+                    })
+                }
+                ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
+                    make_fed_event(event, FedEventData::PlayerLostMod {
+                        team_id: get_one_team_id(event)?,
+                        player_id: get_one_player_id(event)?,
+                        player_name: player_name.to_string(),
+                        r#mod: get_str_metadata(event, "mod")?.to_string(),
+                        mod_name: mod_name.to_string(),
+                    })
+                }
+            }
         }
         EventType::ModExpires => {
             if event.player_tags.is_empty() {
@@ -1324,7 +1358,30 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::PlayerReplacedByNecromancy => { todo!() }
-        EventType::PlayerReplacesReturned => { todo!() }
+        EventType::PlayerReplacesReturned => {
+            let team_nickname = run_parser(&event, parse_player_replaces_returned)?;
+
+            make_fed_event(event, FedEventData::ReplaceReturnedPlayerFromShadows {
+                team_id: get_one_team_id(event)?,
+                team_nickname: team_nickname.to_string(),
+                promoted_player_id: get_uuid_metadata(event, "promotePlayerId")?,
+                promoted_player_name: get_str_metadata(event, "promotePlayerName")?.to_string(),
+                promoted_location: get_int_metadata(event, "promoteLocation")?
+                    .try_into()
+                    .map_err(|_| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "promoteLocation",
+                    })?,
+                removed_player_id: get_uuid_metadata(event, "removePlayerId")?,
+                removed_player_name: get_str_metadata(event, "removePlayerName")?.to_string(),
+                removed_location: get_int_metadata(event, "removeLocation")?
+                    .try_into()
+                    .map_err(|_| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "removeLocation",
+                    })?,
+            })
+        }
         EventType::PlayerRemovedFromTeam => { todo!() }
         EventType::PlayerTraded => { todo!() }
         EventType::PlayerSwap => { todo!() }
@@ -1356,7 +1413,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PlayerStatReroll => { todo!() }
         EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
         EventType::PlayerMoveFailedForce => { todo!() }
-        EventType::EnterHallOfFlame => { todo!() }
+        EventType::EnterHallOfFlame => {
+            // In Beta, this event type is only top-level for return-to-hall events. That was no
+            // longer true in Short Circuits.
+            assert_eq!(event.sim, "thisidisstaticyo");
+
+            let player_name = run_parser(&event, parse_terminated(" entered the Hall of Flame."))?;
+
+            make_fed_event(event, FedEventData::PlayerCalledBackToHall {
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+            })
+        }
         EventType::ExitHallOfFlame => { todo!() }
         EventType::PlayerGainedItem => { todo!() }
         EventType::PlayerLostItem => { todo!() }
@@ -1433,6 +1501,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PlayerAlternated => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
         EventType::ChangedModFromOtherMod => { todo!() }
+        EventType::NecromancyOrPlunderNarration => { todo!() }
         EventType::PlayerPermittedToStay => {
             let player_name = run_parser(&event, parse_terminated(" has been permitted to stay."))?;
 
@@ -1469,6 +1538,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 total_shamings: get_int_metadata(event, "totalShamings")?,
             })
         }
+        EventType::Investigation => {
+            make_fed_event(event, FedEventData::Investigation {
+                player_id: get_one_player_id(event)?,
+                message: event.description.clone(),
+            })
+        }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
@@ -1503,6 +1578,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             })
         }
+        EventType::HighPressure => { todo!() }
         EventType::LineupSorted => {
             // This happened as a top-level event exactly once (and really it should have been a
             // child of the lovers' getting Base Dealing)
@@ -2626,7 +2702,7 @@ fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str, bool)> {
     let (input, is_first) = alt((
         tag("!\nTHE FLAG IS PLANTED").map(|_| true),
         tag(".\nAnother flag is planted!").map(|_| false),
-        ))(input)?;
+    ))(input)?;
 
     Ok((input, (team_nickname, park_name, prefab_name, is_first)))
 }
@@ -2719,11 +2795,23 @@ fn parse_final_standings(input: &str) -> ParserResult<(&str, i32, &str)> {
     Ok((input, (team_nickname, place - 1, division_name)))
 }
 
-fn parse_removed_mod(input: &str) -> ParserResult<&str> {
-    let (input, _) = tag("The ")(input)?;
-    let (input, team_name) = parse_terminated(" have been removed from Party Time to join the Postseason!")(input)?;
+enum ParsedRemovedMod<'s> {
+    TeamRemovedFromPartyTimeForPostseason(&'s str),
+    TeamUsedFreeWill(&'s str),
+    PlayerLostMod((&'s str, &'s str)),
+}
 
-    Ok((input, team_name))
+fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" have been removed from Party Time to join the Postseason!"))
+            .map(|n| ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(n)),
+        preceded(tag("The "), parse_terminated(" used their Free Will."))
+            .map(|n| ParsedRemovedMod::TeamUsedFreeWill(n)),
+        pair(parse_terminated(" lost the "), parse_terminated(" mod."))
+            .map(|nm| ParsedRemovedMod::PlayerLostMod(nm))
+    ))(input)?;
+
+    Ok((input, result))
 }
 
 enum ParsedAddedMod<'a> {
@@ -2886,4 +2974,18 @@ fn parse_peanut_mister(input: &str) -> ParserResult<&str> {
     let (input, player_name) = parse_terminated(" has been cured of their peanut allergy!")(input)?;
 
     Ok((input, player_name))
+}
+
+fn parse_birds_unshell(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The Birds circle...\nThe Birds pecked ")(input)?;
+    let (input, player_name) = parse_terminated(" free!")(input)?;
+
+    Ok((input, player_name))
+}
+
+fn parse_player_replaces_returned(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ")(input)?;
+    let (input, team_nickname) = parse_terminated(" cut a player and promoted another from the shadows.")(input)?;
+
+    Ok((input, team_nickname))
 }
