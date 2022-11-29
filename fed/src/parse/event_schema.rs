@@ -1580,6 +1580,9 @@ pub enum FedEventData {
 
         /// List of players who used their Flippers to slingshot home
         slingshot_home: Vec<PlayerInfo>,
+
+        /// List of players whose Ego kept them on base
+        ego: Vec<PlayerInfo>,
     },
 
     /// Player returned from Elsewhere
@@ -3449,18 +3452,23 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { ref game, ref swept_elsewhere, ref slingshot_home } => {
+            FedEventData::FloodingSwept { ref game, ref swept_elsewhere, ref slingshot_home, ref ego } => {
                 let (children, mut suffix) = self.make_mod_change_sub_events(swept_elsewhere, EventType::AddedMod, "is swept Elsewhere!", "ELSEWHERE");
 
                 for player in slingshot_home {
                     suffix = format!("{suffix}\n{} uses their Flippers to slingshot home!", player.player_name);
                 }
+
+                for player in ego {
+                    suffix = format!("{suffix}\n{}'s Ego keeps them on base!", player.player_name);
+                }
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FloodingSwept,
                         category: EventCategory::Special,
                         description: format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"),
-                        player_tags: slingshot_home.iter().map(|player| player.player_id).collect(),
+                        player_tags: slingshot_home.iter().chain(ego).map(|player| player.player_id).collect(),
                         ..Default::default()
                     })
                     .children(children)

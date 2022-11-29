@@ -1028,12 +1028,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::FloodingSwept => {
-            let (swept_elsewhere_names, flippered_home_names) = run_parser(&event, parse_flooding_swept)?;
+            let (swept_elsewhere_names, flippered_home_names, ego_names) = run_parser(&event, parse_flooding_swept)?;
 
             make_fed_event(event, FedEventData::FloodingSwept {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 swept_elsewhere: zip_mod_change_events(swept_elsewhere_names, children)?,
-                slingshot_home: itertools::zip_eq(flippered_home_names, &event.player_tags)
+                slingshot_home: flippered_home_names.iter().zip(&event.player_tags)
+                    .map(|(player_name, &player_id)| PlayerInfo {
+                        player_id,
+                        player_name: player_name.to_string(),
+                    })
+                    .collect(),
+                // This zip is not correct, but I'm waiting to see the order before I fix it
+                ego: ego_names.iter().zip(&event.player_tags)
                     .map(|(player_name, &player_id)| PlayerInfo {
                         player_id,
                         player_name: player_name.to_string(),
@@ -2733,12 +2740,13 @@ fn parse_player_division_move(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<&str>, Vec<&str>)> {
+fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<&str>, Vec<&str>, Vec<&str>)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")(input)?;
     let (input, players_swept_elsewhere) = many0(preceded(tag("\n"), parse_terminated(" is swept Elsewhere!")))(input)?;
     let (input, players_flippered_home) = many0(preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!")))(input)?;
+    let (input, players_with_ego) = many0(preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!")))(input)?;
 
-    Ok((input, (players_swept_elsewhere, players_flippered_home)))
+    Ok((input, (players_swept_elsewhere, players_flippered_home, players_with_ego)))
 }
 
 fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, Option<i32>)> {
