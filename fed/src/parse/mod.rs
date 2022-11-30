@@ -254,6 +254,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 scores,
                 stopped_inhabiting,
                 cooled_off,
+                is_special: event.category == EventCategory::Special,
             })
         }
         EventType::GroundOut => {
@@ -1039,7 +1040,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::FloodingSwept => {
-            let parsed_effects = run_parser(&event, parse_flooding_swept)?;
+            let (parsed_effects, free_refillers) = run_parser(&event, parse_flooding_swept)?;
 
             let mut children_iter = children.iter();
             let mut player_tags_iter = event.player_tags.iter();
@@ -1096,6 +1097,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }))
                 .collect::<Result<Vec<_>, _>>()?;
 
+            let free_refills = free_refillers.into_iter()
+                .map(|refiller_name| {
+                    make_free_refill(event.r#type, &mut children_iter, refiller_name)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
             if children_iter.next().is_some() {
                 Err(FeedParseError::ExtraChild {
                     event_type: event.r#type,
@@ -1115,6 +1122,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::FloodingSwept {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 effects,
+                free_refills,
             })
         }
         EventType::SalmonSwim => { todo!() }
@@ -2793,11 +2801,13 @@ enum ParsedFloodingEffect<'a> {
     Ego(&'a str),
 }
 
-fn parse_flooding_swept(input: &str) -> ParserResult<Vec<ParsedFloodingEffect>> {
+fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, Vec<&str>)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")(input)?;
     let (input, effects) = many0(parse_flooding_swept_effect)(input)?;
 
-    Ok((input, effects))
+    let (input, refillers) = many0(parse_free_refill)(input)?;
+
+    Ok((input, (effects, refillers)))
 }
 
 fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {

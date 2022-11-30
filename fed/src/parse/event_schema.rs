@@ -661,6 +661,12 @@ pub enum FedEventData {
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
         /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
+        is_special: bool,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -1591,6 +1597,9 @@ pub enum FedEventData {
 
         /// List of effects in the order in which they occurred
         effects: Vec<FloodingSweptEffect>,
+
+        /// List of players who used a Free Refill
+        free_refills: Vec<FreeRefill>,
     },
 
     /// Player returned from Elsewhere
@@ -2410,11 +2419,11 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
+            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
+                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
                         description: format!("{batter_name} hit a flyout to {fielder_name}."),
                         ..Default::default()
                     })
@@ -3426,7 +3435,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { ref game, ref effects } => {
+            FedEventData::FloodingSwept { ref game, ref effects, ref free_refills } => {
                 // I'm being uncharacteristically imperative with this one
                 let mut children = Vec::new();
                 let mut player_tags = Vec::new();
@@ -3461,6 +3470,12 @@ impl FedEvent {
                             write!(description, "\n{player_name}'s Ego keeps them on base!").unwrap();
                         }
                     }
+                }
+
+                for refill in free_refills {
+                    write!(description, "\n{} used their Free Refill.\n{} Refills the In!",
+                           refill.player_name, refill.player_name).unwrap();
+                    children.push(make_free_refill_child(refill));
                 }
 
                 event_builder.for_game(game)
