@@ -17,7 +17,7 @@ use nom::sequence::{pair, preceded, terminated};
 use uuid::{Uuid, uuid};
 use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, Scattered, Unscatter};
+use crate::parse::event_schema::{AttrCategory, BatterSkippedReason, Being, BlooddrainAction, CoffeeBeanMod, FedEvent, FedEventData, FeedbackPlayerData, FreeRefill, GameEvent, Inhabiting, ModChangeSubEvent, ModChangeSubEventWithNamedPlayer, ModChangeSubEventWithPlayer, ModDuration, PlayerInfo, PlayerStatChange, ActivePositionType, ReverbType, ScoreInfo, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, Scattered, Unscatter, FloodingSweptEffect};
 use crate::parse::feed_event_util::{get_one_player_id, get_one_team_id, get_one_sub_event, get_str_metadata, get_float_metadata, get_str_vec_metadata, get_int_metadata, get_two_player_ids, get_two_sub_events, get_uuid_metadata, get_sub_play, get_one_or_zero_sub_events, get_one_or_zero_player_ids};
 
 const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
@@ -1039,24 +1039,82 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::FloodingSwept => {
-            let (swept_elsewhere_names, flippered_home_names, ego_names) = run_parser(&event, parse_flooding_swept)?;
+            let parsed_effects = run_parser(&event, parse_flooding_swept)?;
+
+            let mut children_iter = children.iter();
+            let mut player_tags_iter = event.player_tags.iter();
+
+            let expected_num_tags = parsed_effects.iter()
+                .filter(|effect| match effect {
+                    ParsedFloodingEffect::Elsewhere(_) => { false }
+                    ParsedFloodingEffect::Flippers(_) => { true }
+                    ParsedFloodingEffect::Ego(_) => { true }
+
+                })
+                .count();
+
+            let effects = parsed_effects.iter()
+                .map(|effect| Ok(match effect {
+                    ParsedFloodingEffect::Elsewhere(player_name) => {
+                        let sub_event = children_iter.next()
+                            .ok_or_else(|| FeedParseError::MissingChild {
+                                event_type: event.r#type,
+                                expected_num_children: (children.len() + 1) as i32, // At least
+                            })?;
+
+                        FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer {
+                            sub_event: SubEvent::from_event(sub_event),
+                            team_id: get_one_team_id(sub_event)?,
+                            player_id: get_one_player_id(sub_event)?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                    ParsedFloodingEffect::Flippers(player_name) => {
+                        FloodingSweptEffect::Flippers(PlayerInfo {
+                            player_id: *player_tags_iter.next()
+                                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                                    event_type: event.r#type,
+                                    tag_type: "player",
+                                    expected_num: expected_num_tags,
+                                    actual_num: event.player_tags.len(),
+                                })?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                    ParsedFloodingEffect::Ego(player_name) => {
+                        FloodingSweptEffect::Ego(PlayerInfo {
+                            player_id: *player_tags_iter.next()
+                                .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                                    event_type: event.r#type,
+                                    tag_type: "player",
+                                    expected_num: expected_num_tags,
+                                    actual_num: event.player_tags.len(),
+                                })?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                }))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if children_iter.next().is_some() {
+                Err(FeedParseError::ExtraChild {
+                    event_type: event.r#type,
+                    expected_num_children: effects.len() as i32  - expected_num_tags as i32,
+                })?
+            }
+
+            if player_tags_iter.next().is_some() {
+                Err(FeedParseError::WrongNumberOfTags {
+                    event_type: event.r#type,
+                    tag_type: "player",
+                    expected_num: expected_num_tags,
+                    actual_num: event.player_tags.len(),
+                })?
+            }
 
             make_fed_event(event, FedEventData::FloodingSwept {
                 game: GameEvent::try_from_event(event, unscatter)?,
-                swept_elsewhere: zip_mod_change_events(swept_elsewhere_names, children)?,
-                slingshot_home: flippered_home_names.iter().zip(&event.player_tags)
-                    .map(|(player_name, &player_id)| PlayerInfo {
-                        player_id,
-                        player_name: player_name.to_string(),
-                    })
-                    .collect(),
-                // This zip is not correct, but I'm waiting to see the order before I fix it
-                ego: ego_names.iter().zip(&event.player_tags)
-                    .map(|(player_name, &player_id)| PlayerInfo {
-                        player_id,
-                        player_name: player_name.to_string(),
-                    })
-                    .collect(),
+                effects,
             })
         }
         EventType::SalmonSwim => { todo!() }
@@ -1590,7 +1648,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 is_on,
                 sub_event: SubEvent::from_event(sub_event),
             })
-
         }
         EventType::LineupSorted => {
             // This happened as a top-level event exactly once (and really it should have been a
@@ -2730,13 +2787,28 @@ fn parse_player_division_move(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<&str>, Vec<&str>, Vec<&str>)> {
-    let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")(input)?;
-    let (input, players_swept_elsewhere) = many0(preceded(tag("\n"), parse_terminated(" is swept Elsewhere!")))(input)?;
-    let (input, players_flippered_home) = many0(preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!")))(input)?;
-    let (input, players_with_ego) = many0(preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!")))(input)?;
+enum ParsedFloodingEffect<'a> {
+    Elsewhere(&'a str),
+    Flippers(&'a str),
+    Ego(&'a str),
+}
 
-    Ok((input, (players_swept_elsewhere, players_flippered_home, players_with_ego)))
+fn parse_flooding_swept(input: &str) -> ParserResult<Vec<ParsedFloodingEffect>> {
+    let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")(input)?;
+    let (input, effects) = many0(parse_flooding_swept_effect)(input)?;
+
+    Ok((input, effects))
+}
+
+fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
+    alt((
+        preceded(tag("\n"), parse_terminated(" is swept Elsewhere!"))
+            .map(|n| ParsedFloodingEffect::Elsewhere(n)),
+        preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
+            .map(|n| ParsedFloodingEffect::Flippers(n)),
+        preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
+            .map(|n| ParsedFloodingEffect::Ego(n)),
+    ))(input)
 }
 
 fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, Option<i32>)> {

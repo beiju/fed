@@ -51,6 +51,12 @@ pub enum FeedParseError {
         expected_num_children: i32,
     },
 
+    #[error("Expected {expected_num_children} children for {event_type:?} event but got more")]
+    ExtraChild {
+        event_type: EventType,
+        expected_num_children: i32,
+    },
+
     #[error("Unknown being id {0}")]
     UnknownBeing(i64),
 

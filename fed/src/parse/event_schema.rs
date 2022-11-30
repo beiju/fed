@@ -283,7 +283,8 @@ impl AttrCategory {
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
-    AddStrike(Option<String>), // if there's a strikeout looking, there's a name here
+    AddStrike(Option<String>),
+    // if there's a strikeout looking, there's a name here
     RemoveStrike,
     AddOut,
     RemoveOut,
@@ -487,6 +488,13 @@ pub struct Scattered {
 
     /// Sub-event associated with adding the Scattered mod
     pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub enum FloodingSweptEffect {
+    Elsewhere(ModChangeSubEventWithNamedPlayer),
+    Flippers(PlayerInfo),
+    Ego(PlayerInfo),
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -1581,14 +1589,8 @@ pub enum FedEventData {
     FloodingSwept {
         game: GameEvent,
 
-        /// List of players who were swept Elsewhere
-        swept_elsewhere: Vec<ModChangeSubEventWithNamedPlayer>,
-
-        /// List of players who used their Flippers to slingshot home
-        slingshot_home: Vec<PlayerInfo>,
-
-        /// List of players whose Ego kept them on base
-        ego: Vec<PlayerInfo>,
+        /// List of effects in the order in which they occurred
+        effects: Vec<FloodingSweptEffect>,
     },
 
     /// Player returned from Elsewhere
@@ -3238,7 +3240,7 @@ impl FedEvent {
                         category: EventCategory::Special,
                         description: if let Some((pitcher_1, pitcher_2)) = pitchers.iter().collect_tuple() {
                             format!("{} and {} chug a Third Wave of Coffee!\nThey are now Triple Threats!", pitcher_1.player_name, pitcher_2.player_name)
-                        } else if let Some((pitcher,)) = pitchers.iter().collect_tuple() {
+                        } else if let Some((pitcher, )) = pitchers.iter().collect_tuple() {
                             format!("{} chugs a Third Wave of Coffee!\nThey are now a Triple Threat!", pitcher.player_name)
                         } else {
                             panic!("There should either be one or two pitchers here")
@@ -3424,23 +3426,49 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { ref game, ref swept_elsewhere, ref slingshot_home, ref ego } => {
-                let (children, mut suffix) = self.make_mod_change_sub_events(swept_elsewhere, EventType::AddedMod, "is swept Elsewhere!", "ELSEWHERE");
+            FedEventData::FloodingSwept { ref game, ref effects } => {
+                // I'm being uncharacteristically imperative with this one
+                let mut children = Vec::new();
+                let mut player_tags = Vec::new();
+                let mut description = "A surge of Immateria rushes up from Under!\nBaserunners are swept from play!".to_string();
 
-                for player in slingshot_home {
-                    suffix = format!("{suffix}\n{} uses their Flippers to slingshot home!", player.player_name);
-                }
-
-                for player in ego {
-                    suffix = format!("{suffix}\n{}'s Ego keeps them on base!", player.player_name);
+                for effect in effects {
+                    match effect {
+                        FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer { sub_event, team_id, player_id, player_name }) => {
+                            children.push(
+                                EventBuilderChild::new(&sub_event)
+                                    .update(EventBuilderUpdate {
+                                        r#type: EventType::AddedMod,
+                                        category: EventCategory::Changes,
+                                        description: format!("{player_name} is swept Elsewhere!"),
+                                        team_tags: vec![*team_id],
+                                        player_tags: vec![*player_id],
+                                        ..Default::default()
+                                    })
+                                    .metadata(json!({
+                                        "mod": "ELSEWHERE",
+                                        "type": 0, // ?
+                                    }))
+                            );
+                            write!(description, "\n{player_name} is swept Elsewhere!").unwrap();
+                        }
+                        FloodingSweptEffect::Flippers(PlayerInfo { player_name, player_id }) => {
+                            player_tags.push(*player_id);
+                            write!(description, "\n{player_name} uses their Flippers to slingshot home!").unwrap();
+                        }
+                        FloodingSweptEffect::Ego(PlayerInfo { player_name, player_id }) => {
+                            player_tags.push(*player_id);
+                            write!(description, "\n{player_name}'s Ego keeps them on base!").unwrap();
+                        }
+                    }
                 }
 
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FloodingSwept,
                         category: EventCategory::Special,
-                        description: format!("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!{suffix}"),
-                        player_tags: slingshot_home.iter().chain(ego).map(|player| player.player_id).collect(),
+                        description,
+                        player_tags,
                         ..Default::default()
                     })
                     .children(children)
@@ -4112,7 +4140,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .build()
-
             }
             FedEventData::HighPressure { game, team_id, team_nickname, is_on, sub_event } => {
                 let description = if is_on {
@@ -4143,12 +4170,11 @@ impl FedEvent {
                     })
                     .child(child)
                     .build()
-
             }
         }
     }
 
-    fn make_mod_change_sub_events(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
+    fn make_mod_change_sub_events<'a>(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
         let suffix = mod_changes.iter()
             .map(|e| format!("\n{} {message}", e.player_name))
             .join("");
