@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Write};
 use chrono::{DateTime, Utc};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
@@ -429,11 +429,18 @@ pub enum ActivePositionType {
     Rotation = 1,
 }
 
-impl Display for ActivePositionType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl ActivePositionType {
+    pub fn location(&self) -> &'static str {
         match self {
-            ActivePositionType::Lineup => { write!(f, "batting") }
-            ActivePositionType::Rotation => { write!(f, "pitching") }
+            ActivePositionType::Lineup => "lineup",
+            ActivePositionType::Rotation => "rotation",
+        }
+    }
+
+    pub fn role(&self) -> &'static str {
+        match self {
+            ActivePositionType::Lineup => "batting",
+            ActivePositionType::Rotation => "pitching",
         }
     }
 }
@@ -495,6 +502,13 @@ pub enum FloodingSweptEffect {
     Elsewhere(ModChangeSubEventWithNamedPlayer),
     Flippers(PlayerInfo),
     Ego(PlayerInfo),
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum RenovationVotes {
+    Normal(i64),
+    Manual(String),
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -1962,7 +1976,11 @@ pub enum FedEventData {
         renovation_title: String,
 
         /// Number of votes cast for this renovation
-        votes: i64,
+        ///
+        /// This is ordinarily an int, but for the three renovations that were added manually to
+        /// undo the reno fraud of season 14 it is a string.
+        // TODO Verify that this serializes without any intermediate structure
+        votes: RenovationVotes,
     },
 
     /// Late to the Party mod procs at the beginning of Lateseason
@@ -2128,6 +2146,34 @@ pub enum FedEventData {
 
         /// Metadata for sub-event for adding or removing Overperforming
         sub_event: SubEvent,
+    },
+
+    /// Player was "pulled through the Rift". This was used in the Second Wyatt Masoning and nowhere
+    /// else.
+    PlayerPulledThroughRift {
+        /// Uuid of newly added player
+        player_id: Uuid,
+
+        /// Name of newly added player
+        player_name: String,
+    },
+
+    /// Player Localized on to a team. This occurred as part of the Second Wyatt Masoning.
+    PlayerLocalized {
+        /// Uuid of team the player localized onto
+        team_id: Uuid,
+
+        /// Nickname of team the player localized onto
+        team_nickname: String,
+
+        /// Player who localized onto the team
+        player_id: Uuid,
+
+        /// Name of player who localized onto the team
+        player_name: String,
+
+        /// Position of the new player within the team
+        location: ActivePositionType,
     },
 }
 
@@ -3104,7 +3150,8 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FeedbackSwap,
                         category: EventCategory::Special,
-                        description: format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {position_type}.", player_a.player_name, player_b.player_name, player_b.player_name),
+                        description: format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {}.",
+                                             player_a.player_name, player_b.player_name, player_b.player_name, position_type.role()),
                         player_tags: vec![player_a.player_id, player_b.player_id],
                         ..Default::default()
                     })
@@ -4186,7 +4233,39 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-        }
+            FedEventData::PlayerPulledThroughRift { player_id, player_name } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PlayerDivisionMove,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} was pulled through the Rift."),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({ "id": player_id }))
+                    .build()
+            }
+
+            FedEventData::PlayerLocalized { team_id, team_nickname, player_id, player_name, location } => {
+                let location_int: i64 = location.into();
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PlayerAddedToTeam,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} Localized into the {} {}.", possessive(team_nickname.clone()), location.location()),
+                        player_tags: vec![player_id],
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "location": location_int,
+                        "playerId": player_id,
+                        "playerName": player_name,
+                        "teamId": team_id,
+                        "teamName": team_nickname,
+                    }))
+                    .build()
+            }        }
     }
 
     fn make_mod_change_sub_events<'a>(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {

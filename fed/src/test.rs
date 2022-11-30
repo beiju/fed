@@ -34,7 +34,6 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
         feed_event
     };
 
-
     let parsed_event = parse::parse_feed_event(&feed_event)
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
