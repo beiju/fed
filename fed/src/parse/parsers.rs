@@ -1229,3 +1229,11 @@ pub(crate) fn parse_high_pressure(input: &str) -> ParserResult<(&str, bool)> {
 
     Ok((input, (team_nickname, is_on)))
 }
+
+
+pub(crate) fn parse_echo(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, echoer_name) = parse_terminated(" Echoed ")(input)?;
+    let (input, echoee_name) = parse_terminated("!")(input)?;
+
+    Ok((input, (echoer_name, echoee_name)))
+}

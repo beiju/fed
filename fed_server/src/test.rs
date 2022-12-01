@@ -1,10 +1,7 @@
 #![feature(let_chains)]
 
-mod parse;
-
 use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
-use fed_api::{EventuallyEvent};
+use std::io::{self, BufReader, prelude::*};
 use par_iter_sync::IntoParallelIteratorSync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
@@ -12,29 +9,13 @@ use indicatif::{ProgressDrawTarget, ProgressStyle};
 
 const NUM_EVENTS: u64 = 8299172;
 
-fn sort_children(event: &mut EventuallyEvent) {
-    if event.metadata.children.iter().all(|child| child.metadata.sub_play.is_some()) {
-        event.metadata.children.sort_by_key(|e| e.metadata.sub_play
-            .expect("Shouldn't get here if sub_play is None"));
-    }
-    for child in event.metadata.children.as_mut_slice() {
-        sort_children(child);
-    }
-}
-
 fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<String>)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
-    let feed_event = {
-        let mut feed_event: EventuallyEvent = serde_json::from_str(&str)
-            .context(str)
-            .context("Failed to parse ndjson entry into EventuallyEvent")?;
+    let feed_event = fed::feed_event_from_json(&str)
+        .context(str)
+        .context("Failed to parse ndjson entry into EventuallyEvent")?;
 
-        sort_children(&mut feed_event);
-
-        feed_event
-    };
-
-    let parsed_event = parse::parse_feed_event(&feed_event)
+    let parsed_event = fed::parse_feed_event(&feed_event)
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
 

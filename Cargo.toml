@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "fed_server",
+    "fed_api",
     "fed",
-    "fed_api"
 ]

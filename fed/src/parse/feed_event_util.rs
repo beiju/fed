@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use uuid::Uuid;
 use fed_api::{EventType, EventuallyEvent};
 use itertools::Itertools;
@@ -49,7 +50,7 @@ pub fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> 
 }
 
 pub fn get_uuid_metadata(event: &EventuallyEvent, field: &'static str) -> Result<Uuid, FeedParseError> {
-    Uuid::try_parse(get_str_metadata(event, field)?)
+    Uuid::from_str(get_str_metadata(event, field)?)
         .map_err(|_| FeedParseError::MissingMetadata {
             event_type: event.r#type,
             field

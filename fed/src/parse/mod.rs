@@ -3,16 +3,21 @@ pub mod event_schema;
 mod feed_event_util;
 pub mod builder;
 mod parsers;
+pub mod stream;
 
 use std::slice::Iter;
-use itertools::{Either, Itertools, zip_eq};
-use uuid::{Uuid, uuid};
+use std::str::FromStr;
+use itertools::{Itertools, zip_eq};
+use serde::Deserialize;
+use uuid::Uuid;
 use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::*;
 use crate::parse::feed_event_util::*;
 use crate::parse::parsers::*;
+
+pub use stream::expansion_era_events;
 
 const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
@@ -21,13 +26,13 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 6] = [
-    uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
-    uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
-    uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
-    uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
-    uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
-    uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
+const TAROT_EVENTS: [Uuid; 0] = [
+    // uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
+    // uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
+    // uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
+    // uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
+    // uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
+    // uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
 ];
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -122,7 +127,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     blaserunning,
                     free_refill: free_refiller.map(|refiller_name| {
                         let sub_event = get_one_sub_event(event)?;
-                        Ok(FreeRefill {
+                        Ok::<_, FeedParseError>(FreeRefill {
                             sub_event: SubEvent::from_event(sub_event),
                             player_name: refiller_name.to_string(),
                             player_id: get_one_player_id(sub_event)?,
@@ -314,7 +319,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             } else if let Some((sub_event, remaining)) = remaining_children.split_last() {
                 run_parser(sub_event, parse_terminated(" stopped Inhabiting."))
                     .map(|name| {
-                        Ok((remaining, Some(StoppedInhabiting {
+                        Ok::<_, FeedParseError>((remaining, Some(StoppedInhabiting {
                             sub_event: SubEvent::from_event(sub_event),
                             inhabiting_player_name: name.to_string(),
                             inhabiting_player_id: get_one_player_id(sub_event)?,
@@ -338,7 +343,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 magmatic: magmatic_event.map(|e| {
-                    Ok(ModChangeSubEvent {
+                    Ok::<_, FeedParseError>(ModChangeSubEvent {
                         sub_event: SubEvent::from_event(e),
                         team_id: get_one_team_id(e)?,
                     })
@@ -397,7 +402,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let winner_id = event.metadata.other.as_object()
                 .and_then(|map| map.get("winner"))
                 .and_then(|obj| obj.as_str())
-                .and_then(|uuid_str| Uuid::try_parse(uuid_str).ok())
+                .and_then(|uuid_str| Uuid::from_str(uuid_str).ok())
                 .ok_or_else(|| FeedParseError::MissingMetadata {
                     event_type: event.r#type,
                     field: "winner",
@@ -435,7 +440,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     // These live on the parent
                     let (inhabiting_player_id, inhabited_player_id) = get_two_player_ids(event)?;
 
-                    Ok(Inhabiting {
+                    Ok::<_, FeedParseError>(Inhabiting {
                         sub_event: SubEvent::from_event(child),
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
@@ -652,7 +657,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let pitchers = zip_eq(children, names)
                 .map(|(event, pitcher_name)| {
-                    Ok(ModChangeSubEventWithNamedPlayer {
+                    Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
                         sub_event: SubEvent::from_event(event),
                         team_id: get_one_team_id(event)?,
                         player_id: get_one_player_id(event)?,
@@ -1063,7 +1068,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .count();
 
             let effects = parsed_effects.iter()
-                .map(|effect| Ok(match effect {
+                .map(|effect| Ok::<_, FeedParseError>(match effect {
                     ParsedFloodingEffect::Elsewhere(player_name) => {
                         let sub_event = children_iter.next()
                             .ok_or_else(|| FeedParseError::MissingChild {
@@ -1278,7 +1283,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     .zip(player_names)
                     .map(|(mod_add_event, player_name)| {
                         assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
-                        Ok(ModChangeSubEventWithNamedPlayer {
+                        Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
                             player_name: player_name.to_string(),
                             sub_event: SubEvent::from_event(mod_add_event),
                             player_id: get_one_player_id(mod_add_event)?,
@@ -1637,6 +1642,49 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 total_shamings: get_int_metadata(event, "totalShamings")?,
             })
         }
+        EventType::Echo => {
+            let (echoer_name, echoee_name) = run_parser(&event, parse_echo)?;
+
+            // I would prefer to use try_partition but it doesn't exist and I don't feel like
+            // writing it
+            for child in children {
+                if child.r#type != EventType::AddedModsFromAnotherMod && child.r#type != EventType::RemovedModsFromAnotherMod {
+                    Err(FeedParseError::UnexpectedChildType {
+                        event_type: event.r#type,
+                        child_event_type: child.r#type,
+                    })?
+                }
+            }
+
+            todo!();
+            // Need to add support for echo being removed
+            let (echo_removed, echo_added): (Vec<_>, Vec<_>) = children.iter()
+                .partition(|event| event.r#type == EventType::RemovedModsFromAnotherMod);
+
+            let (main_echo_event, sub_echo_events) = children.split_first()
+                .ok_or_else(|| FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: 1, // At least
+                })?;
+
+            let parse_str = format!("'s Echoed an Echo from {echoer_name}!");
+            let sub_echos = sub_echo_events.iter()
+                .map(move |event| {
+                    let echoer_name = run_parser(event, parse_terminated(&parse_str))?;
+                    make_sub_echo(echoer_name, event)
+                })
+                .collect::<Result<_, _>>()?;
+
+            make_fed_event(event, FedEventData::Echo {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                echoee_name: echoee_name.to_string(),
+                main_echo: make_sub_echo(echoer_name, main_echo_event)?,
+                sub_echos,
+            })
+
+        }
+        EventType::RemovedModsFromAnotherMod => { todo!() }
+        EventType::AddedModsFromAnotherMod => { todo!() }
         EventType::Investigation => {
             make_fed_event(event, FedEventData::Investigation {
                 player_id: get_one_player_id(event)?,
@@ -1708,6 +1756,39 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
     }
+}
+
+fn make_sub_echo(echoer_name: &str, event: &EventuallyEvent) -> Result<SubEcho, FeedParseError> {
+    Ok(SubEcho {
+        team_id: get_one_team_id(event)?,
+        receiver_id: get_one_player_id(event)?,
+        receiver_name: echoer_name.to_string(),
+        mods_added: get_mods_added(event)?,
+        sub_event: SubEvent::from_event(event),
+    })
+}
+
+fn get_mods_added(event: &EventuallyEvent) -> Result<Vec<String>, FeedParseError> {
+    #[derive(Deserialize)]
+    struct ModAndType {
+        r#mod: String,
+        r#type: i32
+    }
+
+    #[derive(Deserialize)]
+    struct EchoMetadata {
+        adds: Vec<ModAndType>,
+    }
+
+    let des: EchoMetadata = serde_json::from_value(event.metadata.other.clone())
+        .map_err(|_| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field: "adds",
+        })?;
+
+    Ok(des.adds.into_iter()
+        .map(|mod_and_type| mod_and_type.r#mod)
+        .collect())
 }
 
 fn zip_mod_change_events(names: Vec<&str>, children: &[EventuallyEvent]) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
@@ -1817,7 +1898,7 @@ fn merge_scores_with_ids(
     }
 
     let scoring_players = scores.scorers.into_iter().zip(scorer_ids)
-        .map(|(score, &scorer_id)| Ok(ScoringPlayer {
+        .map(|(score, &scorer_id)| Ok::<_, FeedParseError>(ScoringPlayer {
             player_id: scorer_id,
             player_name: score.to_string(),
         }))
@@ -1931,4 +2012,22 @@ fn is_known_team_name(name: &str) -> bool {
 
 fn is_known_team_nickname(name: &str) -> bool {
     KNOWN_TEAM_NICKNAMES.contains(&name)
+}
+
+fn sort_children(event: &mut EventuallyEvent) {
+    if event.metadata.children.iter().all(|child| child.metadata.sub_play.is_some()) {
+        event.metadata.children.sort_by_key(|e| e.metadata.sub_play
+            .expect("Shouldn't get here if sub_play is None"));
+    }
+    for child in event.metadata.children.as_mut_slice() {
+        sort_children(child);
+    }
+}
+
+pub fn feed_event_from_json(str: &String) -> serde_json::Result<EventuallyEvent> {
+    let mut feed_event: EventuallyEvent = serde_json::from_str(&str)?;
+
+    sort_children(&mut feed_event);
+
+    Ok(feed_event)
 }

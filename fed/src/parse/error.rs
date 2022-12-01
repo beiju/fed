@@ -4,6 +4,9 @@ use fed_api::EventType;
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {
+    #[error(transparent)]
+    EventuallyEventJsonParseFailed(#[from] serde_json::Error),
+
     #[error("Unknown phase {phase} for {event_type:?} event")]
     UnknownPhase {
         phase: i32,
@@ -74,5 +77,11 @@ pub enum FeedParseError {
     DescriptionParseError {
         event_type: EventType,
         err: String,
+    },
+
+    #[error("Unexpected child event {child_event_type:?} for {event_type:?} event")]
+    UnexpectedChildType {
+        event_type: EventType,
+        child_event_type: EventType,
     },
 }

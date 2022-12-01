@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Write};
 use chrono::{DateTime, Utc};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
@@ -509,6 +509,24 @@ pub enum FloodingSweptEffect {
 pub enum RenovationVotes {
     Normal(i64),
     Manual(String),
+}
+
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct SubEcho {
+    /// Team ID. TODO: Whose?
+    pub(crate) team_id: Uuid,
+
+    /// Uuid of player who received the echo
+    pub(crate) receiver_id: Uuid,
+
+    /// Name of player who received the echo
+    pub(crate) receiver_name: String,
+
+    /// Vec of mods that the player received. Each mod is represented by its internal ID.
+    pub(crate) mods_added: Vec<String>,
+
+    /// Metadata for the event associated with this echo
+    pub(crate) sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
@@ -2166,7 +2184,7 @@ pub enum FedEventData {
         /// Nickname of team the player localized onto
         team_nickname: String,
 
-        /// Player who localized onto the team
+        /// Uuid of player who localized onto the team
         player_id: Uuid,
 
         /// Name of player who localized onto the team
@@ -2174,6 +2192,20 @@ pub enum FedEventData {
 
         /// Position of the new player within the team
         location: ActivePositionType,
+    },
+
+    /// Player Echoed another player
+    Echo {
+        game: GameEvent,
+
+        /// Name of player who was echoed (info for the echoer is in main_echo)
+        echoee_name: String,
+
+        /// Metadata for event for the main echo
+        main_echo: SubEcho,
+
+        /// Vector of additional echos that happened as a consequence of this one
+        sub_echos: Vec<SubEcho>,
     },
 }
 
@@ -4265,7 +4297,60 @@ impl FedEvent {
                         "teamName": team_nickname,
                     }))
                     .build()
-            }        }
+            }
+            FedEventData::Echo { game, echoee_name, main_echo, sub_echos, } => {
+                let description = format!("{} Echoed {echoee_name}!", main_echo.receiver_name);
+                let main_child_adds: Vec<_> = main_echo.mods_added.iter()
+                    .map(|mod_name| json!({ "mod": mod_name, "type": 0 }))
+                    .collect();
+
+                let main_child = EventBuilderChild::new(&main_echo.sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::AddedModsFromAnotherMod,
+                        category: EventCategory::Changes,
+                        description: description.clone(),
+                        player_tags: vec![main_echo.receiver_id],
+                        team_tags: vec![main_echo.team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "adds": main_child_adds,
+                        "source": "ECHO",
+                    }));
+
+                let other_children = sub_echos.iter()
+                    .map(|sub_echo| {
+                        let sub_child_adds: Vec<_> = sub_echo.mods_added.iter()
+                            .map(|mod_name| json!({ "mod": mod_name, "type": 1 }))
+                            .collect();
+
+                        EventBuilderChild::new(&sub_echo.sub_event)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::AddedModsFromAnotherMod,
+                                category: EventCategory::Changes,
+                                description: format!("{}'s Echoed an Echo from {}!", sub_echo.receiver_name, main_echo.receiver_name),
+                                player_tags: vec![sub_echo.receiver_id],
+                                team_tags: vec![sub_echo.team_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "adds": sub_child_adds,
+                                "source": "RECEIVER",
+                            }))
+                    });
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Echo,
+                        category: EventCategory::Special,
+                        description,
+                        ..Default::default()
+                    })
+                    .child(main_child)
+                    .children(other_children)
+                    .build()
+            }
+        }
     }
 
     fn make_mod_change_sub_events<'a>(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
