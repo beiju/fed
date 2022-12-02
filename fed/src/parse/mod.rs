@@ -9,8 +9,8 @@ use std::slice::Iter;
 use std::str::FromStr;
 use itertools::{Itertools, zip_eq};
 use serde::Deserialize;
-use uuid::Uuid;
-use fed_api::{EventCategory, EventType, EventuallyEvent, Weather};
+use uuid::{Uuid, uuid}; // the second one is a macro
+use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::*;
@@ -26,13 +26,13 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 0] = [
-    // uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
-    // uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
-    // uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
-    // uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
-    // uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
-    // uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
+const TAROT_EVENTS: [Uuid; 6] = [
+    uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
+    uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
+    uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
+    uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
+    uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
+    uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
 ];
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {

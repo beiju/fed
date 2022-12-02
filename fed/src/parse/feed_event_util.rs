@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use uuid::Uuid;
-use fed_api::{EventType, EventuallyEvent};
+use eventually_api::{EventType, EventuallyEvent};
 use itertools::Itertools;
 use crate::parse::error::FeedParseError;
 

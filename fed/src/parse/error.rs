@@ -1,6 +1,6 @@
 use thiserror::Error;
 use uuid::Uuid;
-use fed_api::EventType;
+use eventually_api::EventType;
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {

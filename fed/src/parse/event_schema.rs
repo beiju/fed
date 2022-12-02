@@ -4,7 +4,7 @@ use itertools::Itertools;
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
+use eventually_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use schemars::JsonSchema;

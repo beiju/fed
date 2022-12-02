@@ -1,18 +1,20 @@
 [package]
-name = "fed_server"
+name = "fed"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-assert-json-diff = "2.0.2"
 chrono = { version = "0.4.19", features = ["serde"] }
-fed = { path = "../fed" }
+derive_builder = "0.12.0"
+eventually_api = { path = "../eventually_api" }
+flate2 = "1.0.25"
 itertools = "0.10.3"
+nom = "7.1.1"
 num_enum = "0.5.7"
-rocket = "0.5.0-rc.2"
+schemars = { version = "0.8.11", features = ["chrono", "uuid1", "preserve_order"] }
 serde = "1.0.147"
 serde_json = "1.0.82"
 thiserror = "1.0.31"
-uuid = "1.1.2"
+uuid = { version = "1.2.2", features = ["serde"] }

@@ -7,7 +7,7 @@ use nom::error::{convert_error};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
-use fed_api::EventuallyEvent;
+use eventually_api::EventuallyEvent;
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, FedEvent, FedEventData, ModDuration};
 

@@ -1,0 +1,27 @@
+[package]
+name = "fed_tools"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "test"
+path = "src/test.rs"
+
+[[bin]]
+name = "filter_feed"
+path = "src/filter_feed.rs"
+
+[[bin]]
+name = "generate_schema"
+path = "src/generate_schema.rs"
+
+[dependencies]
+anyhow = "1.0.66"
+fed = { path = "../fed" }
+indicatif = "0.17.1"
+json-structural-diff = "0.1.0"
+par-iter-sync = "0.1.10"
+serde = "1.0.147"
+serde_json = "1.0.82"

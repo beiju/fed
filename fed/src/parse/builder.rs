@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde_json::json;
 use uuid::Uuid;
-use fed_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
+use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
