@@ -431,27 +431,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_name: team_name.to_string(),
                 wielding_item: wielding_item.map(|s| s.to_string()),
                 inhabiting: inhabited.map(|inhabited| {
-                    let (child, ) = children.iter().collect_tuple()
-                        .ok_or_else(|| {
-                            FeedParseError::MissingChild {
-                                event_type: event.r#type,
-                                expected_num_children: 1,
-                            }
-                        })?;
+                    let child = if children.is_empty() {
+                        // Exactly 14 times ever, the Haunting didn't have a sub-event. I can't
+                        // figure out why and it annoys me.
+                        None
+                    } else {
+                        Some(get_one_sub_event_from_slice(children, event.r#type)?)
+                    };
 
                     // These live on the parent
                     let (inhabiting_player_id, inhabited_player_id) = get_two_player_ids(event)?;
 
                     Ok::<_, FeedParseError>(Inhabiting {
-                        sub_event: SubEvent::from_event(child),
+                        sub_event: child.map(SubEvent::from_event),
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
                         inhabited_player_id,
-                        inhabiting_player_team_id: if child.team_tags.is_empty() {
+                        inhabiting_player_team_id: child.and_then(|child| if child.team_tags.is_empty() {
                             None
                         } else {
-                            Some(get_one_team_id(child)?)
-                        },
+                            Some(get_one_team_id(child))
+                        }).transpose()?,
                     })
                 }).transpose()?,
                 is_repeating,
@@ -1144,7 +1144,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PolarityShift => { todo!() }
         EventType::EnterSecretBase => { todo!() }
         EventType::ExitSecretBase => { todo!() }
-        EventType::ConsumersAttack => { todo!() }
+        EventType::ConsumersAttack => {
+            let player_name = run_parser(&event, parse_consumer_attack)?;
+            let sub_event = get_one_sub_event(event)?;
+
+            make_fed_event(event, FedEventData::ConsumerAttack {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_id: get_one_team_id(sub_event)?,
+                player_id: get_one_player_id(sub_event)?,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+                rating_before: get_float_metadata(sub_event, "before")?,
+                rating_after: get_float_metadata(sub_event, "after")?,
+            })
+        }
         EventType::EchoChamber => { todo!() }
         EventType::GrindRail => { todo!() }
         EventType::TunnelsUsed => { todo!() }
@@ -1200,30 +1213,54 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::ReturnFromElsewhere => {
-            let (player_name, after_days) = run_parser(event, parse_return_from_elsewhere)?;
+            match run_parser(event, parse_return_from_elsewhere)? {
+                ParsedReturnFromElsewhere::Normal((player_name, after_days)) => {
+                    let (return_sub_event, scattered) = if children.len() == 2 {
+                        let (scattered_sub_event, return_sub_event) = get_two_sub_events(event)?;
+                        let scattered_name = run_parser(scattered_sub_event, parse_terminated(" was Scattered..."))?;
 
-            let (return_sub_event, scattered) = if children.len() == 2 {
-                let (scattered_sub_event, return_sub_event) = get_two_sub_events(event)?;
-                let scattered_name = run_parser(scattered_sub_event, parse_terminated(" was Scattered..."))?;
+                        let scattered = Scattered {
+                            scattered_name: scattered_name.to_string(),
+                            sub_event: SubEvent::from_event(scattered_sub_event),
+                        };
+                        (return_sub_event, Some(scattered))
+                    } else {
+                        (get_one_sub_event(event)?, None)
+                    };
 
-                let scattered = Scattered {
-                    scattered_name: scattered_name.to_string(),
-                    sub_event: SubEvent::from_event(scattered_sub_event),
-                };
-                (return_sub_event, Some(scattered))
-            } else {
-                (get_one_sub_event(event)?, None)
-            };
-
-            make_fed_event(event, FedEventData::ReturnFromElsewhere {
-                game: GameEvent::try_from_event(event, unscatter)?,
-                team_id: get_one_team_id(return_sub_event)?,
-                player_id: get_one_player_id(return_sub_event)?,
-                player_name: player_name.to_string(),
-                sub_event: SubEvent::from_event(return_sub_event),
-                number_of_days: after_days,
-                scattered,
-            })
+                    make_fed_event(event, FedEventData::ReturnFromElsewhere {
+                        game: GameEvent::try_from_event(event, unscatter)?,
+                        player_name: player_name.to_string(),
+                        flavor: ReturnFromElsewhereFlavor::Full {
+                            team_id: get_one_team_id(return_sub_event)?,
+                            player_id: get_one_player_id(return_sub_event)?,
+                            sub_event: SubEvent::from_event(return_sub_event),
+                            number_of_days: after_days,
+                            scattered,
+                        },
+                    })
+                }
+                ParsedReturnFromElsewhere::Short(player_name) => {
+                    if children.is_empty() {
+                        make_fed_event(event, FedEventData::ReturnFromElsewhere {
+                            game: GameEvent::try_from_event(event, unscatter)?,
+                            player_name: player_name.to_string(),
+                            flavor: ReturnFromElsewhereFlavor::False,
+                        })
+                    } else {
+                        let return_sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
+                        make_fed_event(event, FedEventData::ReturnFromElsewhere {
+                            game: GameEvent::try_from_event(event, unscatter)?,
+                            player_name: player_name.to_string(),
+                            flavor: ReturnFromElsewhereFlavor::Short {
+                                team_id: get_one_team_id(return_sub_event)?,
+                                player_id: get_one_player_id(return_sub_event)?,
+                                sub_event: SubEvent::from_event(return_sub_event),
+                            },
+                        })
+                    }
+                }
+            }
         }
         EventType::OverUnder => {
             let (player_name, on) = run_parser(event, parse_under_over_over_under("Over Under"))?;
@@ -1275,7 +1312,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     player_name: player_name.to_string(),
                     peanuts_present,
                 })
-
             } else {
                 let mod_add_event = get_one_sub_event_from_slice(children, event.r#type)?;
 
@@ -1380,7 +1416,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             team_id: get_one_team_id(event)?,
                             player_id: get_one_player_id(event)?,
                             player_name: player_name.to_string(),
-                            r#mod: get_str_metadata(event, "mod")?.to_string(),
+                            level: 1,
                         })
                     }
                 }
@@ -1617,7 +1653,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 division_name: division_name.to_string(),
             })
         }
-        EventType::ModChange => { todo!() }
+        EventType::ModChange => {
+            // This is only a top-level event for MVPs
+            let (player_name, level) = run_parser(&event, parse_repeat_mvp)?;
+
+            make_fed_event(event, FedEventData::PlayerNamedMvp {
+                team_id: get_one_team_id(event)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+                level,
+            })
+        }
         EventType::PlayerAlternated => { todo!() }
         EventType::AddedModFromOtherMod => { todo!() }
         EventType::ChangedModFromOtherMod => { todo!() }

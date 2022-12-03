@@ -192,7 +192,10 @@ impl ScoreInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Inhabiting {
     /// Metadata for the sub-event associated with adding the Inhabiting modifier
-    pub sub_event: SubEvent,
+    ///
+    /// Exactly 14 times ever, there was no sub-event for it. I have no idea why. For those 14
+    /// events sub_event will be null.
+    pub sub_event: Option<SubEvent>,
 
     /// The name of the player who's being inhabited
     pub inhabited_player_name: String,
@@ -561,6 +564,45 @@ pub struct EchoIntoStatic {
 
     /// Metadata for the event associated with changing the Echo mod to the Static mod
     pub mod_changed_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[serde(tag = "flavor")]
+pub enum ReturnFromElsewhereFlavor {
+    /// The normal one
+    Full {
+        /// Team uuid of player who returned from Elsewhere
+        team_id: Uuid,
+
+        /// Uuid of player who returned from Elsewhere
+        player_id: Uuid,
+
+        /// Metadata for sub-event associated with removing the Elsewhere mod
+        sub_event: SubEvent,
+
+        /// Number of days the player was Elsewhere, or null if the player was elsewhere for one
+        /// season. No player has ever returned after more than one season
+        number_of_days: Option<i32>,
+
+        /// Scattered sub-event, if the player was scattered, or null otherwise
+        scattered: Option<Scattered>,
+    },
+    /// The short one that happens when the player went Elsewhere via salmon cannons or fleeing a
+    /// failed heist. Players can't get Scattered on this one.
+    Short {
+        /// Team uuid of player who returned from Elsewhere
+        team_id: Uuid,
+
+        /// Uuid of player who returned from Elsewhere
+        player_id: Uuid,
+
+        /// Metadata for sub-event associated with removing the Elsewhere mod
+        sub_event: SubEvent,
+    },
+    /// Fake returns from elsewhere. As far as I know this only happens when a Receiver returns from
+    /// Elsewhere after being sent there by Receiving Elsewhere from an Echo. There's no extra data
+    /// on a false return from elsewhere.
+    False,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
@@ -1688,24 +1730,11 @@ pub enum FedEventData {
     ReturnFromElsewhere {
         game: GameEvent,
 
-        /// Team uuid of player who returned from Elsewhere
-        team_id: Uuid,
-
-        /// Uuid of player who returned from Elsewhere
-        player_id: Uuid,
-
         /// Name of player who returned from Elsewhere
         player_name: String,
 
-        /// Metadata for sub-event associated with removing the Elsewhere mod
-        sub_event: SubEvent,
-
-        /// Number of days the player was Elsewhere, or null if the player was elsewhere for one
-        /// season. No player has ever returned after more than one season
-        number_of_days: Option<i32>,
-
-        /// Scattered sub-event, if the player was scattered, or null otherwise
-        scattered: Option<Scattered>,
+        /// Which flavor of return from elsewhere this is
+        flavor: ReturnFromElsewhereFlavor,
     },
 
     /// Player was incinerated
@@ -2093,8 +2122,9 @@ pub enum FedEventData {
         /// Name of player who was named an MVP
         player_name: String,
 
-        /// Which mod this player gained (i.e. which level of Ego)
-        r#mod: String,
+        /// Which level of MVP this player attained. The associated ego mod will be EGO{level}. This
+        /// is 1-indexed.
+        level: i32,
     },
 
     /// Late to the Party wore off for the team
@@ -2316,6 +2346,29 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with changing the Receiver mod to Echo
         sub_event: SubEvent,
     },
+
+    /// Player was attacked by a Consumer
+    ConsumerAttack {
+        game: GameEvent,
+
+        /// Team uuid of player who was attacked by the Consumer
+        team_id: Uuid,
+
+        /// Uuid of player who was attacked by the Consumer
+        player_id: Uuid,
+
+        /// Name of player who was attacked by the Consumer
+        player_name: String,
+
+        /// Metadata for sub-event associated with player stat change
+        sub_event: SubEvent,
+
+        /// Player's rating before the attack
+        rating_before: f64,
+
+        /// Player's rating after the attack
+        rating_after: f64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2476,22 +2529,24 @@ impl FedEvent {
                     String::default()
                 };
 
-                let children = inhabiting.iter()
-                    .map(|inhabiting| {
-                        EventBuilderChild::new(&inhabiting.sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::AddedMod,
-                                category: EventCategory::Changes,
-                                description: format!("{} is Inhabiting {}!",
-                                                     batter_name, inhabiting.inhabited_player_name),
-                                player_tags: vec![inhabiting.inhabiting_player_id],
-                                team_tags: inhabiting.inhabiting_player_team_id.iter().cloned().collect(),
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "INHABITING",
-                                "type": 0, // ?
-                            }))
+                let inhabiting_child = inhabiting.as_ref()
+                    .and_then(|inhabiting| {
+                        inhabiting.sub_event.as_ref().map(|sub_event|
+                            EventBuilderChild::new(sub_event)
+                                .update(EventBuilderUpdate {
+                                    r#type: EventType::AddedMod,
+                                    category: EventCategory::Changes,
+                                    description: format!("{} is Inhabiting {}!",
+                                                         batter_name, inhabiting.inhabited_player_name),
+                                    player_tags: vec![inhabiting.inhabiting_player_id],
+                                    team_tags: inhabiting.inhabiting_player_team_id.iter().cloned().collect(),
+                                    ..Default::default()
+                                })
+                                .metadata(json!({
+                                    "mod": "INHABITING",
+                                    "type": 0, // ?
+                                }))
+                        )
                     });
 
                 event_builder.for_game(game)
@@ -2511,7 +2566,7 @@ impl FedEvent {
                         },
                         ..Default::default()
                     })
-                    .children(children)
+                    .children(inhabiting_child)
                     .build()
             }
             FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
@@ -3692,46 +3747,75 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::ReturnFromElsewhere { ref game, team_id, player_id, ref player_name, ref sub_event, number_of_days, ref scattered } => {
-                let description = if let Some(days) = number_of_days {
-                    let s = if days == 1 { "" } else { "s" };
-                    format!("{player_name} has returned from Elsewhere after {days} day{s}!")
-                } else {
-                    format!("{player_name} has returned from Elsewhere after one season!")
-                };
-                let elsewhere_child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
-                        r#type: EventType::RemovedMod,
-                        description: description.clone(),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "ELSEWHERE",
-                        "type": 0, // ?
-                    }));
+            FedEventData::ReturnFromElsewhere { ref game, ref player_name, ref flavor } => {
+                let (description, children) = match flavor {
+                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, number_of_days, scattered } => {
+                        let description = if let Some(days) = number_of_days {
+                            let s = if *days == 1 { "" } else { "s" };
+                            format!("{player_name} has returned from Elsewhere after {days} day{s}!")
+                        } else {
+                            format!("{player_name} has returned from Elsewhere after one season!")
+                        };
+                        let elsewhere_child = EventBuilderChild::new(sub_event)
+                            .update(EventBuilderUpdate {
+                                category: EventCategory::Changes,
+                                r#type: EventType::RemovedMod,
+                                description: description.clone(),
+                                team_tags: vec![*team_id],
+                                player_tags: vec![*player_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "mod": "ELSEWHERE",
+                                "type": 0, // ?
+                            }));
 
-                let children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
-                    let scattered_child = EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::AddedMod,
-                            description: format!("{scattered_name} was Scattered..."),
-                            team_tags: vec![team_id],
-                            player_tags: vec![player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
+                        let children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
+                            let scattered_child = EventBuilderChild::new(sub_event)
+                                .update(EventBuilderUpdate {
+                                    category: EventCategory::Changes,
+                                    r#type: EventType::AddedMod,
+                                    description: format!("{scattered_name} was Scattered..."),
+                                    team_tags: vec![*team_id],
+                                    player_tags: vec![*player_id],
+                                    ..Default::default()
+                                })
+                                .metadata(json!({
                             "mod": "SCATTERED",
                             "type": 0, // ?
                         }));
 
-                    vec![scattered_child, elsewhere_child]
-                } else {
-                    vec![elsewhere_child]
+                            vec![scattered_child, elsewhere_child]
+                        } else {
+                            vec![elsewhere_child]
+                        };
+
+                        (description, children)
+                    }
+                    ReturnFromElsewhereFlavor::Short { team_id, player_id, sub_event } => {
+                        let description = format!("{player_name} has returned from Elsewhere!");
+                        let elsewhere_child = EventBuilderChild::new(sub_event)
+                            .update(EventBuilderUpdate {
+                                category: EventCategory::Changes,
+                                r#type: EventType::RemovedMod,
+                                description: description.clone(),
+                                team_tags: vec![*team_id],
+                                player_tags: vec![*player_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "mod": "ELSEWHERE",
+                                "type": 0, // ?
+                            }));
+
+                        (description, vec![elsewhere_child])
+                    }
+                    ReturnFromElsewhereFlavor::False => {
+                        let description = format!("{player_name} has returned from Elsewhere!");
+                        (description, vec![])
+                    }
                 };
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::ReturnFromElsewhere,
@@ -4217,21 +4301,41 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::PlayerNamedMvp { team_id, player_id, player_name, r#mod } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} is named an MVP."),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": r#mod,
-                        "type": 0,
-                    }))
-                    .build()
+            FedEventData::PlayerNamedMvp { team_id, player_id, player_name, level } => {
+                let mod_name = format!("EGO{level}");
+                if level == 1 {
+                    event_builder
+                        .fill(EventBuilderUpdate {
+                            r#type: EventType::AddedMod,
+                            category: EventCategory::Changes,
+                            description: format!("{player_name} is named an MVP."),
+                            team_tags: vec![team_id],
+                            player_tags: vec![player_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "mod": mod_name,
+                            "type": 0,
+                        }))
+                        .build()
+                } else {
+                    let prev_mod_name = format!("EGO{}", level - 1);
+                    event_builder
+                        .fill(EventBuilderUpdate {
+                            r#type: EventType::ModChange,
+                            category: EventCategory::Changes,
+                            description: format!("{player_name} is named a {level}-Time MVP."),
+                            team_tags: vec![team_id],
+                            player_tags: vec![player_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "from": prev_mod_name,
+                            "to": mod_name,
+                            "type": 0,
+                        }))
+                        .build()
+                }
             }
             FedEventData::LateToThePartyRemoved { game, team_nickname } => {
                 event_builder.for_game(&game)
@@ -4595,6 +4699,34 @@ impl FedEvent {
                         r#type: EventType::EchoReciever,
                         category: EventCategory::Special,
                         description,
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
+                let description = format!("CONSUMERS ATTACK\n{player_name}");
+                let child = EventBuilderChild::new(sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::PlayerStatDecrease,
+                        description: description.clone(),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "before": rating_before,
+                        "after": rating_after,
+                        "type": 4, // ?
+                    }));
+
+                event_builder.for_game(game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::ConsumersAttack,
+                        category: EventCategory::Special,
+                        description,
+                        player_tags: vec![player_id],
                         ..Default::default()
                     })
                     .child(child)

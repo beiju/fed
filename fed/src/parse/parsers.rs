@@ -359,10 +359,10 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
         assert_eq!(name, batter_name);
     }
 
-    let (input, spicy_status) = parse_spicy_status(batter_name)(input)?;
-
-    // I'm just going to assume big buckets are at the end until I get an error about it
+    // Big Buckets is definitely somewhere between the home run and Spicy
     let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!"))(input)?;
+
+    let (input, spicy_status) = parse_spicy_status(batter_name)(input)?;
 
     Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status, big_buckets.is_some())))
 }
@@ -942,7 +942,19 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
     ))(input)
 }
 
-pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<(&str, Option<i32>)> {
+pub(crate) enum ParsedReturnFromElsewhere<'a> {
+    Short(&'a str),
+    Normal((&'a str, Option<i32>))
+}
+
+pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
+    alt((
+        parse_terminated(" has returned from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short(n)),
+        parse_normal_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Normal(v)),
+    ))(input)
+}
+
+pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, Option<i32>)> {
     let (input, player_name) = parse_terminated(" has returned from Elsewhere after ")(input)?;
     let (input, after_days) = alt((
         tag("one season!").map(|_| None),
@@ -1266,4 +1278,21 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
     let (input, echoee_name) = parse_terminated(" ECHO")(input)?;
 
     Ok((input, (echoer_name, echoee_name)))
+}
+
+
+
+pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("CONSUMERS ATTACK\n")(input)?;
+    let (input, victim_name) = take_till1(|c| c == '\n')(input)?;
+
+    Ok((input, victim_name))
+}
+
+pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
+    let (input, player_name) = parse_terminated(" is named a ")(input)?;
+    let (input, n_times) = parse_whole_number(input)?;
+    let (input, _) = tag("-Time MVP")(input)?;
+
+    Ok((input, (player_name, n_times)))
 }
