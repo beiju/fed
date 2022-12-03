@@ -651,6 +651,19 @@ pub enum FedEventData {
         sub_event: SubEvent,
     },
 
+    /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
+    /// of the game. This event has different metadata when Superyummy is Echoed.
+    EchoedSuperyummyGameStart {
+        game: GameEvent,
+
+        /// Name of the Superyummy player
+        player_name: String,
+
+        /// Whether peanuts are present. Determines whether the player "loves" (true) or "misses"
+        /// (false) peanuts.
+        peanuts_present: bool,
+    },
+
     /// Ball
     Ball {
         game: GameEvent,
@@ -2260,6 +2273,49 @@ pub enum FedEventData {
         /// Metadata for the (presumed) victim of the Echo
         echoee: EchoIntoStatic,
     },
+
+    /// Psychoacoustics echoed a mod
+    Psychoacoustics {
+        game: GameEvent,
+
+        /// Name of stadium with Psychoacoustics
+        stadium_name: String,
+
+        /// Uuid of team who Echoed the mod
+        team_id: Uuid,
+
+        /// Nickname of team who Echoed the mod
+        team_nickname: String,
+
+        /// Name of mod that was Echoed
+        mod_name: String,
+
+        /// Internal ID of mod that was echoed
+        mod_id: String,
+
+        /// Metadata for the sub-event associated with adding the mod
+        sub_event: SubEvent,
+    },
+
+    /// An Echo Echoed a Receiver and turned them into an Echo
+    EchoReceiver {
+        game: GameEvent,
+
+        /// Name of Echo who Echoed the Receiver
+        echoer_name: String,
+
+        /// Name of Receiver who was Echoed
+        echoee_name: String,
+
+        /// Uuid of Receiver who was Echoed
+        echoee_id: Uuid,
+
+        /// Team uuid of Receiver who was Echoed
+        echoee_team_id: Uuid,
+
+        /// Metadata for the sub-event associated with changing the Receiver mod to Echo
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2503,6 +2559,17 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .child(change_event)
+                    .build()
+            }
+            FedEventData::EchoedSuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts } => {
+                event_builder.for_game(game)
+                    .fill(EventBuilderUpdate {
+                        category: EventCategory::Special,
+                        r#type: EventType::Superyummy,
+                        description: format!("{} {} Peanuts.", player_name,
+                                             if peanuts { "loves" } else { "misses" }),
+                        ..Default::default()
+                    })
                     .build()
             }
             FedEventData::Ball { game, balls, strikes } => {
@@ -4479,6 +4546,58 @@ impl FedEvent {
                                           EventType::ModChange))
                     .child(make_sub_event(&echoee, &echoee.mod_changed_sub_event,
                                           EventType::ModChange))
+                    .build()
+            }
+            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::AddedModFromOtherMod,
+                        category: EventCategory::Changes,
+                        description: format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} at the {team_nickname}."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": mod_id,
+                        "source": "PSYCHOACOUSTICS",
+                        "type": 3,
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Psychoacoustics,
+                        category: EventCategory::Special,
+                        description: String::new(), // yeah. it's weird
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+            FedEventData::EchoReceiver { game, echoer_name, echoee_name, echoee_id, echoee_team_id, sub_event } => {
+                let description = format!("ECHO {echoer_name} ECHO {echoee_name} ECHO");
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::ModChange,
+                        category: EventCategory::Changes,
+                        description: description.clone(),
+                        player_tags: vec![echoee_id],
+                        team_tags: vec![echoee_team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "from": "RECEIVER",
+                        "to": "ECHO",
+                        "type": 0,
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EchoReciever,
+                        category: EventCategory::Special,
+                        description,
+                        ..Default::default()
+                    })
+                    .child(child)
                     .build()
             }
         }

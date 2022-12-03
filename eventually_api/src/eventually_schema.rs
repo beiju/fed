@@ -312,6 +312,8 @@ pub enum EventType {
     EchoIntoStatic = 170,
     RemovedModsFromAnotherMod = 171,
     AddedModsFromAnotherMod = 172,
+    Psychoacoustics = 173,
+    EchoReciever = 174,
     Investigation = 175,
     Announcement = 201,
     RunsScored = 209,

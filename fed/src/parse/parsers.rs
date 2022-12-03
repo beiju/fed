@@ -623,7 +623,7 @@ pub(crate) fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDura
     Ok((input, (player_name, duration)))
 }
 
-pub(crate)  enum ParsedBlooddrainAction<'s> {
+pub(crate) enum ParsedBlooddrainAction<'s> {
     AddBall,
     RemoveBall,
     AddStrike(Option<&'s str>),
@@ -633,7 +633,7 @@ pub(crate)  enum ParsedBlooddrainAction<'s> {
     RemoveOut,
 }
 
-pub(crate) fn parse_blooddrain_action(drinker_name: &str) ->impl Fn(&str) -> ParserResult<ParsedBlooddrainAction> + '_ {
+pub(crate) fn parse_blooddrain_action(drinker_name: &str) -> impl Fn(&str) -> ParserResult<ParsedBlooddrainAction> + '_ {
     move |input: &str| {
         let (input, _) = tag(drinker_name)(input)?;
         let (input, action) = alt((
@@ -651,7 +651,7 @@ pub(crate) fn parse_blooddrain_action(drinker_name: &str) ->impl Fn(&str) -> Par
     }
 }
 
-pub(crate) fn parse_blooddrain_ability<'a>(drinker_name: &'a str, category: &'a str) ->impl Fn(&str) -> ParserResult<()> + 'a {
+pub(crate) fn parse_blooddrain_ability<'a>(drinker_name: &'a str, category: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
     move |input: &str| {
         let (input, _) = tag(drinker_name)(input)?;
         let (input, _) = tag(" increased their ")(input)?;
@@ -840,7 +840,7 @@ pub(crate) fn parse_single_become_triple_threat(input: &str) -> ParserResult<Vec
     Ok((input, vec![pitcher1_name]))
 }
 
-pub(crate) fn parse_under_over_over_under(mod_text: &str) ->impl Fn(&str) -> ParserResult<(&str, bool)> + '_ {
+pub(crate) fn parse_under_over_over_under(mod_text: &str) -> impl Fn(&str) -> ParserResult<(&str, bool)> + '_ {
     move |input: &str| {
         // complier told me to do the thing with `x` to make the lifetimes work
         let x = alt((
@@ -1242,11 +1242,28 @@ pub(crate) fn parse_echo(input: &str) -> ParserResult<(&str, &str)> {
 }
 
 
-
 pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("ECHO ")(input)?;
     let (input, echoer_name) = parse_terminated(" STATIC\nECHO ")(input)?;
     let (input, echoee_name) = parse_terminated(" STATIC")(input)?;
+
+    Ok((input, (echoer_name, echoee_name)))
+}
+
+
+pub(crate) fn parse_psychoacoustics(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, stadium_name) = parse_terminated(" is Resonating.\nPsychoAcoustics Echo ")(input)?;
+    let (input, mod_name) = parse_terminated(" at the ")(input)?;
+    let (input, team_nickname) = parse_terminated(".")(input)?;
+
+    Ok((input, (stadium_name, mod_name, team_nickname)))
+}
+
+
+pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("ECHO ")(input)?;
+    let (input, echoer_name) = parse_terminated(" ECHO ")(input)?;
+    let (input, echoee_name) = parse_terminated(" ECHO")(input)?;
 
     Ok((input, (echoer_name, echoee_name)))
 }

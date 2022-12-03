@@ -1268,17 +1268,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Superyummy => {
             let (player_name, peanuts_present) = run_parser(event, parse_superyummy)?;
 
-            let mod_add_event = get_one_sub_event(event)?;
+            if children.is_empty() {
+                // Then this must have come from an Echoed Superyummy
+                make_fed_event(event, FedEventData::EchoedSuperyummyGameStart {
+                    game: GameEvent::try_from_event(event, unscatter)?,
+                    player_name: player_name.to_string(),
+                    peanuts_present,
+                })
 
-            make_fed_event(event, FedEventData::SuperyummyGameStart {
-                game: GameEvent::try_from_event(event, unscatter)?,
-                player_name: player_name.to_string(),
-                peanuts_present,
-                is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
-                sub_event: SubEvent::from_event(mod_add_event),
-                player_id: get_one_player_id(mod_add_event)?,
-                team_id: get_one_team_id(mod_add_event)?,
-            })
+            } else {
+                let mod_add_event = get_one_sub_event_from_slice(children, event.r#type)?;
+
+                make_fed_event(event, FedEventData::SuperyummyGameStart {
+                    game: GameEvent::try_from_event(event, unscatter)?,
+                    player_name: player_name.to_string(),
+                    peanuts_present,
+                    is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
+                    sub_event: SubEvent::from_event(mod_add_event),
+                    player_id: get_one_player_id(mod_add_event)?,
+                    team_id: get_one_team_id(mod_add_event)?,
+                })
+            }
         }
         EventType::Perk => {
             let player_names = run_parser(event, parse_perk_up)?;
@@ -1662,7 +1672,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             Err(FeedParseError::UnexpectedChildPattern {
                                 event_type: event.r#type,
                                 err: format!("Encountered two {:?} events in a row",
-                                             EventType::RemovedModsFromAnotherMod)
+                                             EventType::RemovedModsFromAnotherMod),
                             })?;
                         } else {
                             remove_mods_event = Some(child);
@@ -1703,14 +1713,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::EchoIntoStatic => {
             let (echoer_name, echoee_name) = run_parser(&event, parse_echo_into_static)?;
-            
+
             let (echoer_removed, echoee_removed, echoer_mod_change, echoee_mod_change) = children.iter()
                 .collect_tuple()
                 .ok_or_else(|| FeedParseError::MissingChild {
                     event_type: event.r#type,
                     expected_num_children: 4,
                 })?;
-            
+
             let make_echo_into_static = |name: &str, removed_event: &EventuallyEvent, mod_change_event: &EventuallyEvent| {
                 let nickname = get_str_metadata(removed_event, "teamName")?;
                 assert!(is_known_team_nickname(nickname));
@@ -1729,10 +1739,38 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 echoer: make_echo_into_static(echoer_name, echoer_removed, echoer_mod_change)?,
                 echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
             })
-
         }
         EventType::RemovedModsFromAnotherMod => { todo!() }
         EventType::AddedModsFromAnotherMod => { todo!() }
+        EventType::Psychoacoustics => {
+            // For some reason the description on the main event is empty and the description is
+            // only on the child event
+            let child = get_one_sub_event_from_slice(children, event.r#type)?;
+            let (stadium_name, mod_name, team_nickname) = run_parser(&child, parse_psychoacoustics)?;
+            assert!(is_known_team_nickname(team_nickname));
+            make_fed_event(event, FedEventData::Psychoacoustics {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                stadium_name: stadium_name.to_string(),
+                team_id: get_one_team_id(child)?,
+                team_nickname: team_nickname.to_string(),
+                mod_name: mod_name.to_string(),
+                mod_id: get_str_metadata(child, "mod")?.to_string(),
+                sub_event: SubEvent::from_event(child),
+            })
+        }
+        EventType::EchoReciever => {
+            let (echoer_name, echoee_name) = run_parser(&event, parse_echo_receiver)?;
+
+            let child = get_one_sub_event_from_slice(children, event.r#type)?;
+            make_fed_event(event, FedEventData::EchoReceiver {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                echoer_name: echoer_name.to_string(),
+                echoee_name: echoee_name.to_string(),
+                echoee_id: get_one_player_id(child)?,
+                echoee_team_id: get_one_team_id(child)?,
+                sub_event: SubEvent::from_event(child),
+            })
+        }
         EventType::Investigation => {
             make_fed_event(event, FedEventData::Investigation {
                 player_id: get_one_player_id(event)?,
