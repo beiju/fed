@@ -9,7 +9,8 @@ use std::slice::Iter;
 use std::str::FromStr;
 use itertools::{Itertools, zip_eq};
 use serde::Deserialize;
-use uuid::{Uuid, uuid}; // the second one is a macro
+use uuid::{Uuid, uuid};
+// the second one is a macro
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 
 use crate::parse::error::FeedParseError;
@@ -1435,7 +1436,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                                 field: "location",
                             })?,
                     })
-                },
+                }
                 ParsedPlayerAddedToTeam::Localized { player_name, team_nickname, .. } => {
                     // TODO Check location from parsing against location from metadata
                     make_fed_event(event, FedEventData::PlayerLocalized {
@@ -1645,23 +1646,36 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Echo => {
             let (echoer_name, echoee_name) = run_parser(&event, parse_echo)?;
 
-            // I would prefer to use try_partition but it doesn't exist and I don't feel like
+            // I would prefer to use try_group_by but it doesn't exist and I don't feel like
             // writing it
-            for child in children {
-                if child.r#type != EventType::AddedModsFromAnotherMod && child.r#type != EventType::RemovedModsFromAnotherMod {
-                    Err(FeedParseError::UnexpectedChildType {
-                        event_type: event.r#type,
-                        child_event_type: child.r#type,
-                    })?
-                }
-            }
+            let child_groups = {
+                let mut child_groups = Vec::new();
+                let mut remove_mods_event = None;
+                for child in children {
+                    if child.r#type == EventType::RemovedModsFromAnotherMod {
+                        if remove_mods_event.is_some() {
+                            Err(FeedParseError::UnexpectedChildPattern {
+                                event_type: event.r#type,
+                                err: format!("Encountered two {:?} events in a row",
+                                             EventType::RemovedModsFromAnotherMod)
+                            })?;
+                        } else {
+                            remove_mods_event = Some(child);
+                        }
+                    } else if child.r#type == EventType::AddedModsFromAnotherMod {
+                        child_groups.push((remove_mods_event.take(), child));
+                    } else {
+                        Err(FeedParseError::UnexpectedChildType {
+                            event_type: event.r#type,
+                            child_event_type: child.r#type,
+                        })?;
+                    }
+                };
 
-            todo!();
-            // Need to add support for echo being removed
-            let (echo_removed, echo_added): (Vec<_>, Vec<_>) = children.iter()
-                .partition(|event| event.r#type == EventType::RemovedModsFromAnotherMod);
+                child_groups
+            };
 
-            let (main_echo_event, sub_echo_events) = children.split_first()
+            let (main_echo_event, sub_echo_events) = child_groups.split_first()
                 .ok_or_else(|| FeedParseError::MissingChild {
                     event_type: event.r#type,
                     expected_num_children: 1, // At least
@@ -1670,18 +1684,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let parse_str = format!("'s Echoed an Echo from {echoer_name}!");
             let sub_echos = sub_echo_events.iter()
                 .map(move |event| {
-                    let echoer_name = run_parser(event, parse_terminated(&parse_str))?;
-                    make_sub_echo(echoer_name, event)
+                    let echoer_name = run_parser(event.1, parse_terminated(&parse_str))?;
+                    make_echo(echoer_name, event)
                 })
                 .collect::<Result<_, _>>()?;
 
             make_fed_event(event, FedEventData::Echo {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 echoee_name: echoee_name.to_string(),
-                main_echo: make_sub_echo(echoer_name, main_echo_event)?,
+                main_echo: make_echo(echoer_name, main_echo_event)?,
                 sub_echos,
             })
-
         }
         EventType::RemovedModsFromAnotherMod => { todo!() }
         EventType::AddedModsFromAnotherMod => { todo!() }
@@ -1758,23 +1771,43 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     }
 }
 
-fn make_sub_echo(echoer_name: &str, event: &EventuallyEvent) -> Result<SubEcho, FeedParseError> {
-    Ok(SubEcho {
-        team_id: get_one_team_id(event)?,
-        receiver_id: get_one_player_id(event)?,
+fn make_echo(echoer_name: &str, events: &(Option<&EventuallyEvent>, &EventuallyEvent)) -> Result<Echo, FeedParseError> {
+    let (removed, added) = events;
+    // I could verify that the IDs all match, but the round-trip test should verify that
+    Ok(Echo {
+        receiver_team_id: get_one_team_id(added)?,
+        receiver_id: get_one_player_id(added)?,
         receiver_name: echoer_name.to_string(),
-        mods_added: get_mods_added(event)?,
-        sub_event: SubEvent::from_event(event),
+        mods_removed: removed.map(get_mods_removed).transpose()?,
+        mods_added: get_mods_added(added)?,
     })
 }
 
-fn get_mods_added(event: &EventuallyEvent) -> Result<Vec<String>, FeedParseError> {
+#[derive(Deserialize)]
+struct ModAndType {
+    r#mod: String,
+    // r#type: i32,
+}
+
+fn get_mods_removed(event: &EventuallyEvent) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
     #[derive(Deserialize)]
-    struct ModAndType {
-        r#mod: String,
-        r#type: i32
+    struct EchoMetadata {
+        removes: Vec<ModAndType>,
     }
 
+    let des: EchoMetadata = serde_json::from_value(event.metadata.other.clone())
+        .map_err(|_| FeedParseError::MissingMetadata {
+            event_type: event.r#type,
+            field: "removes",
+        })?;
+
+    let mod_ids = des.removes.into_iter()
+        .map(|mod_and_type| mod_and_type.r#mod)
+        .collect();
+    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: SubEvent::from_event(event) })
+}
+
+fn get_mods_added(event: &EventuallyEvent) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
     #[derive(Deserialize)]
     struct EchoMetadata {
         adds: Vec<ModAndType>,
@@ -1786,9 +1819,10 @@ fn get_mods_added(event: &EventuallyEvent) -> Result<Vec<String>, FeedParseError
             field: "adds",
         })?;
 
-    Ok(des.adds.into_iter()
+    let mod_ids = des.adds.into_iter()
         .map(|mod_and_type| mod_and_type.r#mod)
-        .collect())
+        .collect();
+    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: SubEvent::from_event(event) })
 }
 
 fn zip_mod_change_events(names: Vec<&str>, children: &[EventuallyEvent]) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {

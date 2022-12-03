@@ -1,17 +1,21 @@
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
+use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use schemars::JsonSchema;
+use strum_macros::AsRefStr;
+
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
 
-#[derive(Debug, Clone, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Being {
     EmergencyAlert = -1,
@@ -24,7 +28,7 @@ pub enum Being {
     Namerifeht = 6,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Unscatter {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
@@ -33,7 +37,7 @@ pub struct Unscatter {
 }
 
 /// Game data. Every game event has one of these.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GameEvent {
     /// Game uuid
     pub game_id: Uuid,
@@ -98,7 +102,7 @@ impl GameEvent {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub struct SubEvent {
     /// Uuid of sub-event
     pub id: Uuid,
@@ -121,7 +125,7 @@ impl SubEvent {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FreeRefill {
     /// Metadata for the sub-event associated with losing the Free Refill mod
     pub sub_event: SubEvent,
@@ -140,7 +144,7 @@ pub struct FreeRefill {
     pub team_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ScoringPlayer {
     /// Player uuid
     pub player_id: Uuid,
@@ -149,7 +153,7 @@ pub struct ScoringPlayer {
     pub player_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ScoreInfo {
     /// List of players who scored a Run
     pub scoring_players: Vec<ScoringPlayer>,
@@ -185,7 +189,7 @@ impl ScoreInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Inhabiting {
     /// Metadata for the sub-event associated with adding the Inhabiting modifier
     pub sub_event: SubEvent,
@@ -205,7 +209,7 @@ pub struct Inhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StoppedInhabiting {
     /// Sub-event associated with losing the Inhabiting mod
     pub sub_event: SubEvent,
@@ -222,7 +226,7 @@ pub struct StoppedInhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum CoffeeBeanMod {
     Wired,
     Tired,
@@ -249,7 +253,7 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum AttrCategory {
     Batting,
     Pitching,
@@ -279,7 +283,7 @@ impl AttrCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
@@ -306,7 +310,7 @@ impl Display for BlooddrainAction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[repr(i32)]
 pub enum ModDuration {
     // Permanent = 0,
@@ -329,7 +333,7 @@ impl Display for ModDuration {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the od of the player is not present in the
 // containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModChangeSubEvent {
     /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
@@ -341,7 +345,7 @@ pub struct ModChangeSubEvent {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is not present in the
 // containing event, use ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModChangeSubEventWithPlayer {
     /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
@@ -356,7 +360,7 @@ pub struct ModChangeSubEventWithPlayer {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is present in the
 // containing event, use ModChangeSubEventWithPlayer instead.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModChangeSubEventWithNamedPlayer {
     /// Metadata for the sub-event associated with the mod change
     pub sub_event: SubEvent,
@@ -371,7 +375,7 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub player_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum SpicyStatus {
     /// Nothing Spicy-related is happening
     None,
@@ -400,7 +404,7 @@ impl SpicyStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PlayerStatChange {
     /// Team uuid of player whose stats changed
     pub team_id: Uuid,
@@ -422,7 +426,7 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 pub enum ActivePositionType {
     Lineup = 0,
@@ -445,14 +449,14 @@ impl ActivePositionType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 pub enum ShadowPositionType {
     Bench = 2,
     Bullpen = 3,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackPlayerData {
     pub team_id: Uuid,
     pub team_nickname: String,
@@ -461,14 +465,14 @@ pub struct FeedbackPlayerData {
     pub location: i64,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
     Full(SubEvent),
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum BatterSkippedReason {
     /// Batter is Shelled
     Shelled,
@@ -479,7 +483,7 @@ pub enum BatterSkippedReason {
     Elsewhere(Uuid),
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PlayerInfo {
     /// Player uuid
     pub player_id: Uuid,
@@ -488,7 +492,7 @@ pub struct PlayerInfo {
     pub player_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Scattered {
     /// Name of player after being Scattered
     pub scattered_name: String,
@@ -497,39 +501,48 @@ pub struct Scattered {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum FloodingSweptEffect {
     Elsewhere(ModChangeSubEventWithNamedPlayer),
     Flippers(PlayerInfo),
     Ego(PlayerInfo),
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum RenovationVotes {
     Normal(i64),
     Manual(String),
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
-pub struct SubEcho {
-    /// Team ID. TODO: Whose?
-    pub(crate) team_id: Uuid,
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MultipleModsAddedOrRemoved {
+    /// Vector of mods that were added/removed. Each mod is represented by its internal ID.
+    pub mod_ids: Vec<String>,
 
-    /// Uuid of player who received the echo
-    pub(crate) receiver_id: Uuid,
-
-    /// Name of player who received the echo
-    pub(crate) receiver_name: String,
-
-    /// Vec of mods that the player received. Each mod is represented by its internal ID.
-    pub(crate) mods_added: Vec<String>,
-
-    /// Metadata for the event associated with this echo
-    pub(crate) sub_event: SubEvent,
+    /// Metadata for the event associated with adding or removing these mods
+    pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct Echo {
+    /// Team Uuid of player who received the Echo.
+    pub receiver_team_id: Uuid,
+
+    /// Uuid of player who received the Echo
+    pub receiver_id: Uuid,
+
+    /// Name of player who received the Echo
+    pub receiver_name: String,
+
+    /// Mods that Faded as a result of this Echo, if any
+    pub mods_removed: Option<MultipleModsAddedOrRemoved>,
+
+    /// Mods that were added as a result of this Echo
+    pub mods_added: MultipleModsAddedOrRemoved,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -2201,15 +2214,15 @@ pub enum FedEventData {
         /// Name of player who was echoed (info for the echoer is in main_echo)
         echoee_name: String,
 
-        /// Metadata for event for the main echo
-        main_echo: SubEcho,
+        /// Information about the effect on the echoer
+        main_echo: Echo,
 
-        /// Vector of additional echos that happened as a consequence of this one
-        sub_echos: Vec<SubEcho>,
+        /// Information about the effects on any receivers that were affected
+        sub_echos: Vec<Echo>,
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum SimPhase {
     GodsDay = 0,
@@ -2230,7 +2243,7 @@ pub enum SimPhase {
 }
 
 /// Represents the parsed data for any Feed event
-#[derive(Debug, Builder, JsonSchema)]
+#[derive(Debug, Builder, JsonSchema, Serialize, Deserialize)]
 pub struct FedEvent {
     /// Uuid of the event itself
     pub id: Uuid,
@@ -4299,45 +4312,63 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Echo { game, echoee_name, main_echo, sub_echos, } => {
-                let description = format!("{} Echoed {echoee_name}!", main_echo.receiver_name);
-                let main_child_adds: Vec<_> = main_echo.mods_added.iter()
-                    .map(|mod_name| json!({ "mod": mod_name, "type": 0 }))
-                    .collect();
-
-                let main_child = EventBuilderChild::new(&main_echo.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedModsFromAnotherMod,
-                        category: EventCategory::Changes,
-                        description: description.clone(),
-                        player_tags: vec![main_echo.receiver_id],
-                        team_tags: vec![main_echo.team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "adds": main_child_adds,
-                        "source": "ECHO",
-                    }));
-
-                let other_children = sub_echos.iter()
-                    .map(|sub_echo| {
-                        let sub_child_adds: Vec<_> = sub_echo.mods_added.iter()
-                            .map(|mod_name| json!({ "mod": mod_name, "type": 1 }))
+                let make_children_for_echo = |echo: Echo, mod_type: i64, source: &str, echo_description: &str| {
+                    let child_removed = echo.mods_removed.map(|mods_removed| {
+                        let removes: Vec<_> = mods_removed.mod_ids.into_iter()
+                            .map(|mod_id| json!({ "type": mod_type, "mod": mod_id }))
                             .collect();
 
-                        EventBuilderChild::new(&sub_echo.sub_event)
+                        EventBuilderChild::new(&mods_removed.sub_event)
                             .update(EventBuilderUpdate {
-                                r#type: EventType::AddedModsFromAnotherMod,
+                                r#type: EventType::RemovedModsFromAnotherMod,
                                 category: EventCategory::Changes,
-                                description: format!("{}'s Echoed an Echo from {}!", sub_echo.receiver_name, main_echo.receiver_name),
-                                player_tags: vec![sub_echo.receiver_id],
-                                team_tags: vec![sub_echo.team_id],
+                                description: format!("{}'s {}Echo faded.", echo.receiver_name,
+                                                     if mod_type == 0 { "" } else { "Echoed " }),
+                                player_tags: vec![echo.receiver_id],
+                                team_tags: vec![echo.receiver_team_id],
                                 ..Default::default()
                             })
                             .metadata(json!({
-                                "adds": sub_child_adds,
-                                "source": "RECEIVER",
+                                "removes": removes,
+                                "source": source,
                             }))
                     });
+                    let child_added = {
+                        let adds: Vec<_> = echo.mods_added.mod_ids.into_iter()
+                            .map(|mod_id| json!({ "type": mod_type, "mod": mod_id }))
+                            .collect();
+
+                        EventBuilderChild::new(&echo.mods_added.sub_event)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::AddedModsFromAnotherMod,
+                                category: EventCategory::Changes,
+                                description: format!("{}{echo_description}!", echo.receiver_name),
+                                player_tags: vec![echo.receiver_id],
+                                team_tags: vec![echo.receiver_team_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "adds": adds,
+                                "source": source,
+                            }))
+                    };
+
+                    (child_removed, child_added)
+                };
+
+                let receiver_echo_description = format!("'s Echoed an Echo from {}", main_echo.receiver_name);
+                let main_echo_children = make_children_for_echo(main_echo, 0, "ECHO",
+                                                                &format!(" Echoed {echoee_name}"));
+                let sub_echo_children = sub_echos.into_iter()
+                    .map(|sub_echo| make_children_for_echo(sub_echo, 1, "RECEIVER",
+                                                           &receiver_echo_description));
+
+                let description = main_echo_children.1.update.description.clone();
+                let children = iter::once(main_echo_children)
+                    .chain(sub_echo_children)
+                    .map(|(removed, added)| [removed, Some(added)])
+                    .flatten() // This one should flatten the array
+                    .flatten(); // This one should flatten the options
 
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
@@ -4346,8 +4377,7 @@ impl FedEvent {
                         description,
                         ..Default::default()
                     })
-                    .child(main_child)
-                    .children(other_children)
+                    .children(children)
                     .build()
             }
         }
@@ -4387,5 +4417,25 @@ fn base_name(base_stolen: i32) -> &'static str {
         4 => "fourth",
         5 => "fifth",
         _ => panic!("What base is this")
+    }
+}
+
+impl Eq for FedEvent {}
+
+impl PartialEq<Self> for FedEvent {
+    fn eq(&self, other: &Self) -> bool {
+        self.created.eq(&other.created)
+    }
+}
+
+impl PartialOrd<Self> for FedEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.created.partial_cmp(&other.created)
+    }
+}
+
+impl Ord for FedEvent {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.created.cmp(&other.created)
     }
 }

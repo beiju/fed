@@ -84,4 +84,10 @@ pub enum FeedParseError {
         event_type: EventType,
         child_event_type: EventType,
     },
+
+    #[error("Unexpected child pattern for {event_type:?} event: {err}")]
+    UnexpectedChildPattern {
+        event_type: EventType,
+        err: String,
+    },
 }

@@ -987,7 +987,7 @@ pub(crate) enum ParsedPlayerAddedToTeam<'a> {
     Localized {
         player_name: &'a str,
         team_nickname: &'a str,
-        location: &'a str,
+        #[allow(unused)] location: &'a str,
     },
 }
 
