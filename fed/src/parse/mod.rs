@@ -297,7 +297,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
-            let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status) = run_parser(&event, parse_hr)?;
+            let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status, big_bucket) = run_parser(&event, parse_hr)?;
             let (remaining_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
             let (remaining_children, magmatic_event) = if is_magmatic {
                 let expected_num_children = children.len() - remaining_children.len() + 1;
@@ -361,6 +361,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     .collect::<Result<_, _>>()?,
                 spicy_status,
                 is_special: event.category == EventCategory::Special,
+                big_bucket,
             })
         }
         EventType::Hit => {

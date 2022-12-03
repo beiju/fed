@@ -343,7 +343,7 @@ pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserR
     }
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus)> {
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus, bool)> {
     let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n"))(input)?;
     let (input, batter_name) = parse_terminated(" hits a ")(input)?;
     let (input, num_runs) = alt((
@@ -361,7 +361,10 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
 
     let (input, spicy_status) = parse_spicy_status(batter_name)(input)?;
 
-    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status)))
+    // I'm just going to assume big buckets are at the end until I get an error about it
+    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!"))(input)?;
+
+    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status, big_buckets.is_some())))
 }
 
 pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {

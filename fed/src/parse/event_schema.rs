@@ -855,6 +855,9 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// True if the ball landed in a Big Bucket and scored an extra Run, false otherwise
+        big_bucket: bool,
     },
 
     /// Stolen base
@@ -2544,13 +2547,17 @@ impl FedEvent {
                     .spicy(spicy_status, batter_id, batter_name)
                     .build()
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special } => {
-                let suffix = free_refills.iter()
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket } => {
+                let mut suffix = free_refills.iter()
                     .map(|free_refill| {
                         format!("\n{} used their Free Refill.\n{} Refills the In!",
                                 free_refill.player_name, free_refill.player_name)
                     })
                     .join("");
+
+                if big_bucket {
+                    write!(suffix, "\nThe ball lands in a Big Bucket. An extra Run scores!").unwrap();
+                }
 
                 let mut children: Vec<_> = free_refills.iter()
                     .map(make_free_refill_child)
