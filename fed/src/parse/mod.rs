@@ -1179,7 +1179,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::EventHorizonActivation => { todo!() }
         EventType::EventHorizonAwaits => { todo!() }
-        EventType::SolarPanelsAwait => { todo!() }
+        EventType::SolarPanelsAwait => {
+            parse_fixed_description(event, "The Solar Panels are angled toward Sun 2.", FedEventData::SolarPanelsAwait {
+                game: GameEvent::try_from_event(event, unscatter)?,
+            })
+        }
         EventType::SolarPanelsActivation => { todo!() }
         EventType::TarotReading => {
             make_fed_event(event, FedEventData::TarotReading {
@@ -1696,6 +1700,36 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 main_echo: make_echo(echoer_name, main_echo_event)?,
                 sub_echos,
             })
+        }
+        EventType::EchoIntoStatic => {
+            let (echoer_name, echoee_name) = run_parser(&event, parse_echo_into_static)?;
+            
+            let (echoer_removed, echoee_removed, echoer_mod_change, echoee_mod_change) = children.iter()
+                .collect_tuple()
+                .ok_or_else(|| FeedParseError::MissingChild {
+                    event_type: event.r#type,
+                    expected_num_children: 4,
+                })?;
+            
+            let make_echo_into_static = |name: &str, removed_event: &EventuallyEvent, mod_change_event: &EventuallyEvent| {
+                let nickname = get_str_metadata(removed_event, "teamName")?;
+                assert!(is_known_team_nickname(nickname));
+                Ok::<_, FeedParseError>(EchoIntoStatic {
+                    team_id: get_uuid_metadata(removed_event, "teamId")?,
+                    team_nickname: nickname.to_string(),
+                    player_id: get_uuid_metadata(removed_event, "playerId")?,
+                    player_name: name.to_string(),
+                    removed_from_team_sub_event: SubEvent::from_event(removed_event),
+                    mod_changed_sub_event: SubEvent::from_event(mod_change_event),
+                })
+            };
+
+            make_fed_event(event, FedEventData::EchoIntoStatic {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                echoer: make_echo_into_static(echoer_name, echoer_removed, echoer_mod_change)?,
+                echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
+            })
+
         }
         EventType::RemovedModsFromAnotherMod => { todo!() }
         EventType::AddedModsFromAnotherMod => { todo!() }

@@ -1240,3 +1240,13 @@ pub(crate) fn parse_echo(input: &str) -> ParserResult<(&str, &str)> {
 
     Ok((input, (echoer_name, echoee_name)))
 }
+
+
+
+pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("ECHO ")(input)?;
+    let (input, echoer_name) = parse_terminated(" STATIC\nECHO ")(input)?;
+    let (input, echoee_name) = parse_terminated(" STATIC")(input)?;
+
+    Ok((input, (echoer_name, echoee_name)))
+}

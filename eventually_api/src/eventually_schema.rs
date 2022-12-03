@@ -309,6 +309,7 @@ pub enum EventType {
     HighPressure = 165,
     LineupSorted = 166,
     Echo = 169,
+    EchoIntoStatic = 170,
     RemovedModsFromAnotherMod = 171,
     AddedModsFromAnotherMod = 172,
     Investigation = 175,

@@ -542,6 +542,27 @@ pub struct Echo {
     pub mods_added: MultipleModsAddedOrRemoved,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct EchoIntoStatic {
+    /// Team Uuid of player who echoed into static
+    pub team_id: Uuid,
+
+    /// Team nickname of player who echoed into static
+    pub team_nickname: String,
+
+    /// Uuid of player who echoed into static
+    pub player_id: Uuid,
+
+    /// Name of player who echoed into static
+    pub player_name: String,
+
+    /// Metadata for the event associated with removing the player from the team
+    pub removed_from_team_sub_event: SubEvent,
+
+    /// Metadata for the event associated with changing the Echo mod to the Static mod
+    pub mod_changed_sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2222,6 +2243,22 @@ pub enum FedEventData {
 
         /// Information about the effects on any receivers that were affected
         sub_echos: Vec<Echo>,
+    },
+
+    /// The Solar Panels await at the beginning of a game
+    SolarPanelsAwait {
+        game: GameEvent,
+    },
+
+    /// Players Echoed into Static
+    EchoIntoStatic {
+        game: GameEvent,
+
+        /// Metadata for the (presumed) initiator of the Echo
+        echoer: EchoIntoStatic,
+
+        /// Metadata for the (presumed) victim of the Echo
+        echoee: EchoIntoStatic,
     },
 }
 
@@ -4385,6 +4422,63 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .children(children)
+                    .build()
+            }
+            FedEventData::SolarPanelsAwait { game } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::SolarPanelsAwait,
+                        category: EventCategory::Special,
+                        description: "The Solar Panels are angled toward Sun 2.".to_string(),
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::EchoIntoStatic { game, echoer, echoee } => {
+                let description = format!("ECHO {} STATIC\nECHO {} STATIC", echoer.player_name, echoee.player_name);
+
+                let make_sub_event = |echo: &EchoIntoStatic, sub_event: &SubEvent, event_type: EventType| {
+                    let child = EventBuilderChild::new(sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: event_type,
+                            category: EventCategory::Changes,
+                            description: description.clone(),
+                            player_tags: vec![echo.player_id],
+                            team_tags: vec![echo.team_id],
+                            ..Default::default()
+                        });
+
+                    if event_type == EventType::PlayerRemovedFromTeam {
+                        child.metadata(json!({
+                            "playerId": echo.player_id,
+                            "playerName": echo.player_name,
+                            "teamId": echo.team_id,
+                            "teamName": echo.team_nickname,
+                        }))
+                    } else {
+                        child.metadata(json!({
+                            "from": "ECHO",
+                            "to": "STATIC",
+                            "type": 0,
+                        }))
+                    }
+                };
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EchoIntoStatic,
+                        category: EventCategory::Special,
+                        description: description.clone(),
+                        ..Default::default()
+                    })
+                    .child(make_sub_event(&echoer, &echoer.removed_from_team_sub_event,
+                                          EventType::PlayerRemovedFromTeam))
+                    .child(make_sub_event(&echoee, &echoee.removed_from_team_sub_event,
+                                          EventType::PlayerRemovedFromTeam))
+                    .child(make_sub_event(&echoer, &echoer.mod_changed_sub_event,
+                                          EventType::ModChange))
+                    .child(make_sub_event(&echoee, &echoee.mod_changed_sub_event,
+                                          EventType::ModChange))
                     .build()
             }
         }
