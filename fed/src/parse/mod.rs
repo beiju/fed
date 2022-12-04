@@ -1847,6 +1847,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::Tidings {
                 message: event.description.clone(),
                 metadata: event.metadata.clone(),
+                player_tags: event.player_tags.clone(),
             })
         }
         EventType::Announcement => { todo!() }
@@ -1904,6 +1905,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                                         team_nickname: "Lovers".to_string(),
                                     })
         }
+        EventType::NutButton => { todo!() }
         EventType::PostseasonEliminated => {
             let (team_nickname, season_num) = run_parser(&event, parse_postseason_eliminated)?;
             assert!(is_known_team_nickname(team_nickname));

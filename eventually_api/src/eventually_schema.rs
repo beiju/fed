@@ -308,6 +308,7 @@ pub enum EventType {
     PostseasonAdvance = 159,
     HighPressure = 165,
     LineupSorted = 166,
+    NutButton = 168,
     Echo = 169,
     EchoIntoStatic = 170,
     RemovedModsFromAnotherMod = 171,

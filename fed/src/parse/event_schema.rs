@@ -2388,6 +2388,9 @@ pub enum FedEventData {
 
         /// Event metadata exactly as it appears in the Feed event
         metadata: EventMetadata,
+
+        /// Player tags exactly as it appears in the Feed event
+        player_tags: Vec<Uuid>,
     },
 
 
@@ -4800,12 +4803,13 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::Tidings { message, metadata } => {
+            FedEventData::Tidings { message, metadata, player_tags } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Tidings,
                         category: EventCategory::Outcomes,
                         description: message,
+                        player_tags,
                         ..Default::default()
                     })
                     .full_metadata(metadata)

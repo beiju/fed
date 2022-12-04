@@ -1302,8 +1302,8 @@ pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
 
 pub(crate) fn parse_homebody(input: &str) -> ParserResult<(&str, bool)> {
     let (input, result) = alt((
-        parse_terminated(" is homesick.").map(|n| (n, true)),
-        parse_terminated(" is happy to be home.").map(|n| (n, false)),
+        parse_terminated(" is homesick.").map(|n| (n, false)),
+        parse_terminated(" is happy to be home.").map(|n| (n, true)),
     ))(input)?;
 
     Ok((input, result))
