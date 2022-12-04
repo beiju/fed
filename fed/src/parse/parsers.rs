@@ -1308,3 +1308,12 @@ pub(crate) fn parse_homebody(input: &str) -> ParserResult<(&str, bool)> {
 
     Ok((input, result))
 }
+
+pub(crate) fn parse_salmon(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("The Salmon swim upstream!\nInning ")(input)?;
+    let (input, inning_num) = parse_whole_number(input)?;
+    // I'll update this to handle runs being lost when I encounter it
+    let (input, _) = tag(" begins again.\nNo Runs are lost.")(input)?;
+
+    Ok((input, inning_num))
+}

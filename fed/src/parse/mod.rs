@@ -1140,7 +1140,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 free_refills,
             })
         }
-        EventType::SalmonSwim => { todo!() }
+        EventType::SalmonSwim => {
+            let inning_num = run_parser(&event, parse_salmon)?;
+
+            make_fed_event(event, FedEventData::SalmonSwim {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                inning_num,
+            })
+
+        }
         EventType::PolarityShift => { todo!() }
         EventType::EnterSecretBase => { todo!() }
         EventType::ExitSecretBase => { todo!() }

@@ -2393,7 +2393,6 @@ pub enum FedEventData {
         player_tags: Vec<Uuid>,
     },
 
-
     /// The event that announces when a Homebody is happy to be home or misses home at the beginning
     /// of the game
     HomebodyGameStart {
@@ -2419,6 +2418,14 @@ pub enum FedEventData {
         /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
         sub_event: SubEvent,
     },
+
+    /// The Salmon swim upstream
+    SalmonSwim {
+        game: GameEvent,
+
+        /// The inning number according to the event description. 1-indexed.
+        inning_num: i32,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -4828,7 +4835,15 @@ impl FedEvent {
                     })
                     .child(change_event)
                     .build()
-
+            }
+            FedEventData::SalmonSwim { game, inning_num } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::SalmonSwim,
+                        description: format!("The Salmon swim upstream!\nInning {inning_num} begins again.\nNo Runs are lost."),
+                        ..Default::default()
+                    })
+                    .build()
             }
         }
     }
