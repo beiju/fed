@@ -4,7 +4,7 @@ use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, verify};
 use nom::error::{convert_error};
-use nom::multi::{many0, many1, separated_list1};
+use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 use eventually_api::EventuallyEvent;
@@ -1376,13 +1376,15 @@ pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLo
     Ok((input, ParsedTeamRunsLost { runs, name }))
 }
 
-pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
     let (input, pitcher_name) = parse_terminated(" hits ")(input)?;
     let (input, batter_name) = parse_terminated(" with a pitch!\n")(input)?;
     let (input, _) = tag(batter_name)(input)?;
     let (input, _) = tag(" is now being Observed...")(input)?; // I'll deal with murder debt later
 
-    Ok((input, (pitcher_name, batter_name)))
+    let (input, scores) = parse_scores(" scores!")(input)?;
+
+    Ok((input, (pitcher_name, batter_name, scores)))
 }
 
 pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(i32, &str)> {
@@ -1406,4 +1408,18 @@ pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, i32, bo
     let (input, _) = tag(".")(input)?;
 
     Ok((input, (team_nickname, num_runs, unruns)))
+}
+
+pub(crate) fn parse_middling(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Happy Midseason!\nThe ")(input)?;
+    let (input, team_nickname) = parse_terminated(" are Middling!")(input)?;
+
+    Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" enters the Crime Scene at ")(input)?;
+    let (input, team_nickname) = parse_terminated(" to Investigate...")(input)?;
+
+    Ok((input, (player_name, team_nickname)))
 }

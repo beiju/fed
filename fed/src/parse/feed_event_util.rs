@@ -28,10 +28,14 @@ pub fn get_one_or_zero_sub_events(event: &EventuallyEvent) -> Result<Option<&Eve
 }
 
 pub fn get_two_sub_events(event: &EventuallyEvent) -> Result<(&EventuallyEvent, &EventuallyEvent), FeedParseError> {
-    let (a, b) = event.metadata.children.iter().collect_tuple()
+    get_two_sub_events_from_slice(&event.metadata.children, event.r#type)
+}
+
+pub fn get_two_sub_events_from_slice(slice: &[EventuallyEvent], event_type: EventType) -> Result<(&EventuallyEvent, &EventuallyEvent), FeedParseError> {
+    let (a, b) = slice.iter().collect_tuple()
         .ok_or_else(|| {
             FeedParseError::MissingChild {
-                event_type: event.r#type,
+                event_type,
                 expected_num_children: 2,
             }
         })?;
@@ -162,6 +166,10 @@ fn get_two_ids(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> 
 
 pub fn get_two_player_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {
     get_two_ids("player", &event.player_tags, event.r#type)
+}
+
+pub fn get_two_player_ids_from_slice(slice: &[Uuid], event_type: EventType) -> Result<(Uuid, Uuid), FeedParseError> {
+    get_two_ids("player", slice, event_type)
 }
 
 // pub fn get_two_team_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {

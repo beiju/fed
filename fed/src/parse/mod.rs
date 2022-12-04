@@ -27,13 +27,15 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 6] = [
+const TAROT_EVENTS: [Uuid; 8] = [
     uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
     uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
     uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
     uuid!("17df7d13-41df-4caf-af56-da75577a43e8"), // Lovers get Base Dealing
     uuid!("6a9e3ad7-f6a7-437c-9bd5-22b602a32cc3"), // Quitter gets Receiver
     uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
+    uuid!("77df7273-e3c3-49b1-9ce5-4baec629d75a"), // Mints get Middling
+    uuid!("9cd56488-5ee2-436e-9196-37a76593cdaf"), // Flowers get After Party
 ];
 
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
@@ -504,9 +506,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::HomeFieldAdvantage => { todo!() }
         EventType::HitByPitch => {
-            let (pitcher_name, batter_name) = run_parser(&event, parse_hit_by_pitch)?;
-            let (pitcher_id, batter_id) = get_two_player_ids(event)?;
-            let sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
+            let (pitcher_name, batter_name, scores) = run_parser(&event, parse_hit_by_pitch)?;
+            let (hbp_player_ids, scorer_ids) = event.player_tags.split_at(2);
+
+            let (pitcher_id, batter_id) = get_two_player_ids_from_slice(hbp_player_ids, event.r#type)?;
+            let (hbp_children, score_children) = children.split_at(1);
+            let sub_event = get_one_sub_event_from_slice(hbp_children, event.r#type)?;
+
+            let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &score_children, event.r#type, 0)?;
+
             make_fed_event(event, FedEventData::HitByPitch {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 pitcher_id,
@@ -515,6 +523,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_id,
                 batter_name: batter_name.to_string(),
                 sub_event: SubEvent::from_event(sub_event),
+                scores,
+                stopped_inhabiting,
             })
         }
         EventType::BatterSkipped => {
@@ -1430,7 +1440,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: SubEvent::from_event(mod_add_event),
                         player_id: get_one_player_id(mod_add_event)?,
                         team_id: get_one_team_id(mod_add_event)?,
-                    }
+                    },
                 })
             }
         }
@@ -1943,6 +1953,46 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 message: event.description.clone(),
                 metadata: event.metadata.clone(),
                 player_tags: event.player_tags.clone(),
+            })
+        }
+        EventType::Middling => {
+            let team_nickname = run_parser(&event, parse_middling)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let child = get_one_sub_event_from_slice(children, event.r#type)?;
+            make_fed_event(event, FedEventData::Middling {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_nickname: team_nickname.to_string(),
+                change_event: ModChangeSubEvent {
+                    sub_event: SubEvent::from_event(child),
+                    team_id: get_one_team_id(child)?,
+                },
+            })
+        }
+        EventType::EnterCrimeScene => {
+            let (player_name, stadium_nickname) = run_parser(&event, parse_enter_crime_scene)?;
+
+            let (crime_scene_event, shadows_event) = get_two_sub_events_from_slice(children, event.r#type)?;
+
+            make_fed_event(event, FedEventData::EnterCrimeScene {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_id: get_uuid_metadata(crime_scene_event, "playerId")?,
+                player_name: get_str_metadata(crime_scene_event, "playerName")?.to_string(),
+                previous_team_id: get_uuid_metadata(crime_scene_event, "sendTeamId")?,
+                previous_team_name: get_str_metadata(crime_scene_event, "sendTeamName")?.to_string(),
+                previous_location: get_int_metadata(crime_scene_event, "location")?
+                    .try_into()
+                    .map_err(|_| FeedParseError::MissingMetadata {
+                        event_type: event.r#type,
+                        field: "location",
+                    })?,
+                new_team_id: get_uuid_metadata(crime_scene_event, "receiveTeamId")?,
+                new_team_name: get_str_metadata(crime_scene_event, "receiveTeamName")?.to_string(),
+                stadium_name: stadium_nickname.to_string(),
+                rating_before: get_float_metadata(shadows_event, "before")?,
+                rating_after: get_float_metadata(shadows_event, "after")?,
+                crime_scene_sub_event: SubEvent::from_event(crime_scene_event),
+                enter_shadows_sub_event: SubEvent::from_event(shadows_event),
             })
         }
         EventType::Announcement => { todo!() }

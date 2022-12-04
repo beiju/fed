@@ -317,6 +317,8 @@ pub enum EventType {
     EchoReciever = 174,
     InvestigationMessage = 175,
     Tidings = 176,
+    Middling = 178,
+    EnterCrimeScene = 181,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,

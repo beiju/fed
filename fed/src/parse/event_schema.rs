@@ -459,6 +459,15 @@ pub enum ShadowPositionType {
     Bullpen = 3,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[repr(i64)]
+pub enum PositionType {
+    Lineup = 0,
+    Rotation = 1,
+    Bench = 2,
+    Bullpen = 3,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FeedbackPlayerData {
     pub team_id: Uuid,
@@ -2514,6 +2523,13 @@ pub enum FedEventData {
 
         /// Metadata for the event associated with adding the Observed mod
         sub_event: SubEvent,
+
+        #[serde(flatten)]
+        scores: ScoreInfo,
+
+        /// If the player who scored was Inhabiting, contains metadata about the player losing the
+        /// Inhabiting mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
@@ -2537,7 +2553,38 @@ pub enum FedEventData {
 
         /// Number of Runs (positive) or Unruns (negative) gained
         num_runs: i32,
-    }
+    },
+
+    /// Team gains or loses Middling
+    Middling {
+        game: GameEvent,
+
+        /// Nickname of team who gained the (Un)runs
+        team_nickname: String,
+
+        #[serde(flatten)]
+        change_event: ModChangeSubEvent,
+    },
+
+    /// Detective enters a Crime Scene
+    EnterCrimeScene {
+        game: GameEvent,
+
+        // TODO Document these
+        player_id: Uuid,
+        player_name: String,
+        previous_team_id: Uuid,
+        previous_team_name: String,
+        previous_location: PositionType,
+        new_team_id: Uuid,
+        new_team_name: String,
+        stadium_name: String,
+        rating_before: f64,
+        rating_after: f64,
+
+        crime_scene_sub_event: SubEvent,
+        enter_shadows_sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -5039,7 +5086,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event } => {
+            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event, scores, stopped_inhabiting } => {
                 let child = EventBuilderChild::new(&sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
@@ -5062,6 +5109,8 @@ impl FedEvent {
                         player_tags: vec![pitcher_id, batter_id],
                         ..Default::default()
                     })
+                    .scores(&scores, " scores!")
+                    .stopped_inhabiting(&stopped_inhabiting)
                     .child(child)
                     .build()
             }
@@ -5089,6 +5138,77 @@ impl FedEvent {
                                              }),
                         ..Default::default()
                     })
+                    .build()
+            }
+            FedEventData::Middling { game, team_nickname, change_event } => {
+                let child = EventBuilderChild::new(&change_event.sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::AddedModFromOtherMod,
+                        description: format!("The {team_nickname} are Middling!"),
+                        team_tags: vec![change_event.team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "OVERPERFORMING",
+                        "source": "MIDDLING",
+                        "type": 0, // ?
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Middling,
+                        category: EventCategory::Special,
+                        description: format!("Happy Midseason!\nThe {team_nickname} are Middling!"),
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+            FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, crime_scene_sub_event, enter_shadows_sub_event } => {
+                let crime_child = EventBuilderChild::new(&crime_scene_sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::PlayerMoved,
+                        description: format!("{player_name} entered the Crime Scene at {stadium_name} to Investigate..."),
+                        team_tags: vec![previous_team_id, new_team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "location": previous_location as i64,
+                        "playerId": player_id,
+                        "playerName": player_name,
+                        "receiveLocation": 3,
+                        "receiveTeamId": new_team_id,
+                        "receiveTeamName": new_team_name,
+                        "sendTeamId": previous_team_id,
+                        "sendTeamName": previous_team_name,
+                    }));
+                let shadows_child = EventBuilderChild::new(&enter_shadows_sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::PlayerStatIncrease,
+                        description: format!("{player_name} entered the Shadows."),
+                        team_tags: vec![new_team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "before": rating_before,
+                        "after": rating_after,
+                        "type": 4, // ?
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EnterCrimeScene,
+                        category: EventCategory::Special,
+                        description: format!("{player_name} enters the Crime Scene at {stadium_name} to Investigate..."),
+                        ..Default::default()
+                    })
+                    .child(crime_child)
+                    .child(shadows_child)
                     .build()
             }
         }
