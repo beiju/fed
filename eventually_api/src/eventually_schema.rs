@@ -5,7 +5,6 @@ use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
-use chrono::serde::ts_milliseconds;
 use schemars::gen::SchemaGenerator;
 use schemars::JsonSchema;
 use schemars::schema::Schema;
@@ -85,7 +84,6 @@ impl EventCategory {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EventuallyEvent {
     pub id: Uuid,
-    #[serde(with = "ts_milliseconds")]
     pub created: DateTime<Utc>,
     pub r#type: EventType,
     pub category: EventCategory,

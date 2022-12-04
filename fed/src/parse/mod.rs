@@ -1970,7 +1970,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::EnterCrimeScene => {
-            let (player_name, stadium_nickname) = run_parser(&event, parse_enter_crime_scene)?;
+            let (_player_name, stadium_nickname) = run_parser(&event, parse_enter_crime_scene)?;
 
             let (crime_scene_event, shadows_event) = get_two_sub_events_from_slice(children, event.r#type)?;
 

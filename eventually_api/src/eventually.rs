@@ -141,3 +141,15 @@ fn eventually_pages(start: &'static str, buffer_pages: usize) -> impl Stream<Ite
         // whether the previous page was empty
         .scan((), |_, page_opt| future::ready(page_opt))
 }
+
+pub fn events_from_str(event_str: &str) -> serde_json::Result<Vec<EventuallyEvent>> {
+    let response: EventuallyResponse = serde_json::from_str(&event_str)?;
+    let results = response.0.into_iter()
+        .map(|mut event| {
+            sort_children(&mut event.metadata.children);
+
+            event
+        })
+        .collect();
+    Ok(results)
+}
