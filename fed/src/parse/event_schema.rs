@@ -625,7 +625,7 @@ impl Display for TeamRunsLost {
 pub enum SalmonRunsLost {
     None,
     OneTeam(TeamRunsLost),
-    BothTeams((TeamRunsLost, TeamRunsLost))
+    BothTeams((TeamRunsLost, TeamRunsLost)),
 }
 
 impl Display for SalmonRunsLost {
@@ -636,6 +636,33 @@ impl Display for SalmonRunsLost {
             SalmonRunsLost::BothTeams((a, b)) => { write!(f, "{a} {b}") }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct DetectiveActivity {
+    /// Uuid of the detective
+    pub detective_id: Uuid,
+
+    /// Name of the detective
+    pub detective_name: String,
+
+    /// Metadata for the sub-event associated with the detective activity
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct BatterDebt {
+    /// Batter Uuid. For some reason this is only added to the event when Debt procs, even though
+    /// the batter and fielder are always part of the event.
+    pub batter_id: Uuid,
+
+    /// Fielder Uuid. For some reason this is only added to the event when Debt procs, even though
+    /// the batter and fielder are always part of the event.
+    pub fielder_id: Uuid,
+
+    /// Metadata for the sub-event associated with adding the Observed/Unstable/etc. mod.
+    /// Unfortunately there is one (1) event where this was not added, so it needs to be optional.
+    pub sub_event: Option<ModChangeSubEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
@@ -822,10 +849,9 @@ pub enum FedEventData {
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
 
-        /// Whether the fielder became Observed as a result of batter Debt. In this case the event
-        /// does have player Uuids, and this will be equal to a 2-element array of batter id,
-        /// fielder id in that order. Otherwise, this will be null.
-        batter_debt: Option<(Uuid, Uuid)>,
+        /// If the batter has Debt and hit the fielder with the ball, this contains the information
+        /// about adding Unstable/Observed/whatever. Otherwise it will be null.
+        batter_debt: Option<BatterDebt>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -2406,6 +2432,9 @@ pub enum FedEventData {
 
         /// Player's rating after the attack
         rating_after: f64,
+
+        /// Detective activity, if any
+        sensed_something_fishy: Option<DetectiveActivity>,
     },
 
     /// Team gained a Free Will
@@ -2489,7 +2518,7 @@ pub enum FedEventData {
 
         /// Metadata for the event associated with adding the Observed mod
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2805,13 +2834,32 @@ impl FedEvent {
                 } else {
                     String::new()
                 };
+
+                let observed_child = batter_debt.as_ref().and_then(|debt| {
+                    debt.sub_event.as_ref().map(|sub_event| {
+                        EventBuilderChild::new(&sub_event.sub_event)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::AddedMod,
+                                category: EventCategory::Changes,
+                                description: format!("{fielder_name} is now being Observed."),
+                                player_tags: vec![debt.fielder_id],
+                                team_tags: vec![sub_event.team_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "mod": "COFFEE_PERIL",
+                                "type": 2, // ?
+                            }))
+                    })
+                });
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
                         description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
-                        player_tags: if let Some((batter_id, fielder_id)) = batter_debt {
-                            vec![batter_id, fielder_id]
+                        player_tags: if let Some(debt) = batter_debt {
+                            vec![debt.batter_id, debt.fielder_id]
                         } else {
                             vec![]
                         },
@@ -2820,6 +2868,7 @@ impl FedEvent {
                     .scores(scores, " tags up and scores!")
                     .stopped_inhabiting(stopped_inhabiting)
                     .cooled_off(cooled_off, batter_name)
+                    .children(observed_child) // slight abuse of IntoIter
                     .build()
             }
             FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status, is_special } => {
@@ -4841,7 +4890,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
+            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after, sensed_something_fishy } => {
                 let description = format!("CONSUMERS ATTACK\n{player_name}");
                 let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
@@ -4858,6 +4907,17 @@ impl FedEvent {
                         "type": 4, // ?
                     }));
 
+                let something_fishy_child = sensed_something_fishy.map(|something_fishy| {
+                    EventBuilderChild::new(&something_fishy.sub_event)
+                        .update(EventBuilderUpdate {
+                            category: EventCategory::Special,
+                            r#type: EventType::InvestigationMessage,
+                            description: format!("{} sensed something fishy.", something_fishy.detective_name),
+                            player_tags: vec![something_fishy.detective_id],
+                            ..Default::default()
+                        })
+                });
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::ConsumersAttack,
@@ -4867,6 +4927,7 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .child(child)
+                    .children(something_fishy_child) // moderate abuse of IntoIter
                     .build()
             }
             FedEventData::TeamGainedFreeWill { team_id, team_nickname } => {
@@ -4944,7 +5005,6 @@ impl FedEvent {
                     })
                     .child(child)
                     .build()
-
             }
         }
     }

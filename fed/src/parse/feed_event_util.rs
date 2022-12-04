@@ -43,17 +43,21 @@ pub fn get_str_metadata<'a>(event: &'a EventuallyEvent, field: &'static str) -> 
         .as_object()
         .and_then(|obj| obj.get(field))
         .and_then(|to| to.as_str())
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
+        .ok_or_else(|| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field,
+            }
         })
 }
 
 pub fn get_uuid_metadata(event: &EventuallyEvent, field: &'static str) -> Result<Uuid, FeedParseError> {
     Uuid::from_str(get_str_metadata(event, field)?)
-        .map_err(|_| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field
+        .map_err(|_| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field
+            }
         })
 }
 
@@ -65,9 +69,11 @@ pub fn get_str_vec_metadata<'a>(event: &'a EventuallyEvent, field: &'static str)
             to.as_array()
                 .and_then(|arr| arr.iter().map(|v| v.as_str()).collect::<Option<Vec<_>>>())
         })
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
+        .ok_or_else(|| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field,
+            }
         })
 }
 
@@ -76,9 +82,11 @@ pub fn get_float_metadata(event: &EventuallyEvent, field: &'static str) -> Resul
         .as_object()
         .and_then(|obj| obj.get(field))
         .and_then(|to| to.as_f64())
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field,
+        .ok_or_else(|| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field,
+            }
         })
 }
 
@@ -130,9 +138,11 @@ pub fn get_one_team_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> 
 
 pub fn get_sub_play(event: &EventuallyEvent) -> Result<i64, FeedParseError> {
     event.metadata.sub_play
-        .ok_or_else(|| FeedParseError::MissingMetadata {
-            event_type: event.r#type,
-            field: "subPlay"
+        .ok_or_else(|| {
+            FeedParseError::MissingMetadata {
+                event_type: event.r#type,
+                field: "subPlay"
+            }
         })
 }
 
@@ -140,13 +150,14 @@ fn get_two_ids(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> 
     tags.iter()
         .cloned()
         .collect_tuple()
-        .ok_or_else(||
+        .ok_or_else(|| {
             FeedParseError::WrongNumberOfTags {
                 event_type,
                 tag_type,
                 expected_num: 2,
                 actual_num: tags.len(),
-            })
+            }
+        })
 }
 
 pub fn get_two_player_ids(event: &EventuallyEvent) -> Result<(Uuid, Uuid), FeedParseError> {

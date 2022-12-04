@@ -245,7 +245,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores, cooled_off, batter_debt) = run_parser(&event, parse_flyout)?;
-            let (observed_tags, remaining_player_tags) = if batter_debt {
+            let (batter_debt, remaining_player_tags, children) = if batter_debt {
                 let (observed_tags, other_tags) = event.player_tags.split_at(2);
                 let (batter_id, fielder_id) = observed_tags.iter().collect_tuple()
                     .ok_or_else(|| FeedParseError::WrongNumberOfTags {
@@ -254,9 +254,30 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         expected_num: 2,
                         actual_num: event.player_tags.len(),
                     })?;
-                (Some((*batter_id, *fielder_id)), other_tags)
+
+                let (sub_event, rest_children) = if children.first().map_or(false, |child| child.r#type == EventType::AddedMod) {
+                    let (child, rest_children) = children.split_first()
+                        .expect("If there isn't at least one child we shouldn't be in this branch of the if");
+
+                    let sub_event = ModChangeSubEvent {
+                        team_id: get_one_team_id(child)?,
+                        sub_event: SubEvent::from_event(child),
+                    };
+
+                    (Some(sub_event), rest_children)
+                } else {
+                    (None, children)
+                };
+
+                let batter_debt = BatterDebt {
+                    batter_id: *batter_id,
+                    fielder_id: *fielder_id,
+                    sub_event,
+                };
+
+                (Some(batter_debt), other_tags, rest_children)
             } else {
-                (None, event.player_tags.as_slice())
+                (None, event.player_tags.as_slice(), children)
             };
 
             let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
@@ -269,7 +290,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 stopped_inhabiting,
                 cooled_off,
                 is_special: event.category == EventCategory::Special,
-                batter_debt: observed_tags, // Surprisingly there's no sub-event for this
+                batter_debt,
             })
         }
         EventType::GroundOut => {
@@ -513,7 +534,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_name: batter_name.to_string(),
                 sub_event: SubEvent::from_event(sub_event),
             })
-
         }
         EventType::BatterSkipped => {
             let (player_name, reason) = run_parser(&event, parse_batter_skipped)?;
@@ -1188,14 +1208,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 },
             })
-
         }
         EventType::PolarityShift => { todo!() }
         EventType::EnterSecretBase => { todo!() }
         EventType::ExitSecretBase => { todo!() }
         EventType::ConsumersAttack => {
             let player_name = run_parser(&event, parse_consumer_attack)?;
-            let sub_event = get_one_sub_event(event)?;
+            let (sub_event, sensed_something_fishy) = if children.len() == 2 {
+                // Then a detective sensed something fishy
+                let (chomp_event, fishy_event) = get_two_sub_events(event)?;
+                let detective_name = run_parser(fishy_event, parse_terminated(" sensed something fishy."))?;
+                let detective_activity = DetectiveActivity {
+                    detective_id: get_one_player_id(fishy_event)?,
+                    detective_name: detective_name.to_string(),
+                    sub_event: SubEvent::from_event(fishy_event),
+                };
+
+                (chomp_event, Some(detective_activity))
+            } else {
+                let sub_event = get_one_sub_event(event)?;
+                (sub_event, None)
+            };
 
             make_fed_event(event, FedEventData::ConsumerAttack {
                 game: GameEvent::try_from_event(event, unscatter)?,
@@ -1205,6 +1238,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sub_event: SubEvent::from_event(sub_event),
                 rating_before: get_float_metadata(sub_event, "before")?,
                 rating_after: get_float_metadata(sub_event, "after")?,
+                sensed_something_fishy,
             })
         }
         EventType::EchoChamber => { todo!() }
