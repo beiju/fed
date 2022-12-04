@@ -244,8 +244,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::FlyOut => {
-            let (batter_name, fielder_name, scores, cooled_off) = run_parser(&event, parse_flyout)?;
-            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, &event.player_tags)?;
+            let (batter_name, fielder_name, scores, cooled_off, batter_debt) = run_parser(&event, parse_flyout)?;
+            let (observed_tags, remaining_player_tags) = if batter_debt {
+                let (observed_tags, other_tags) = event.player_tags.split_at(2);
+                let (batter_id, fielder_id) = observed_tags.iter().collect_tuple()
+                    .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                        event_type: event.r#type,
+                        tag_type: "player",
+                        expected_num: 2,
+                        actual_num: event.player_tags.len(),
+                    })?;
+                (Some((*batter_id, *fielder_id)), other_tags)
+            } else {
+                (None, event.player_tags.as_slice())
+            };
+
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             make_fed_event(event, FedEventData::Flyout {
                 game: GameEvent::try_from_event(event, unscatter)?,
@@ -255,6 +269,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 stopped_inhabiting,
                 cooled_off,
                 is_special: event.category == EventCategory::Special,
+                batter_debt: observed_tags, // Surprisingly there's no sub-event for this
             })
         }
         EventType::GroundOut => {
@@ -485,7 +500,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::ShamingRun => { todo!() }
         EventType::HomeFieldAdvantage => { todo!() }
-        EventType::HitByPitch => { todo!() }
+        EventType::HitByPitch => {
+            let (pitcher_name, batter_name) = run_parser(&event, parse_hit_by_pitch)?;
+            let (pitcher_id, batter_id) = get_two_player_ids(event)?;
+            let sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
+            make_fed_event(event, FedEventData::HitByPitch {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                pitcher_id,
+                pitcher_name: pitcher_name.to_string(),
+                batter_team_id: get_one_team_id(sub_event)?,
+                batter_id,
+                batter_name: batter_name.to_string(),
+                sub_event: SubEvent::from_event(sub_event),
+            })
+
+        }
         EventType::BatterSkipped => {
             let (player_name, reason) = run_parser(&event, parse_batter_skipped)?;
             make_fed_event(event, FedEventData::BatterSkipped {

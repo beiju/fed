@@ -788,6 +788,11 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// Whether the fielder became Observed as a result of batter Debt. In this case the event
+        /// does have player Uuids, and this will be equal to a 2-element array of batter id,
+        /// fielder id in that order. Otherwise, this will be null.
+        batter_debt: Option<(Uuid, Uuid)>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -2425,6 +2430,29 @@ pub enum FedEventData {
 
         /// The inning number according to the event description. 1-indexed.
         inning_num: i32,
+    },
+
+    /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
+    HitByPitch {
+        game: GameEvent,
+
+        /// Uuid of player who threw the HBP
+        pitcher_id: Uuid,
+
+        /// Name of player who threw the HBP
+        pitcher_name: String,
+
+        /// Team uuid of player who was hit by the HBP
+        batter_team_id: Uuid,
+
+        /// Uuid of player who was hit by the HBP
+        batter_id: Uuid,
+
+        /// Name of player who was hit by the HBP
+        batter_name: String,
+
+        /// Metadata for the event associated with adding the Observed mod
+        sub_event: SubEvent,
     }
 }
 
@@ -2735,12 +2763,22 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
+            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, batter_debt } => {
+                let suffix = if batter_debt.is_some() {
+                    format!("\n{batter_name} hit a ball at {fielder_name}...\n{fielder_name} is now being Observed.")
+                } else {
+                    String::new()
+                };
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                        description: format!("{batter_name} hit a flyout to {fielder_name}."),
+                        description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
+                        player_tags: if let Some((batter_id, fielder_id)) = batter_debt {
+                            vec![batter_id, fielder_id]
+                        } else {
+                            vec![]
+                        },
                         ..Default::default()
                     })
                     .scores(scores, " tags up and scores!")
@@ -4844,6 +4882,33 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .build()
+            }
+            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event } => {
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::AddedMod,
+                        description: format!("{batter_name} is now being Observed..."),
+                        team_tags: vec![batter_team_id],
+                        player_tags: vec![batter_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "COFFEE_PERIL",
+                        "type": 2, // ?
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::HitByPitch,
+                        category: EventCategory::Special,
+                        description: format!("{pitcher_name} hits {batter_name} with a pitch!\n{batter_name} is now being Observed..."),
+                        player_tags: vec![pitcher_id, batter_id],
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+
             }
         }
     }

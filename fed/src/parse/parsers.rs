@@ -186,15 +186,32 @@ pub(crate) fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores, bool)> {
+pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores, bool, bool)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
+
+    // Guessing at where this goes in the order
+    let (input, batter_debt) = opt(parse_batter_debt(batter_name, fielder_name))(input)?;
 
     let (input, scores) = parse_scores(" tags up and scores!")(input)?;
 
     let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
 
-    Ok((input, (batter_name, fielder_name, scores, cooled_off)))
+    Ok((input, (batter_name, fielder_name, scores, cooled_off, batter_debt.is_some())))
+}
+
+pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
+    move |input: &str| {
+        let (input, _) = tag("\n")(input)?;
+        let (input, _) = tag(batter_name)(input)?;
+        let (input, _) = tag(" hit a ball at ")(input)?;
+        let (input, _) = tag(fielder_name)(input)?;
+        let (input, _) = tag("...\n")(input)?;
+        let (input, _) = tag(fielder_name)(input)?;
+        let (input, _) = tag(" is now being Observed.")(input)?;
+
+        Ok((input, ()))
+    }
 }
 
 pub(crate) enum ParsedGroundOut<'a> {
@@ -1316,4 +1333,13 @@ pub(crate) fn parse_salmon(input: &str) -> ParserResult<i32> {
     let (input, _) = tag(" begins again.\nNo Runs are lost.")(input)?;
 
     Ok((input, inning_num))
+}
+
+pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, pitcher_name) = parse_terminated(" hits ")(input)?;
+    let (input, batter_name) = parse_terminated(" with a pitch!\n")(input)?;
+    let (input, _) = tag(batter_name)(input)?;
+    let (input, _) = tag(" is now being Observed...")(input)?; // I'll deal with murder debt later
+
+    Ok((input, (pitcher_name, batter_name)))
 }
