@@ -1411,6 +1411,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             team_nickname: team_nickname.to_string(),
                         })
                     }
+                    ParsedAddedMod::GainFreeWill(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        make_fed_event(event, FedEventData::TeamGainedFreeWill {
+                            team_id: get_one_team_id(event)?,
+                            team_nickname: team_nickname.to_string(),
+                        })
+                    }
                     ParsedAddedMod::MVP(player_name) => {
                         make_fed_event(event, FedEventData::PlayerNamedMvp {
                             team_id: get_one_team_id(event)?,
@@ -1817,10 +1824,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sub_event: SubEvent::from_event(child),
             })
         }
-        EventType::Investigation => {
-            make_fed_event(event, FedEventData::Investigation {
+        EventType::InvestigationMessage => {
+            make_fed_event(event, FedEventData::InvestigationMessage {
                 player_id: get_one_player_id(event)?,
                 message: event.description.clone(),
+            })
+        }
+        EventType::Tidings => {
+            make_fed_event(event, FedEventData::Tidings {
+                message: event.description.clone(),
+                metadata: event.metadata.clone(),
             })
         }
         EventType::Announcement => { todo!() }

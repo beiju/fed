@@ -2220,7 +2220,7 @@ pub enum FedEventData {
     },
 
     /// Investigation progress. This could be parsed further, contributions welcome.
-    Investigation {
+    InvestigationMessage {
         /// Uuid of player doing the investigating
         player_id: Uuid,
 
@@ -2368,6 +2368,26 @@ pub enum FedEventData {
 
         /// Player's rating after the attack
         rating_after: f64,
+    },
+
+    /// Team gained a Free Will
+    TeamGainedFreeWill {
+        /// Uuid of team who gained the Free Will
+        team_id: Uuid,
+
+        /// Nickname of team who gained the Free Will
+        team_nickname: String,
+    },
+
+    /// Tidings section of Election results. This event is currently minimally parsed, with metadata
+    /// simply included as-is. If you have a use-case where thoroughly parsing this event type would
+    /// be useful please let us know in the SIBR discord.
+    Tidings {
+        /// Tidings message
+        message: String,
+
+        /// Event metadata exactly as it appears in the Feed event
+        metadata: EventMetadata,
     },
 }
 
@@ -4452,10 +4472,10 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::Investigation { player_id, message } => {
+            FedEventData::InvestigationMessage { player_id, message } => {
                 event_builder
                     .fill(EventBuilderUpdate {
-                        r#type: EventType::Investigation,
+                        r#type: EventType::InvestigationMessage,
                         category: EventCategory::Special,
                         description: message,
                         player_tags: vec![player_id],
@@ -4731,6 +4751,33 @@ impl FedEvent {
                     })
                     .child(child)
                     .build()
+            }
+            FedEventData::TeamGainedFreeWill { team_id, team_nickname } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::AddedMod,
+                        category: EventCategory::Changes,
+                        description: format!("The {team_nickname} gain Free Will."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "FREE_WILL",
+                        "type": 0,
+                    }))
+                    .build()
+            }
+            FedEventData::Tidings { message, metadata } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Tidings,
+                        category: EventCategory::Outcomes,
+                        description: message,
+                        ..Default::default()
+                    })
+                    .full_metadata(metadata)
+                    .build()
+
             }
         }
     }

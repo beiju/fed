@@ -1066,12 +1066,14 @@ pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
 
 pub(crate) enum ParsedAddedMod<'a> {
     EnteredPartyTime(&'a str),
+    GainFreeWill(&'a str),
     MVP(&'a str),
 }
 
 pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
     let (input, result) = alt((
         preceded(tag("The "), parse_terminated(" have entered Party Time!")).map(|n| ParsedAddedMod::EnteredPartyTime(n)),
+        preceded(tag("The "), parse_terminated(" gain Free Will.")).map(|n| ParsedAddedMod::GainFreeWill(n)),
         parse_terminated(" is named an MVP.").map(|n| ParsedAddedMod::MVP(n)),
     ))(input)?;
 
@@ -1292,7 +1294,7 @@ pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<&str> {
 pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
     let (input, player_name) = parse_terminated(" is named a ")(input)?;
     let (input, n_times) = parse_whole_number(input)?;
-    let (input, _) = tag("-Time MVP")(input)?;
+    let (input, _) = tag("-Time MVP.")(input)?;
 
     Ok((input, (player_name, n_times)))
 }
