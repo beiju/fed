@@ -605,6 +605,39 @@ pub enum ReturnFromElsewhereFlavor {
     False,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TeamRunsLost {
+    /// Number of runs lost
+    pub runs_lost: i32,
+
+    /// Name of team who lost the runs
+    pub team_name: String,
+}
+
+impl Display for TeamRunsLost {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} of the {}'s Runs are lost!", self.runs_lost, self.team_name)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[serde(untagged)]
+pub enum SalmonRunsLost {
+    None,
+    OneTeam(TeamRunsLost),
+    BothTeams((TeamRunsLost, TeamRunsLost))
+}
+
+impl Display for SalmonRunsLost {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SalmonRunsLost::None => { write!(f, "No Runs are lost.") }
+            SalmonRunsLost::OneTeam(runs) => { write!(f, "{runs}") }
+            SalmonRunsLost::BothTeams((a, b)) => { write!(f, "{a} {b}") }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2430,6 +2463,9 @@ pub enum FedEventData {
 
         /// The inning number according to the event description. 1-indexed.
         inning_num: i32,
+
+        /// Runs lost to the Salmon
+        runs_lost: SalmonRunsLost,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
@@ -4874,11 +4910,11 @@ impl FedEvent {
                     .child(change_event)
                     .build()
             }
-            FedEventData::SalmonSwim { game, inning_num } => {
+            FedEventData::SalmonSwim { game, inning_num, runs_lost } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::SalmonSwim,
-                        description: format!("The Salmon swim upstream!\nInning {inning_num} begins again.\nNo Runs are lost."),
+                        description: format!("The Salmon swim upstream!\nInning {inning_num} begins again.\n{runs_lost}"),
                         ..Default::default()
                     })
                     .build()

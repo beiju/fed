@@ -1326,13 +1326,37 @@ pub(crate) fn parse_homebody(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_salmon(input: &str) -> ParserResult<i32> {
+pub(crate) struct ParsedTeamRunsLost<'a> {
+    pub(crate) runs: i32,
+    pub(crate) name: &'a str,
+}
+
+pub(crate) enum ParsedSalmonRunsLost<'a> {
+    None,
+    OneTeam(ParsedTeamRunsLost<'a>),
+    BothTeams((ParsedTeamRunsLost<'a>, ParsedTeamRunsLost<'a>))
+}
+
+pub(crate) fn parse_salmon(input: &str) -> ParserResult<(i32, ParsedSalmonRunsLost)> {
     let (input, _) = tag("The Salmon swim upstream!\nInning ")(input)?;
     let (input, inning_num) = parse_whole_number(input)?;
-    // I'll update this to handle runs being lost when I encounter it
-    let (input, _) = tag(" begins again.\nNo Runs are lost.")(input)?;
+    let (input, _) = tag(" begins again.\n")(input)?;
 
-    Ok((input, inning_num))
+    let (input, runs_lost) = alt((
+        pair(parse_team_runs_lost, parse_team_runs_lost).map(|rs| ParsedSalmonRunsLost::BothTeams(rs)),
+        parse_team_runs_lost.map(|r| ParsedSalmonRunsLost::OneTeam(r)),
+        tag("No Runs are lost.").map(|_| ParsedSalmonRunsLost::None),
+    ))(input)?;
+
+    Ok((input, (inning_num, runs_lost)))
+}
+
+pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLost> {
+    let (input, runs) = parse_whole_number(input)?;
+    let (input, _) = tag(" of the ")(input)?;
+    let (input, name) = parse_terminated("'s Runs are lost!")(input)?;
+
+    Ok((input, ParsedTeamRunsLost { runs, name }))
 }
 
 pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
