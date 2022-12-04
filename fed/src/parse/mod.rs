@@ -1301,7 +1301,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sub_event: SubEvent::from_event(mod_add_event),
             })
         }
-        EventType::Homebody => { todo!() }
+        EventType::Homebody => {
+            let (player_name, is_home) = run_parser(event, parse_homebody)?;
+            let mod_add_event = get_one_sub_event_from_slice(children, event.r#type)?;
+
+            make_fed_event(event, FedEventData::HomebodyGameStart {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_name: player_name.to_string(),
+                is_home,
+                is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
+                sub_event: SubEvent::from_event(mod_add_event),
+                player_id: get_one_player_id(mod_add_event)?,
+                team_id: get_one_team_id(mod_add_event)?,
+            })
+        }
         EventType::Superyummy => {
             let (player_name, peanuts_present) = run_parser(event, parse_superyummy)?;
 

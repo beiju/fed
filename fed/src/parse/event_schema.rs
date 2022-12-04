@@ -2389,6 +2389,33 @@ pub enum FedEventData {
         /// Event metadata exactly as it appears in the Feed event
         metadata: EventMetadata,
     },
+
+
+    /// The event that announces when a Homebody is happy to be home or misses home at the beginning
+    /// of the game
+    HomebodyGameStart {
+        game: GameEvent,
+
+        /// Uuid of the Homebody player
+        player_id: Uuid,
+
+        /// Uuid of the Homebody player's team
+        team_id: Uuid,
+
+        /// Name of the Homebody player
+        player_name: String,
+
+        /// Whether player is home. Determines whether the player is happy to be home (true) or
+        /// homesick (false)
+        is_home: bool,
+
+        /// Whether this is the first time Homebody has procced. This is necessary for accurate
+        /// reconstruction of the game event.
+        is_first_proc: bool,
+
+        /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2471,6 +2498,44 @@ fn possessive(name: String) -> String {
         name + "'s"
     }
 }
+
+fn make_switch_performing_child(overperforming: bool, is_first_proc: bool, sub_event: &SubEvent, player_id: Uuid, team_id: Uuid, description: &str, mod_source: &str) -> EventBuilderChildFull {
+    let mod_name = if overperforming { "OVERPERFORMING" } else { "UNDERPERFORMING" };
+    let opposite_mod_name = if overperforming { "UNDERPERFORMING" } else { "OVERPERFORMING" };
+    if is_first_proc {
+        EventBuilderChild::new(sub_event)
+            .update(EventBuilderUpdate {
+                category: EventCategory::Changes,
+                r#type: EventType::AddedModFromOtherMod,
+                description: description.to_string(),
+                team_tags: vec![team_id],
+                player_tags: vec![player_id],
+                ..Default::default()
+            })
+            .metadata(json!({
+                "mod": mod_name,
+                "source": mod_source,
+                "type": 0, // ?
+            }))
+    } else {
+        EventBuilderChild::new(sub_event)
+            .update(EventBuilderUpdate {
+                r#type: EventType::ChangedModFromOtherMod,
+                category: EventCategory::Changes,
+                description: description.to_string(),
+                team_tags: vec![team_id],
+                player_tags: vec![player_id],
+                ..Default::default()
+            })
+            .metadata(json!({
+                "from": opposite_mod_name,
+                "source": mod_source,
+                "to": mod_name,
+                "type": 0, // ?
+            }))
+    }
+}
+
 
 impl FedEvent {
     pub fn into_feed_event(self) -> EventuallyEvent {
@@ -2592,40 +2657,8 @@ impl FedEvent {
             FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
                 let description = format!("{} {} Peanuts.", player_name,
                                           if peanuts { "loves" } else { "misses" });
-                let mod_name = if peanuts { "OVERPERFORMING" } else { "UNDERPERFORMING" };
-                let opposite_mod_name = if peanuts { "UNDERPERFORMING" } else { "OVERPERFORMING" };
-                let change_event = if is_first_proc {
-                    EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::AddedModFromOtherMod,
-                            description: description.clone(),
-                            team_tags: vec![team_id],
-                            player_tags: vec![player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "mod": mod_name,
-                            "source": "SUPERYUMMY",
-                            "type": 0, // ?
-                        }))
-                } else {
-                    EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::ChangedModFromOtherMod,
-                            category: EventCategory::Changes,
-                            description: description.clone(),
-                            team_tags: vec![team_id],
-                            player_tags: vec![player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "from": opposite_mod_name,
-                            "source": "SUPERYUMMY",
-                            "to": mod_name,
-                            "type": 0, // ?
-                        }))
-                };
+                let change_event = make_switch_performing_child(
+                    peanuts, is_first_proc, sub_event, player_id, team_id, &description, "SUPERYUMMY");
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
@@ -4776,6 +4809,20 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .full_metadata(metadata)
+                    .build()
+            }
+            FedEventData::HomebodyGameStart { game, player_id, team_id, player_name, is_home, is_first_proc, sub_event } => {
+                let description = format!("{player_name} is {}.", if is_home { "happy to be home" } else { "homesick" });
+                let change_event = make_switch_performing_child(
+                    is_home, is_first_proc, &sub_event, player_id, team_id, &description, "HOMEBODY");
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        category: EventCategory::Special,
+                        r#type: EventType::Homebody,
+                        description,
+                        ..Default::default()
+                    })
+                    .child(change_event)
                     .build()
 
             }

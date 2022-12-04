@@ -1298,3 +1298,13 @@ pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
 
     Ok((input, (player_name, n_times)))
 }
+
+
+pub(crate) fn parse_homebody(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, result) = alt((
+        parse_terminated(" is homesick.").map(|n| (n, true)),
+        parse_terminated(" is happy to be home.").map(|n| (n, false)),
+    ))(input)?;
+
+    Ok((input, result))
+}
