@@ -494,7 +494,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 strikes,
             })
         }
-        EventType::ShamingRun => { todo!() }
+        EventType::RunsOverflowing => {
+            let (team_nickname, num_runs, unruns) = run_parser(&event, parse_runs_overflowing)?;
+            make_fed_event(event, FedEventData::RunsOverflowing {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_nickname: team_nickname.to_string(),
+                num_runs: if unruns { -num_runs } else { num_runs },
+            })
+        }
         EventType::HomeFieldAdvantage => { todo!() }
         EventType::HitByPitch => {
             let (pitcher_name, batter_name) = run_parser(&event, parse_hit_by_pitch)?;
@@ -1267,7 +1274,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event, unscatter)?,
             })
         }
-        EventType::SolarPanelsActivation => { todo!() }
+        EventType::SolarPanelsActivation => {
+            let (num_runs, team_nickname) = run_parser(event, parse_solar_panels)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            make_fed_event(event, FedEventData::SolarPanelsActivate {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                num_runs,
+                team_nickname: team_nickname.to_string(),
+            })
+        }
         EventType::TarotReading => {
             make_fed_event(event, FedEventData::TarotReading {
                 description: event.description.clone(),
@@ -1372,17 +1388,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::Homebody => {
-            let (player_name, is_home) = run_parser(event, parse_homebody)?;
-            let mod_add_event = get_one_sub_event_from_slice(children, event.r#type)?;
+            let players = run_parser(event, parse_homebody)?;
+
+            let homebodies = zip_eq(players, children)
+                .map(|((player_name, is_overperforming), mod_add_event)| {
+                    Ok::<_, FeedParseError>(TogglePerforming {
+                        player_id: get_one_player_id(mod_add_event)?,
+                        team_id: get_one_team_id(mod_add_event)?,
+                        player_name: player_name.to_string(),
+                        is_overperforming,
+                        is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
+                        sub_event: SubEvent::from_event(mod_add_event),
+                    })
+                })
+                .collect::<Result<_, _>>()?;
 
             make_fed_event(event, FedEventData::HomebodyGameStart {
                 game: GameEvent::try_from_event(event, unscatter)?,
-                player_name: player_name.to_string(),
-                is_home,
-                is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
-                sub_event: SubEvent::from_event(mod_add_event),
-                player_id: get_one_player_id(mod_add_event)?,
-                team_id: get_one_team_id(mod_add_event)?,
+                homebodies,
             })
         }
         EventType::Superyummy => {
@@ -1400,12 +1423,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
                 make_fed_event(event, FedEventData::SuperyummyGameStart {
                     game: GameEvent::try_from_event(event, unscatter)?,
-                    player_name: player_name.to_string(),
-                    peanuts_present,
-                    is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
-                    sub_event: SubEvent::from_event(mod_add_event),
-                    player_id: get_one_player_id(mod_add_event)?,
-                    team_id: get_one_team_id(mod_add_event)?,
+                    toggle: TogglePerforming {
+                        player_name: player_name.to_string(),
+                        is_overperforming: peanuts_present,
+                        is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
+                        sub_event: SubEvent::from_event(mod_add_event),
+                        player_id: get_one_player_id(mod_add_event)?,
+                        team_id: get_one_team_id(mod_add_event)?,
+                    }
                 })
             }
         }

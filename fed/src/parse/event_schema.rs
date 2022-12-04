@@ -665,6 +665,28 @@ pub struct BatterDebt {
     pub sub_event: Option<ModChangeSubEvent>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TogglePerforming {
+    /// Uuid of the player whose Overperforming/Underperforming was toggled
+    pub player_id: Uuid,
+
+    /// Team uuid of the player whose Overperforming/Underperforming was toggled
+    pub team_id: Uuid,
+
+    /// Name of the player whose Overperforming/Underperforming was toggled
+    pub player_name: String,
+
+    /// Whether player is now Overperforming (true) or Underperforming (false)
+    pub is_overperforming: bool,
+
+    /// Whether this is the first this toggle has procced. This is necessary for accurate
+    /// reconstruction of the game event.
+    pub is_first_proc: bool,
+
+    /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -732,25 +754,8 @@ pub enum FedEventData {
     SuperyummyGameStart {
         game: GameEvent,
 
-        /// Uuid of the Superyummy player
-        player_id: Uuid,
-
-        /// Uuid of the Superyummy player's team
-        team_id: Uuid,
-
-        /// Name of the Superyummy player
-        player_name: String,
-
-        /// Whether peanuts are present. Determines whether the player "loves" (true) or "misses"
-        /// (false) peanuts.
-        peanuts_present: bool,
-
-        /// Whether this is the first time superyummy has procced. This is necessary for accurate
-        /// reconstruction of the game event.
-        is_first_proc: bool,
-
-        /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
-        sub_event: SubEvent,
+        #[serde(flatten)]
+        toggle: TogglePerforming,
     },
 
     /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
@@ -2473,25 +2478,8 @@ pub enum FedEventData {
     HomebodyGameStart {
         game: GameEvent,
 
-        /// Uuid of the Homebody player
-        player_id: Uuid,
-
-        /// Uuid of the Homebody player's team
-        team_id: Uuid,
-
-        /// Name of the Homebody player
-        player_name: String,
-
-        /// Whether player is home. Determines whether the player is happy to be home (true) or
-        /// homesick (false)
-        is_home: bool,
-
-        /// Whether this is the first time Homebody has procced. This is necessary for accurate
-        /// reconstruction of the game event.
-        is_first_proc: bool,
-
-        /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
-        sub_event: SubEvent,
+        /// List of data for all players with Homebody in this game
+        homebodies: Vec<TogglePerforming>,
     },
 
     /// The Salmon swim upstream
@@ -2527,6 +2515,29 @@ pub enum FedEventData {
         /// Metadata for the event associated with adding the Observed mod
         sub_event: SubEvent,
     },
+
+    /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
+    /// team's next game
+    SolarPanelsActivate {
+        game: GameEvent,
+
+        /// Number of runs saved for the team's next game
+        num_runs: i32,
+
+        /// Nickname of the team who activted Solar Panels
+        team_nickname: String
+    },
+
+    /// (Un)runs are Overflowing from a previous Solar Panels or Event Horizon activation
+    RunsOverflowing {
+        game: GameEvent,
+
+        /// Nickname of team who gained the (Un)runs
+        team_nickname: String,
+
+        /// Number of Runs (positive) or Unruns (negative) gained
+        num_runs: i32,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
@@ -2610,17 +2621,17 @@ fn possessive(name: String) -> String {
     }
 }
 
-fn make_switch_performing_child(overperforming: bool, is_first_proc: bool, sub_event: &SubEvent, player_id: Uuid, team_id: Uuid, description: &str, mod_source: &str) -> EventBuilderChildFull {
-    let mod_name = if overperforming { "OVERPERFORMING" } else { "UNDERPERFORMING" };
-    let opposite_mod_name = if overperforming { "UNDERPERFORMING" } else { "OVERPERFORMING" };
-    if is_first_proc {
-        EventBuilderChild::new(sub_event)
+fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
+    let mod_name = if toggle.is_overperforming { "OVERPERFORMING" } else { "UNDERPERFORMING" };
+    let opposite_mod_name = if toggle.is_overperforming { "UNDERPERFORMING" } else { "OVERPERFORMING" };
+    if toggle.is_first_proc {
+        EventBuilderChild::new(&toggle.sub_event)
             .update(EventBuilderUpdate {
                 category: EventCategory::Changes,
                 r#type: EventType::AddedModFromOtherMod,
                 description: description.to_string(),
-                team_tags: vec![team_id],
-                player_tags: vec![player_id],
+                team_tags: vec![toggle.team_id],
+                player_tags: vec![toggle.player_id],
                 ..Default::default()
             })
             .metadata(json!({
@@ -2629,13 +2640,13 @@ fn make_switch_performing_child(overperforming: bool, is_first_proc: bool, sub_e
                 "type": 0, // ?
             }))
     } else {
-        EventBuilderChild::new(sub_event)
+        EventBuilderChild::new(&toggle.sub_event)
             .update(EventBuilderUpdate {
                 r#type: EventType::ChangedModFromOtherMod,
                 category: EventCategory::Changes,
                 description: description.to_string(),
-                team_tags: vec![team_id],
-                player_tags: vec![player_id],
+                team_tags: vec![toggle.team_id],
+                player_tags: vec![toggle.player_id],
                 ..Default::default()
             })
             .metadata(json!({
@@ -2799,11 +2810,10 @@ impl FedEvent {
                     .children(inhabiting_child)
                     .build()
             }
-            FedEventData::SuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts, is_first_proc, ref sub_event, player_id, team_id } => {
-                let description = format!("{} {} Peanuts.", player_name,
-                                          if peanuts { "loves" } else { "misses" });
-                let change_event = make_switch_performing_child(
-                    peanuts, is_first_proc, sub_event, player_id, team_id, &description, "SUPERYUMMY");
+            FedEventData::SuperyummyGameStart { ref game, ref toggle } => {
+                let description = format!("{} {} Peanuts.", toggle.player_name,
+                                          if toggle.is_overperforming { "loves" } else { "misses" });
+                let change_event = make_switch_performing_child(toggle, &description, "SUPERYUMMY");
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
@@ -5000,18 +5010,24 @@ impl FedEvent {
                     .full_metadata(metadata)
                     .build()
             }
-            FedEventData::HomebodyGameStart { game, player_id, team_id, player_name, is_home, is_first_proc, sub_event } => {
-                let description = format!("{player_name} is {}.", if is_home { "happy to be home" } else { "homesick" });
-                let change_event = make_switch_performing_child(
-                    is_home, is_first_proc, &sub_event, player_id, team_id, &description, "HOMEBODY");
+            FedEventData::HomebodyGameStart { game, homebodies } => {
+                let (descriptions, children): (Vec<_>, Vec<_>) = homebodies.into_iter()
+                    .map(|toggle| {
+                        let description = format!("{} is {}.", toggle.player_name,
+                                                  if toggle.is_overperforming { "happy to be home" } else { "homesick" });
+                        let change_event = make_switch_performing_child(&toggle, &description, "HOMEBODY");
+                        (description, change_event)
+                    })
+                    .unzip();
+
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         category: EventCategory::Special,
                         r#type: EventType::Homebody,
-                        description,
+                        description: descriptions.into_iter().join("\n"),
                         ..Default::default()
                     })
-                    .child(change_event)
+                    .children(children)
                     .build()
             }
             FedEventData::SalmonSwim { game, inning_num, runs_lost } => {
@@ -5047,6 +5063,32 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .child(child)
+                    .build()
+            }
+            FedEventData::SolarPanelsActivate { game, num_runs, team_nickname } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::SolarPanelsActivation,
+                        category: EventCategory::Special,
+                        description: format!("The Solar Panels absorb Sun 2's energy!\n{num_runs} Runs are collected and saved for the {team_nickname}'s next game."),
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::RunsOverflowing { game, team_nickname, num_runs  } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::RunsOverflowing,
+                        category: EventCategory::Special,
+                        description: format!("Runs are Overflowing!\n{team_nickname} gain {}.",
+                                             match num_runs {
+                                                 x if x < -1 => { format!("{} Unruns", -x) }
+                                                 -1 => { format!("1 Unrun") }
+                                                 1 => { format!("1 Run") }
+                                                 x => { format!("{x} Runs") }
+                                             }),
+                        ..Default::default()
+                    })
                     .build()
             }
         }

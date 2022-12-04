@@ -4,7 +4,7 @@ use nom::{AsChar, Finish, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, verify};
 use nom::error::{convert_error};
-use nom::multi::{many0, separated_list1};
+use nom::multi::{many0, many1, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 use eventually_api::EventuallyEvent;
@@ -248,7 +248,7 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGround
     let parsed = ParsedGroundOut::Simple {
         batter_name,
         fielder_name,
-        batter_debt: batter_debt.is_some()
+        batter_debt: batter_debt.is_some(),
     };
     Ok((input, (parsed, scores, cooled_off)))
 }
@@ -1329,7 +1329,11 @@ pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
 }
 
 
-pub(crate) fn parse_homebody(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_homebody(input: &str) -> ParserResult<Vec<(&str, bool)>> {
+    separated_list1(tag("\n"), parse_single_homebody)(input)
+}
+
+pub(crate) fn parse_single_homebody(input: &str) -> ParserResult<(&str, bool)> {
     let (input, result) = alt((
         parse_terminated(" is homesick.").map(|n| (n, false)),
         parse_terminated(" is happy to be home.").map(|n| (n, true)),
@@ -1379,4 +1383,27 @@ pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag(" is now being Observed...")(input)?; // I'll deal with murder debt later
 
     Ok((input, (pitcher_name, batter_name)))
+}
+
+pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(i32, &str)> {
+    let (input, _) = tag("The Solar Panels absorb Sun 2's energy!\n")(input)?;
+    let (input, num_runs) = parse_whole_number(input)?;
+    let (input, _) = tag(" Runs are collected and saved for the ")(input)?;
+    let (input, team_nickname) = parse_terminated("'s next game.")(input)?;
+
+    Ok((input, (num_runs, team_nickname)))
+}
+
+pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, i32, bool)> {
+    let (input, _) = tag("Runs are Overflowing!\n")(input)?;
+    let (input, team_nickname) = parse_terminated(" gain ")(input)?;
+    let (input, num_runs) = parse_whole_number(input)?;
+    let (input, unruns) = alt((
+        tag(" Run").map(|_| false),
+        tag(" Unrun").map(|_| true),
+    ))(input)?;
+    let (input, _) = opt(tag("s"))(input)?;
+    let (input, _) = tag(".")(input)?;
+
+    Ok((input, (team_nickname, num_runs, unruns)))
 }
