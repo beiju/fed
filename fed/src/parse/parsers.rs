@@ -218,6 +218,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     Simple {
         batter_name: &'a str,
         fielder_name: &'a str,
+        batter_debt: bool,
     },
     FieldersChoice {
         runner_out_name: &'a str,
@@ -237,11 +238,19 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGround
     let (input, batter_name) = parse_terminated(" hit a ground out to ")(input)?;
     let (input, fielder_name) = parse_terminated(".")(input)?;
 
+    // Guessing at where this goes in the order
+    let (input, batter_debt) = opt(parse_batter_debt(batter_name, fielder_name))(input)?;
+
     let (input, scores) = parse_scores(" advances on the sacrifice.")(input)?;
 
     let (input, cooled_off) = parse_cooled_off(batter_name)(input)?;
 
-    Ok((input, (ParsedGroundOut::Simple { batter_name, fielder_name }, scores, cooled_off)))
+    let parsed = ParsedGroundOut::Simple {
+        batter_name,
+        fielder_name,
+        batter_debt: batter_debt.is_some()
+    };
+    Ok((input, (parsed, scores, cooled_off)))
 }
 
 pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
@@ -619,6 +628,7 @@ pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDu
     ))(input)?;
     let (input, duration) = alt((
         tag("game").map(|_| ModDuration::Game),
+        tag("weekly").map(|_| ModDuration::Weekly),
         tag("seasonal").map(|_| ModDuration::Seasonal),
     ))(input)?;
     let (input, _) = tag(" mods wore off.")(input)?;
@@ -961,7 +971,7 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
 
 pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Short(&'a str),
-    Normal((&'a str, Option<i32>))
+    Normal((&'a str, Option<i32>)),
 }
 
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
@@ -1230,11 +1240,14 @@ pub(crate) fn parse_undersea(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_peanut_mister(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_peanut_mister(input: &str) -> ParserResult<(&str, bool)> {
     let (input, _) = tag("The Peanut Mister activates!\n")(input)?;
-    let (input, player_name) = parse_terminated(" has been cured of their peanut allergy!")(input)?;
+    let (input, result) = alt((
+        parse_terminated(" has been cured of their peanut allergy!").map(|n| (n, false)),
+        parse_terminated(" is no longer Superallergic!").map(|n| (n, true)),
+    ))(input)?;
 
-    Ok((input, player_name))
+    Ok((input, result))
 }
 
 pub(crate) fn parse_birds_unshell(input: &str) -> ParserResult<&str> {
@@ -1300,7 +1313,6 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 }
 
 
-
 pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("CONSUMERS ATTACK\n")(input)?;
     let (input, victim_name) = take_till1(|c| c == '\n')(input)?;
@@ -1334,24 +1346,25 @@ pub(crate) struct ParsedTeamRunsLost<'a> {
 pub(crate) enum ParsedSalmonRunsLost<'a> {
     None,
     OneTeam(ParsedTeamRunsLost<'a>),
-    BothTeams((ParsedTeamRunsLost<'a>, ParsedTeamRunsLost<'a>))
+    BothTeams((ParsedTeamRunsLost<'a>, ParsedTeamRunsLost<'a>)),
 }
 
 pub(crate) fn parse_salmon(input: &str) -> ParserResult<(i32, ParsedSalmonRunsLost)> {
     let (input, _) = tag("The Salmon swim upstream!\nInning ")(input)?;
     let (input, inning_num) = parse_whole_number(input)?;
-    let (input, _) = tag(" begins again.\n")(input)?;
+    let (input, _) = tag(" begins again.")(input)?;
 
     let (input, runs_lost) = alt((
         pair(parse_team_runs_lost, parse_team_runs_lost).map(|rs| ParsedSalmonRunsLost::BothTeams(rs)),
         parse_team_runs_lost.map(|r| ParsedSalmonRunsLost::OneTeam(r)),
-        tag("No Runs are lost.").map(|_| ParsedSalmonRunsLost::None),
+        tag("\nNo Runs are lost.").map(|_| ParsedSalmonRunsLost::None),
     ))(input)?;
 
     Ok((input, (inning_num, runs_lost)))
 }
 
 pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLost> {
+    let (input, _) = tag("\n")(input)?;
     let (input, runs) = parse_whole_number(input)?;
     let (input, _) = tag(" of the ")(input)?;
     let (input, name) = parse_terminated("'s Runs are lost!")(input)?;

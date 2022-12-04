@@ -318,7 +318,7 @@ impl Display for BlooddrainAction {
 pub enum ModDuration {
     // Permanent = 0,
     Seasonal = 1,
-    // Weekly = 2,
+    Weekly = 2,
     Game = 3,
 }
 
@@ -327,7 +327,7 @@ impl Display for ModDuration {
         match self {
             // ModDuration::Permanent => { write!(f, "permanent") }
             ModDuration::Seasonal => { write!(f, "seasonal") }
-            // ModDuration::Weekly => { write!(f, "weekly") }
+            ModDuration::Weekly => { write!(f, "weekly") }
             ModDuration::Game => { write!(f, "game") }
         }
     }
@@ -633,7 +633,7 @@ impl Display for SalmonRunsLost {
         match self {
             SalmonRunsLost::None => { write!(f, "No Runs are lost.") }
             SalmonRunsLost::OneTeam(runs) => { write!(f, "{runs}") }
-            SalmonRunsLost::BothTeams((a, b)) => { write!(f, "{a} {b}") }
+            SalmonRunsLost::BothTeams((a, b)) => { write!(f, "{a}\n{b}") }
         }
     }
 }
@@ -881,6 +881,10 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// If the batter has Debt and hit the fielder with the ball, this contains the information
+        /// about adding Unstable/Observed/whatever. Otherwise it will be null.
+        batter_debt: Option<BatterDebt>,
     },
 
     /// Fielders choice event
@@ -2173,6 +2177,10 @@ pub enum FedEventData {
 
         /// Name of player who got Misted
         player_name: String,
+
+        /// If the mister cured a Superallergy, this will be metadata about the event associated
+        /// with losing the Superallergic mod. For a normal allergy this will be null.
+        superallergy: Option<ModChangeSubEvent>,
     },
 
     /// Player was named an MVP
@@ -2639,6 +2647,40 @@ fn make_switch_performing_child(overperforming: bool, is_first_proc: bool, sub_e
     }
 }
 
+fn apply_batter_debt(batter_debt: &Option<BatterDebt>, batter_name: &str, fielder_name: &str) -> (String, Option<EventBuilderChildFull>, Vec<Uuid>) {
+    let suffix = if batter_debt.is_some() {
+        format!("\n{batter_name} hit a ball at {fielder_name}...\n{fielder_name} is now being Observed.")
+    } else {
+        String::new()
+    };
+
+    let observed_child = batter_debt.as_ref().and_then(|debt| {
+        debt.sub_event.as_ref().map(|sub_event| {
+            EventBuilderChild::new(&sub_event.sub_event)
+                .update(EventBuilderUpdate {
+                    r#type: EventType::AddedMod,
+                    category: EventCategory::Changes,
+                    description: format!("{fielder_name} is now being Observed."),
+                    player_tags: vec![debt.fielder_id],
+                    team_tags: vec![sub_event.team_id],
+                    ..Default::default()
+                })
+                .metadata(json!({
+                                "mod": "COFFEE_PERIL",
+                                "type": 2, // ?
+                            }))
+        })
+    });
+
+    let player_tags = if let Some(debt) = batter_debt {
+        vec![debt.batter_id, debt.fielder_id]
+    } else {
+        vec![]
+    };
+
+    (suffix, observed_child, player_tags)
+}
+
 
 impl FedEvent {
     pub fn into_feed_event(self) -> EventuallyEvent {
@@ -2829,40 +2871,14 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, batter_debt } => {
-                let suffix = if batter_debt.is_some() {
-                    format!("\n{batter_name} hit a ball at {fielder_name}...\n{fielder_name} is now being Observed.")
-                } else {
-                    String::new()
-                };
-
-                let observed_child = batter_debt.as_ref().and_then(|debt| {
-                    debt.sub_event.as_ref().map(|sub_event| {
-                        EventBuilderChild::new(&sub_event.sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::AddedMod,
-                                category: EventCategory::Changes,
-                                description: format!("{fielder_name} is now being Observed."),
-                                player_tags: vec![debt.fielder_id],
-                                team_tags: vec![sub_event.team_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "COFFEE_PERIL",
-                                "type": 2, // ?
-                            }))
-                    })
-                });
+                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, batter_name, fielder_name);
 
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
                         description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
-                        player_tags: if let Some(debt) = batter_debt {
-                            vec![debt.batter_id, debt.fielder_id]
-                        } else {
-                            vec![]
-                        },
+                        player_tags,
                         ..Default::default()
                     })
                     .scores(scores, " tags up and scores!")
@@ -2920,9 +2936,9 @@ impl FedEvent {
                                 ..Default::default()
                             })
                             .metadata(json!({
-                            "mod": "MAGMATIC",
-                            "type": 0, // ?
-                        }))
+                                "mod": "MAGMATIC",
+                                "type": 0, // ?
+                            }))
                     );
                 }
 
@@ -2948,17 +2964,21 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
+            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, ref batter_debt } => {
+                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, batter_name, fielder_name);
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                        description: format!("{batter_name} hit a ground out to {fielder_name}."),
+                        description: format!("{batter_name} hit a ground out to {fielder_name}.{suffix}"),
+                        player_tags,
                         ..Default::default()
                     })
                     .scores(scores, " advances on the sacrifice.")
                     .stopped_inhabiting(stopped_inhabiting)
                     .cooled_off(cooled_off, batter_name)
+                    .children(observed_child)
                     .build()
             }
             FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill } => {
@@ -4457,10 +4477,10 @@ impl FedEvent {
                             ..Default::default()
                         })
                         .metadata(json!({
-                        "mod": "OVERPERFORMING",
-                        "source": "LATE_TO_PARTY",
-                        "type": 0, // ?
-                    }))]
+                            "mod": "OVERPERFORMING",
+                            "source": "LATE_TO_PARTY",
+                            "type": 0, // ?
+                        }))]
                 } else {
                     vec![]
                 };
@@ -4476,15 +4496,38 @@ impl FedEvent {
                     .build()
             }
 
-            FedEventData::PeanutMister { game, player_id, player_name } => {
+            FedEventData::PeanutMister { game, player_id, player_name, superallergy } => {
+                let effect_str = if superallergy.is_some() {
+                    "is no longer Superallergic"
+                } else {
+                    "has been cured of their peanut allergy"
+                };
+
+                let child = superallergy.map(|superallergy| {
+                    EventBuilderChild::new(&superallergy.sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::RemovedMod,
+                            category: EventCategory::Changes,
+                            description: format!("{player_name} lost the Superallergic mod."),
+                            player_tags: vec![player_id],
+                            team_tags: vec![superallergy.team_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "mod": "SUPERALLERGIC",
+                            "type": 0, // ?
+                        }))
+                });
+
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::PeanutMister,
                         category: EventCategory::Special,
-                        description: format!("The Peanut Mister activates!\n{player_name} has been cured of their peanut allergy!"),
+                        description: format!("The Peanut Mister activates!\n{player_name} {effect_str}!"),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })
+                    .children(child)
                     .build()
             }
             FedEventData::PlayerNamedMvp { team_id, player_id, player_name, level } => {

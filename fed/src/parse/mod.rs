@@ -245,41 +245,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FlyOut => {
             let (batter_name, fielder_name, scores, cooled_off, batter_debt) = run_parser(&event, parse_flyout)?;
-            let (batter_debt, remaining_player_tags, children) = if batter_debt {
-                let (observed_tags, other_tags) = event.player_tags.split_at(2);
-                let (batter_id, fielder_id) = observed_tags.iter().collect_tuple()
-                    .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-                        event_type: event.r#type,
-                        tag_type: "player",
-                        expected_num: 2,
-                        actual_num: event.player_tags.len(),
-                    })?;
 
-                let (sub_event, rest_children) = if children.first().map_or(false, |child| child.r#type == EventType::AddedMod) {
-                    let (child, rest_children) = children.split_first()
-                        .expect("If there isn't at least one child we shouldn't be in this branch of the if");
-
-                    let sub_event = ModChangeSubEvent {
-                        team_id: get_one_team_id(child)?,
-                        sub_event: SubEvent::from_event(child),
-                    };
-
-                    (Some(sub_event), rest_children)
-                } else {
-                    (None, children)
-                };
-
-                let batter_debt = BatterDebt {
-                    batter_id: *batter_id,
-                    fielder_id: *fielder_id,
-                    sub_event,
-                };
-
-                (Some(batter_debt), other_tags, rest_children)
-            } else {
-                (None, event.player_tags.as_slice(), children)
-            };
-
+            let (batter_debt, remaining_player_tags, children) = extract_batter_debt(event, children, batter_debt)?;
             let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             make_fed_event(event, FedEventData::Flyout {
@@ -295,10 +262,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::GroundOut => {
             let (parsed_out, scores, cooled_off) = run_parser(&event, parse_ground_out)?;
-            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, &event.player_tags)?;
+
+            let has_batter_debt = if let ParsedGroundOut::Simple { batter_debt, .. } = parsed_out {
+                batter_debt
+            } else {
+                false
+            };
+            let (batter_debt, remaining_player_tags, children) = extract_batter_debt(event, children, has_batter_debt)?;
+            let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
             match parsed_out {
-                ParsedGroundOut::Simple { batter_name, fielder_name } => {
+                ParsedGroundOut::Simple { batter_name, fielder_name, batter_debt: _ } => {
                     make_fed_event(event, FedEventData::GroundOut {
                         game: GameEvent::try_from_event(event, unscatter)?,
                         batter_name: batter_name.to_string(),
@@ -307,6 +281,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         stopped_inhabiting,
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
+                        batter_debt,
                     })
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
@@ -1245,11 +1220,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::GrindRail => { todo!() }
         EventType::TunnelsUsed => { todo!() }
         EventType::PeanutMister => {
-            let player_name = run_parser(event, parse_peanut_mister)?;
+            let (player_name, cured_superallergy) = run_parser(event, parse_peanut_mister)?;
+
+            let superallergy = if cured_superallergy {
+                let sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
+                Some(ModChangeSubEvent {
+                    sub_event: SubEvent::from_event(sub_event),
+                    team_id: get_one_team_id(sub_event)?,
+                })
+            } else {
+                None
+            };
+
             make_fed_event(event, FedEventData::PeanutMister {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 player_id: get_one_player_id(event)?,
                 player_name: player_name.to_string(),
+                superallergy,
             })
         }
         EventType::PeanutFlavorText => {
@@ -1998,6 +1985,43 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             })
         }
+    }
+}
+
+fn extract_batter_debt<'a>(event: &'a EventuallyEvent, children: &'a [EventuallyEvent], batter_debt: bool) -> Result<(Option<BatterDebt>, &'a [Uuid], &'a [EventuallyEvent]), FeedParseError> {
+    if batter_debt {
+        let (observed_tags, other_tags) = event.player_tags.split_at(2);
+        let (batter_id, fielder_id) = observed_tags.iter().collect_tuple()
+            .ok_or_else(|| FeedParseError::WrongNumberOfTags {
+                event_type: event.r#type,
+                tag_type: "player",
+                expected_num: 2,
+                actual_num: event.player_tags.len(),
+            })?;
+
+        let (sub_event, rest_children) = if children.first().map_or(false, |child| child.r#type == EventType::AddedMod) {
+            let (child, rest_children) = children.split_first()
+                .expect("If there isn't at least one child we shouldn't be in this branch of the if");
+
+            let sub_event = ModChangeSubEvent {
+                team_id: get_one_team_id(child)?,
+                sub_event: SubEvent::from_event(child),
+            };
+
+            (Some(sub_event), rest_children)
+        } else {
+            (None, children)
+        };
+
+        let batter_debt = BatterDebt {
+            batter_id: *batter_id,
+            fielder_id: *fielder_id,
+            sub_event,
+        };
+
+        Ok((Some(batter_debt), other_tags, rest_children))
+    } else {
+        Ok((None, event.player_tags.as_slice(), children))
     }
 }
 
