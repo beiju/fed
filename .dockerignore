@@ -1,0 +1,6 @@
+target
+feed_dump*
+schema.json
+http_cache
+sample_outputs
+.git
