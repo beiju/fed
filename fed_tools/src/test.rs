@@ -10,6 +10,7 @@ use indicatif::{ProgressDrawTarget, ProgressStyle};
 use fed::FedEvent;
 use flate2::read::GzDecoder;
 use seen_structure::HasStructure;
+use clap::Parser;
 
 const NUM_EVENTS: u64 = 8299172;
 
@@ -40,8 +41,16 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     Ok((i, parsed_event))
 }
 
+#[derive(Parser)]
+struct Args {
+    /// Path to save sample outputs, if desired
+    #[arg(value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
+    sample_outputs: Option<std::path::PathBuf>,
+}
+
 fn main() -> anyhow::Result<()> {
-    run_test()
+
+    run_test(Args::parse())
         .map_err(|err| {
             // Wait until the other threads hopefully clear
             std::thread::sleep(std::time::Duration::from_secs(2));
@@ -49,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         })
 }
 
-fn run_test() -> anyhow::Result<()> {
+fn run_test(args: Args) -> anyhow::Result<()> {
     println!("Test starting...");
 
     // If this file doesn't exist, download feed_dump.ndjson from
@@ -72,13 +81,17 @@ fn run_test() -> anyhow::Result<()> {
         progress.set_message(format!("s{}d{}", value.season + 1, value.day + 1));
         progress.set_position(i as u64);
 
+        let Some(ref sample_path) = args.sample_outputs else {
+            continue;
+        };
+
         let structure = value.structure();
 
         if !seen_structures.contains(&structure) {
             seen_structures.insert(structure);
 
             std::fs::write(
-                format!("sample_outputs/{}.json", value.id),
+                sample_path.join(format!("/{}.json", value.id)),
                 serde_json::to_string_pretty(&value)?,
             )?;
         }

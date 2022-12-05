@@ -19,6 +19,7 @@ path = "src/generate_schema.rs"
 
 [dependencies]
 anyhow = "1.0.66"
+clap = { version = "4.0.29", features = ["derive"] }
 fed = { path = "../fed" }
 eventually_api = { path = "../eventually_api" }
 indicatif = "0.17.1"
