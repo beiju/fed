@@ -1187,13 +1187,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::SalmonSwim {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 inning_num,
-                runs_lost: match parsed_runs_lost {
-                    ParsedSalmonRunsLost::None => { SalmonRunsLost::None }
+                run_losses: match parsed_runs_lost {
+                    ParsedSalmonRunsLost::None => { RunLossesFromSalmon::None }
                     ParsedSalmonRunsLost::OneTeam(ParsedTeamRunsLost { runs, name }) => {
-                        SalmonRunsLost::OneTeam(TeamRunsLost { runs_lost: runs, team_name: name.to_string() })
+                        RunLossesFromSalmon::OneTeam(TeamRunsLost { runs_lost: runs, team_name: name.to_string() })
                     }
                     ParsedSalmonRunsLost::BothTeams((a, b)) => {
-                        SalmonRunsLost::BothTeams((
+                        RunLossesFromSalmon::BothTeams((
                             TeamRunsLost { runs_lost: a.runs, team_name: a.name.to_string() },
                             TeamRunsLost { runs_lost: b.runs, team_name: b.name.to_string() },
                         ))

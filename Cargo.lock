@@ -642,6 +642,8 @@ dependencies = [
  "nom",
  "num_enum",
  "schemars",
+ "seen_structure",
+ "seen_structure_derive",
  "serde",
  "serde_json",
  "strum",
@@ -676,10 +678,12 @@ dependencies = [
  "chrono",
  "eventually_api",
  "fed",
+ "flate2",
  "indicatif",
  "itertools",
  "json-structural-diff",
  "par-iter-sync",
+ "seen_structure",
  "serde",
  "serde_json",
 ]
@@ -1920,6 +1924,23 @@ checksum = "0160a13a177a45bfb43ce71c01580998474f556ad854dcbca936dd2841a5c556"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seen_structure"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "uuid",
+]
+
+[[package]]
+name = "seen_structure_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

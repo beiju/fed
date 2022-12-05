@@ -1,15 +1,19 @@
 #![feature(let_chains)]
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, prelude::*};
 use par_iter_sync::IntoParallelIteratorSync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
 use indicatif::{ProgressDrawTarget, ProgressStyle};
+use fed::FedEvent;
+use flate2::read::GzDecoder;
+use seen_structure::HasStructure;
 
 const NUM_EVENTS: u64 = 8299172;
 
-fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<String>)> {
+fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, FedEvent)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
     let feed_event = fed::feed_event_from_json(&str)
         .context(str)
@@ -19,9 +23,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
 
-    let season = parsed_event.season + 1;
-    let day = parsed_event.day + 1;
-    let reconstructed_event = parsed_event.into_feed_event();
+    let reconstructed_event = parsed_event.clone().into_feed_event();
 
     // JsonDiff is expensive. Only run it if the events don't compare equal.
     if feed_event != reconstructed_event {
@@ -35,7 +37,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
                          |str| Err(anyhow!("{str}")))
             .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
     }
-    Ok((i, Some(format!("s{season}d{day}"))))
+    Ok((i, parsed_event))
 }
 
 fn main() -> anyhow::Result<()> {
@@ -53,22 +55,33 @@ fn run_test() -> anyhow::Result<()> {
     // If this file doesn't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
-    let file = File::open("feed_dump.filtered.ndjson")?;
-    let reader = BufReader::new(file);
+    let file = File::open("feed_dump.filtered.ndjson.gz")?;
+    let reader = BufReader::new(GzDecoder::new(file));
 
     let iter = reader.lines()
         .enumerate()
         .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
 
+    let mut seen_structures = HashSet::<<FedEvent as HasStructure>::Structure>::new();
+
     let progress = indicatif::ProgressBar::new(NUM_EVENTS);
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     for item in iter {
-        let (i, result) = item?;
-        if let Some(status) = result {
-            progress.set_message(status);
-        }
+        let (i, value): (usize, FedEvent) = item?;
+        progress.set_message(format!("s{}d{}", value.season + 1, value.day + 1));
         progress.set_position(i as u64);
+
+        let structure = value.structure();
+
+        if !seen_structures.contains(&structure) {
+            seen_structures.insert(structure);
+
+            std::fs::write(
+                format!("sample_outputs/{}.json", value.id),
+                serde_json::to_string_pretty(&value)?,
+            )?;
+        }
     }
 
     progress.finish();

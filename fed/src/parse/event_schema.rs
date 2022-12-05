@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
@@ -11,6 +11,8 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::AsRefStr;
+use seen_structure::HasStructure;
+use seen_structure_derive::HasStructure;
 
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
@@ -662,19 +664,46 @@ impl Display for TeamRunsLost {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
-#[serde(untagged, rename_all = "camelCase")]
-pub enum SalmonRunsLost {
+#[serde(into = "SerdeRunLossesFromSalmon", try_from = "SerdeRunLossesFromSalmon")]
+pub enum RunLossesFromSalmon {
     None,
     OneTeam(TeamRunsLost),
     BothTeams((TeamRunsLost, TeamRunsLost)),
 }
 
-impl Display for SalmonRunsLost {
+#[derive(Serialize, Deserialize)]
+struct SerdeRunLossesFromSalmon(Vec<TeamRunsLost>);
+
+impl TryFrom<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
+    type Error = String;
+
+    fn try_from(value: SerdeRunLossesFromSalmon) -> Result<Self, Self::Error> {
+        Ok(match value.0.len() {
+            0 => { Self::None }
+            1 => { Self::OneTeam(value.0.into_iter().next().unwrap()) }
+            2 => { Self::BothTeams(value.0.into_iter().collect_tuple().unwrap()) }
+            n => { return Err(format!("RunLossesFromSalmon must have 0, 1, or 2 elements but got {} elements", n)); }
+        })
+    }
+}
+
+impl Into<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
+    fn into(self) -> SerdeRunLossesFromSalmon {
+        match self {
+            RunLossesFromSalmon::None => { SerdeRunLossesFromSalmon(vec![]) }
+            RunLossesFromSalmon::OneTeam(one) => { SerdeRunLossesFromSalmon(vec![one]) }
+            RunLossesFromSalmon::BothTeams((a, b)) => { SerdeRunLossesFromSalmon(vec![a, b]) }
+        }
+    }
+}
+
+
+impl Display for RunLossesFromSalmon {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SalmonRunsLost::None => { write!(f, "No Runs are lost.") }
-            SalmonRunsLost::OneTeam(runs) => { write!(f, "{runs}") }
-            SalmonRunsLost::BothTeams((a, b)) => { write!(f, "{a}\n{b}") }
+            RunLossesFromSalmon::None => { write!(f, "No Runs are lost.") }
+            RunLossesFromSalmon::OneTeam(runs) => { write!(f, "{runs}") }
+            RunLossesFromSalmon::BothTeams((a, b)) => { write!(f, "{a}\n{b}") }
         }
     }
 }
@@ -731,7 +760,7 @@ pub struct TogglePerforming {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -2717,7 +2746,7 @@ pub enum FedEventData {
         inning_num: i32,
 
         /// Runs lost to the Salmon
-        runs_lost: SalmonRunsLost,
+        run_losses: RunLossesFromSalmon,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
@@ -2763,7 +2792,7 @@ pub enum FedEventData {
         num_runs: i32,
 
         /// Nickname of the team who activted Solar Panels
-        team_nickname: String
+        team_nickname: String,
     },
 
     /// (Un)runs are Overflowing from a previous Solar Panels or Event Horizon activation
@@ -2815,7 +2844,7 @@ pub enum FedEventData {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, HasStructure, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum SimPhase {
     GodsDay = 0,
@@ -2836,7 +2865,7 @@ pub enum SimPhase {
 }
 
 /// Represents the parsed data for any Feed event
-#[derive(Debug, Builder, JsonSchema, Serialize, Deserialize)]
+#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, HasStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FedEvent {
     /// Uuid of the event itself
@@ -5308,7 +5337,7 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::SalmonSwim { game, inning_num, runs_lost } => {
+            FedEventData::SalmonSwim { game, inning_num, run_losses: runs_lost } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::SalmonSwim,
@@ -5355,7 +5384,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::RunsOverflowing { game, team_nickname, num_runs  } => {
+            FedEventData::RunsOverflowing { game, team_nickname, num_runs } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::RunsOverflowing,

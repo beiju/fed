@@ -5,4 +5,6 @@ members = [
     "fed",
     "fed_server",
     "fed_tools",
+    "seen_structure",
+    "seen_structure_derive",
 ]
