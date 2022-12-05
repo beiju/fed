@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::AsRefStr;
@@ -299,7 +299,7 @@ impl AttrCategory {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", tag = "action", content = "strikeoutBatterName")]
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
@@ -490,6 +490,16 @@ pub enum PositionType {
     Bullpen = 3,
 }
 
+impl From<num_enum::TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
+    fn from(value: TryFromPrimitiveError<ActivePositionType>) -> Self {
+        FeedParseError::InvalidLocation {
+            expected: &[1, 2],
+            actual: value.number,
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedbackPlayerData {
@@ -497,11 +507,12 @@ pub struct FeedbackPlayerData {
     pub team_nickname: String,
     pub player_id: Uuid,
     pub player_name: String,
-    pub location: i64,
+    pub location: ActivePositionType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+// This uses a combo of flatten and adjacent tagging
+#[serde(rename_all = "camelCase", tag = "type", content="subEvent")]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
@@ -528,6 +539,17 @@ pub struct PlayerInfo {
 
     /// Player name
     pub player_name: String,
+}
+
+// This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PitcherInfo {
+    /// Pitcher uuid
+    pub pitcher_id: Uuid,
+
+    /// Pitcher name
+    pub pitcher_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1451,6 +1473,7 @@ pub enum FedEventData {
         sipped_category: AttrCategory,
 
         /// What the drained blood was used for
+        #[serde(flatten)]
         action: BlooddrainAction,
 
         /// Metadata for the sub-event associated with the player stat change event
@@ -1522,7 +1545,7 @@ pub enum FedEventData {
 
         /// If this is a Friends of Crows proc, the uuid and name of the pitcher who called upon
         /// their friends
-        pitcher: Option<PlayerInfo>,
+        friend_of_crows: Option<PitcherInfo>,
     },
 
     /// Sun2 set a Win. This version of the event shows up in the Outcomes section and is separate
@@ -1747,6 +1770,7 @@ pub enum FedEventData {
 
         /// Type of reverb that happened, with metadata for the associated `ReverbRosterShuffle`
         /// sub-event
+        #[serde(flatten)]
         reverb_type: ReverbType,
 
         /// Players who were kept in place with Gravity
@@ -1997,6 +2021,7 @@ pub enum FedEventData {
         player_name: String,
 
         /// Which flavor of return from elsewhere this is
+        #[serde(flatten)]
         flavor: ReturnFromElsewhereFlavor,
     },
 
@@ -2600,10 +2625,10 @@ pub enum FedEventData {
         echoee_name: String,
 
         /// Information about the effect on the echoer
-        main_echo: Echo,
+        primary_echo: Echo,
 
         /// Information about the effects on any receivers that were affected
-        sub_echos: Vec<Echo>,
+        receiver_echos: Vec<Echo>,
     },
 
     /// The Solar Panels await at the beginning of a game
@@ -2839,7 +2864,7 @@ pub enum FedEventData {
         rating_before: f64,
         rating_after: f64,
 
-        crime_scene_sub_event: SubEvent,
+        enter_crime_scene_sub_event: SubEvent,
         enter_shadows_sub_event: SubEvent,
     },
 }
@@ -3620,9 +3645,9 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::AmbushedByCrows { ref game, batter_id, ref batter_name, ref pitcher } => {
-                let prefix = if let Some(PlayerInfo { player_name, .. }) = pitcher {
-                    format!("{player_name} calls upon their Friends!\n")
+            FedEventData::AmbushedByCrows { ref game, batter_id, ref batter_name, friend_of_crows: ref pitcher } => {
+                let prefix = if let Some(PitcherInfo { pitcher_name, .. }) = pitcher {
+                    format!("{pitcher_name} calls upon their Friends!\n")
                 } else {
                     String::new()
                 };
@@ -3631,7 +3656,7 @@ impl FedEvent {
                         r#type: EventType::AmbushedByCrows,
                         category: EventCategory::Special,
                         description: format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."),
-                        player_tags: if let Some(PlayerInfo { player_id, .. }) = pitcher { vec![*player_id, batter_id] } else { vec![batter_id] },
+                        player_tags: if let Some(PitcherInfo { pitcher_id, .. }) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] },
                         ..Default::default()
                     })
                     .build()
@@ -3868,12 +3893,12 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .metadata(json!({
-                        "aLocation": player_a.location,
+                        "aLocation": player_a.location as i64,
                         "aPlayerId": player_a.player_id,
                         "aPlayerName": player_a.player_name,
                         "aTeamId": player_a.team_id,
                         "aTeamName": player_a.team_nickname,
-                        "bLocation": player_b.location,
+                        "bLocation": player_b.location as i64,
                         "bPlayerId": player_b.player_id,
                         "bPlayerName": player_b.player_name,
                         "bTeamId": player_b.team_id,
@@ -5072,7 +5097,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::Echo { game, echoee_name, main_echo, sub_echos, } => {
+            FedEventData::Echo { game, echoee_name, primary_echo: main_echo, receiver_echos: sub_echos, } => {
                 let make_children_for_echo = |echo: Echo, mod_type: i64, source: &str, echo_description: &str| {
                     let child_removed = echo.mods_removed.map(|mods_removed| {
                         let removes: Vec<_> = mods_removed.mod_ids.into_iter()
@@ -5425,7 +5450,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, crime_scene_sub_event, enter_shadows_sub_event } => {
+            FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, enter_crime_scene_sub_event: crime_scene_sub_event, enter_shadows_sub_event } => {
                 let crime_child = EventBuilderChild::new(&crime_scene_sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,

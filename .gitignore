@@ -81,3 +81,4 @@ fabric.properties
 /feed_dump.ndjson
 /feed_dump.filtered.ndjson
 /sample_outputs/
+/feed_dump_iso.ndjson

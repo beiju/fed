@@ -1,6 +1,7 @@
 use thiserror::Error;
 use uuid::Uuid;
 use eventually_api::EventType;
+use crate::parse::event_schema::FeedbackPlayerData;
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {
@@ -66,6 +67,12 @@ pub enum FeedParseError {
     #[error("Unknown weather {0}")]
     UnknownWeather(i64),
 
+    #[error("Expected location to be one of {expected:?} but it was {actual}")]
+    InvalidLocation {
+        expected: &'static [i64],
+        actual: i64,
+    },
+
     #[error("Unexpected description for {event_type:?} event: {description} (expected {expected})")]
     UnexpectedDescription {
         event_type: EventType,
@@ -91,3 +98,4 @@ pub enum FeedParseError {
         err: String,
     },
 }
+

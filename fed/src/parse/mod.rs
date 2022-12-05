@@ -664,8 +664,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::AmbushedByCrows => {
             let (pitcher_name, batter_name) = run_parser(&event, parse_friend_of_crows)?;
             let (pitcher, batter_id) = if let Some(name) = pitcher_name {
-                let (pitcher_uuid, batter_uuid) = get_two_player_ids(event)?;
-                (Some(PlayerInfo { player_id: pitcher_uuid, player_name: name.to_string() }), batter_uuid)
+                let (pitcher_id, batter_id) = get_two_player_ids(event)?;
+                (Some(PitcherInfo { pitcher_id, pitcher_name: name.to_string() }), batter_id)
             } else {
                 (None, get_one_player_id(event)?)
             };
@@ -674,7 +674,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event, unscatter)?,
                 batter_id,
                 batter_name: batter_name.to_string(),
-                pitcher,
+                friend_of_crows: pitcher,
             })
         }
         EventType::BirdsUnshell => {
@@ -800,7 +800,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             team_nickname,
                             player_id: get_uuid_metadata($event, concat!($prefix, "PlayerId"))?,
                             player_name,
-                            location: get_int_metadata($event, concat!($prefix, "Location"))?,
+                            location: get_int_metadata($event, concat!($prefix, "Location"))?.try_into()?,
                         }
                     }
                 };
@@ -1878,8 +1878,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             make_fed_event(event, FedEventData::Echo {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 echoee_name: echoee_name.to_string(),
-                main_echo: make_echo(echoer_name, main_echo_event)?,
-                sub_echos,
+                primary_echo: make_echo(echoer_name, main_echo_event)?,
+                receiver_echos: sub_echos,
             })
         }
         EventType::EchoIntoStatic => {
@@ -1991,7 +1991,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 stadium_name: stadium_nickname.to_string(),
                 rating_before: get_float_metadata(shadows_event, "before")?,
                 rating_after: get_float_metadata(shadows_event, "after")?,
-                crime_scene_sub_event: SubEvent::from_event(crime_scene_event),
+                enter_crime_scene_sub_event: SubEvent::from_event(crime_scene_event),
                 enter_shadows_sub_event: SubEvent::from_event(shadows_event),
             })
         }
