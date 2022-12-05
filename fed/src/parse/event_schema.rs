@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventCategory, EventuallyEvent, Weather};

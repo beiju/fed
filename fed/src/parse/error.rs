@@ -1,7 +1,6 @@
 use thiserror::Error;
 use uuid::Uuid;
 use eventually_api::EventType;
-use crate::parse::event_schema::FeedbackPlayerData;
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {

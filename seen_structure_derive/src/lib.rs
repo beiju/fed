@@ -1,8 +1,8 @@
 use ::proc_macro::TokenStream;
 use ::proc_macro2::{TokenStream as TokenStream2};
 use syn::{parse_macro_input, DeriveInput, Data, DataStruct, Field};
-use quote::{quote, ToTokens};
-use ::syn::{*, parse::{Parse, Parser}, spanned::Spanned, Result};
+use quote::quote;
+use ::syn::{*, Result};
 
 #[proc_macro_derive(HasStructure, attributes(seen_structure))]
 pub fn has_structure_derive(input: TokenStream) -> TokenStream {
@@ -112,6 +112,7 @@ fn impl_has_structure_for_enum(item_vis: Visibility, name: Ident, e: DataEnum) -
     Ok({
         quote! {
             #[derive(Eq, PartialEq, ::std::hash::Hash)]
+            #[allow(non_camel_case_types)]
             #item_vis enum #structure_name {
                 #(#structure_variants,)*
             }
