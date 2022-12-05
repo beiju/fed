@@ -683,6 +683,7 @@ dependencies = [
  "itertools",
  "json-structural-diff",
  "par-iter-sync",
+ "schemars",
  "seen_structure",
  "serde",
  "serde_json",

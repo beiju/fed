@@ -1,9 +1,8 @@
 #![feature(let_chains)]
 
-#[allow(unused)]
-mod parse;
 
 use itertools::Itertools;
+use fed::FedEvent;
 use schemars::{
     schema::SchemaObject,
     visit::Visitor,
@@ -11,7 +10,6 @@ use schemars::{
 };
 use schemars::gen::SchemaSettings;
 use schemars::schema::Schema::Object;
-use crate::parse::event_schema::FedEvent;
 
 #[derive(Debug, Clone)]
 pub struct SurfaceEnumTitle;

@@ -44,8 +44,10 @@ pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used
     // in game update' lastUpdateFull field
     #[serde(default)]
+    #[schemars(skip)]
     pub children: Vec<EventuallyEvent>,
     #[serde(default)]
+    #[schemars(skip)]
     #[serde(rename = "_eventually_siblingEvents")]
     pub siblings: Vec<EventuallyEvent>,
     #[serde(rename = "_eventually_ingest_time")]
