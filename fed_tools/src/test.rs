@@ -36,7 +36,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
         JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
             .map_or_else(|| Ok(()),
                          |str| Err(anyhow!("{str}")))
-            .with_context(|| format!("Event not reconstructed exactly: {}", reconstructed_event_json.get("description").unwrap().as_str().unwrap()))?;
+            .with_context(|| format!("Event not reconstructed exactly: {}", original_event_json.get("description").unwrap().as_str().unwrap()))?;
     }
     Ok((i, parsed_event))
 }

@@ -16,7 +16,7 @@ type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
 pub(crate) fn run_parser<'a, F, Out>(event: &'a EventuallyEvent, parser: F) -> Result<Out, FeedParseError>
     where F: Fn(&'a str) -> ParserResult<'a, Out> {
-    let (_, output) = terminated(parser, eof)(&event.description)
+    let (_, output) = terminated(parser, eof).parse(&event.description)
         .finish()
         .map_err(|e| FeedParseError::DescriptionParseError {
             event_type: event.r#type,
@@ -742,7 +742,7 @@ pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, scoring_team) = parse_terminated(" collect 10! Sun 2 smiles.\nSun 2 set a Win upon the ").parse(input)?;
     let (input, _) = tag(scoring_team).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
-    let (input, rays_player) = opt(preceded(tag("\n"), parse_terminated( " catches some rays."))).parse(input)?;
+    let (input, rays_player) = opt(preceded(tag("\n"), parse_terminated(" catches some rays."))).parse(input)?;
 
     Ok((input, (scoring_team, rays_player)))
 }
@@ -990,7 +990,7 @@ pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&
         parse_whole_number.map(|n| Some(n)),
     )).parse(input)?;
     let input = if let Some(after_days) = after_days {
-        let (input, _) = if after_days == 1 { tag(" day!") } else { tag(" days!") }(input)?;
+        let (input, _) = if after_days == 1 { tag(" day!") } else { tag(" days!") }.parse(input)?;
         input
     } else {
         input
@@ -1415,11 +1415,14 @@ pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, i32, bo
     Ok((input, (team_nickname, num_runs, unruns)))
 }
 
-pub(crate) fn parse_middling(input: &str) -> ParserResult<&str> {
-    let (input, _) = tag("Happy Midseason!\nThe ").parse(input)?;
-    let (input, team_nickname) = parse_terminated(" are Middling!").parse(input)?;
+pub(crate) fn parse_middling(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, _) = tag("Happy Midseason!\n").parse(input)?;
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Middling!")).map(|m| (m, true)),
+        preceded(tag("Middling wears off for the "), parse_terminated(".")).map(|m| (m, false)),
+    )).parse(input)?;
 
-    Ok((input, team_nickname))
+    Ok((input, result))
 }
 
 pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)> {
@@ -1450,4 +1453,41 @@ pub(crate) fn parse_return_from_investigation(input: &str) -> ParserResult<(&str
     )).parse(input)?;
 
     Ok((input, (player_name, emptyhanded)))
+}
+
+pub(crate) enum ParsedGrindRailSuccess<'a> {
+    Safe(ParsedGrindRailTrick<'a>),
+    TaggedOut(ParsedGrindRailTrick<'a>),
+    Bailed,
+}
+
+pub(crate) fn parse_grind_rail(input: &str) -> ParserResult<(&str, ParsedGrindRailTrick, ParsedGrindRailSuccess)> {
+    let (input, player_name) = parse_terminated(" hops on the Grind Rail toward third base.\nThey do a ").parse(input)?;
+    let (input, first_trick) = parse_grind_rail_trick.parse(input)?;
+    let (input, _) = tag("!\n").parse(input)?;
+    let (input, success) = alt((
+        preceded(tag("They land a Sunflip "), terminated(parse_grind_rail_trick, tag("\nSafe!")))
+            .map(|t| ParsedGrindRailSuccess::Safe(t)),
+        preceded(tag("They're tagged out doing a "), terminated(parse_grind_rail_trick, tag("!")))
+            .map(|t| ParsedGrindRailSuccess::TaggedOut(t)),
+        tag("... but lose their balance and bail!\nOut!").map(|_| ParsedGrindRailSuccess::Bailed),
+    )).parse(input)?;
+
+
+    Ok((input, (player_name, first_trick, success)))
+}
+
+pub(crate) struct ParsedGrindRailTrick<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) score: i32,
+}
+
+pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<ParsedGrindRailTrick> {
+    // Currently assumes a trick name can't have a "(". I would like to remove this limitation but
+    // I couldn't easily figure it out with Nom
+    let (input, name) = parse_terminated(" (").parse(input)?;
+    let (input, score) = parse_whole_number.parse(input)?;
+    let (input, _) = tag(")").parse(input)?;
+
+    Ok((input, ParsedGrindRailTrick { name, score }))
 }

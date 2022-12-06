@@ -1251,7 +1251,34 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::EchoChamber => { todo!() }
-        EventType::GrindRail => { todo!() }
+        EventType::GrindRail => {
+            let (player_name, first_trick, success) = run_parser(event, parse_grind_rail)?;
+
+            fn trick_from_parsed(parsed: ParsedGrindRailTrick) -> GrindRailTrick {
+                GrindRailTrick {
+                    trick_name: parsed.name.to_string(),
+                    points: parsed.score,
+                }
+            }
+
+            make_fed_event(event, FedEventData::GrindRail {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+                first_trick: trick_from_parsed(first_trick),
+                success: match success {
+                    ParsedGrindRailSuccess::Safe(trick) => {
+                        GrindRailSuccess::Safe(trick_from_parsed(trick))
+                    }
+                    ParsedGrindRailSuccess::TaggedOut(trick) => {
+                        GrindRailSuccess::TaggedOut(trick_from_parsed(trick))
+                    }
+                    ParsedGrindRailSuccess::Bailed => {
+                        GrindRailSuccess::Bailed
+                    }
+                },
+            })
+        }
         EventType::TunnelsUsed => { todo!() }
         EventType::PeanutMister => {
             let (player_name, cured_superallergy) = run_parser(event, parse_peanut_mister)?;
@@ -1999,13 +2026,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::Middling => {
-            let team_nickname = run_parser(&event, parse_middling)?;
+            let (team_nickname, is_middling) = run_parser(&event, parse_middling)?;
             assert!(is_known_team_nickname(team_nickname));
 
             let child = get_one_sub_event_from_slice(children, event.r#type)?;
             make_fed_event(event, FedEventData::Middling {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 team_nickname: team_nickname.to_string(),
+                is_middling,
                 change_event: ModChangeSubEvent {
                     sub_event: SubEvent::from_event(child),
                     team_id: get_one_team_id(child)?,

@@ -782,6 +782,50 @@ pub struct TogglePerforming {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, HasStructure)]
+pub struct GrindRailTrick {
+    /// Name of this Grind Rail trick
+    pub trick_name: String,
+
+    /// Point value of this grind rail trick
+    pub points: i32,
+}
+
+impl Display for GrindRailTrick {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.trick_name, self.points)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure)]
+#[serde(tag = "success")]
+pub enum GrindRailSuccess {
+    /// The player was Safe, and secondTrick was successful
+    Safe(GrindRailTrick),
+
+    /// The player was Safe, and secondTrick failed
+    TaggedOut(GrindRailTrick),
+
+    /// The player lost their balance and bailed, and secondTrick is null
+    Bailed,
+}
+
+impl Display for GrindRailSuccess {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GrindRailSuccess::Safe(trick) => {
+                write!(f, "They land a {trick}!\nSafe!")
+            }
+            GrindRailSuccess::TaggedOut(trick) => {
+                write!(f, "They're tagged out doing a {trick}!")
+            }
+            GrindRailSuccess::Bailed => {
+                write!(f, "... but lose their balance and bail!\nOut!")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2848,8 +2892,11 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Nickname of team who gained the (Un)runs
+        /// Nickname of team became or un-became Middling
         team_nickname: String,
+
+        /// Whether this team just became Middling (true) or un-became Middling (false)
+        is_middling: bool,
 
         #[serde(flatten)]
         change_event: ModChangeSubEvent,
@@ -2899,6 +2946,26 @@ pub enum FedEventData {
 
         /// Name of the stadium at which the investigation has concluded
         stadium_name: String,
+    },
+
+    /// Player hopped on the Grind Rail
+    #[serde(rename_all = "camelCase")]
+    GrindRail {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who hopped on the Grind Rail
+        player_id: Uuid,
+
+        /// Name of the player who hopped on the Grind Rail
+        player_name: String,
+
+        /// First trick this player attempted. This trick always succeeds.
+        first_trick: GrindRailTrick,
+
+        /// Second trick this player attempted. This trick does not always succeed
+        #[serde(rename = "secondTrick")] // this makes sense given the external tag
+        success: GrindRailSuccess,
     },
 }
 
@@ -5487,12 +5554,18 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Middling { game, team_nickname, change_event } => {
+            FedEventData::Middling { game, team_nickname, change_event, is_middling } => {
+                let child_description = if is_middling {
+                    format!("The {team_nickname} are Middling!")
+                } else {
+                    format!("Middling wears off for the {team_nickname}.")
+                };
+                let parent_description = format!("Happy Midseason!\n{child_description}");
                 let child = EventBuilderChild::new(&change_event.sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
-                        r#type: EventType::AddedModFromOtherMod,
-                        description: format!("The {team_nickname} are Middling!"),
+                        r#type: if is_middling { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod },
+                        description: child_description,
                         team_tags: vec![change_event.team_id],
                         ..Default::default()
                     })
@@ -5506,7 +5579,7 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Middling,
                         category: EventCategory::Special,
-                        description: format!("Happy Midseason!\nThe {team_nickname} are Middling!"),
+                        description: parent_description,
                         ..Default::default()
                     })
                     .child(child)
@@ -5595,6 +5668,17 @@ impl FedEvent {
                         "type": 0, // ?
                     }))
                     .build()
+            }
+            FedEventData::GrindRail { game, player_id, player_name, first_trick, success } => {
+                event_builder.for_game(&game )
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::GrindRail,
+                        description: format!("{player_name} hops on the Grind Rail toward third base.\nThey do a {first_trick}!\n{success}"),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .build()
+
             }
         }
     }
