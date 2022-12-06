@@ -1572,6 +1572,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         mod_name: mod_name.to_string(),
                     })
                 }
+                ParsedRemovedMod::InvestigationConcluded(stadium_name) => {
+                    make_fed_event(event, FedEventData::InvestigationConcluded {
+                        team_id: get_one_team_id(event)?,
+                        stadium_name: stadium_name.to_string(),
+                    })
+                }
             }
         }
         EventType::ModExpires => {
@@ -1659,23 +1665,25 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::PlayerTraded => { todo!() }
         EventType::PlayerSwap => { todo!() }
         EventType::PlayerMoved => {
-            let (_player_name, emptyhanded) = run_parser(&event, parse_player_moved)?;
-
-            make_fed_event(event, FedEventData::ReturnFromInvestigation {
-                player_id: get_uuid_metadata(event, "playerId")?,
-                player_name: get_str_metadata(event, "playerName")?.to_string(),
-                previous_team_id: get_uuid_metadata(event, "sendTeamId")?,
-                previous_team_name: get_str_metadata(event, "sendTeamName")?.to_string(),
-                new_location: get_int_metadata(event, "receiveLocation")?
-                    .try_into()
-                    .map_err(|_| FeedParseError::MissingMetadata {
-                        event_type: event.r#type,
-                        field: "receiveLocation",
-                    })?,
-                new_team_id: get_uuid_metadata(event, "receiveTeamId")?,
-                new_team_name: get_str_metadata(event, "receiveTeamName")?.to_string(),
-                emptyhanded,
-            })
+            match run_parser(&event, parse_player_moved)? {
+                ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
+                    make_fed_event(event, FedEventData::ReturnFromInvestigation {
+                        player_id: get_uuid_metadata(event, "playerId")?,
+                        player_name: get_str_metadata(event, "playerName")?.to_string(),
+                        previous_team_id: get_uuid_metadata(event, "sendTeamId")?,
+                        previous_team_name: get_str_metadata(event, "sendTeamName")?.to_string(),
+                        new_location: get_int_metadata(event, "receiveLocation")?
+                            .try_into()
+                            .map_err(|_| FeedParseError::MissingMetadata {
+                                event_type: event.r#type,
+                                field: "receiveLocation",
+                            })?,
+                        new_team_id: get_uuid_metadata(event, "receiveTeamId")?,
+                        new_team_name: get_str_metadata(event, "receiveTeamName")?.to_string(),
+                        emptyhanded,
+                    })
+                }
+            }
         }
         EventType::PlayerBornFromIncineration => { todo!() }
         EventType::PlayerStatIncrease => {

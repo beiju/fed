@@ -2881,6 +2881,16 @@ pub enum FedEventData {
         new_team_name: String,
         emptyhanded: bool,
     },
+
+    /// Investigation at stadium concluded
+    #[serde(rename_all = "camelCase")]
+    InvestigationConcluded {
+        /// Uuid of the team at whose stadium the investigation was concluded
+        team_id: Uuid,
+
+        /// Name of the stadium at which the investigation has concluded
+        stadium_name: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, HasStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5530,6 +5540,21 @@ impl FedEvent {
                         "receiveTeamName": new_team_name,
                         "sendTeamId": previous_team_id,
                         "sendTeamName": previous_team_name,
+                    }))
+                    .build()
+            }
+            FedEventData::InvestigationConcluded { stadium_name, team_id } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::RemovedMod,
+                        category: EventCategory::Changes,
+                        description: format!("The Crime Scene Investigation at {stadium_name} has concluded."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "CRIME_SCENE",
+                        "type": 0, // ?
                     }))
                     .build()
             }
