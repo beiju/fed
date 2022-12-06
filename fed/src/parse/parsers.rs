@@ -1423,3 +1423,13 @@ pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)>
 
     Ok((input, (player_name, team_nickname)))
 }
+
+pub(crate) fn parse_player_moved(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, player_name) = parse_terminated(" returns from the Investigation")(input)?;
+    let (input, emptyhanded) = alt((
+        tag(" emptyhanded.").map(|_| true),
+        tag(".").map(|_| false),
+        ))(input)?;
+
+    Ok((input, (player_name, emptyhanded)))
+}

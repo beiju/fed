@@ -2867,6 +2867,20 @@ pub enum FedEventData {
         enter_crime_scene_sub_event: SubEvent,
         enter_shadows_sub_event: SubEvent,
     },
+
+    /// Detective returns from an Investigation
+    #[serde(rename_all = "camelCase")]
+    ReturnFromInvestigation {
+        // TODO Document these
+        player_id: Uuid,
+        player_name: String,
+        previous_team_id: Uuid,
+        previous_team_name: String,
+        new_location: PositionType,
+        new_team_id: Uuid,
+        new_team_name: String,
+        emptyhanded: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, HasStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5494,6 +5508,29 @@ impl FedEvent {
                     })
                     .child(crime_child)
                     .child(shadows_child)
+                    .build()
+            }
+            FedEventData::ReturnFromInvestigation { player_id, player_name, previous_team_id, previous_team_name, new_location, new_team_id, new_team_name, emptyhanded } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PlayerMoved,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} returns from the Investigation{}.",
+                                             if emptyhanded { " emptyhanded" } else { "" }),
+                        player_tags: vec![player_id],
+                        team_tags: vec![previous_team_id, new_team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "location": 3,
+                        "playerId": player_id,
+                        "playerName": player_name,
+                        "receiveLocation": new_location as i64,
+                        "receiveTeamId": new_team_id,
+                        "receiveTeamName": new_team_name,
+                        "sendTeamId": previous_team_id,
+                        "sendTeamName": previous_team_name,
+                    }))
                     .build()
             }
         }
