@@ -138,6 +138,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             sub_play: get_sub_play(sub_event)?,
                         })
                     }).transpose()?,
+                    is_special: event.category == EventCategory::Special,
                 })
             } else {
                 make_fed_event(event, FedEventData::CaughtStealing {
@@ -649,11 +650,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::Sun2 => {
-            let scoring_team = run_parser(&event, parse_sun2)?;
+            let (scoring_team, rays_player) = run_parser(&event, parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
+
+            let caught_some_rays = if let Some(player_name) = rays_player {
+                let child = get_one_sub_event_from_slice(children, event.r#type)?;
+                Some(PlayerStatChange {
+                    sub_event: SubEvent::from_event(child),
+                    team_id: get_one_team_id(child)?,
+                    player_id: get_one_player_id(child)?,
+                    player_name: player_name.to_string(),
+                    rating_before: get_float_metadata(child, "before")?,
+                    rating_after: get_float_metadata(child, "after")?,
+                })
+            } else {
+                None
+            };
+
             make_fed_event(event, FedEventData::Sun2 {
                 game: GameEvent::try_from_event(event, unscatter)?,
                 team_nickname: scoring_team.to_string(),
+                caught_some_rays,
             })
         }
         EventType::BirdsCircle => {

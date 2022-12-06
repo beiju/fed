@@ -379,14 +379,14 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     )).parse(input)?;
 
+    // Big Buckets is definitely between the home run and the free refill(s)
+    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
+
     let (input, free_refillers) = many0(parse_free_refill).parse(input)?;
 
     if let Some(name) = magmatic_player {
         assert_eq!(name, batter_name);
     }
-
-    // Big Buckets is definitely somewhere between the home run and Spicy
-    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
 
     let (input, spicy_status) = parse_spicy_status(batter_name).parse(input)?;
 
@@ -644,6 +644,7 @@ pub(crate) fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDura
     )).parse(input)?;
     let (input, duration) = alt((
         tag("game").map(|_| ModDuration::Game),
+        tag("weekly").map(|_| ModDuration::Weekly),
         tag("seasonal").map(|_| ModDuration::Seasonal),
     )).parse(input)?;
     let (input, _) = tag(" mods wore off.").parse(input)?;
@@ -736,13 +737,14 @@ pub(crate) fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_sun2(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, scoring_team) = parse_terminated(" collect 10! Sun 2 smiles.\nSun 2 set a Win upon the ").parse(input)?;
     let (input, _) = tag(scoring_team).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
+    let (input, rays_player) = opt(preceded(tag("\n"), parse_terminated( " catches some rays."))).parse(input)?;
 
-    Ok((input, scoring_team))
+    Ok((input, (scoring_team, rays_player)))
 }
 
 pub(crate) fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {

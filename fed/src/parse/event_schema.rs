@@ -512,7 +512,7 @@ pub struct FeedbackPlayerData {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 // This uses a combo of flatten and adjacent tagging
-#[serde(rename_all = "camelCase", tag = "type", content="subEvent")]
+#[serde(rename_all = "camelCase", tag = "type", content = "subEvent")]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
@@ -1159,6 +1159,12 @@ pub enum FedEventData {
 
         /// Free Refill data if one was used, otherwise null
         free_refill: Option<FreeRefill>,
+
+        /// If the event was a Special type. Usually this can be inferred from other fields.
+        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that there are other
+        /// circumstances that cause an otherwise-undetectable Special event.)
+        is_special: bool,
     },
 
     /// Caught stealing
@@ -1579,6 +1585,9 @@ pub enum FedEventData {
 
         /// Nickname of team who earned the Win
         team_nickname: String,
+
+        /// If a player caught some rays, info about the player's attribute increase, otherwise null
+        caught_some_rays: Option<PlayerStatChange>,
     },
 
     /// Black hole swallowed a win. This version of the event shows up in the game log and is
@@ -3275,15 +3284,13 @@ impl FedEvent {
                     .build()
             }
             FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket } => {
-                let mut suffix = free_refills.iter()
-                    .map(|free_refill| {
-                        format!("\n{} used their Free Refill.\n{} Refills the In!",
-                                free_refill.player_name, free_refill.player_name)
-                    })
-                    .join("");
-
+                let mut suffix = String::new();
                 if big_bucket {
                     write!(suffix, "\nThe ball lands in a Big Bucket. An extra Run scores!").unwrap();
+                }
+                for free_refill in free_refills {
+                    write!(suffix, "\n{} used their Free Refill.\n{} Refills the In!",
+                           free_refill.player_name, free_refill.player_name).unwrap();
                 }
 
                 let mut children: Vec<_> = free_refills.iter()
@@ -3347,7 +3354,7 @@ impl FedEvent {
                     .children(observed_child)
                     .build()
             }
-            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill } => {
+            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, is_special } => {
                 let blaserunning_str = if blaserunning {
                     format!("\n{} scores with Blaserunning!", runner_name)
                 } else {
@@ -3363,7 +3370,7 @@ impl FedEvent {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::StolenBase,
-                        category: EventCategory::special_if(blaserunning || free_refill.is_some()),
+                        category: EventCategory::special_if(blaserunning || free_refill.is_some() || is_special),
                         description: format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str),
                         player_tags: if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] },
                         ..Default::default()
@@ -3707,14 +3714,45 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Sun2 { game, team_nickname } => {
+            FedEventData::Sun2 { game, team_nickname, caught_some_rays } => {
+                let suffix = if let Some(rays) = &caught_some_rays {
+                    format!("\n{} catches some rays.", rays.player_name)
+                } else {
+                    String::new()
+                };
+
+                let child = if let Some(rays) = &caught_some_rays {
+                    Some(EventBuilderChild::new(&rays.sub_event)
+                             .update(EventBuilderUpdate {
+                                 r#type: EventType::PlayerStatIncrease,
+                                 category: EventCategory::Changes,
+                                 description: format!("{} caught some rays.", rays.player_name),
+                                 team_tags: vec![rays.team_id],
+                                 player_tags: vec![rays.player_id],
+                                 ..Default::default()
+                             })
+                             .metadata(json!({
+                        "type": 4, // ?
+                        "before": rays.rating_before,
+                        "after": rays.rating_after,
+                    })))
+                } else {
+                    None
+                };
+
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Sun2,
                         category: EventCategory::Special,
-                        description: format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}."),
+                        description: format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}.{suffix}"),
+                        player_tags: if let Some(rays) = &caught_some_rays {
+                            vec![rays.player_id]
+                        } else {
+                            Vec::new()
+                        },
                         ..Default::default()
                     })
+                    .children(child)
                     .build()
             }
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
