@@ -9,7 +9,7 @@ FROM debian:buster-slim
 
 RUN apt-get update && \
     apt-get dist-upgrade -y&& \
-    apt-get install libssl-dev -y
+    apt-get install libssl-dev ca-certificates -y
 
 COPY --from=builder /usr/src/fed/target/release/fed_server .
 
