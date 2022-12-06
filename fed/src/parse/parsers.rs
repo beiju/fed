@@ -1466,7 +1466,7 @@ pub(crate) fn parse_grind_rail(input: &str) -> ParserResult<(&str, ParsedGrindRa
     let (input, first_trick) = parse_grind_rail_trick.parse(input)?;
     let (input, _) = tag("!\n").parse(input)?;
     let (input, success) = alt((
-        preceded(tag("They land a Sunflip "), terminated(parse_grind_rail_trick, tag("\nSafe!")))
+        preceded(tag("They land a "), terminated(parse_grind_rail_trick, tag("!\nSafe!")))
             .map(|t| ParsedGrindRailSuccess::Safe(t)),
         preceded(tag("They're tagged out doing a "), terminated(parse_grind_rail_trick, tag("!")))
             .map(|t| ParsedGrindRailSuccess::TaggedOut(t)),
@@ -1490,4 +1490,11 @@ pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<ParsedGrindRai
     let (input, _) = tag(")").parse(input)?;
 
     Ok((input, ParsedGrindRailTrick { name, score }))
+}
+
+pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The Echo Chamber traps a wave.\n").parse(input)?;
+    let (input, player_name) = parse_terminated(" is temporarily Repeating!").parse(input)?;
+
+    Ok((input, player_name))
 }

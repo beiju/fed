@@ -1219,8 +1219,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::PolarityShift => { todo!() }
-        EventType::EnterSecretBase => { todo!() }
-        EventType::ExitSecretBase => { todo!() }
+        EventType::EnterSecretBase => {
+            let player_name = run_parser(&event, parse_terminated(" enters the Secret Base..."))?;
+
+            make_fed_event(event, FedEventData::EnterSecretBase {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+            })
+        }
+        EventType::ExitSecretBase => {
+            let player_name = run_parser(&event, parse_terminated(" exits the Secret Base to Second Base!"))?;
+
+            make_fed_event(event, FedEventData::ExitSecretBase {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                player_id: get_one_player_id(event)?,
+                player_name: player_name.to_string(),
+            })
+        }
         EventType::ConsumersAttack => {
             let player_name = run_parser(&event, parse_consumer_attack)?;
             let (sub_event, sensed_something_fishy) = if children.len() == 2 {
@@ -1250,7 +1266,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 sensed_something_fishy,
             })
         }
-        EventType::EchoChamber => { todo!() }
+        EventType::EchoChamber => {
+            let player_name = run_parser(event, parse_echo_chamber)?;
+
+            let child = get_one_sub_event_from_slice(children, event.r#type)?;
+            make_fed_event(event, FedEventData::EchoChamber {
+                game: GameEvent::try_from_event(event, unscatter)?,
+                team_id: get_one_team_id(child)?,
+                player_id: get_one_player_id(child)?,
+                player_name: player_name.to_string(),
+                sub_event: SubEvent::from_event(child),
+            })
+        }
         EventType::GrindRail => {
             let (player_name, first_trick, success) = run_parser(event, parse_grind_rail)?;
 

@@ -2967,6 +2967,51 @@ pub enum FedEventData {
         #[serde(rename = "secondTrick")] // this makes sense given the external tag
         success: GrindRailSuccess,
     },
+
+    /// Player entered the Secret Base
+    #[serde(rename_all = "camelCase")]
+    EnterSecretBase {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who entered the Secret Base
+        player_id: Uuid,
+
+        /// Name of the player who entered the Secret Base
+        player_name: String,
+    },
+
+    /// Player exits the Secret Base
+    #[serde(rename_all = "camelCase")]
+    ExitSecretBase {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who exited the Secret Base
+        player_id: Uuid,
+
+        /// Name of the player who exited the Secret Base
+        player_name: String,
+    },
+
+    /// Echo Chamber makes a player temporarily Repeating
+    #[serde(rename_all = "camelCase")]
+    EchoChamber {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Team uuid of the player who was made Repeating
+        team_id: Uuid,
+
+        /// Uuid of the player who was made Repeating
+        player_id: Uuid,
+
+        /// Name of the player who was made Repeating
+        player_name: String,
+
+        /// Metadata for the event associated with adding the Repeating mod
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, HasStructure, IntoPrimitive, TryFromPrimitive)]
@@ -3790,15 +3835,15 @@ impl FedEvent {
 
                 let child = if let Some(rays) = &caught_some_rays {
                     Some(EventBuilderChild::new(&rays.sub_event)
-                             .update(EventBuilderUpdate {
-                                 r#type: EventType::PlayerStatIncrease,
-                                 category: EventCategory::Changes,
-                                 description: format!("{} caught some rays.", rays.player_name),
-                                 team_tags: vec![rays.team_id],
-                                 player_tags: vec![rays.player_id],
-                                 ..Default::default()
-                             })
-                             .metadata(json!({
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::PlayerStatIncrease,
+                            category: EventCategory::Changes,
+                            description: format!("{} caught some rays.", rays.player_name),
+                            team_tags: vec![rays.team_id],
+                            player_tags: vec![rays.player_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
                         "type": 4, // ?
                         "before": rays.rating_before,
                         "after": rays.rating_after,
@@ -5670,15 +5715,64 @@ impl FedEvent {
                     .build()
             }
             FedEventData::GrindRail { game, player_id, player_name, first_trick, success } => {
-                event_builder.for_game(&game )
+                event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GrindRail,
+                        category: EventCategory::Special,
                         description: format!("{player_name} hops on the Grind Rail toward third base.\nThey do a {first_trick}!\n{success}"),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })
                     .build()
+            }
+            FedEventData::EnterSecretBase { game, player_id, player_name } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EnterSecretBase,
+                        category: EventCategory::Special,
+                        description: format!("{player_name} enters the Secret Base..."),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::ExitSecretBase { game, player_id, player_name } => {
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::ExitSecretBase,
+                        category: EventCategory::Special,
+                        description: format!("{player_name} exits the Secret Base to Second Base!"),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .build()
+            }
+            FedEventData::EchoChamber { game, team_id, player_id, player_name, sub_event } => {
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        category: EventCategory::Changes,
+                        r#type: EventType::AddedMod,
+                        description: "The Echo Chamber traps a wave.".to_string(),
+                        team_tags: vec![team_id],
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": "REPEATING",
+                        "type": 3, // ?
+                    }));
 
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EchoChamber,
+                        category: EventCategory::Special,
+                        description: format!("The Echo Chamber traps a wave.\n{player_name} is temporarily Repeating!"),
+                        player_tags: vec![player_id],
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
             }
         }
     }
