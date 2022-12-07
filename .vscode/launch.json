@@ -1,0 +1,80 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'fed_server'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=fed_server",
+                    "--package=fed_server"
+                ],
+                "filter": {
+                    "name": "fed_server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'test'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=test",
+                    "--package=fed_tools"
+                ],
+                "filter": {
+                    "name": "test",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'filter_feed'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=filter_feed",
+                    "--package=fed_tools"
+                ],
+                "filter": {
+                    "name": "filter_feed",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'generate_schema'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=generate_schema",
+                    "--package=fed_tools"
+                ],
+                "filter": {
+                    "name": "generate_schema",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+    ]
+}
