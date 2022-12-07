@@ -1919,6 +1919,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::DecreeNarration => { todo!() }
         EventType::WillResults => { todo!() }
+        EventType::TeamStatAdjustment => { todo!() }
         EventType::TeamWasShamed => {
             let (shaming_team, shamed_team) = run_parser(description, event.r#type, parse_team_was_shamed)?;
             assert!(is_known_team_nickname(shaming_team));
@@ -2086,6 +2087,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 },
             })
         }
+        EventType::PlayerAttributeIncrease => { todo!() }
+        EventType::PlayerAttributeDecrease => { todo!() }
         EventType::EnterCrimeScene => {
             let (_player_name, stadium_nickname) = run_parser(description, event.r#type, parse_enter_crime_scene)?;
 
@@ -2146,6 +2149,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             })
         }
+        EventType::GainBloodType => { todo!() }
         EventType::HighPressure => {
             let (team_nickname, is_on) = run_parser(description, event.r#type, parse_high_pressure)?;
             assert!(is_known_team_nickname(team_nickname));
