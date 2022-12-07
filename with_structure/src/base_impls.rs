@@ -17,3 +17,9 @@ macro_rules! trivial_with_structure {
 }
 
 trivial_with_structure!(bool, f64, f32, i64, i32, i16, i8, isize, u64, u32, u16, u8, usize, Uuid, String, DateTime<Utc>);
+
+impl<T> WithStructure for Vec<T> {
+    type Structure = MonostateStructure;
+
+    fn structure(&self) -> Self::Structure { MonostateStructure }
+}

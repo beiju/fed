@@ -1256,31 +1256,57 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::ConsumersAttack => {
-            let player_name = run_parser(description, event.r#type, parse_consumer_attack)?;
-            let (sub_event, sensed_something_fishy) = if children.len() == 2 {
-                // Then a detective sensed something fishy
-                let (chomp_event, fishy_event) = get_two_sub_events(event)?;
-                let detective_name = run_parser(&fishy_event.description, fishy_event.r#type, parse_terminated(" sensed something fishy."))?;
-                let detective_activity = DetectiveActivity {
-                    detective_id: get_one_player_id(&fishy_event.player_tags, fishy_event.r#type)?,
-                    detective_name: detective_name.to_string(),
-                    sub_event: SubEvent::from_event(fishy_event),
+            let (player_name, item_breaks) = run_parser(description, event.r#type, parse_consumer_attack)?;
+
+            let (team_id, effect, sensed_something_fishy) = if item_breaks.is_some() {
+                let break_child= get_one_sub_event_from_slice(children, event.r#type)?;
+
+                let item_breaks = ItemDamage {
+                    item_id: get_uuid_metadata(break_child, "itemId")?,
+                    item_name: get_str_metadata(break_child, "itemName")?.to_string(),
+                    item_mods: vec![],
+                    durability: get_int_metadata(break_child, "itemDurability")?,
+                    player_item_rating_before: get_float_metadata(break_child, "playerItemRatingBefore")?,
+                    player_item_rating_after: get_float_metadata(break_child, "playerItemRatingAfter")?,
+                    player_rating: get_float_metadata(break_child, "playerRating")?,
+                    sub_event: SubEvent::from_event(break_child),
                 };
 
-                (chomp_event, Some(detective_activity))
+                let team_id = get_one_team_id(break_child)?;
+                (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks), None)
             } else {
-                let sub_event = get_one_sub_event(event)?;
-                (sub_event, None)
+                // I'm hoping that detectives only sense something fishy if the attack hit
+                // TODO: If this is true, move the something fishy inside the effect
+                let (sub_event, sensed_something_fishy) = if children.len() == 2 {
+                    // Then a detective sensed something fishy
+                    let (chomp_event, fishy_event) = get_two_sub_events(event)?;
+                    let detective_name = run_parser(&fishy_event.description, fishy_event.r#type, parse_terminated(" sensed something fishy."))?;
+                    let detective_activity = DetectiveActivity {
+                        detective_id: get_one_player_id(&fishy_event.player_tags, fishy_event.r#type)?,
+                        detective_name: detective_name.to_string(),
+                        sub_event: SubEvent::from_event(fishy_event),
+                    };
+
+                    (chomp_event, Some(detective_activity))
+                } else {
+                    let sub_event = get_one_sub_event(event)?;
+                    (sub_event, None)
+                };
+
+                let team_id = get_one_team_id(sub_event)?;
+                (team_id, ConsumerAttackEffect::Hits {
+                    rating_before: get_float_metadata(sub_event, "before")?,
+                    rating_after: get_float_metadata(sub_event, "after")?,
+                    sub_event: SubEvent::from_event(sub_event),
+                }, sensed_something_fishy)
             };
 
             make_fed_event(event, FedEventData::ConsumerAttack {
                 game: GameEvent::try_from_event(event, unscatter, attractor_secret_base)?,
-                team_id: get_one_team_id(sub_event)?,
-                player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
+                team_id,
+                player_id: get_one_player_id(player_tags, event.r#type)?,
                 player_name: player_name.to_string(),
-                sub_event: SubEvent::from_event(sub_event),
-                rating_before: get_float_metadata(sub_event, "before")?,
-                rating_after: get_float_metadata(sub_event, "after")?,
+                effect,
                 sensed_something_fishy,
             })
         }

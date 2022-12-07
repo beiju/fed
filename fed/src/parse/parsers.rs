@@ -1321,11 +1321,12 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 }
 
 
-pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, _) = tag("CONSUMERS ATTACK\n").parse(input)?;
     let (input, victim_name) = take_till1(|c| c == '\n').parse(input)?;
+    let (input, item_breaks) = opt(preceded(tag("\n\n"), parse_terminated(" BREAKS"))).parse(input)?;
 
-    Ok((input, victim_name))
+    Ok((input, (victim_name, item_breaks)))
 }
 
 pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {

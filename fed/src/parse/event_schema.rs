@@ -111,7 +111,7 @@ impl GameEvent {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct SubEvent {
     /// Uuid of sub-event
@@ -844,6 +844,52 @@ impl Display for EchoChamberModAdded {
             EchoChamberModAdded::Reverberating => { write!(f, "Reverberating") }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[serde(tag = "type")]
+pub enum ConsumerAttackEffect {
+    Hits {
+        /// Player's rating before the attack
+        rating_before: f64,
+
+        /// Player's rating after the attack
+        rating_after: f64,
+
+        /// Metadata for sub-event associated with player stat change
+        sub_event: SubEvent,
+    },
+
+    DefendedWithItem(ItemDamage)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemDamage {
+    /// Uuid of item that was damaged
+    pub item_id: Uuid,
+
+    /// Name of item that was damaged
+    pub item_name: String,
+
+    /// Mods bestowed by item that was damaged
+    pub item_mods: Vec<String>,
+
+    /// Durability of item. This is its max health.
+    pub durability: i64,
+
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before being damaged (TODO Clarify damage vs. breaking)
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's remaining items cause to their star
+    /// rating.
+    pub player_item_rating_after: f64,
+
+    /// The player's star rating. TODO: Is this with or without items?
+    pub player_rating: f64,
+
+    /// Metadata for the event associated with the item being damaged
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay)]
@@ -2898,14 +2944,8 @@ pub enum FedEventData {
         /// Name of player who was attacked by the Consumer
         player_name: String,
 
-        /// Metadata for sub-event associated with player stat change
-        sub_event: SubEvent,
-
-        /// Player's rating before the attack
-        rating_before: f64,
-
-        /// Player's rating after the attack
-        rating_after: f64,
+        /// Effect of the attack
+        effect: ConsumerAttackEffect,
 
         /// Detective activity, if any
         sensed_something_fishy: Option<DetectiveActivity>,
@@ -5619,22 +5659,49 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after, sensed_something_fishy } => {
-                let description = format!("CONSUMERS ATTACK\n{player_name}");
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
-                        r#type: EventType::PlayerStatDecrease,
-                        description: description.clone(),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "before": rating_before,
-                        "after": rating_after,
-                        "type": 4, // ?
-                    }));
+            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, effect, sensed_something_fishy } => {
+                let mut description = format!("CONSUMERS ATTACK\n{player_name}");
+                let child = match effect {
+                    ConsumerAttackEffect::Hits { rating_before, rating_after, sub_event } => {
+                        EventBuilderChild::new(&sub_event)
+                            .update(EventBuilderUpdate {
+                                category: EventCategory::Changes,
+                                r#type: EventType::PlayerStatDecrease,
+                                description: description.clone(),
+                                team_tags: vec![team_id],
+                                player_tags: vec![player_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "before": rating_before,
+                                "after": rating_after,
+                                "type": 4, // ?
+                            }))
+                    }
+                    ConsumerAttackEffect::DefendedWithItem(damage) => {
+                        write!(description, "\n\n{} BREAKS", damage.item_name.to_ascii_uppercase()).unwrap();
+                        EventBuilderChild::new(&damage.sub_event)
+                            .update(EventBuilderUpdate {
+                                category: EventCategory::Changes,
+                                r#type: EventType::ItemBreaks,
+                                description: description.clone(),
+                                team_tags: vec![team_id],
+                                player_tags: vec![player_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "itemDurability": damage.durability,
+                                "itemHealthAfter": 0,
+                                "itemHealthBefore": 1,
+                                "itemId": damage.item_id,
+                                "itemName": damage.item_name,
+                                "mods": damage.item_mods,
+                                "playerItemRatingAfter": zero_int(damage.player_item_rating_after),
+                                "playerItemRatingBefore": damage.player_item_rating_before,
+                                "playerRating": damage.player_rating,
+                            }))
+                    }
+                };
 
                 let something_fishy_child = sensed_something_fishy.map(|something_fishy| {
                     EventBuilderChild::new(&something_fishy.sub_event)
@@ -6008,6 +6075,15 @@ fn base_name(base_stolen: i32) -> &'static str {
         4 => "fourth",
         5 => "fifth",
         _ => panic!("What base is this")
+    }
+}
+
+// Sometimes in the metadata, an 0 needs to be an int even if the value is a float. ballclark.
+fn zero_int(value: f64) -> serde_json::Value {
+    if value == 0.0 {
+        serde_json::Value::from(0)
+    } else {
+        serde_json::Value::from(value)
     }
 }
 
