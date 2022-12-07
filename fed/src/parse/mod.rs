@@ -1285,7 +1285,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::EchoChamber => {
-            let player_name = run_parser(description, event.r#type, parse_echo_chamber)?;
+            let (player_name, which_mod) = run_parser(description, event.r#type, parse_echo_chamber)?;
 
             let child = get_one_sub_event_from_slice(children, event.r#type)?;
             make_fed_event(event, FedEventData::EchoChamber {
@@ -1293,6 +1293,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_id: get_one_team_id(child)?,
                 player_id: get_one_player_id(&child.player_tags, child.r#type)?,
                 player_name: player_name.to_string(),
+                which_mod,
                 sub_event: SubEvent::from_event(child),
             })
         }

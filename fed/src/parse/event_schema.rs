@@ -831,6 +831,21 @@ impl Display for GrindRailSuccess {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+pub enum EchoChamberModAdded {
+    Repeating,
+    Reverberating
+}
+
+impl Display for EchoChamberModAdded {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EchoChamberModAdded::Repeating => { write!(f, "Repeating") }
+            EchoChamberModAdded::Reverberating => { write!(f, "Reverberating") }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay)]
 #[enum_access(get_some(game = "pub"))]
 #[serde(tag = "type")]
@@ -3140,7 +3155,10 @@ pub enum FedEventData {
         /// Name of the player who was made Repeating
         player_name: String,
 
-        /// Metadata for the event associated with adding the Repeating mod
+        /// Whether the player was made Repeating or Reverberating
+        which_mod: EchoChamberModAdded,
+
+        /// Metadata for the event associated with adding the Repeating or Reverberating mod
         sub_event: SubEvent,
     },
 }
@@ -5882,7 +5900,11 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::EchoChamber { game, team_id, player_id, player_name, sub_event } => {
+            FedEventData::EchoChamber { game, team_id, player_id, player_name, which_mod, sub_event } => {
+                let mod_id = match which_mod {
+                    EchoChamberModAdded::Repeating => { "REPEATING" }
+                    EchoChamberModAdded::Reverberating => { "REVERBERATING" }
+                };
                 let child = EventBuilderChild::new(&sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
@@ -5893,7 +5915,7 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .metadata(json!({
-                        "mod": "REPEATING",
+                        "mod": mod_id,
                         "type": 3, // ?
                     }));
 
@@ -5902,7 +5924,7 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::EchoChamber,
                         category: EventCategory::Special,
-                        description: format!("The Echo Chamber traps a wave.\n{player_name} is temporarily Repeating!"),
+                        description: format!("The Echo Chamber traps a wave.\n{player_name} is temporarily {which_mod}!"),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })

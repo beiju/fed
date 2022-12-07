@@ -8,6 +8,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 use eventually_api::{EventType, EventuallyEvent};
+use crate::EchoChamberModAdded;
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, FedEvent, FedEventData, ModDuration};
 
@@ -1494,9 +1495,13 @@ pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<ParsedGrindRai
     Ok((input, ParsedGrindRailTrick { name, score }))
 }
 
-pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamberModAdded)> {
     let (input, _) = tag("The Echo Chamber traps a wave.\n").parse(input)?;
-    let (input, player_name) = parse_terminated(" is temporarily Repeating!").parse(input)?;
+    let (input, player_name) = parse_terminated(" is temporarily ").parse(input)?;
+    let (input, mod_) = alt((
+        tag("Repeating!").map(|_| EchoChamberModAdded::Repeating),
+        tag("Reverberating!").map(|_| EchoChamberModAdded::Reverberating),
+    )).parse(input)?;
 
-    Ok((input, player_name))
+    Ok((input, (player_name, mod_)))
 }
