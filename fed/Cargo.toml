@@ -8,18 +8,18 @@ edition = "2021"
 [dependencies]
 chrono = { version = "0.4.19", features = ["serde"] }
 derive_builder = "0.12.0"
-enum_access = { path = "../../enum_access" }
+enum_access = { git = "https://github.com/beiju/enum_access" }
 eventually_api = { path = "../eventually_api" }
 flate2 = "1.0.25"
 itertools = "0.10.3"
 nom = "7.1.1"
 num_enum = "0.5.7"
 schemars = { version = "0.8.11", features = ["chrono", "uuid1", "preserve_order"] }
-seen_structure = { path = "../seen_structure" }
-seen_structure_derive = { path = "../seen_structure_derive" }
 serde = "1.0.147"
 serde_json = "1.0.82"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 thiserror = "1.0.31"
 uuid = { version = "1.2.2", features = ["serde"] }
+with_structure = { path = "../with_structure" }
+with_structure_derive = { path = "../with_structure_derive" }

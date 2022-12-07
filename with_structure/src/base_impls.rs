@@ -1,4 +1,4 @@
-use crate::{HasStructure, ItemStructure};
+use crate::{WithStructure, ItemStructure};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -6,9 +6,9 @@ use chrono::{DateTime, Utc};
 pub struct MonostateStructure;
 impl ItemStructure for MonostateStructure {}
 
-macro_rules! trivial_has_structure {
+macro_rules! trivial_with_structure {
     ($($t:ty),+) => {
-        $(impl HasStructure for $t {
+        $(impl WithStructure for $t {
             type Structure = MonostateStructure;
 
             fn structure(&self) -> Self::Structure { MonostateStructure }
@@ -16,4 +16,4 @@ macro_rules! trivial_has_structure {
     }
 }
 
-trivial_has_structure!(bool, f64, f32, i64, i32, i16, i8, isize, u64, u32, u16, u8, usize, Uuid, String, DateTime<Utc>);
+trivial_with_structure!(bool, f64, f32, i64, i32, i16, i8, isize, u64, u32, u16, u8, usize, Uuid, String, DateTime<Utc>);

@@ -9,7 +9,7 @@ use anyhow::{anyhow, Context};
 use indicatif::{ProgressDrawTarget, ProgressStyle};
 use fed::FedEvent;
 use flate2::read::GzDecoder;
-use seen_structure::HasStructure;
+use with_structure::WithStructure;
 use clap::Parser;
 
 const NUM_EVENTS: u64 = 8299172;
@@ -71,7 +71,7 @@ fn run_test(args: Args) -> anyhow::Result<()> {
         .enumerate()
         .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
 
-    let mut seen_structures = HashSet::<<FedEvent as HasStructure>::Structure>::new();
+    let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 
     let progress = indicatif::ProgressBar::new(NUM_EVENTS);
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
@@ -87,8 +87,8 @@ fn run_test(args: Args) -> anyhow::Result<()> {
 
         let structure = value.structure();
 
-        if !seen_structures.contains(&structure) {
-            seen_structures.insert(structure);
+        if !with_structures.contains(&structure) {
+            with_structures.insert(structure);
 
             std::fs::write(
                 sample_path.join(format!("/{}.json", value.id)),

@@ -12,8 +12,8 @@ use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::AsRefStr;
-use seen_structure::HasStructure;
-use seen_structure_derive::HasStructure;
+use with_structure::WithStructure;
+use with_structure_derive::WithStructure;
 
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
@@ -783,7 +783,7 @@ pub struct TogglePerforming {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, HasStructure)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct GrindRailTrick {
     /// Name of this Grind Rail trick
     pub trick_name: String,
@@ -798,7 +798,7 @@ impl Display for GrindRailTrick {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(tag = "success")]
 pub enum GrindRailSuccess {
     /// The player was Safe, and secondTrick was successful
@@ -827,7 +827,7 @@ impl Display for GrindRailSuccess {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure, EnumAccess, EnumDisplay)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay)]
 #[enum_access(get_some(game = "pub"))]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3138,7 +3138,7 @@ pub enum FedEventData {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, HasStructure, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum SimPhase {
     GodsDay = 0,
@@ -3159,7 +3159,7 @@ pub enum SimPhase {
 }
 
 /// Represents the parsed data for any Feed event
-#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, HasStructure)]
+#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FedEvent {
     /// Uuid of the event itself

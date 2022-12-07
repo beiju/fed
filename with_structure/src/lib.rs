@@ -8,7 +8,7 @@ pub trait ItemStructure: Eq + Hash {
 
 }
 
-pub trait HasStructure {
+pub trait WithStructure {
     type Structure: ItemStructure;
 
     fn structure(&self) -> Self::Structure;

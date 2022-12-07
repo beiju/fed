@@ -4,27 +4,27 @@ use syn::{parse_macro_input, DeriveInput, Data, DataStruct, Field};
 use quote::quote;
 use ::syn::{*, Result};
 
-#[proc_macro_derive(HasStructure, attributes(seen_structure))]
-pub fn has_structure_derive(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(WithStructure, attributes(with_structure))]
+pub fn with_structure_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as _);
-    TokenStream::from(match impl_has_structure(ast) {
+    TokenStream::from(match impl_with_structure(ast) {
         | Ok(it) => it,
         | Err(err) => err.to_compile_error(),
     })
 }
 
-fn impl_has_structure(ast: DeriveInput) -> Result<TokenStream2> {
+fn impl_with_structure(ast: DeriveInput) -> Result<TokenStream2> {
         let item_vis = ast.vis;
         let name = ast.ident;
 
         match ast.data {
-            Data::Struct(s) => impl_has_structure_for_struct(item_vis, name, s),
-            Data::Enum(e) => impl_has_structure_for_enum(item_vis, name, e),
+            Data::Struct(s) => impl_with_structure_for_struct(item_vis, name, s),
+            Data::Enum(e) => impl_with_structure_for_enum(item_vis, name, e),
             Data::Union(_) => todo!(),
         }
 }
 
-fn impl_has_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruct) -> Result<TokenStream2> {
+fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruct) -> Result<TokenStream2> {
     let structure_name = Ident::new(&format!("{}Structure", name), name.span());
     let structure_record_name = Ident::new(&format!("{}StructureRecord", name), name.span());
 
@@ -32,7 +32,7 @@ fn impl_has_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruc
         .map(|field: &Field| {
             let ident = &field.ident;
             let ty = &field.ty;
-            quote! { #ident: <#ty as HasStructure>::Structure }
+            quote! { #ident: <#ty as WithStructure>::Structure }
         })
         .collect();
 
@@ -50,13 +50,13 @@ fn impl_has_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruc
                 #(#definition_fields),*
             }
 
-            impl ::seen_structure::ItemStructure for #structure_name {}
+            impl ::with_structure::ItemStructure for #structure_name {}
 
             #item_vis struct #structure_record_name {
                 #(#definition_fields),*
             }
 
-            impl ::seen_structure::HasStructure for #name {
+            impl ::with_structure::WithStructure for #name {
                 type Structure = #structure_name;
 
                 fn structure(&self) -> Self::Structure {
@@ -69,7 +69,7 @@ fn impl_has_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruc
     })
 }
 
-fn impl_has_structure_for_enum(item_vis: Visibility, name: Ident, e: DataEnum) -> Result<TokenStream2> {
+fn impl_with_structure_for_enum(item_vis: Visibility, name: Ident, e: DataEnum) -> Result<TokenStream2> {
     let structure_name = Ident::new(&format!("{}Structure", name), name.span());
     let structure_record_name = Ident::new(&format!("{}StructureRecord", name), name.span());
 
@@ -117,11 +117,11 @@ fn impl_has_structure_for_enum(item_vis: Visibility, name: Ident, e: DataEnum) -
                 #(#structure_variants,)*
             }
 
-            impl ::seen_structure::ItemStructure for #structure_name {}
+            impl ::with_structure::ItemStructure for #structure_name {}
 
             #item_vis struct #structure_record_name {}
 
-            impl ::seen_structure::HasStructure for #name {
+            impl ::with_structure::WithStructure for #name {
                 type Structure = #structure_name;
 
                 fn structure(&self) -> Self::Structure {
