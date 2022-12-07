@@ -2132,6 +2132,9 @@ pub enum FedEventData {
 
         /// List of players who used a Free Refill
         free_refills: Vec<FreeRefill>,
+
+        /// Whether the Flood Pumps activated
+        flood_pumps: bool,
     },
 
     /// Player returned from Elsewhere
@@ -4543,7 +4546,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { ref game, ref effects, ref free_refills } => {
+            FedEventData::FloodingSwept { ref game, ref effects, ref free_refills, flood_pumps } => {
                 // I'm being uncharacteristically imperative with this one
                 let mut children = Vec::new();
                 let mut player_tags = Vec::new();
@@ -4584,6 +4587,10 @@ impl FedEvent {
                     write!(description, "\n{} used their Free Refill.\n{} Refills the In!",
                            refill.player_name, refill.player_name).unwrap();
                     children.push(make_free_refill_child(refill));
+                }
+
+                if flood_pumps {
+                    write!(description, "\nThe Flood Pumps activate!").unwrap();
                 }
 
                 event_builder.for_game(game)

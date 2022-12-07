@@ -951,13 +951,15 @@ pub(crate) enum ParsedFloodingEffect<'a> {
     Ego(&'a str),
 }
 
-pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, Vec<&str>)> {
+pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, Vec<&str>, bool)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!").parse(input)?;
     let (input, effects) = many0(parse_flooding_swept_effect).parse(input)?;
 
+    let (input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
+
     let (input, refillers) = many0(parse_free_refill).parse(input)?;
 
-    Ok((input, (effects, refillers)))
+    Ok((input, (effects, refillers, flumps.is_some())))
 }
 
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {

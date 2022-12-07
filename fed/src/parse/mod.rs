@@ -1131,7 +1131,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::FloodingSwept => {
-            let (parsed_effects, free_refillers) = run_parser(description, event.r#type, parse_flooding_swept)?;
+            let (parsed_effects, free_refillers, flood_pumps) = run_parser(description, event.r#type, parse_flooding_swept)?;
 
             let mut children_iter = children.iter();
             let mut player_tags_iter = player_tags.iter();
@@ -1213,6 +1213,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: GameEvent::try_from_event(event, unscatter, attractor_secret_base)?,
                 effects,
                 free_refills,
+                flood_pumps,
             })
         }
         EventType::SalmonSwim => {
