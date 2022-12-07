@@ -7,20 +7,20 @@ use nom::error::{convert_error};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
-use eventually_api::EventuallyEvent;
+use eventually_api::{EventType, EventuallyEvent};
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, FedEvent, FedEventData, ModDuration};
 
 type ParserError<'a> = nom::error::VerboseError<&'a str>;
 type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
-pub(crate) fn run_parser<'a, F, Out>(event: &'a EventuallyEvent, parser: F) -> Result<Out, FeedParseError>
+pub(crate) fn run_parser<'a, F, Out>(description: &'a str, event_type: EventType, parser: F) -> Result<Out, FeedParseError>
     where F: Fn(&'a str) -> ParserResult<'a, Out> {
-    let (_, output) = terminated(parser, eof).parse(&event.description)
+    let (_, output) = terminated(parser, eof).parse(description)
         .finish()
         .map_err(|e| FeedParseError::DescriptionParseError {
-            event_type: event.r#type,
-            err: convert_error(&event.description as &str, e),
+            event_type,
+            err: convert_error(description, e),
         })?;
 
     Ok(output)

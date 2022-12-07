@@ -124,8 +124,8 @@ fn get_one_id(tag_type: &'static str, tags: &[Uuid], event_type: EventType) -> R
     }
 }
 
-pub fn get_one_player_id(event: &EventuallyEvent) -> Result<Uuid, FeedParseError> {
-    get_one_id("player", &event.player_tags, event.r#type)
+pub fn get_one_player_id(player_tags: &[Uuid], event_type: EventType) -> Result<Uuid, FeedParseError> {
+    get_one_id("player", player_tags, event_type)
 }
 
 pub fn get_one_or_zero_player_ids(event: &EventuallyEvent) -> Result<Option<Uuid>, FeedParseError> {

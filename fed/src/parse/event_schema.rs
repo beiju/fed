@@ -59,11 +59,14 @@ pub struct GameEvent {
 
     /// If a player got unscattered this tick, contains information about their unscattering.
     pub unscatter: Option<Unscatter>,
+
+    /// If an Attractor entered the Secret Base on this tick, contains information about this player
+    pub attractor_secret_base: Option<PlayerInfo>,
 }
 
 
 impl GameEvent {
-    pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>) -> Result<Self, FeedParseError> {
+    pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
         let (&game_id, ) = event.game_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
 
@@ -71,10 +74,10 @@ impl GameEvent {
         let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
 
-        Self::try_from_event_with_teams(event, unscatter, game_id, away_team, home_team)
+        Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
     }
 
-    pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>) -> Result<Self, FeedParseError> {
+    pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
         let (&game_id, ) = event.game_tags.iter().collect_tuple()
             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
 
@@ -85,10 +88,10 @@ impl GameEvent {
         assert_eq!(away_team, away_team2);
         assert_eq!(home_team, home_team2);
 
-        Self::try_from_event_with_teams(event, unscatter, game_id, away_team, home_team)
+        Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
     }
 
-    fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
+    fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
         Ok(Self {
             game_id,
             home_team,
@@ -101,6 +104,7 @@ impl GameEvent {
                     }
                 })?,
             unscatter,
+            attractor_secret_base,
         })
     }
 }

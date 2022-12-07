@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
+use std::fmt::Write;
+
 use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
@@ -232,8 +234,18 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
 
     pub fn build(self) -> EventuallyEvent {
         let mut children_builders = Vec::new();
+        let mut prefix = String::new();
         let mut suffix = String::new();
         let mut player_tags = Vec::new();
+
+        // Just guessing that attractor is before unscatter
+        let has_attractor = if let Some(attractor) = self.game.as_ref().and_then(|game| game.attractor_secret_base.as_ref()) {
+            write!(prefix, "{} enters the Secret Base...\n", attractor.player_name).unwrap();
+            player_tags.push(attractor.player_id);
+            true
+        } else {
+            false
+        };
 
         if let Some(unscatter) = self.game.as_ref().and_then(|game| game.unscatter.as_ref()) {
             children_builders.push(
@@ -379,7 +391,7 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
 
         let suffix = &suffix;
 
-        build_final(self.common, self.game, self.update, metadata, suffix, player_tags)
+        build_final(self.common, self.game, self.update, metadata, prefix, suffix, player_tags, has_attractor)
     }
 }
 
@@ -410,7 +422,7 @@ pub struct EventBuilderWithFullMetadata {
 
 impl EventBuilderWithFullMetadata {
     pub fn build(self) -> EventuallyEvent {
-        build_final(self.common, self.game, self.update, self.metadata, "", Vec::new())
+        build_final(self.common, self.game, self.update, self.metadata, String::new(), "", Vec::new(), false)
     }
 }
 
@@ -419,8 +431,10 @@ fn build_final(
     game: Option<GameEvent>,
     update: EventBuilderUpdate,
     metadata: EventMetadata,
+    prefix: String,
     suffix: &str,
     additional_player_tags: impl IntoIterator<Item=Uuid>,
+    override_category: bool,
 ) -> EventuallyEvent {
     let team_tags = if update.override_team_tags {
         update.team_tags
@@ -436,10 +450,10 @@ fn build_final(
         id: common.id,
         created: common.created,
         r#type: update.r#type,
-        category: update.category,
+        category: if override_category { EventCategory::Special } else { update.category },
         metadata,
         blurb: "".to_string(),
-        description: update.description + suffix,
+        description: prefix + &update.description + suffix,
         player_tags: update.player_tags.into_iter().chain(additional_player_tags.into_iter()).collect(),
         game_tags: game.as_ref().map_or_else(|| Vec::new(), |g| vec![g.game_id]),
         team_tags,
