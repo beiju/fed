@@ -323,6 +323,7 @@ pub enum EventType {
     PlayerAttributeIncrease = 179,
     PlayerAttributeDecrease = 180,
     EnterCrimeScene = 181,
+    ItemBreaks = 185,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,

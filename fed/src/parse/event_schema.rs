@@ -3161,6 +3161,21 @@ pub enum FedEventData {
         /// Metadata for the event associated with adding the Repeating or Reverberating mod
         sub_event: SubEvent,
     },
+
+    /// Player Roamed at the end of the Season
+    #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
+    Roam {
+        // TODO Document these
+        player_id: Uuid,
+        player_name: String,
+        location: PositionType,
+        previous_team_id: Uuid,
+        previous_team_name: String,
+        new_team_id: Uuid,
+        new_team_name: String,
+    },
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5933,6 +5948,29 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
+            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_name, new_team_id, new_team_name } => {
+                event_builder
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::PlayerMoved,
+                        category: EventCategory::Changes,
+                        description: format!("{player_name} wandered to a new team."),
+                        player_tags: vec![player_id],
+                        team_tags: vec![previous_team_id, new_team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "location": location as i64,
+                        "playerId": player_id,
+                        "playerName": player_name,
+                        "receiveLocation": location as i64,
+                        "receiveTeamId": new_team_id,
+                        "receiveTeamName": new_team_name,
+                        "sendTeamId": previous_team_id,
+                        "sendTeamName": previous_team_name,
+                    }))
+                    .build()
+            }
+
         }
     }
 

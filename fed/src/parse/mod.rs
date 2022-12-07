@@ -1773,6 +1773,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         emptyhanded,
                     })
                 }
+                ParsedPlayerMoved::Roamin(_player_name) => {
+                    make_fed_event(event, FedEventData::Roam {
+                        player_id: get_uuid_metadata(event, "playerId")?,
+                        player_name: get_str_metadata(event, "playerName")?.to_string(),
+                        location: get_int_metadata(event, "location")?
+                            .try_into()
+                            .map_err(|_| FeedParseError::MissingMetadata {
+                                event_type: event.r#type,
+                                field: "receiveLocation",
+                            })?,
+                        previous_team_id: get_uuid_metadata(event, "sendTeamId")?,
+                        previous_team_name: get_str_metadata(event, "sendTeamName")?.to_string(),
+                        new_team_id: get_uuid_metadata(event, "receiveTeamId")?,
+                        new_team_name: get_str_metadata(event, "receiveTeamName")?.to_string(),
+                    })
+                }
             }
         }
         EventType::PlayerBornFromIncineration => { todo!() }
@@ -2115,6 +2131,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 enter_shadows_sub_event: SubEvent::from_event(shadows_event),
             })
         }
+        EventType::ItemBreaks => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

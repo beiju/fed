@@ -1441,15 +1441,14 @@ pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)>
 
 pub(crate) enum ParsedPlayerMoved<'a> {
     ReturnFromInvestigation((&'a str, bool)),
+    Roamin(&'a str),
 }
 
 pub(crate) fn parse_player_moved(input: &str) -> ParserResult<ParsedPlayerMoved> {
-    // alt((
-    //     parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)),
-    // )).parse(input)
-    let (input, r) = parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)).parse(input)?;
-
-    Ok((input, r))
+    alt((
+        parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)),
+        parse_terminated(" wandered to a new team.").map(|n| ParsedPlayerMoved::Roamin(n)),
+    )).parse(input)
 }
 
 pub(crate) fn parse_return_from_investigation(input: &str) -> ParserResult<(&str, bool)> {
