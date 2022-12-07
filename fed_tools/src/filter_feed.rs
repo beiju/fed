@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use serde::Deserialize;
 use serde_json::Value;
 
 fn parse(s: io::Result<String>) -> (String, bool, DateTime<Utc>) {

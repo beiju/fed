@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use chrono::{DateTime, Utc};
+use enum_access::{EnumDisplay, EnumAccess};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -826,11 +827,13 @@ impl Display for GrindRailSuccess {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, HasStructure, EnumAccess, EnumDisplay)]
+#[enum_access(get_some(game = "pub"))]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BeingSpeech {
         /// Which being is speaking
         being: Being,
@@ -840,6 +843,7 @@ pub enum FedEventData {
 
     /// This is always the first event of every game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     LetsGo {
         #[serde(flatten)]
         game: GameEvent,
@@ -853,6 +857,7 @@ pub enum FedEventData {
 
     /// This is always the second of event of every game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayBall {
         #[serde(flatten)]
         game: GameEvent,
@@ -860,6 +865,7 @@ pub enum FedEventData {
 
     /// Marks the start of a half-inning
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     HalfInningStart {
         #[serde(flatten)]
         game: GameEvent,
@@ -876,6 +882,7 @@ pub enum FedEventData {
 
     /// Marks a new batter stepping up to the plate
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BatterUp {
         #[serde(flatten)]
         game: GameEvent,
@@ -900,6 +907,7 @@ pub enum FedEventData {
     /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
     /// of the game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     SuperyummyGameStart {
         #[serde(flatten)]
         game: GameEvent,
@@ -911,6 +919,7 @@ pub enum FedEventData {
     /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
     /// of the game. This event has different metadata when Superyummy is Echoed.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EchoedSuperyummyGameStart {
         #[serde(flatten)]
         game: GameEvent,
@@ -925,6 +934,7 @@ pub enum FedEventData {
 
     /// Ball
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Ball {
         #[serde(flatten)]
         game: GameEvent,
@@ -938,6 +948,7 @@ pub enum FedEventData {
 
     /// Foul Ball
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FoulBall {
         #[serde(flatten)]
         game: GameEvent,
@@ -951,6 +962,7 @@ pub enum FedEventData {
 
     /// Strike, swinging
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeSwinging {
         #[serde(flatten)]
         game: GameEvent,
@@ -964,6 +976,7 @@ pub enum FedEventData {
 
     /// Strike, looking
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeLooking {
         #[serde(flatten)]
         game: GameEvent,
@@ -977,6 +990,7 @@ pub enum FedEventData {
 
     /// Strike, flinching
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeFlinching {
         #[serde(flatten)]
         game: GameEvent,
@@ -991,6 +1005,7 @@ pub enum FedEventData {
 
     /// Flyout
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Flyout {
         #[serde(flatten)]
         game: GameEvent,
@@ -1026,6 +1041,7 @@ pub enum FedEventData {
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
     /// double plays.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     GroundOut {
         #[serde(flatten)]
         game: GameEvent,
@@ -1060,6 +1076,7 @@ pub enum FedEventData {
 
     /// Fielders choice event
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FieldersChoice {
         #[serde(flatten)]
         game: GameEvent,
@@ -1093,6 +1110,7 @@ pub enum FedEventData {
 
     /// Double play event
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     DoublePlay {
         #[serde(flatten)]
         game: GameEvent,
@@ -1114,6 +1132,7 @@ pub enum FedEventData {
 
     /// Hit event (Single, Double, Triple, or Quadruple)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Hit {
         #[serde(flatten)]
         game: GameEvent,
@@ -1146,6 +1165,7 @@ pub enum FedEventData {
 
     /// Home run, including Grand Slam
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     HomeRun {
         #[serde(flatten)]
         game: GameEvent,
@@ -1185,6 +1205,7 @@ pub enum FedEventData {
 
     /// Stolen base
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StolenBase {
         #[serde(flatten)]
         game: GameEvent,
@@ -1213,6 +1234,7 @@ pub enum FedEventData {
 
     /// Caught stealing
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     CaughtStealing {
         #[serde(flatten)]
         game: GameEvent,
@@ -1226,6 +1248,7 @@ pub enum FedEventData {
 
     /// Strikeout swinging
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeoutSwinging {
         #[serde(flatten)]
         game: GameEvent,
@@ -1246,6 +1269,7 @@ pub enum FedEventData {
 
     /// Strikeout looking
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeoutLooking {
         #[serde(flatten)]
         game: GameEvent,
@@ -1266,6 +1290,7 @@ pub enum FedEventData {
 
     /// Player drew a walk
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Walk {
         #[serde(flatten)]
         game: GameEvent,
@@ -1296,6 +1321,7 @@ pub enum FedEventData {
 
     /// Marks the end of the half-inning
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     InningEnd {
         #[serde(flatten)]
         game: GameEvent,
@@ -1309,6 +1335,7 @@ pub enum FedEventData {
 
     /// Player struck out by charming the batter
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     CharmStrikeout {
         #[serde(flatten)]
         game: GameEvent,
@@ -1332,6 +1359,7 @@ pub enum FedEventData {
 
     /// Zapped a strike
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     StrikeZapped {
         #[serde(flatten)]
         game: GameEvent,
@@ -1339,6 +1367,7 @@ pub enum FedEventData {
 
     /// Peanut flavor text messages
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PeanutFlavorText {
         #[serde(flatten)]
         game: GameEvent,
@@ -1348,6 +1377,7 @@ pub enum FedEventData {
     },
 
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     GameEnd {
         #[serde(flatten)]
         game: GameEvent,
@@ -1370,6 +1400,7 @@ pub enum FedEventData {
 
     /// Mild pitch that does not result in a walk
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     MildPitch {
         #[serde(flatten)]
         game: GameEvent,
@@ -1400,6 +1431,7 @@ pub enum FedEventData {
 
     /// Mild pitch that results in a walk
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     MildPitchWalk {
         #[serde(flatten)]
         game: GameEvent,
@@ -1426,6 +1458,7 @@ pub enum FedEventData {
 
     /// Player is Beaned with a Tired or Wired
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     CoffeeBean {
         #[serde(flatten)]
         game: GameEvent,
@@ -1461,6 +1494,7 @@ pub enum FedEventData {
 
     /// Player became magmatic
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BecameMagmatic {
         #[serde(flatten)]
         game: GameEvent,
@@ -1481,6 +1515,7 @@ pub enum FedEventData {
     /// Blooddrain event that results in player gaining the stolen blood (as opposed to using it to
     /// add/remove an out, strike. etc.), whether siphon or not
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Blooddrain {
         #[serde(flatten)]
         game: GameEvent,
@@ -1500,6 +1535,7 @@ pub enum FedEventData {
 
     /// Blooddrain event that results in a special action (add/remove an out, strike, etc.)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     SpecialBlooddrain {
         #[serde(flatten)]
         game: GameEvent,
@@ -1539,6 +1575,7 @@ pub enum FedEventData {
 
     /// Mod expired after set time period (game, week, or season)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerModExpires {
         /// Uuid of the team for the player whose mod(s) expired
         team_id: Uuid,
@@ -1558,6 +1595,7 @@ pub enum FedEventData {
 
     /// Mod expired after set time period (game, week, or season)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamModExpires {
         /// Uuid of the team whose mod(s) expired
         team_id: Uuid,
@@ -1575,6 +1613,7 @@ pub enum FedEventData {
     /// Birds Circle event. This event always has the same text ("The Birds circle ... but they
     /// don't find what they're looking for") and almost no metadata
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BirdsCircle {
         #[serde(flatten)]
         game: GameEvent,
@@ -1583,6 +1622,7 @@ pub enum FedEventData {
     /// Batter is ambushed by crows, leading to an out. This can happen randomly or as a result of
     /// the Friend of Crows mod
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     AmbushedByCrows {
         #[serde(flatten)]
         game: GameEvent,
@@ -1601,6 +1641,7 @@ pub enum FedEventData {
     /// Sun2 set a Win. This version of the event shows up in the Outcomes section and is separate
     /// from the version that shows up in the game log.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Sun2SetWin {
         /// Uuid of team who earned the Win
         team_id: Uuid,
@@ -1612,6 +1653,7 @@ pub enum FedEventData {
     /// Black hole swallowed a win. This version of the event shows up in the Outcomes section and
     /// is separate from the version that shows up in the game log.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BlackHoleSwallowedWin {
         /// Uuid of team whose Win was swallowed
         team_id: Uuid,
@@ -1623,6 +1665,7 @@ pub enum FedEventData {
     /// Sun2 set a Win. This version of the event shows up in the game log and is separate from the
     /// version that shows up in the Outcomes section.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Sun2 {
         #[serde(flatten)]
         game: GameEvent,
@@ -1637,6 +1680,7 @@ pub enum FedEventData {
     /// Black hole swallowed a win. This version of the event shows up in the game log and is
     /// separate from the version that shows up in the Outcomes section.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BlackHole {
         #[serde(flatten)]
         game: GameEvent,
@@ -1650,6 +1694,7 @@ pub enum FedEventData {
 
     /// Team shamed another team
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamDidShame {
         /// Uuid of the team that did the shaming
         shaming_team_id: Uuid,
@@ -1669,6 +1714,7 @@ pub enum FedEventData {
 
     /// Team was shamed
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamWasShamed {
         /// Uuid of the team that was shamed
         shamed_team_id: Uuid,
@@ -1688,6 +1734,7 @@ pub enum FedEventData {
 
     /// Walk as a result of Charm
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     CharmWalk {
         #[serde(flatten)]
         game: GameEvent,
@@ -1711,6 +1758,7 @@ pub enum FedEventData {
 
     /// Player gained a Free Refill
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     GainFreeRefill {
         #[serde(flatten)]
         game: GameEvent,
@@ -1740,6 +1788,7 @@ pub enum FedEventData {
     /// Player suffered an allergic reaction (note: yummy reactions and the Feed never coexisted,
     /// so all peanut reactions in the Feed were allergic)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     AllergicReaction {
         #[serde(flatten)]
         game: GameEvent,
@@ -1765,6 +1814,7 @@ pub enum FedEventData {
 
     /// Player perked up at start of game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PerkUp {
         #[serde(flatten)]
         game: GameEvent,
@@ -1775,6 +1825,7 @@ pub enum FedEventData {
 
     /// Feedback
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Feedback {
         #[serde(flatten)]
         game: GameEvent,
@@ -1792,6 +1843,7 @@ pub enum FedEventData {
 
     /// Reverb bestows the Reverberating mod
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BestowReverberating {
         #[serde(flatten)]
         game: GameEvent,
@@ -1811,6 +1863,7 @@ pub enum FedEventData {
 
     /// Reverb swap
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Reverb {
         #[serde(flatten)]
         game: GameEvent,
@@ -1832,6 +1885,7 @@ pub enum FedEventData {
 
     /// Tarot readings
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TarotReading {
         /// Tarot reading description
         description: String,
@@ -1848,6 +1902,7 @@ pub enum FedEventData {
 
     /// Added a mod as a result of a Tarot reading
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TarotReadingAddedMod {
         /// Uuid of team who gained the mod or team of player who gained the mod
         team_id: Uuid,
@@ -1867,6 +1922,7 @@ pub enum FedEventData {
 
     /// Team entered Party Time!
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamEnteredPartyTime {
         /// Uuid of team who just entered Party Time
         team_id: Uuid,
@@ -1877,6 +1933,7 @@ pub enum FedEventData {
 
     /// Player becomes Triple Threat at start of game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BecomeTripleThreat {
         #[serde(flatten)]
         game: GameEvent,
@@ -1888,6 +1945,7 @@ pub enum FedEventData {
 
     /// Under Over procced
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     UnderOver {
         #[serde(flatten)]
         game: GameEvent,
@@ -1910,6 +1968,7 @@ pub enum FedEventData {
 
     /// Over Under procced
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     OverUnder {
         #[serde(flatten)]
         game: GameEvent,
@@ -1932,6 +1991,7 @@ pub enum FedEventData {
 
     /// Player tastes the infinite and Shells another player
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TasteTheInfinite {
         #[serde(flatten)]
         game: GameEvent,
@@ -1957,6 +2017,7 @@ pub enum FedEventData {
 
     /// Batter skipped event
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BatterSkipped {
         #[serde(flatten)]
         game: GameEvent,
@@ -1970,6 +2031,7 @@ pub enum FedEventData {
 
     /// Feedback failed and initiator was tangled in the feedback
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FeedbackBlocked {
         #[serde(flatten)]
         game: GameEvent,
@@ -2001,6 +2063,7 @@ pub enum FedEventData {
 
     /// Team breaks ground on ballpark and ground is broken
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FlagPlanted {
         /// Uuid of team who broke ground
         team_id: Uuid,
@@ -2027,6 +2090,7 @@ pub enum FedEventData {
 
     /// Emergency Alerty
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EmergencyAlert {
         /// Message of emergency alert
         message: String,
@@ -2037,6 +2101,7 @@ pub enum FedEventData {
 
     /// Team was added to ILB
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamJoinedILB {
         /// Uuid of newly added team
         team_id: Uuid,
@@ -2053,6 +2118,7 @@ pub enum FedEventData {
 
     /// Players swept off base by Flooding
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FloodingSwept {
         #[serde(flatten)]
         game: GameEvent,
@@ -2066,6 +2132,7 @@ pub enum FedEventData {
 
     /// Player returned from Elsewhere
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     ReturnFromElsewhere {
         #[serde(flatten)]
         game: GameEvent,
@@ -2080,6 +2147,7 @@ pub enum FedEventData {
 
     /// Player was incinerated
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Incineration {
         #[serde(flatten)]
         game: GameEvent,
@@ -2113,6 +2181,7 @@ pub enum FedEventData {
     /// Pitcher change event. This happens automatically when something incapacitates the active
     /// pitcher (e.g. the player is shelled by Taste the Infinite)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PitcherChange {
         #[serde(flatten)]
         game: GameEvent,
@@ -2129,6 +2198,7 @@ pub enum FedEventData {
 
     /// Team partied
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Party {
         #[serde(flatten)]
         game: GameEvent,
@@ -2156,6 +2226,7 @@ pub enum FedEventData {
 
     /// Player was hatched from the Field of Eggs
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerHatched {
         /// Uuid of newly hatched player
         player_id: Uuid,
@@ -2166,6 +2237,7 @@ pub enum FedEventData {
 
     /// Team received a postseason birth. I believe this is always preceded by a PlayerHatched event
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PostseasonBirth {
         /// Uuid of team who received the birth
         team_id: Uuid,
@@ -2185,6 +2257,7 @@ pub enum FedEventData {
 
     /// Place of team in the final standings
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FinalStandings {
         /// Uuid of team
         team_id: Uuid,
@@ -2201,6 +2274,7 @@ pub enum FedEventData {
 
     /// Event indicating when a team leaves Party Time because it's been drafted into the postseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamLeftPartyTimeForPostseason {
         /// Uuid of team who left Party Time
         team_id: Uuid,
@@ -2211,6 +2285,7 @@ pub enum FedEventData {
 
     /// Team earned a slot in the postseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EarnedPostseasonSlot {
         /// Uuid of team who earned a slot in the postseason
         team_id: Uuid,
@@ -2221,6 +2296,7 @@ pub enum FedEventData {
 
     /// Team advanced to next round of the postseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PostseasonAdvance {
         /// Uuid of team who advanced in the postseason
         team_id: Uuid,
@@ -2237,6 +2313,7 @@ pub enum FedEventData {
 
     /// Team was eliminated from the postseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PostseasonEliminated {
         /// Uuid of team who was eliminated from the postseason
         team_id: Uuid,
@@ -2250,6 +2327,7 @@ pub enum FedEventData {
 
     /// Player was boosted during election
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerBoosted {
         /// Uuid of team whose player was boosted
         team_id: Uuid,
@@ -2269,6 +2347,7 @@ pub enum FedEventData {
 
     /// Team won the Internet Series
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamWonInternetSeries {
         /// Uuid of team who won the series
         team_id: Uuid,
@@ -2282,6 +2361,7 @@ pub enum FedEventData {
 
     /// Bottom Dwellers team mod procs
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BottomDwellers {
         /// Uuid of team whose bottom dwellers procced
         team_id: Uuid,
@@ -2300,6 +2380,7 @@ pub enum FedEventData {
     /// included as-is. If you have a use-case where thoroughly parsing this event type would be
     /// useful please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     WillReceived {
         /// Uuid of team who received the Will
         team_id: Uuid,
@@ -2315,6 +2396,7 @@ pub enum FedEventData {
     /// included as-is. If you have a use-case where thoroughly parsing this event type would be
     /// useful please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BlessingWon {
         /// Team tags of the Blessing event. This is often the Uuid of the team who won the
         /// blessing, but not always. For example, the Pitching Flotation Bubble has the Uuids of
@@ -2330,6 +2412,7 @@ pub enum FedEventData {
 
     /// Earlbirds mod procs at the beginning of Earlseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EarlbirdsAdded {
         #[serde(flatten)]
         game: GameEvent,
@@ -2348,6 +2431,7 @@ pub enum FedEventData {
     /// as-is. If you have a use-case where thoroughly parsing this event type would be useful
     /// please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     DecreePassed {
         /// Title of Decree that passesd. This may be redundant with the title in `metadata`
         decree_title: String,
@@ -2358,6 +2442,7 @@ pub enum FedEventData {
 
     /// Player was added to ILB
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerJoinedILB {
         /// Uuid of newly added player
         player_id: Uuid,
@@ -2369,6 +2454,7 @@ pub enum FedEventData {
     /// A Returned player was permitted to stay (not called back to the Hall at the end of the
     /// season)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerPermittedToStay {
         /// Uuid of player who was permitted to stay
         player_id: Uuid,
@@ -2379,6 +2465,7 @@ pub enum FedEventData {
 
     /// Umpire tried to incinerate the player, but the player was Fireproof
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     FireproofIncineration {
         #[serde(flatten)]
         game: GameEvent,
@@ -2392,6 +2479,7 @@ pub enum FedEventData {
 
     /// Team's lineup was sorted as a result of gaining Base Dealing
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     LineupSorted {
         /// Uuid of team whose lineup was just sorted
         team_id: Uuid,
@@ -2402,6 +2490,7 @@ pub enum FedEventData {
 
     /// Earlbirds mod is removed at the end of Earlseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EarlbirdsRemoved {
         #[serde(flatten)]
         game: GameEvent,
@@ -2415,6 +2504,7 @@ pub enum FedEventData {
 
     /// Team went Undersea
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Undersea {
         #[serde(flatten)]
         game: GameEvent,
@@ -2431,6 +2521,7 @@ pub enum FedEventData {
 
     /// Renovation was built at a Ballpark
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     RenovationBuilt {
         /// Uuid of team who owns the Ballpark
         team_id: Uuid,
@@ -2454,6 +2545,7 @@ pub enum FedEventData {
 
     /// Late to the Party mod procs at the beginning of Lateseason
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     LateToThePartyAdded {
         #[serde(flatten)]
         game: GameEvent,
@@ -2476,6 +2568,7 @@ pub enum FedEventData {
 
     /// The peanut mister activates and cures a player's peanut allergy
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PeanutMister {
         #[serde(flatten)]
         game: GameEvent,
@@ -2493,6 +2586,7 @@ pub enum FedEventData {
 
     /// Player was named an MVP
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerNamedMvp {
         /// Uuid of team of player who was named an MVP
         team_id: Uuid,
@@ -2510,6 +2604,7 @@ pub enum FedEventData {
 
     /// Late to the Party wore off for the team
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     LateToThePartyRemoved {
         #[serde(flatten)]
         game: GameEvent,
@@ -2520,6 +2615,7 @@ pub enum FedEventData {
 
     /// The birds circle and peck a Shelled player free
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     BirdsUnshell {
         #[serde(flatten)]
         game: GameEvent,
@@ -2543,6 +2639,7 @@ pub enum FedEventData {
     /// A Returned player on this Team was called back to the Hall and replaced by a newly-promoted
     /// player from the Shadows
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     ReplaceReturnedPlayerFromShadows {
         /// Uuid of team whose players were moved around
         team_id: Uuid,
@@ -2571,6 +2668,7 @@ pub enum FedEventData {
 
     /// Player was called back to the Hall at the end of the Season
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerCalledBackToHall {
         /// Uuid of player who was called back to the Hall
         player_id: Uuid,
@@ -2581,6 +2679,7 @@ pub enum FedEventData {
 
     /// Team used their Free Will
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamUsedFreeWill {
         /// Uuid of team who used their Free Will
         team_id: Uuid,
@@ -2591,6 +2690,7 @@ pub enum FedEventData {
 
     /// Player lost a mod
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerLostMod {
         /// Team uuid of player who lost the mod
         team_id: Uuid,
@@ -2610,6 +2710,7 @@ pub enum FedEventData {
 
     /// Investigation progress. This could be parsed further, contributions welcome.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     InvestigationMessage {
         /// Uuid of player doing the investigating
         player_id: Uuid,
@@ -2621,6 +2722,7 @@ pub enum FedEventData {
     /// High Pressure status messages from Season 14. They were removed in the following season,
     /// presumably for occurring too often and cluttering up the Feed.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     HighPressure {
         #[serde(flatten)]
         game: GameEvent,
@@ -2641,6 +2743,7 @@ pub enum FedEventData {
     /// Player was "pulled through the Rift". This was used in the Second Wyatt Masoning and nowhere
     /// else.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerPulledThroughRift {
         /// Uuid of newly added player
         player_id: Uuid,
@@ -2651,6 +2754,7 @@ pub enum FedEventData {
 
     /// Player Localized on to a team. This occurred as part of the Second Wyatt Masoning.
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     PlayerLocalized {
         /// Uuid of team the player localized onto
         team_id: Uuid,
@@ -2670,6 +2774,7 @@ pub enum FedEventData {
 
     /// Player Echoed another player
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Echo {
         #[serde(flatten)]
         game: GameEvent,
@@ -2686,6 +2791,7 @@ pub enum FedEventData {
 
     /// The Solar Panels await at the beginning of a game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     SolarPanelsAwait {
         #[serde(flatten)]
         game: GameEvent,
@@ -2693,6 +2799,7 @@ pub enum FedEventData {
 
     /// Players Echoed into Static
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EchoIntoStatic {
         #[serde(flatten)]
         game: GameEvent,
@@ -2706,6 +2813,7 @@ pub enum FedEventData {
 
     /// Psychoacoustics echoed a mod
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Psychoacoustics {
         #[serde(flatten)]
         game: GameEvent,
@@ -2731,6 +2839,7 @@ pub enum FedEventData {
 
     /// An Echo Echoed a Receiver and turned them into an Echo
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EchoReceiver {
         #[serde(flatten)]
         game: GameEvent,
@@ -2753,6 +2862,7 @@ pub enum FedEventData {
 
     /// Player was attacked by a Consumer
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     ConsumerAttack {
         #[serde(flatten)]
         game: GameEvent,
@@ -2781,6 +2891,7 @@ pub enum FedEventData {
 
     /// Team gained a Free Will
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     TeamGainedFreeWill {
         /// Uuid of team who gained the Free Will
         team_id: Uuid,
@@ -2806,6 +2917,7 @@ pub enum FedEventData {
     /// The event that announces when a Homebody is happy to be home or misses home at the beginning
     /// of the game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     HomebodyGameStart {
         #[serde(flatten)]
         game: GameEvent,
@@ -2816,6 +2928,7 @@ pub enum FedEventData {
 
     /// The Salmon swim upstream
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     SalmonSwim {
         #[serde(flatten)]
         game: GameEvent,
@@ -2829,6 +2942,7 @@ pub enum FedEventData {
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     HitByPitch {
         #[serde(flatten)]
         game: GameEvent,
@@ -2862,6 +2976,7 @@ pub enum FedEventData {
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
     /// team's next game
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     SolarPanelsActivate {
         #[serde(flatten)]
         game: GameEvent,
@@ -2875,6 +2990,7 @@ pub enum FedEventData {
 
     /// (Un)runs are Overflowing from a previous Solar Panels or Event Horizon activation
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     RunsOverflowing {
         #[serde(flatten)]
         game: GameEvent,
@@ -2888,6 +3004,7 @@ pub enum FedEventData {
 
     /// Team gains or loses Middling
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     Middling {
         #[serde(flatten)]
         game: GameEvent,
@@ -2904,6 +3021,7 @@ pub enum FedEventData {
 
     /// Detective enters a Crime Scene
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EnterCrimeScene {
         #[serde(flatten)]
         game: GameEvent,
@@ -2926,6 +3044,7 @@ pub enum FedEventData {
 
     /// Detective returns from an Investigation
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     ReturnFromInvestigation {
         // TODO Document these
         player_id: Uuid,
@@ -2940,6 +3059,7 @@ pub enum FedEventData {
 
     /// Investigation at stadium concluded
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     InvestigationConcluded {
         /// Uuid of the team at whose stadium the investigation was concluded
         team_id: Uuid,
@@ -2950,6 +3070,7 @@ pub enum FedEventData {
 
     /// Player hopped on the Grind Rail
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     GrindRail {
         #[serde(flatten)]
         game: GameEvent,
@@ -2970,6 +3091,7 @@ pub enum FedEventData {
 
     /// Player entered the Secret Base
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EnterSecretBase {
         #[serde(flatten)]
         game: GameEvent,
@@ -2983,6 +3105,7 @@ pub enum FedEventData {
 
     /// Player exits the Secret Base
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     ExitSecretBase {
         #[serde(flatten)]
         game: GameEvent,
@@ -2996,6 +3119,7 @@ pub enum FedEventData {
 
     /// Echo Chamber makes a player temporarily Repeating
     #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     EchoChamber {
         #[serde(flatten)]
         game: GameEvent,
