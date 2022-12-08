@@ -1258,6 +1258,7 @@ pub enum FedEventData {
         batter_id: Uuid,
 
         /// Number of bases the batter got. Single is `1`, double is `2`, etc.
+        /// TODO: Strongly type this
         num_bases: i32,
 
         #[serde(flatten)]
