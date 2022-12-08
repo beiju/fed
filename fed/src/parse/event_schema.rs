@@ -65,49 +65,49 @@ pub struct GameEvent {
 }
 
 
-impl GameEvent {
-    pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
-        let (&game_id, ) = event.game_tags.iter().collect_tuple()
-            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
-
-        // Order is very important here
-        let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
-            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
-
-        Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
-    }
-
-    pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
-        let (&game_id, ) = event.game_tags.iter().collect_tuple()
-            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
-
-        // Order is very important here. Apparently game end events have extra teams?
-        let (&away_team, &home_team, &home_team2, &away_team2) = event.team_tags.iter().collect_tuple()
-            .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
-
-        assert_eq!(away_team, away_team2);
-        assert_eq!(home_team, home_team2);
-
-        Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
-    }
-
-    fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
-        Ok(Self {
-            game_id,
-            home_team,
-            away_team,
-            play: event.metadata.play
-                .ok_or_else(|| {
-                    FeedParseError::MissingMetadata {
-                        event_type: event.r#type,
-                        field: "play",
-                    }
-                })?,
-            unscatter,
-            attractor_secret_base,
-        })
-    }
-}
+// impl GameEvent {
+//     pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
+//         let (&game_id, ) = event.game_tags.iter().collect_tuple()
+//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
+//
+//         // Order is very important here
+//         let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
+//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
+//
+//         Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
+//     }
+//
+//     pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
+//         let (&game_id, ) = event.game_tags.iter().collect_tuple()
+//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
+//
+//         // Order is very important here. Apparently game end events have extra teams?
+//         let (&away_team, &home_team, &home_team2, &away_team2) = event.team_tags.iter().collect_tuple()
+//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
+//
+//         assert_eq!(away_team, away_team2);
+//         assert_eq!(home_team, home_team2);
+//
+//         Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
+//     }
+//
+//     fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
+//         Ok(Self {
+//             game_id,
+//             home_team,
+//             away_team,
+//             play: event.metadata.play
+//                 .ok_or_else(|| {
+//                     FeedParseError::MissingMetadata {
+//                         event_type: event.r#type,
+//                         field: "play",
+//                     }
+//                 })?,
+//             unscatter,
+//             attractor_secret_base,
+//         })
+//     }
+// }
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
@@ -123,16 +123,6 @@ pub struct SubEvent {
 
     /// Number of upshells this event has received
     pub nuts: i32,
-}
-
-impl SubEvent {
-    pub fn from_event(event: &EventuallyEvent) -> Self {
-        Self {
-            id: event.id,
-            created: event.created,
-            nuts: event.nuts,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

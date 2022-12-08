@@ -12,49 +12,8 @@ use crate::EchoChamberModAdded;
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, FedEvent, FedEventData, ModDuration};
 
-type ParserError<'a> = nom::error::VerboseError<&'a str>;
-type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
-
-pub(crate) fn run_parser<'a, F, Out>(description: &'a str, event_type: EventType, parser: F) -> Result<Out, FeedParseError>
-    where F: Fn(&'a str) -> ParserResult<'a, Out> {
-    let (_, output) = terminated(parser, eof).parse(description)
-        .finish()
-        .map_err(|e| FeedParseError::DescriptionParseError {
-            event_type,
-            err: convert_error(description, e),
-        })?;
-
-    Ok(output)
-}
-
-pub(crate) fn parse_fixed_description(event: &EventuallyEvent, expected_description: &'static str, data: FedEventData) -> Result<FedEvent, FeedParseError> {
-    if event.description == expected_description {
-        make_fed_event(event, data)
-    } else {
-        Err(FeedParseError::UnexpectedDescription {
-            event_type: event.r#type,
-            description: event.description.clone(),
-            expected: expected_description.to_string(),
-        })
-    }
-}
-
-pub(crate) fn make_fed_event(feed_event: &EventuallyEvent, data: FedEventData) -> Result<FedEvent, FeedParseError> {
-    Ok(FedEvent {
-        id: feed_event.id,
-        created: feed_event.created,
-        sim: feed_event.sim.clone(),
-        tournament: feed_event.tournament,
-        season: feed_event.season,
-        day: feed_event.day,
-        phase: feed_event.phase.try_into().map_err(|_| FeedParseError::UnknownPhase {
-            phase: feed_event.phase,
-            event_type: feed_event.r#type,
-        })?,
-        nuts: feed_event.nuts,
-        data,
-    })
-}
+pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
+pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
 pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {

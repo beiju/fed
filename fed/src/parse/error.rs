@@ -7,37 +7,30 @@ pub enum FeedParseError {
     #[error(transparent)]
     EventuallyEventJsonParseFailed(#[from] serde_json::Error),
 
-    #[error("Unknown phase {phase} for {event_type:?} event")]
-    UnknownPhase {
-        phase: i32,
-        event_type: EventType
-    },
-
-    #[error("Expected metadata field \"{field}\" for {event_type:?} event")]
-    MissingMetadata {
+    #[error("Parsing {event_type:?} did not parse end of description: {remaining}")]
+    DescriptionNotFullyParsed {
         event_type: EventType,
-        field: &'static str,
+        remaining: String,
     },
 
-    #[error("Unexpected value \"{value}\" in metadata field \"{field}\" for {event_type:?} event")]
-    UnexpectedMetadataValue {
+    #[error("Description parse error for {event_type:?} event: {err}")]
+    DescriptionParseError {
         event_type: EventType,
-        field: &'static str,
-        value: String,
+        err: String,
     },
 
-    #[error("Expected {tag_type} tag(s) for {event_type:?} event")]
-    MissingTags {
+    #[error("Expected at least {expected_at_least} {tag_type} tag(s) for {event_type:?} event")]
+    NotEnoughTags {
         event_type: EventType,
         tag_type: &'static str,
+        expected_at_least: usize,
     },
 
-    #[error("Expected {expected_num} {tag_type} tag(s) for {event_type:?} event but saw {actual_num}")]
-    WrongNumberOfTags {
+    #[error("Expected {expected} {tag_type} tag(s) for {event_type:?} event but found more")]
+    TooManyTags {
         event_type: EventType,
         tag_type: &'static str,
-        expected_num: usize,
-        actual_num: usize,
+        expected: usize,
     },
 
     #[error("Expected equal {tag_type} tag(s) for {event_type:?} event but saw {tag1} and {tag2}")]
@@ -48,53 +41,73 @@ pub enum FeedParseError {
         tag2: Uuid,
     },
 
-    #[error("Expected {expected_num_children} children for {event_type:?} event but got fewer")]
-    MissingChild {
+    #[error("Expected at least {expected_at_least} children for {event_type:?} event")]
+    NotEnoughChildren {
         event_type: EventType,
-        expected_num_children: i32,
+        expected_at_least: usize,
     },
 
-    #[error("Expected {expected_num_children} children for {event_type:?} event but got more")]
-    ExtraChild {
+    #[error("Expected {expected} children {event_type:?} event but found more")]
+    TooManyChildren {
         event_type: EventType,
-        expected_num_children: i32,
+        expected: usize,
+    },
+
+    #[error("Unexpected event type {child_event_type:?} as {child_number}th child of {event_type:?} event")]
+    UnexpectedChildType {
+        event_type: EventType,
+        child_event_type: EventType,
+        child_number: usize,
+    },
+
+    #[error("Expected metadata to be an object for {event_type:?} event")]
+    MetadataWasNotAnObject {
+        event_type: EventType,
+    },
+
+    #[error("Expected metadata field \"{field}\" for {event_type:?} event")]
+    MissingMetadata {
+        event_type: EventType,
+        field: &'static str,
+    },
+
+    #[error("Expected metadata field \"{field}\" for {event_type:?} event to have type {ty}")]
+    MetadataTypeError {
+        event_type: EventType,
+        field: &'static str,
+        ty: &'static str,
+    },
+
+    #[error("Couldn't convert field \"{field}\" for {event_type:?} event to Uuid: {err}")]
+    MetadataStrToUuidError {
+        event_type: EventType,
+        field: &'static str,
+        err: uuid::Error,
+    },
+
+    #[error("Unexpected value \"{value}\" in metadata field \"{field}\" for {event_type:?} event")]
+    UnexpectedMetadataValue {
+        event_type: EventType,
+        field: &'static str,
+        value: String,
+    },
+
+    #[error("Unknown phase {phase} for {event_type:?} event")]
+    UnknownPhase {
+        phase: i32,
+        event_type: EventType
     },
 
     #[error("Unknown being id {0}")]
-    UnknownBeing(i64),
+    UnknownBeing(i32),
 
     #[error("Unknown weather {0}")]
-    UnknownWeather(i64),
+    UnknownWeather(i32),
 
     #[error("Expected location to be one of {expected:?} but it was {actual}")]
     InvalidLocation {
         expected: &'static [i64],
         actual: i64,
-    },
-
-    #[error("Unexpected description for {event_type:?} event: {description} (expected {expected})")]
-    UnexpectedDescription {
-        event_type: EventType,
-        description: String,
-        expected: String,
-    },
-
-    #[error("Description parse error for {event_type:?} event: {err}")]
-    DescriptionParseError {
-        event_type: EventType,
-        err: String,
-    },
-
-    #[error("Unexpected child event {child_event_type:?} for {event_type:?} event")]
-    UnexpectedChildType {
-        event_type: EventType,
-        child_event_type: EventType,
-    },
-
-    #[error("Unexpected child pattern for {event_type:?} event: {err}")]
-    UnexpectedChildPattern {
-        event_type: EventType,
-        err: String,
     },
 }
 
