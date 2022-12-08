@@ -1303,7 +1303,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             })
         }
         EventType::ConsumersAttack => {
-            let (player_name, item_breaks) = run_parser(description, event.r#type, parse_consumer_attack)?;
+            let (player_name, item_breaks, scattered) = run_parser(description, event.r#type, parse_consumer_attack)?;
 
             let (team_id, effect, sensed_something_fishy) = if item_breaks.is_some() {
                 let break_child= get_one_sub_event_from_slice(children, event.r#type)?;
@@ -1341,7 +1341,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 };
 
                 let team_id = get_one_team_id(sub_event)?;
-                (team_id, ConsumerAttackEffect::Hits {
+                (team_id, ConsumerAttackEffect::Chomp {
                     rating_before: get_float_metadata(sub_event, "before")?,
                     rating_after: get_float_metadata(sub_event, "after")?,
                     sub_event: SubEvent::from_event(sub_event),
@@ -1355,6 +1355,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 player_name: player_name.to_string(),
                 effect,
                 sensed_something_fishy,
+                scattered,
             })
         }
         EventType::EchoChamber => {

@@ -849,7 +849,7 @@ impl Display for EchoChamberModAdded {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(tag = "type")]
 pub enum ConsumerAttackEffect {
-    Hits {
+    Chomp {
         /// Player's rating before the attack
         rating_before: f64,
 
@@ -2970,6 +2970,9 @@ pub enum FedEventData {
 
         /// Detective activity, if any
         sensed_something_fishy: Option<DetectiveActivity>,
+
+        /// Whether the player who was attacked was Scattered
+        scattered: bool,
     },
 
     /// Team gained a Free Will
@@ -5652,62 +5655,14 @@ impl FedEvent {
                                           EventType::ModChange))
                     .build()
             }
-            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
-                let child = EventBuilderChild::new(&sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedModFromOtherMod,
-                        category: EventCategory::Changes,
-                        description: format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} at the {team_nickname}."),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": mod_id,
-                        "source": "PSYCHOACOUSTICS",
-                        "type": 3,
-                    }));
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Psychoacoustics,
-                        category: EventCategory::Special,
-                        description: String::new(), // yeah. it's weird
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
-            }
-            FedEventData::EchoReceiver { game, echoer_name, echoee_name, echoee_id, echoee_team_id, sub_event } => {
-                let description = format!("ECHO {echoer_name} ECHO {echoee_name} ECHO");
-                let child = EventBuilderChild::new(&sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::ModChange,
-                        category: EventCategory::Changes,
-                        description: description.clone(),
-                        player_tags: vec![echoee_id],
-                        team_tags: vec![echoee_team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "from": "RECEIVER",
-                        "to": "ECHO",
-                        "type": 0,
-                    }));
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::EchoReciever,
-                        category: EventCategory::Special,
-                        description,
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
-            }
-            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, effect, sensed_something_fishy } => {
-                let mut description = format!("CONSUMERS ATTACK\n{player_name}");
+            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, effect, sensed_something_fishy, scattered } => {
+                let mut description = if scattered {
+                    format!("CONSUMERS ATTACK\nSCATTERED\n{player_name}")
+                } else {
+                    format!("CONSUMERS ATTACK\n{player_name}")
+                };
                 let child = match effect {
-                    ConsumerAttackEffect::Hits { rating_before, rating_after, sub_event } => {
+                    ConsumerAttackEffect::Chomp { rating_before, rating_after, sub_event } => {
                         EventBuilderChild::new(&sub_event)
                             .update(EventBuilderUpdate {
                                 category: EventCategory::Changes,
@@ -5769,6 +5724,58 @@ impl FedEvent {
                     })
                     .child(child)
                     .children(something_fishy_child) // moderate abuse of IntoIter
+                    .build()
+            }
+            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::AddedModFromOtherMod,
+                        category: EventCategory::Changes,
+                        description: format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} at the {team_nickname}."),
+                        team_tags: vec![team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "mod": mod_id,
+                        "source": "PSYCHOACOUSTICS",
+                        "type": 3,
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::Psychoacoustics,
+                        category: EventCategory::Special,
+                        description: String::new(), // yeah. it's weird
+                        ..Default::default()
+                    })
+                    .child(child)
+                    .build()
+            }
+            FedEventData::EchoReceiver { game, echoer_name, echoee_name, echoee_id, echoee_team_id, sub_event } => {
+                let description = format!("ECHO {echoer_name} ECHO {echoee_name} ECHO");
+                let child = EventBuilderChild::new(&sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::ModChange,
+                        category: EventCategory::Changes,
+                        description: description.clone(),
+                        player_tags: vec![echoee_id],
+                        team_tags: vec![echoee_team_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "from": "RECEIVER",
+                        "to": "ECHO",
+                        "type": 0,
+                    }));
+
+                event_builder.for_game(&game)
+                    .fill(EventBuilderUpdate {
+                        r#type: EventType::EchoReciever,
+                        category: EventCategory::Special,
+                        description,
+                        ..Default::default()
+                    })
+                    .child(child)
                     .build()
             }
             FedEventData::TeamGainedFreeWill { team_id, team_nickname } => {
