@@ -35,6 +35,11 @@ const TAROT_EVENTS: [Uuid; 8] = [
     uuid!("9cd56488-5ee2-436e-9196-37a76593cdaf"), // Flowers get After Party
 ];
 
+#[allow(non_snake_case)]
+fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
+    Ok(v)
+}
+
 pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
         parse_single_feed_event(feed_event)
@@ -52,7 +57,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     // This can happen on the majority of events, so I handle it outside
     let unscatter = event.next_child_if_mod_effect(EventType::RemovedMod, "SCATTERED")?.map(|mut child| {
         let player_name = child.next_parse(parse_terminated(" was Unscattered."))?;
-        Ok::<_, FeedParseError>(Unscatter {
+        ParseOk(Unscatter {
             sub_event: child.as_sub_event(),
             team_id: child.next_team_id()?,
             player_id: child.next_player_id()?,
@@ -63,7 +68,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     // Ditto
     let attractor_secret_base = event.next_parse_opt(parse_terminated(" enters the Secret Base...\n"))
         .map(|name| {
-            Ok::<_, FeedParseError>(PlayerInfo {
+            ParseOk(PlayerInfo {
                 player_id: event.next_player_id()?,
                 player_name: name.to_string(),
             })
@@ -124,7 +129,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //             blaserunning,
         //             free_refill: free_refiller.map(|refiller_name| {
         //                 let sub_event = get_one_sub_event(event)?;
-        //                 Ok::<_, FeedParseError>(FreeRefill {
+        //                 ParseOk(FreeRefill {
         //                     sub_event: sub_event.as_sub_event(),
         //                     player_name: refiller_name.to_string(),
         //                     player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
@@ -241,18 +246,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //     }
         // }
         EventType::FlyOut => {
-            let (batter_name, fielder_name, scores, cooled_off, batter_debt) = event.next_parse(parse_flyout)?;
-
             // Order matters
-            let batter_debt = extract_batter_debt(&mut event, batter_debt)?;
-            let cooled_off = extract_cooled_off_event(&mut event, cooled_off)?;
-            let scores = extract_scores(&mut event, scores)?;
+            let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
+            let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
+            let scores = event.parse_scores(" tags up and scores!")?;
+            let cooled_off = event.parse_cooled_off(batter_name)?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
             FedEventData::Flyout {
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
                 fielder_name: fielder_name.to_string(),
                 scores,
-                stopped_inhabiting: get_stopped_inhabiting(&mut event, None)?,
+                stopped_inhabiting,
                 cooled_off,
                 is_special: event.category == EventCategory::Special,
                 batter_debt,
@@ -305,121 +310,57 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //         }
         //     }
         // }
-        // EventType::HomeRun => {
-        //     let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status, big_bucket, attract) =
-        //         event.next_parse(parse_hr)?;
-        //     let mut expected_children = 0;
-        //
-        //     let (children, spicy_status) = extract_spicy_event(children, spicy_status)?;
-        //     if let SpicyStatus::RedHot(_) = spicy_status { expected_children += 1; }
-        //     let (children, magmatic_event) = if is_magmatic {
-        //         expected_children += 1;
-        //         children.split_first()
-        //             .map(|(magmatic_event, children)| {
-        //                 (children, Some(magmatic_event))
-        //             })
-        //             .ok_or_else(move || {
-        //                 FeedParseError::MissingChild {
-        //                     event_type: event.r#type,
-        //                     expected_num_children: expected_children as i32,
-        //                 }
-        //             })?
-        //     } else {
-        //         (children, None)
-        //     };
-        //
-        //     let (children, stopped_inhabiting) = if children.is_empty() {
-        //         (children, None)
-        //     } else if let Some((sub_event, remaining)) = children.split_last() {
-        //         run_parser(&sub_event.description, sub_event.r#type, parse_terminated(" stopped Inhabiting."))
-        //             .map(|name| {
-        //                 Ok::<_, FeedParseError>((remaining, Some(StoppedInhabiting {
-        //                     sub_event: sub_event.as_sub_event(),
-        //                     inhabiting_player_name: name.to_string(),
-        //                     inhabiting_player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //                     inhabiting_player_team_id: if sub_event.team_tags.is_empty() {
-        //                         None
-        //                     } else {
-        //                         Some(sub_event.next_team_id()?)
-        //                     },
-        //                 })))
-        //             })
-        //             .unwrap_or(Ok((children, None)))?
-        //     } else {
-        //         let expected_num_children = children.len() - children.len() + 1;
-        //         Err(FeedParseError::MissingChild {
-        //             event_type: event.r#type,
-        //             expected_num_children: expected_num_children as i32,
-        //         })?
-        //     };
-        //
-        //     let (&batter_id, player_tags) = player_tags.split_first()
-        //         .ok_or_else(move || {
-        //             FeedParseError::WrongNumberOfTags {
-        //                 event_type: event.r#type,
-        //                 tag_type: "player",
-        //                 expected_num: 2,
-        //                 actual_num: player_tags.len(),
-        //             }
-        //         })?;
-        //
-        //     // Guessing at where this goes in the big list of many events
-        //     let (children, player_tags, attraction) = if let Some((team_nickname, player_name)) = attract {
-        //         expected_children += 1;
-        //         let (child, rest_children)  = children.split_first()
-        //             .ok_or_else(move || {
-        //                 FeedParseError::MissingChild {
-        //                     event_type: event.r#type,
-        //                     expected_num_children: expected_children,
-        //                 }
-        //             })?;
-        //
-        //         let (_, player_tags) = player_tags.split_first()
-        //             .ok_or_else(move || {
-        //                 FeedParseError::WrongNumberOfTags {
-        //                     event_type: event.r#type,
-        //                     tag_type: "player",
-        //                     expected_num: 2,
-        //                     actual_num: player_tags.len(),
-        //                 }
-        //             })?;
-        //
-        //         (rest_children, player_tags, Some(Attraction {
-        //             team_nickname: get_str_metadata(child, "teamName")?.to_string(),
-        //             team_id: get_uuid_metadata(child, "teamId")?,
-        //             player_name: get_str_metadata(child, "playerName")?.to_string(),
-        //             player_id: get_uuid_metadata(child, "playerId")?,
-        //             sub_event: child.as_sub_event(),
-        //         }))
-        //     } else {
-        //         (children, player_tags, None)
-        //     };
-        //
-        //
-        //     make_fed_event(event, FedEventData::HomeRun {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         magmatic: magmatic_event.map(|e| {
-        //             Ok::<_, FeedParseError>(ModChangeSubEvent {
-        //                 sub_event: e.as_sub_event(),
-        //                 team_id: e.next_team_id()?,
-        //             })
-        //         }).transpose()?,
-        //         batter_name: batter_name.to_string(),
-        //         batter_id,
-        //         num_runs,
-        //         stopped_inhabiting,
-        //         free_refills: free_refillers.into_iter()
-        //             .map(|refiller_name| {
-        //                 let mut children = children.iter();
-        //                 make_free_refill(event.r#type, &mut children, refiller_name)
-        //             })
-        //             .collect::<Result<_, _>>()?,
-        //         spicy_status,
-        //         is_special: event.category == EventCategory::Special,
-        //         big_bucket,
-        //         attraction,
-        //     })
-        // }
+        EventType::HomeRun => {
+            // In addition to getting a magmatic event, get a player name and id to check against
+            // the batter name and id
+            let magmatic_expanded = event.next_parse(parse_magmatic)?
+                .map(|player_name| {
+                    let mut child = event.next_child(EventType::RemovedMod)?;
+                    let magmatic = ModChangeSubEvent {
+                        sub_event: child.as_sub_event(),
+                        team_id: child.next_team_id()?,
+                    };
+
+                    ParseOk((magmatic, player_name, child.next_player_id()?))
+                })
+                .transpose()?;
+
+            let (batter_name, num_runs) = event.next_parse(parse_hr)?;
+
+            let attraction = event.next_parse(parse_attract_player)?
+                .map(|(team_nickname, player_name)| {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    let mut child = event.next_child(EventType::PlayerAddedToTeam)?;
+                    ParseOk(Attraction {
+                        team_nickname: team_nickname.to_string(),
+                        team_id: child.next_team_id()?,
+                        player_name: player_name.to_string(),
+                        player_id: child.next_player_id()?,
+                        sub_event: child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
+            let big_bucket = event.next_parse(parse_big_bucket)?;
+            let free_refills = event.parse_free_refills()?;
+            let spicy_status = event.parse_spicy_status(batter_name)?;
+
+            FedEventData::HomeRun {
+                game: event.game(unscatter, attractor_secret_base)?,
+                // TODO Verify batter name and id against magmatic
+                magmatic: magmatic_expanded.map(|(m, _, _)| m),
+                batter_name: batter_name.to_string(),
+                batter_id: event.next_player_id()?,
+                num_runs,
+                stopped_inhabiting: None, // TODO
+                free_refills,
+                spicy_status,
+                is_special: event.category == EventCategory::Special,
+                big_bucket,
+                attraction,
+            }
+        }
         // EventType::Hit => {
         //     let (batter_name, num_bases, scores, spicy_status) = event.next_parse(parse_hit)?;
         //     if let Some((&batter_id, scorer_ids)) = player_tags.split_first() {
@@ -496,7 +437,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let inhabiting_player_id = event.next_player_id()?;
                     let inhabited_player_id = event.next_player_id()?;
 
-                    Ok::<_, FeedParseError>(Inhabiting {
+                    ParseOk(Inhabiting {
                         sub_event: child.map(|c| c.as_sub_event()),
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
@@ -740,7 +681,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //
         //     let pitchers = zip_eq(children, names)
         //         .map(|(event, pitcher_name)| {
-        //             Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
+        //             ParseOk(ModChangeSubEventWithNamedPlayer {
         //                 sub_event: event.as_sub_event(),
         //                 team_id: event.next_team_id()?,
         //                 player_id: get_one_player_id(&event.player_tags, event.r#type)?,
@@ -1151,7 +1092,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //         .count();
         //
         //     let effects = parsed_effects.iter()
-        //         .map(|effect| Ok::<_, FeedParseError>(match effect {
+        //         .map(|effect| ParseOk(match effect {
         //             ParsedFloodingEffect::Elsewhere(player_name) => {
         //                 let sub_event = children_iter.next()
         //                     .ok_or_else(|| FeedParseError::MissingChild {
@@ -1525,7 +1466,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //
         //     let homebodies = zip_eq(players, children)
         //         .map(|((player_name, is_overperforming), mod_add_event)| {
-        //             Ok::<_, FeedParseError>(TogglePerforming {
+        //             ParseOk(TogglePerforming {
         //                 player_id: get_one_player_id(&mod_add_event.player_tags, mod_add_event.r#type)?,
         //                 team_id: mod_add_event.next_team_id()?,
         //                 player_name: player_name.to_string(),
@@ -1577,7 +1518,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //             .zip(player_names)
         //             .map(|(mod_add_event, player_name)| {
         //                 assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
-        //                 Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
+        //                 ParseOk(ModChangeSubEventWithNamedPlayer {
         //                     player_name: player_name.to_string(),
         //                     sub_event: mod_add_event.as_sub_event(),
         //                     player_id: get_one_player_id(&mod_add_event.player_tags, mod_add_event.r#type)?,
@@ -2062,7 +2003,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //     let make_echo_into_static = |name: &str, removed_event: &EventuallyEvent, mod_change_event: &EventuallyEvent| {
         //         let nickname = get_str_metadata(removed_event, "teamName")?;
         //         assert!(is_known_team_nickname(nickname));
-        //         Ok::<_, FeedParseError>(EchoIntoStatic {
+        //         ParseOk(EchoIntoStatic {
         //             team_id: get_uuid_metadata(removed_event, "teamId")?,
         //             team_nickname: nickname.to_string(),
         //             player_id: get_uuid_metadata(removed_event, "playerId")?,
@@ -2242,7 +2183,7 @@ fn extract_batter_debt(event: &mut EventParseWrapper, batter_debt: bool) -> Resu
     Ok(if batter_debt {
         let sub_event = event.next_child_if_mod_effect(EventType::AddedMod, "OBSERVED")?
             .map(|mut child| {
-                Ok::<_, FeedParseError>(ModChangeSubEvent {
+                ParseOk(ModChangeSubEvent {
                     team_id: child.next_team_id()?,
                     sub_event: child.as_sub_event(),
                 })
@@ -2350,96 +2291,6 @@ fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Res
 //         get_one_player_id(&player_tags, event_type)
 //     }
 // }
-//
-// fn extract_spicy_event(children: &[EventuallyEvent], spicy_status: ParsedSpicyStatus) -> Result<(&[EventuallyEvent], SpicyStatus), FeedParseError> {
-//     Ok(match spicy_status {
-//         ParsedSpicyStatus::None => { (children, SpicyStatus::None) }
-//         ParsedSpicyStatus::HeatingUp => { (children, SpicyStatus::HeatingUp) }
-//         ParsedSpicyStatus::RedHot => {
-//             // TODO Is the spicy event always the last? first? neither?
-//             if let Some((spicy_event, children)) = children.split_last() {
-//                 if spicy_event.r#type == EventType::AddedMod {
-//                     (children, SpicyStatus::RedHot(Some(ModChangeSubEvent {
-//                         sub_event: spicy_event.as_sub_event(),
-//                         team_id: spicy_event.next_team_id()?,
-//                     })))
-//                 } else {
-//                     (&children, SpicyStatus::RedHot(None))
-//                 }
-//             } else {
-//                 (&children, SpicyStatus::RedHot(None))
-//             }
-//         }
-//     })
-// }
-
-fn extract_cooled_off_event(event: &mut EventParseWrapper, cooled_off: bool) -> Result<Option<ModChangeSubEventWithPlayer>, FeedParseError> {
-    Ok(match cooled_off {
-        false => { None }
-        true => {
-            let mut cooled_off_event = event.next_child(EventType::RemovedMod)?;
-
-            Some(ModChangeSubEventWithPlayer {
-                sub_event: cooled_off_event.as_sub_event(),
-                team_id: cooled_off_event.next_team_id()?,
-                player_id: cooled_off_event.next_player_id()?,
-            })
-        }
-    })
-}
-
-fn extract_scores(event: &mut EventParseWrapper, scores: ParsedScores) -> Result<Scores, FeedParseError> {
-    let scoring_players = scores.scorers.into_iter()
-        .map(|scorer| {
-            Ok::<_, FeedParseError>((event.next_player_id()?, scorer.to_string()))
-        })
-        .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
-
-    let free_refills = scores.refillers.into_iter()
-        .map(|name| {
-            let mut child = event.next_child(EventType::RemovedMod)?;
-            Ok::<_, FeedParseError>(FreeRefill {
-                sub_event: child.as_sub_event(),
-                player_name: name.to_string(),
-                player_id: child.next_player_id()?,
-                team_id: child.next_team_id()?,
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
-
-    let scores = scoring_players.into_iter()
-        .map(|(player_id, player_name)| {
-            Ok::<_, FeedParseError>(ScoringPlayer {
-                player_id,
-                player_name,
-                stopped_inhabiting: get_stopped_inhabiting(event, Some(player_id))?,
-            })
-        })
-        .collect::<Result<_, _>>()?;
-
-    Ok(Scores {
-        scores,
-        free_refills,
-    })
-}
-
-fn get_stopped_inhabiting(event: &mut EventParseWrapper, player_id: Option<Uuid>) -> Result<Option<StoppedInhabiting>, FeedParseError> {
-    event
-        .next_child_if_mod_effect_and(EventType::RemovedMod, "INHABITING", |child| {
-            player_id.is_none() || child.peek_player_id() == player_id
-        })?
-        .map(|mut child| {
-            let name = child.next_parse(parse_stopped_inhabiting)?;
-            Ok::<_, FeedParseError>(StoppedInhabiting {
-                sub_event: child.as_sub_event(),
-                inhabiting_player_name: name.to_string(),
-                inhabiting_player_id: child.next_player_id()?,
-                inhabiting_player_team_id: child.next_team_id_opt(),
-            })
-        })
-        .transpose()
-}
-
 // fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
 //     let child = children.next()
 //         .ok_or_else(|| {

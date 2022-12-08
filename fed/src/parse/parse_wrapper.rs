@@ -3,8 +3,9 @@ use nom::{Finish, Parser};
 use nom::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{FedEvent, FedEventData, FeedParseError, GameEvent, PlayerInfo, SimPhase, SubEvent, Unscatter};
-use crate::parse::parsers::ParserResult;
+use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
+use crate::parse::ParseOk;
+use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -73,7 +74,7 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_parse<F, Out>(&mut self, mut parser: F) -> Result<Out, FeedParseError>
-        where F: Fn(&'e str) -> ParserResult<'e, Out> {
+        where F: Parser<&'e str, Out, ParserError<'e>> {
         let (rest, result) = parser.parse(&self.description)
             .finish()
             .map_err(|e| {
@@ -191,12 +192,12 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_child_if_mod_effect_and<F>(&mut self, expected_type: EventType, expected_mod: &str, pred: F) -> Result<Option<Self>, FeedParseError>
-        where F: Fn(Self) -> bool{
+        where F: Fn(Self) -> bool {
         self.next_child_if_any_mod_effect_and(&[expected_type], expected_mod, pred)
     }
 
     pub fn next_child_if_any_mod_effect_and<F>(&mut self, expected_types: &[EventType], expected_mod: &str, pred: F) -> Result<Option<Self>, FeedParseError>
-        where F: Fn(Self) -> bool{
+        where F: Fn(Self) -> bool {
         self.next_child_if_any(expected_types, |child| {
             expected_types.iter().any(|t| t == &child.event_type) &&
                 child.metadata_str("mod").map_or(false, |m| m == expected_mod) &&
@@ -216,7 +217,7 @@ impl<'e> EventParseWrapper<'e> {
         self.consumed_children_count += 1;
         self.children = rest;
 
-        if !expected_types.iter().any(|t| t == &child.event_type)  {
+        if !expected_types.iter().any(|t| t == &child.event_type) {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
                 child_event_type: child.event_type,
@@ -306,6 +307,118 @@ impl<'e> EventParseWrapper<'e> {
                     err,
                 }
             })
+    }
+
+    pub fn parse_spicy_status(&mut self, batter_name: &str) -> Result<SpicyStatus, FeedParseError> {
+        Ok(match self.next_parse(parse_spicy_status(batter_name))? {
+            ParsedSpicyStatus::None => { SpicyStatus::None }
+            ParsedSpicyStatus::HeatingUp => { SpicyStatus::HeatingUp }
+            ParsedSpicyStatus::RedHot => {
+                let child = self.next_child_if_mod_effect(EventType::AddedMod, "RED_HOT")?
+                    .map(|mut spicy_event| {
+                        ParseOk(ModChangeSubEvent {
+                            sub_event: spicy_event.as_sub_event(),
+                            team_id: spicy_event.next_team_id()?,
+                        })
+                    })
+                    .transpose()?;
+                SpicyStatus::RedHot(child)
+            }
+        })
+    }
+
+    pub fn parse_cooled_off(&mut self, batter_name: &str) -> Result<Option<ModChangeSubEventWithPlayer>, FeedParseError> {
+        Ok(match self.next_parse(parse_cooled_off(batter_name))? {
+            false => { None }
+            true => {
+                let mut cooled_off_event = self.next_child(EventType::RemovedMod)?;
+
+                Some(ModChangeSubEventWithPlayer {
+                    sub_event: cooled_off_event.as_sub_event(),
+                    team_id: cooled_off_event.next_team_id()?,
+                    player_id: cooled_off_event.next_player_id()?,
+                })
+            }
+        })
+    }
+
+    pub fn parse_free_refills(&mut self) -> Result<Vec<FreeRefill>, FeedParseError> {
+        self.next_parse(parse_free_refills)?.into_iter()
+            .map(|name| {
+                let mut child = self.next_child(EventType::RemovedMod)?;
+                ParseOk(FreeRefill {
+                    sub_event: child.as_sub_event(),
+                    player_name: name.to_string(),
+                    player_id: child.next_player_id()?,
+                    team_id: child.next_team_id()?,
+                })
+            })
+            .collect()
+    }
+
+    pub fn parse_batter_debt(&mut self, batter_name: &str, fielder_name: &str) -> Result<Option<BatterDebt>, FeedParseError> {
+        self.next_parse_opt(parse_batter_debt(batter_name, fielder_name))
+            .map(|()| {
+                let sub_event = self.next_child_if_mod_effect(EventType::AddedMod, "OBSERVED")?
+                    .map(|mut child| {
+                        ParseOk(ModChangeSubEvent {
+                            team_id: child.next_team_id()?,
+                            sub_event: child.as_sub_event(),
+                        })
+                    })
+                    .transpose()?;
+
+                ParseOk(BatterDebt {
+                    batter_id: self.next_player_id()?,
+                    fielder_id: self.next_player_id()?,
+                    sub_event,
+                })
+            })
+            .transpose()
+    }
+
+    pub fn parse_stopped_inhabiting(&mut self, player_id: Option<Uuid>) -> Result<Option<StoppedInhabiting>, FeedParseError> {
+        self
+            .next_child_if_mod_effect_and(EventType::RemovedMod, "INHABITING", |child| {
+                player_id.is_none() || child.peek_player_id() == player_id
+            })?
+            .map(|mut child| {
+                let name = child.next_parse(parse_stopped_inhabiting)?;
+                ParseOk(StoppedInhabiting {
+                    sub_event: child.as_sub_event(),
+                    inhabiting_player_name: name.to_string(),
+                    inhabiting_player_id: child.next_player_id()?,
+                    inhabiting_player_team_id: child.next_team_id_opt(),
+                })
+            })
+            .transpose()
+    }
+
+
+    pub fn parse_scores(&mut self, label: &'static str) -> Result<Scores, FeedParseError> {
+        let scores = self.next_parse(parse_scores(label))?;
+        let scoring_players = scores.scorers.into_iter()
+            .map(|scorer| {
+                ParseOk((self.next_player_id()?, scorer.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
+
+        let free_refills = self.parse_free_refills()?;
+
+        let scores = scoring_players.into_iter()
+            .map(|(player_id, player_name)| {
+                ParseOk(ScoringPlayer {
+                    player_id,
+                    player_name,
+                    stopped_inhabiting: self.parse_stopped_inhabiting(Some(player_id))?,
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Scores {
+            scores,
+            free_refills,
+        })
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

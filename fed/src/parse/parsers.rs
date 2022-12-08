@@ -144,18 +144,11 @@ pub(crate) fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str, ParsedScores, bool, bool)> {
+pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
-    // Guessing at where this goes in the order
-    let (input, batter_debt) = opt(parse_batter_debt(batter_name, fielder_name)).parse(input)?;
-
-    let (input, scores) = parse_scores(" tags up and scores!").parse(input)?;
-
-    let (input, cooled_off) = parse_cooled_off(batter_name).parse(input)?;
-
-    Ok((input, (batter_name, fielder_name, scores, cooled_off, batter_debt.is_some())))
+    Ok((input, (batter_name, fielder_name)))
 }
 
 pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
@@ -327,8 +320,11 @@ pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserR
     }
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus, bool, Option<(&str, &str)>)> {
-    let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n")).parse(input)?;
+pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
+    opt(parse_terminated(" is Magmatic!\n")).parse(input)
+}
+
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, num_runs) = alt((
         tag("solo home run!").map(|_| 1),
@@ -337,23 +333,14 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     )).parse(input)?;
 
-    let (input, attract) = opt(parse_attract_player).parse(input)?;
-
-    // Big Buckets is definitely between the home run and the free refill(s)
-    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
-
-    let (input, free_refillers) = many0(parse_free_refill).parse(input)?;
-
-    if let Some(name) = magmatic_player {
-        assert_eq!(name, batter_name);
-    }
-
-    let (input, spicy_status) = parse_spicy_status(batter_name).parse(input)?;
-
-    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status, big_buckets.is_some(), attract)))
+    Ok((input, (batter_name, num_runs)))
 }
 
-pub(crate) fn parse_attract_player(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_attract_player(input: &str) -> ParserResult<Option<(&str, &str)>> {
+    opt(parse_attract_player_inner).parse(input)
+}
+
+pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
     let (input, player_name) = parse_terminated("!").parse(input)?;
@@ -361,6 +348,16 @@ pub(crate) fn parse_attract_player(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (team_nickname, player_name)))
 
 }
+
+pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
+    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
+    Ok((input, big_buckets.is_some()))
+}
+
+pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
+    many0(parse_free_refill).parse(input)
+}
+
 pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
