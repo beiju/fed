@@ -131,9 +131,6 @@ pub struct FreeRefill {
     /// Metadata for the sub-event associated with losing the Free Refill mod
     pub sub_event: SubEvent,
 
-    /// Subplay for the sub-event associated with losing the Free Refill mod
-    pub sub_play: i64,
-
     /// Name of the player who used their Free Refill. This may be the batter, a scoring runner, or
     /// in rare cases, the pitcher.
     pub player_name: String,
@@ -153,23 +150,30 @@ pub struct ScoringPlayer {
 
     /// Player name
     pub player_name: String,
+
+    /// Info about the player who stopped inhabiting by going home on this score, if any, otherwise
+    /// null
+    pub stopped_inhabiting: Option<StoppedInhabiting>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ScoreInfo {
-    /// List of players who scored a Run
-    #[serde(rename = "scores")]
-    pub scoring_players: Vec<ScoringPlayer>,
+pub struct Scores {
+    /// Info for all the scores that happened on this event
+    pub scores: Vec<ScoringPlayer>,
 
-    /// List of players who used a Free Refill
-    pub free_refills: Vec<FreeRefill>,
+    /// List of free refills used on this event, if any. This should always be empty if `scores` is
+    /// empty, but if `scores` is non-empty it may be larger than `scores`.
+    ///
+    /// It's almost possible to attribute each one to the specific score that caused it, but not
+    /// quite because FlyOut events don't have pitcher and batter uuids.
+    pub free_refills: Vec<FreeRefill>
 }
 
-impl ScoreInfo {
+impl Scores {
     pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
         let mut output = String::new();
-        for score in &self.scoring_players {
+        for score in &self.scores {
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
         }
 
@@ -183,7 +187,45 @@ impl ScoreInfo {
     }
 
     pub fn scorer_ids(&self) -> Vec<Uuid> {
-        self.scoring_players.iter()
+        self.scores.iter()
+            .map(|p| p.player_id)
+            .collect()
+    }
+
+    pub fn used_refill(&self) -> bool {
+        !self.free_refills.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Score {
+    /// Info for the score that happened on this event, if any, otherwise null
+    pub score: Option<ScoringPlayer>,
+
+    /// List of free refills used on this event, if any. This should always be empty if `score` is
+    /// null, but if `scores` is non-null it may contain more than one element.
+    pub free_refills: Vec<FreeRefill>
+}
+
+impl Score {
+    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
+        let mut output = String::new();
+        if let Some(score) = &self.score {
+            write!(output, "\n{}{}", score.player_name, score_text).unwrap();
+        }
+
+        write!(output, "{}", text_between).unwrap();
+
+        for refill in &self.free_refills {
+            write!(output, "\n{} used their Free Refill.\n{} Refills the In!", refill.player_name, refill.player_name).unwrap();
+        }
+
+        output
+    }
+
+    pub fn scorer_ids(&self) -> Vec<Uuid> {
+        self.score.iter()
             .map(|p| p.player_id)
             .collect()
     }
@@ -197,7 +239,7 @@ impl ScoreInfo {
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
     /// Metadata for the sub-event associated with adding the Inhabiting modifier. If the player
-    /// already has the Inhabiting modifier, this will be null. (That only happens 14 times in all 
+    /// already has the Inhabiting modifier, this will be null. (That only happens 14 times in all
     /// of Expansion.)
     pub sub_event: Option<SubEvent>,
 
@@ -748,8 +790,8 @@ pub struct BatterDebt {
     /// the batter and fielder are always part of the event.
     pub fielder_id: Uuid,
 
-    /// Metadata for the sub-event associated with adding the Observed/Unstable/etc. mod.
-    /// Unfortunately there is one (1) event where this was not added, so it needs to be optional.
+    /// Metadata for the sub-event associated with adding the Observed/Unstable/etc. mod. If the
+    /// player already had the mod, this will be null.
     pub sub_event: Option<ModChangeSubEvent>,
 }
 
@@ -1089,10 +1131,10 @@ pub enum FedEventData {
         fielder_name: String,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        /// mod, otherwise null. Note that scoring players losing Inhabiting is inside `scores`.
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
@@ -1125,7 +1167,7 @@ pub enum FedEventData {
         fielder_name: String,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1163,7 +1205,7 @@ pub enum FedEventData {
         out_at_base: i32,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1191,7 +1233,7 @@ pub enum FedEventData {
         batter_name: String,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1219,7 +1261,7 @@ pub enum FedEventData {
         num_bases: i32,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1377,7 +1419,7 @@ pub enum FedEventData {
         batter_id: Uuid,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1497,7 +1539,7 @@ pub enum FedEventData {
         runners_advance: bool,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1524,7 +1566,7 @@ pub enum FedEventData {
         batter_name: String,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -1824,7 +1866,7 @@ pub enum FedEventData {
         pitcher_name: String,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -3041,7 +3083,7 @@ pub enum FedEventData {
         sub_event: SubEvent,
 
         #[serde(flatten)]
-        scores: ScoreInfo,
+        scores: Scores,
 
         /// If the player who scored was Inhabiting, contains metadata about the player losing the
         /// Inhabiting mod, otherwise null.

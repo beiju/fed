@@ -6,12 +6,9 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
-use std::str::FromStr;
-use itertools::Itertools;
-use serde::Deserialize;
 use uuid::{Uuid, uuid};
 // the second one is a macro
-use eventually_api::{EventType, EventuallyEvent, Weather};
+use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::event_schema::*;
@@ -53,9 +50,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     let _id_string = event.id.to_string();
 
     // This can happen on the majority of events, so I handle it outside
-    let unscatter = event.next_child_if(EventType::LetsGo, |child| {
-        child.event_type == EventType::RemovedMod && child.metadata_str("mod").map_or(false, |m| m == "SCATTERED")
-    })?.map(|mut child| {
+    let unscatter = event.next_child_if_mod_effect(EventType::RemovedMod, "SCATTERED")?.map(|mut child| {
         let player_name = child.next_parse(parse_terminated(" was Unscattered."))?;
         Ok::<_, FeedParseError>(Unscatter {
             sub_event: child.as_sub_event(),
@@ -161,7 +156,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //                     }
         //                 })?;
         //
-        //             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &children, event.r#type, 0)?;
+        //             let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, &children, event.r#type, 0)?;
         //
         //             make_fed_event(event, FedEventData::Walk {
         //                 game: event.game(unscatter, attractor_secret_base)?,
@@ -190,7 +185,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //                 })?;
         //             assert_eq!(batter_id, charmer_id);
         //
-        //             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_ids, &children, event.r#type, 0)?;
+        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_ids, &children, event.r#type, 0)?;
         //
         //             make_fed_event(event, FedEventData::CharmWalk {
         //                 game: event.game(unscatter, attractor_secret_base)?,
@@ -206,7 +201,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         // EventType::Strikeout => {
         //     match event.next_parse(parse_strikeout)? {
         //         ParsedStrikeout::Swinging(batter_name) => {
-        //             let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
+        //             let (_, stopped_inhabiting) = extract_scores(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
         //             make_fed_event(event, FedEventData::StrikeoutSwinging {
         //                 game: event.game(unscatter, attractor_secret_base)?,
         //                 batter_name: batter_name.to_string(),
@@ -215,7 +210,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //             })
         //         }
         //         ParsedStrikeout::Looking(batter_name) => {
-        //             let (_, stopped_inhabiting) = merge_scores_with_ids(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
+        //             let (_, stopped_inhabiting) = extract_scores(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
         //             make_fed_event(event, FedEventData::StrikeoutLooking {
         //                 game: event.game(unscatter, attractor_secret_base)?,
         //                 batter_name: batter_name.to_string(),
@@ -245,23 +240,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //         }
         //     }
         // }
-        // EventType::FlyOut => {
-        //     let (batter_name, fielder_name, scores, cooled_off, batter_debt) = event.next_parse(parse_flyout)?;
-        //
-        //     let (batter_debt, remaining_player_tags, children) = extract_batter_debt(children, player_tags, event.r#type, batter_debt)?;
-        //     let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
-        //     let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
-        //     make_fed_event(event, FedEventData::Flyout {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         batter_name: batter_name.to_string(),
-        //         fielder_name: fielder_name.to_string(),
-        //         scores,
-        //         stopped_inhabiting,
-        //         cooled_off,
-        //         is_special: event.category == EventCategory::Special,
-        //         batter_debt,
-        //     })
-        // }
+        EventType::FlyOut => {
+            let (batter_name, fielder_name, scores, cooled_off, batter_debt) = event.next_parse(parse_flyout)?;
+
+            // Order matters
+            let batter_debt = extract_batter_debt(&mut event, batter_debt)?;
+            let cooled_off = extract_cooled_off_event(&mut event, cooled_off)?;
+            let scores = extract_scores(&mut event, scores)?;
+            FedEventData::Flyout {
+                game: event.game(unscatter, attractor_secret_base)?,
+                batter_name: batter_name.to_string(),
+                fielder_name: fielder_name.to_string(),
+                scores,
+                stopped_inhabiting: get_stopped_inhabiting(&mut event, None)?,
+                cooled_off,
+                is_special: event.category == EventCategory::Special,
+                batter_debt,
+            }
+        }
         // EventType::GroundOut => {
         //     let (parsed_out, scores, cooled_off) = event.next_parse(parse_ground_out)?;
         //
@@ -272,7 +268,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //     };
         //     let (batter_debt, remaining_player_tags, children) = extract_batter_debt(children, player_tags, event.r#type, has_batter_debt)?;
         //     let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
-        //     let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, remaining_player_tags, score_children, event.r#type, 0)?;
+        //     let (scores, stopped_inhabiting) = extract_scores(scores, remaining_player_tags, score_children, event.r#type, 0)?;
         //     match parsed_out {
         //         ParsedGroundOut::Simple { batter_name, fielder_name, batter_debt: _ } => {
         //             make_fed_event(event, FedEventData::GroundOut {
@@ -443,7 +439,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //         };
         //
         //         let (score_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
-        //         let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, score_children, event.r#type, 1)?;
+        //         let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, score_children, event.r#type, 1)?;
         //
         //         make_fed_event(event, FedEventData::Hit {
         //             game: event.game(unscatter, attractor_secret_base)?,
@@ -481,11 +477,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::BatterUp => {
             let (batter_name, inhabited, team_name, wielding_item, is_repeating) =
                 event.next_parse(parse_batter_up)?;
-        
+
             // I missed `team_name: "Millennials, wielding An Actual Airplane"` once and I don't
             // want something like that to happen again
             assert!(is_known_team_nickname(team_name));
-        
+
             FedEventData::BatterUp {
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
@@ -494,10 +490,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 inhabiting: inhabited.map(|inhabited| {
                     // Haunting doesn't have a sub-event if the player who Haunted already has the
                     // Inhabiting mod
-                    let child = event.next_child_if(EventType::AddedMod, |child| {
-                                                        child.event_type == EventType::AddedMod && child.metadata_str("mod").map_or(false, |m| m == "INHABITING")
-                                                    })?;
-        
+                    let child = event.next_child_if_mod_effect(EventType::AddedMod, "INHABITING")?;
+
                     // These live on the parent
                     let inhabiting_player_id = event.next_player_id()?;
                     let inhabited_player_id = event.next_player_id()?;
@@ -513,41 +507,41 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 is_repeating,
             }
         }
-        // EventType::Strike => {
-        //     let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
-        //     let game = event.game(unscatter, attractor_secret_base)?;
-        //     make_fed_event(event, match strike_type {
-        //         StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes },
-        //         StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes },
-        //         StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes },
-        //     })
-        // }
-        // EventType::Ball => {
-        //     let (balls, strikes) = event.next_parse(parse_ball)?;
-        //     make_fed_event(event, FedEventData::Ball {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         balls,
-        //         strikes,
-        //     })
-        // }
-        // EventType::FoulBall => {
-        //     // Eventually this will need very foul support, but I'll get to that when it comes up
-        //     let (balls, strikes) = event.next_parse(parse_foul_ball)?;
-        //     make_fed_event(event, FedEventData::FoulBall {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         balls,
-        //         strikes,
-        //     })
-        // }
-        // EventType::RunsOverflowing => {
-        //     let (team_nickname, num_runs, unruns) = event.next_parse(parse_runs_overflowing)?;
-        //     make_fed_event(event, FedEventData::RunsOverflowing {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_nickname: team_nickname.to_string(),
-        //         num_runs: if unruns { -num_runs } else { num_runs },
-        //     })
-        // }
-        // EventType::HomeFieldAdvantage => { todo!() }
+        EventType::Strike => {
+            let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
+            let game = event.game(unscatter, attractor_secret_base)?;
+            match strike_type {
+                StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes },
+                StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes },
+                StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes },
+            }
+        }
+        EventType::Ball => {
+            let (balls, strikes) = event.next_parse(parse_ball)?;
+            FedEventData::Ball {
+                game: event.game(unscatter, attractor_secret_base)?,
+                balls,
+                strikes,
+            }
+        }
+        EventType::FoulBall => {
+            // Eventually this will need very foul support, but I'll get to that when it comes up
+            let (balls, strikes) = event.next_parse(parse_foul_ball)?;
+            FedEventData::FoulBall {
+                game: event.game(unscatter, attractor_secret_base)?,
+                balls,
+                strikes,
+            }
+        }
+        EventType::RunsOverflowing => {
+            let (team_nickname, num_runs, unruns) = event.next_parse(parse_runs_overflowing)?;
+            FedEventData::RunsOverflowing {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                num_runs: if unruns { -num_runs } else { num_runs },
+            }
+        }
+        EventType::HomeFieldAdvantage => { todo!() }
         // EventType::HitByPitch => {
         //     let (pitcher_name, batter_name, scores) = event.next_parse(parse_hit_by_pitch)?;
         //     let (hbp_player_ids, scorer_ids) = player_tags.split_at(2);
@@ -556,7 +550,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //     let (hbp_children, score_children) = children.split_at(1);
         //     let sub_event = get_one_sub_event_from_slice(hbp_children, event.r#type)?;
         //
-        //     let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, scorer_ids, &score_children, event.r#type, 0)?;
+        //     let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, &score_children, event.r#type, 0)?;
         //
         //     make_fed_event(event, FedEventData::HitByPitch {
         //         game: event.game(unscatter, attractor_secret_base)?,
@@ -615,7 +609,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //
         //     match pitch_type {
         //         MildPitchType::Ball((balls, strikes)) => {
-        //             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &children, event.r#type, 1)?;
+        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_player_ids, &children, event.r#type, 1)?;
         //
         //             make_fed_event(event, FedEventData::MildPitch {
         //                 game: event.game(unscatter, attractor_secret_base)?,
@@ -636,7 +630,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //                     expected_num: 2,
         //                     actual_num: player_tags.len(),
         //                 })?;
-        //             let (scores, stopped_inhabiting) = merge_scores_with_ids(scores, rest_player_ids, &children, event.r#type, 2)?;
+        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_player_ids, &children, event.r#type, 2)?;
         //
         //             // I don't believe this should be possible
         //             assert!(!runners_advance, "Runners \"advanced on the pathetic play\" on a mild pitch that was also a walk");
@@ -652,15 +646,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         //         }
         //     }
         // }
-        // EventType::InningEnd => {
-        //     let (inning_num, lost_triple_threat_names) = event.next_parse(parse_inning_end)?;
-        //
-        //     make_fed_event(event, FedEventData::InningEnd {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         inning_num,
-        //         lost_triple_threat: zip_mod_change_events(lost_triple_threat_names, children)?,
-        //     })
-        // }
+        EventType::InningEnd => {
+            let (inning_num, lost_triple_threat_names) = event.next_parse(parse_inning_end)?;
+
+            FedEventData::InningEnd {
+                game: event.game(unscatter, attractor_secret_base)?,
+                inning_num,
+                lost_triple_threat: zip_mod_change_events(&mut event, lost_triple_threat_names)?,
+            }
+        }
         EventType::BigDeal => {
             FedEventData::BeingSpeech {
                 being: Being::try_from(event.metadata_i64("being")? as i32)
@@ -668,16 +662,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 message: event.consume_description().to_string(),
             }
         }
-        // EventType::BlackHole => {
-        //     let (scoring_team, victim_team) = event.next_parse(parse_black_hole)?;
-        //     assert!(is_known_team_nickname(scoring_team));
-        //     assert!(is_known_team_nickname(victim_team));
-        //     make_fed_event(event, FedEventData::BlackHole {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         scoring_team_nickname: scoring_team.to_string(),
-        //         victim_team_nickname: victim_team.to_string(),
-        //     })
-        // }
+        EventType::BlackHole => {
+            let (scoring_team, victim_team) = event.next_parse(parse_black_hole)?;
+            assert!(is_known_team_nickname(scoring_team));
+            assert!(is_known_team_nickname(victim_team));
+            FedEventData::BlackHole {
+                game: event.game(unscatter, attractor_secret_base)?,
+                scoring_team_nickname: scoring_team.to_string(),
+                victim_team_nickname: victim_team.to_string(),
+            }
+        }
         // EventType::Sun2 => {
         //     let (scoring_team, rays_player) = event.next_parse(parse_sun2)?;
         //     assert!(is_known_team_nickname(scoring_team));
@@ -2244,43 +2238,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     event.to_fed(data)
 }
 
-// fn extract_batter_debt<'a>(children: &'a [EventuallyEvent], player_tags: &'a [Uuid], event_type: EventType, batter_debt: bool) -> Result<(Option<BatterDebt>, &'a [Uuid], &'a [EventuallyEvent]), FeedParseError> {
-//     if batter_debt {
-//         let (observed_tags, other_tags) = player_tags.split_at(2);
-//         let (batter_id, fielder_id) = observed_tags.iter().collect_tuple()
-//             .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-//                 event_type,
-//                 tag_type: "player",
-//                 expected_num: 2,
-//                 actual_num: player_tags.len(),
-//             })?;
-//
-//         let (sub_event, rest_children) = if children.first().map_or(false, |child| child.r#type == EventType::AddedMod) {
-//             let (child, rest_children) = children.split_first()
-//                 .expect("If there isn't at least one child we shouldn't be in this branch of the if");
-//
-//             let sub_event = ModChangeSubEvent {
-//                 team_id: child.next_team_id()?,
-//                 sub_event: child.as_sub_event(),
-//             };
-//
-//             (Some(sub_event), rest_children)
-//         } else {
-//             (None, children)
-//         };
-//
-//         let batter_debt = BatterDebt {
-//             batter_id: *batter_id,
-//             fielder_id: *fielder_id,
-//             sub_event,
-//         };
-//
-//         Ok((Some(batter_debt), other_tags, rest_children))
-//     } else {
-//         Ok((None, player_tags, children))
-//     }
-// }
-//
+fn extract_batter_debt(event: &mut EventParseWrapper, batter_debt: bool) -> Result<Option<BatterDebt>, FeedParseError> {
+    Ok(if batter_debt {
+        let sub_event = event.next_child_if_mod_effect(EventType::AddedMod, "OBSERVED")?
+            .map(|mut child| {
+                Ok::<_, FeedParseError>(ModChangeSubEvent {
+                    team_id: child.next_team_id()?,
+                    sub_event: child.as_sub_event(),
+                })
+            })
+            .transpose()?;
+
+        Some(BatterDebt {
+            batter_id: event.next_player_id()?,
+            fielder_id: event.next_player_id()?,
+            sub_event,
+        })
+    } else {
+        None
+    })
+}
+
 // fn make_echo(echoer_name: &str, events: &(Option<&EventuallyEvent>, &EventuallyEvent)) -> Result<Echo, FeedParseError> {
 //     let (removed, added) = events;
 //     // I could verify that the IDs all match, but the round-trip test should verify that
@@ -2334,18 +2312,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 //         .collect();
 //     Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
 // }
-//
-// fn zip_mod_change_events(names: Vec<&str>, children: &[EventuallyEvent]) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
-//     names.iter().zip_eq(children)
-//         .map(|(name, sub_event)| Ok(ModChangeSubEventWithNamedPlayer {
-//             sub_event: sub_event.as_sub_event(),
-//             team_id: sub_event.next_team_id()?,
-//             player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-//             player_name: name.to_string(),
-//         }))
-//         .collect::<Result<_, _>>()
-// }
-//
+
+fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
+    names.into_iter()
+        .map(|name| {
+            let mut sub_event = event.next_child(EventType::ModChange)?;
+            Ok(ModChangeSubEventWithNamedPlayer {
+                sub_event: sub_event.as_sub_event(),
+                team_id: sub_event.next_team_id()?,
+                player_id: sub_event.next_player_id()?,
+                player_name: name.to_string(),
+            })
+        })
+        .collect::<Result<_, _>>()
+}
+
 // fn get_one_player_id_advanced(player_tags: &[Uuid], event_type: EventType, has_extra_id: bool) -> Result<Uuid, FeedParseError> {
 //     if has_extra_id {
 //         let (&id1, &id2) = player_tags.iter().collect_tuple()
@@ -2391,125 +2372,74 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 //         }
 //     })
 // }
-//
-// fn extract_cooled_off_event<'e, 't>(event: &'e EventuallyEvent, children: &'e [EventuallyEvent], cooled_off: bool, player_tags: &'t [Uuid]) -> Result<(&'e [EventuallyEvent], Option<ModChangeSubEventWithPlayer>, &'t [Uuid]), FeedParseError> {
-//     Ok(match cooled_off {
-//         false => { (children, None, player_tags) }
-//         true => {
-//             // TODO Is the spicy event always the last? first? neither?
-//             if let Some((cooled_off_event, children)) = children.split_last() {
-//                 // TODO Make this assert into a propagated error
-//                 assert_eq!(cooled_off_event.r#type, EventType::RemovedMod);
-//                 let (&player_id, remaining_tags) = player_tags.split_last()
-//                     .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-//                         event_type: event.r#type,
-//                         tag_type: "player",
-//                         expected_num: 1, // at least
-//                         actual_num: 0,
-//                     })?;
-//
-//                 (children, Some(ModChangeSubEventWithPlayer {
-//                     sub_event: cooled_off_event.as_sub_event(),
-//                     team_id: cooled_off_event.next_team_id()?,
-//                     player_id,
-//                 }), remaining_tags)
-//             } else {
-//                 Err(FeedParseError::MissingChild {
-//                     event_type: event.r#type,
-//                     expected_num_children: 1,  // at least one
-//                 })?
-//             }
-//         }
-//     })
-// }
-//
-// fn merge_scores_with_ids(
-//     scores: ParsedScores,
-//     scorer_ids: &[Uuid],
-//     children: &[EventuallyEvent],
-//     event_type: EventType,
-//     extra_player_tags: usize,
-// ) -> Result<(ScoreInfo, Option<StoppedInhabiting>), FeedParseError> {
-//     let mut children = children.iter();
-//
-//     if scorer_ids.len() != scores.scorers.len() {
-//         return Err(FeedParseError::WrongNumberOfTags {
-//             event_type,
-//             tag_type: "player",
-//             expected_num: scores.scorers.len() + extra_player_tags,
-//             actual_num: scorer_ids.len() + extra_player_tags,
-//         });
-//     }
-//
-//     let scoring_players = scores.scorers.into_iter().zip(scorer_ids)
-//         .map(|(score, &scorer_id)| Ok::<_, FeedParseError>(ScoringPlayer {
-//             player_id: scorer_id,
-//             player_name: score.to_string(),
-//         }))
-//         .collect::<Result<_, _>>()?;
-//
-//
-//     let free_refills = scores.refillers.into_iter()
-//         .map(|name| {
-//             if let Some(event) = children.next() {
-//                 let expected_description = format!("{} used their Free Refill.", name);
-//                 if event.description == expected_description {
-//                     Ok(FreeRefill {
-//                         sub_event: event.as_sub_event(),
-//                         player_name: name.to_string(),
-//                         player_id: get_one_player_id(&event.player_tags, event.r#type)?,
-//                         team_id: event.next_team_id()?,
-//                         sub_play: get_sub_play(event)?,
-//                     })
-//                 } else {
-//                     Err(FeedParseError::UnexpectedDescription {
-//                         event_type,
-//                         description: event.description.clone(),
-//                         expected: expected_description,
-//                     })
-//                 }
-//             } else {
-//                 Err(FeedParseError::MissingChild {
-//                     event_type,
-//                     expected_num_children: -1,
-//                 })
-//             }
-//         })
-//         .collect::<Result<_, _>>()?;
-//
-//     let result = ScoreInfo {
-//         scoring_players,
-//         free_refills,
-//     };
-//
-//     if let Some(extra_child) = children.next() {
-//         if extra_child.r#type == EventType::RemovedMod && extra_child.metadata.other.as_object()
-//             .and_then(|o| o.get("mod"))
-//             .and_then(|m| m.as_str())
-//             .map(|m| m == "INHABITING")
-//             .unwrap_or(false) {
-//             let name = run_parser(&extra_child.description, extra_child.r#type, parse_stopped_inhabiting)?;
-//             Ok((result, Some(StoppedInhabiting {
-//                 sub_event: extra_child.as_sub_event(),
-//                 inhabiting_player_name: name.to_string(),
-//                 inhabiting_player_id: get_one_player_id(&extra_child.player_tags, extra_child.r#type)?,
-//                 inhabiting_player_team_id: if extra_child.team_tags.is_empty() {
-//                     None
-//                 } else {
-//                     Some(extra_child.next_team_id()?)
-//                 },
-//             })))
-//         } else {
-//             Err(FeedParseError::MissingChild {
-//                 event_type,
-//                 expected_num_children: 0,
-//             })
-//         }
-//     } else {
-//         Ok((result, None))
-//     }
-// }
-//
+
+fn extract_cooled_off_event(event: &mut EventParseWrapper, cooled_off: bool) -> Result<Option<ModChangeSubEventWithPlayer>, FeedParseError> {
+    Ok(match cooled_off {
+        false => { None }
+        true => {
+            let mut cooled_off_event = event.next_child(EventType::RemovedMod)?;
+
+            Some(ModChangeSubEventWithPlayer {
+                sub_event: cooled_off_event.as_sub_event(),
+                team_id: cooled_off_event.next_team_id()?,
+                player_id: cooled_off_event.next_player_id()?,
+            })
+        }
+    })
+}
+
+fn extract_scores(event: &mut EventParseWrapper, scores: ParsedScores) -> Result<Scores, FeedParseError> {
+    let scoring_players = scores.scorers.into_iter()
+        .map(|scorer| {
+            Ok::<_, FeedParseError>((event.next_player_id()?, scorer.to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
+
+    let free_refills = scores.refillers.into_iter()
+        .map(|name| {
+            let mut child = event.next_child(EventType::RemovedMod)?;
+            Ok::<_, FeedParseError>(FreeRefill {
+                sub_event: child.as_sub_event(),
+                player_name: name.to_string(),
+                player_id: child.next_player_id()?,
+                team_id: child.next_team_id()?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
+
+    let scores = scoring_players.into_iter()
+        .map(|(player_id, player_name)| {
+            Ok::<_, FeedParseError>(ScoringPlayer {
+                player_id,
+                player_name,
+                stopped_inhabiting: get_stopped_inhabiting(event, Some(player_id))?,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    Ok(Scores {
+        scores,
+        free_refills,
+    })
+}
+
+fn get_stopped_inhabiting(event: &mut EventParseWrapper, player_id: Option<Uuid>) -> Result<Option<StoppedInhabiting>, FeedParseError> {
+    event
+        .next_child_if_mod_effect_and(EventType::RemovedMod, "INHABITING", |child| {
+            player_id.is_none() || child.peek_player_id() == player_id
+        })?
+        .map(|mut child| {
+            let name = child.next_parse(parse_stopped_inhabiting)?;
+            Ok::<_, FeedParseError>(StoppedInhabiting {
+                sub_event: child.as_sub_event(),
+                inhabiting_player_name: name.to_string(),
+                inhabiting_player_id: child.next_player_id()?,
+                inhabiting_player_team_id: child.next_team_id_opt(),
+            })
+        })
+        .transpose()
+}
+
 // fn make_free_refill(event_type: EventType, children: &mut Iter<EventuallyEvent>, refiller_name: &str) -> Result<FreeRefill, FeedParseError> {
 //     let child = children.next()
 //         .ok_or_else(|| {

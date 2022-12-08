@@ -64,7 +64,7 @@ pub struct EventMetadata {
     pub other: Value,
 }
 
-#[derive(Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
+#[derive(Copy, Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
 #[repr(i32)]
 pub enum EventCategory {
     #[default]

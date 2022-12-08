@@ -2,13 +2,14 @@ use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
 use nom::error::convert_error;
 use uuid::Uuid;
-use eventually_api::{EventType, EventuallyEvent};
+use eventually_api::{EventCategory, EventType, EventuallyEvent};
 use crate::{FedEvent, FedEventData, FeedParseError, GameEvent, PlayerInfo, SimPhase, SubEvent, Unscatter};
 use crate::parse::parsers::ParserResult;
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
     pub event_type: EventType,
+    pub category: EventCategory,
     pub id: Uuid,
     pub created: DateTime<Utc>,
     pub sim: &'e str,
@@ -38,6 +39,7 @@ impl<'e> EventParseWrapper<'e> {
     pub fn new(event: &'e EventuallyEvent) -> Result<Self, FeedParseError> {
         Ok(Self {
             event_type: event.r#type,
+            category: event.category,
             id: event.id,
             created: event.created,
             sim: &event.sim,
@@ -112,6 +114,10 @@ impl<'e> EventParseWrapper<'e> {
         Ok(id)
     }
 
+    pub fn peek_player_id(&self) -> Option<Uuid> {
+        self.player_ids.first().copied()
+    }
+
     pub fn next_team_id(&mut self) -> Result<Uuid, FeedParseError> {
         self.consumed_team_id_count += 1;
         let (&id, rest) = self.team_ids.split_first()
@@ -171,6 +177,31 @@ impl<'e> EventParseWrapper<'e> {
     pub fn next_child_if<F>(&mut self, expected_type: EventType, pred: F) -> Result<Option<Self>, FeedParseError>
         where F: Fn(Self) -> bool {
         self.next_child_if_any(&[expected_type], pred)
+    }
+
+    pub fn next_child_if_mod_effect(&mut self, expected_type: EventType, expected_mod: &str) -> Result<Option<Self>, FeedParseError> {
+        self.next_child_if_any_mod_effect(&[expected_type], expected_mod)
+    }
+
+    pub fn next_child_if_any_mod_effect(&mut self, expected_types: &[EventType], expected_mod: &str) -> Result<Option<Self>, FeedParseError> {
+        self.next_child_if_any(expected_types, |child| {
+            expected_types.iter().any(|t| t == &child.event_type) &&
+                child.metadata_str("mod").map_or(false, |m| m == expected_mod)
+        })
+    }
+
+    pub fn next_child_if_mod_effect_and<F>(&mut self, expected_type: EventType, expected_mod: &str, pred: F) -> Result<Option<Self>, FeedParseError>
+        where F: Fn(Self) -> bool{
+        self.next_child_if_any_mod_effect_and(&[expected_type], expected_mod, pred)
+    }
+
+    pub fn next_child_if_any_mod_effect_and<F>(&mut self, expected_types: &[EventType], expected_mod: &str, pred: F) -> Result<Option<Self>, FeedParseError>
+        where F: Fn(Self) -> bool{
+        self.next_child_if_any(expected_types, |child| {
+            expected_types.iter().any(|t| t == &child.event_type) &&
+                child.metadata_str("mod").map_or(false, |m| m == expected_mod) &&
+                pred(child)
+        })
     }
 
     pub fn next_child_if_any<F>(&mut self, expected_types: &[EventType], pred: F) -> Result<Option<Self>, FeedParseError>

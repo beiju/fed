@@ -4,7 +4,7 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use std::fmt::Write;
 
-use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, ScoreInfo, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, Scores, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
     pub id: Uuid,
@@ -130,14 +130,14 @@ pub struct EventBuilderFull<'s, 'i, 'c> {
     pub update: EventBuilderUpdate,
     pub children: Vec<EventBuilderChildFull>,
     pub metadata: serde_json::Value,
-    pub scores: Option<(&'s ScoreInfo, &'static str)>,
+    pub scores: Option<(&'s Scores, &'static str)>,
     pub stopped_inhabiting: Option<&'i StoppedInhabiting>,
     pub spicy_change: SpicyChange<'c>,
 }
 
 
 impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
-    pub fn scores<'s>(self, scores: &'s ScoreInfo, score_text: &'static str) -> EventBuilderFull<'s, 'ti, 'tc> {
+    pub fn scores<'s>(self, scores: &'s Scores, score_text: &'static str) -> EventBuilderFull<'s, 'ti, 'tc> {
         EventBuilderFull {
             common: self.common,
             game: self.game,
