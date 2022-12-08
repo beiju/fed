@@ -1,16 +1,14 @@
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
-use nom::{AsChar, Finish, IResult, Parser};
+use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{eof, fail, map_res, opt, recognize, verify};
-use nom::error::{convert_error};
+use nom::combinator::{fail, map_res, opt, recognize, verify};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
-use eventually_api::{EventType, EventuallyEvent};
+
 use crate::EchoChamberModAdded;
-use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::{ActivePositionType, AttrCategory, FedEvent, FedEventData, ModDuration};
+use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;

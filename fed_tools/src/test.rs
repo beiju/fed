@@ -69,7 +69,8 @@ fn run_test(args: Args) -> anyhow::Result<()> {
 
     let iter = reader.lines()
         .enumerate()
-        .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
+        .map(|args| check_json_line(args));
+        // .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
 
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 

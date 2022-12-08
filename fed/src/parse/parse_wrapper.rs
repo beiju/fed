@@ -126,17 +126,24 @@ impl<'e> EventParseWrapper<'e> {
         Ok(id)
     }
 
-    fn next_game_id(&mut self) -> Result<Uuid, FeedParseError> {
+    pub fn next_team_id_opt(&mut self) -> Option<Uuid> {
+        let (&id, rest) = self.team_ids.split_first()?;
         self.consumed_team_id_count += 1;
-        let (&id, rest) = self.team_ids.split_first()
+        self.team_ids = rest;
+        Some(id)
+    }
+
+    fn next_game_id(&mut self) -> Result<Uuid, FeedParseError> {
+        self.consumed_game_id_count += 1;
+        let (&id, rest) = self.game_ids.split_first()
             .ok_or_else(|| {
                 FeedParseError::NotEnoughTags {
                     event_type: self.event_type,
-                    tag_type: "team",
-                    expected_at_least: self.consumed_team_id_count,
+                    tag_type: "game",
+                    expected_at_least: self.consumed_game_id_count,
                 }
             })?;
-        self.team_ids = rest;
+        self.game_ids = rest;
         Ok(id)
     }
 
@@ -163,6 +170,11 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn next_child_if<F>(&mut self, expected_type: EventType, pred: F) -> Result<Option<Self>, FeedParseError>
         where F: Fn(Self) -> bool {
+        self.next_child_if_any(&[expected_type], pred)
+    }
+
+    pub fn next_child_if_any<F>(&mut self, expected_types: &[EventType], pred: F) -> Result<Option<Self>, FeedParseError>
+        where F: Fn(Self) -> bool {
         let Some((child, rest)) = self.children.split_first() else {
             return Ok(None);
         };
@@ -173,7 +185,7 @@ impl<'e> EventParseWrapper<'e> {
         self.consumed_children_count += 1;
         self.children = rest;
 
-        if child.event_type != expected_type {
+        if !expected_types.iter().any(|t| t == &child.event_type)  {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
                 child_event_type: child.event_type,

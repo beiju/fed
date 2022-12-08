@@ -196,10 +196,9 @@ impl ScoreInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
-    /// Metadata for the sub-event associated with adding the Inhabiting modifier
-    ///
-    /// Exactly 14 times ever, there was no sub-event for it. I have no idea why. For those 14
-    /// events sub_event will be null.
+    /// Metadata for the sub-event associated with adding the Inhabiting modifier. If the player
+    /// already has the Inhabiting modifier, this will be null. (That only happens 14 times in all 
+    /// of Expansion.)
     pub sub_event: Option<SubEvent>,
 
     /// The name of the player who's being inhabited
