@@ -328,27 +328,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
-            let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status, big_bucket) = run_parser(description, event.r#type, parse_hr)?;
-            let (remaining_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
-            let (remaining_children, magmatic_event) = if is_magmatic {
-                let expected_num_children = children.len() - remaining_children.len() + 1;
-                remaining_children.split_first()
-                    .map(|(magmatic_event, remaining_children)| {
-                        (remaining_children, Some(magmatic_event))
+            let (is_magmatic, batter_name, num_runs, free_refillers, spicy_status, big_bucket, attract) =
+                run_parser(description, event.r#type, parse_hr)?;
+            let mut expected_children = 0;
+
+            let (children, spicy_status) = extract_spicy_event(children, spicy_status)?;
+            if let SpicyStatus::RedHot(_) = spicy_status { expected_children += 1; }
+            let (children, magmatic_event) = if is_magmatic {
+                expected_children += 1;
+                children.split_first()
+                    .map(|(magmatic_event, children)| {
+                        (children, Some(magmatic_event))
                     })
                     .ok_or_else(move || {
                         FeedParseError::MissingChild {
                             event_type: event.r#type,
-                            expected_num_children: expected_num_children as i32,
+                            expected_num_children: expected_children as i32,
                         }
                     })?
             } else {
-                (remaining_children, None)
+                (children, None)
             };
 
-            let (remaining_children, stopped_inhabiting) = if remaining_children.is_empty() {
-                (remaining_children, None)
-            } else if let Some((sub_event, remaining)) = remaining_children.split_last() {
+            let (children, stopped_inhabiting) = if children.is_empty() {
+                (children, None)
+            } else if let Some((sub_event, remaining)) = children.split_last() {
                 run_parser(&sub_event.description, sub_event.r#type, parse_terminated(" stopped Inhabiting."))
                     .map(|name| {
                         Ok::<_, FeedParseError>((remaining, Some(StoppedInhabiting {
@@ -362,16 +366,58 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             },
                         })))
                     })
-                    .unwrap_or(Ok((remaining_children, None)))?
+                    .unwrap_or(Ok((children, None)))?
             } else {
-                let expected_num_children = children.len() - remaining_children.len() + 1;
+                let expected_num_children = children.len() - children.len() + 1;
                 Err(FeedParseError::MissingChild {
                     event_type: event.r#type,
                     expected_num_children: expected_num_children as i32,
                 })?
             };
 
-            let batter_id = get_one_player_id_advanced(player_tags, event.r#type, !spicy_status.is_none())?;
+            let (&batter_id, player_tags) = player_tags.split_first()
+                .ok_or_else(move || {
+                    FeedParseError::WrongNumberOfTags {
+                        event_type: event.r#type,
+                        tag_type: "player",
+                        expected_num: 2,
+                        actual_num: player_tags.len(),
+                    }
+                })?;
+
+            // Guessing at where this goes in the big list of many events
+            let (children, player_tags, attraction) = if let Some((team_nickname, player_name)) = attract {
+                expected_children += 1;
+                let (child, rest_children)  = children.split_first()
+                    .ok_or_else(move || {
+                        FeedParseError::MissingChild {
+                            event_type: event.r#type,
+                            expected_num_children: expected_children,
+                        }
+                    })?;
+
+                let (_, player_tags) = player_tags.split_first()
+                    .ok_or_else(move || {
+                        FeedParseError::WrongNumberOfTags {
+                            event_type: event.r#type,
+                            tag_type: "player",
+                            expected_num: 2,
+                            actual_num: player_tags.len(),
+                        }
+                    })?;
+
+                (rest_children, player_tags, Some(Attraction {
+                    team_nickname: get_str_metadata(child, "teamName")?.to_string(),
+                    team_id: get_uuid_metadata(child, "teamId")?,
+                    player_name: get_str_metadata(child, "playerName")?.to_string(),
+                    player_id: get_uuid_metadata(child, "playerId")?,
+                    sub_event: SubEvent::from_event(child),
+                }))
+            } else {
+                (children, player_tags, None)
+            };
+
+
             make_fed_event(event, FedEventData::HomeRun {
                 game: GameEvent::try_from_event(event, unscatter, attractor_secret_base)?,
                 magmatic: magmatic_event.map(|e| {
@@ -386,13 +432,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 stopped_inhabiting,
                 free_refills: free_refillers.into_iter()
                     .map(|refiller_name| {
-                        let mut remaining_children = remaining_children.iter();
-                        make_free_refill(event.r#type, &mut remaining_children, refiller_name)
+                        let mut children = children.iter();
+                        make_free_refill(event.r#type, &mut children, refiller_name)
                     })
                     .collect::<Result<_, _>>()?,
                 spicy_status,
                 is_special: event.category == EventCategory::Special,
                 big_bucket,
+                attraction,
             })
         }
         EventType::Hit => {

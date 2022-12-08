@@ -370,7 +370,7 @@ pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserR
     }
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus, bool)> {
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>, ParsedSpicyStatus, bool, Option<(&str, &str)>)> {
     let (input, magmatic_player) = opt(parse_terminated(" is Magmatic!\n")).parse(input)?;
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, num_runs) = alt((
@@ -379,6 +379,8 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
         tag("3-run home run!").map(|_| 3),
         tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
     )).parse(input)?;
+
+    let (input, attract) = opt(parse_attract_player).parse(input)?;
 
     // Big Buckets is definitely between the home run and the free refill(s)
     let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
@@ -391,9 +393,17 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(bool, &str, i32, Vec<&str>,
 
     let (input, spicy_status) = parse_spicy_status(batter_name).parse(input)?;
 
-    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status, big_buckets.is_some())))
+    Ok((input, (magmatic_player.is_some(), batter_name, num_runs, free_refillers, spicy_status, big_buckets.is_some(), attract)))
 }
 
+pub(crate) fn parse_attract_player(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("\nThe ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
+    let (input, player_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (team_nickname, player_name)))
+
+}
 pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),

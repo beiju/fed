@@ -1,3 +1,4 @@
 - Figure out if the is_special field always designates Wired/Tired/Triple Threat, and if so, make it false when there's
   another reason for the event to be special and rename it to indicate that
 - Figure out and properly taxonify the various "type" integers in the metadata
+- Consume and produce tags, children, and pieces of description one by one

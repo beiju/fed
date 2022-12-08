@@ -834,7 +834,7 @@ impl Display for GrindRailSuccess {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum EchoChamberModAdded {
     Repeating,
-    Reverberating
+    Reverberating,
 }
 
 impl Display for EchoChamberModAdded {
@@ -860,7 +860,7 @@ pub enum ConsumerAttackEffect {
         sub_event: SubEvent,
     },
 
-    DefendedWithItem(ItemDamage)
+    DefendedWithItem(ItemDamage),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -889,6 +889,24 @@ pub struct ItemDamage {
     pub player_rating: f64,
 
     /// Metadata for the event associated with the item being damaged
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Attraction {
+    /// Nickname of team who attracted this player
+    pub team_nickname: String,
+
+    /// Uuid of team who attracted this player
+    pub team_id: Uuid,
+
+    /// Name of player who was attracted
+    pub player_name: String,
+
+    /// Uuid of player who was attracted
+    pub player_id: Uuid,
+
+    /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
 }
 
@@ -1266,6 +1284,9 @@ pub enum FedEventData {
 
         /// True if the ball landed in a Big Bucket and scored an extra Run, false otherwise
         big_bucket: bool,
+
+        /// Info about an Attractor being Attracted, if any. Otherwise null.
+        attraction: Option<Attraction>,
     },
 
     /// Stolen base
@@ -3599,8 +3620,9 @@ impl FedEvent {
                     .spicy(spicy_status, batter_id, batter_name)
                     .build()
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction } => {
                 let mut suffix = String::new();
+                let mut player_tags = vec![batter_id];
                 if big_bucket {
                     write!(suffix, "\nThe ball lands in a Big Bucket. An extra Run scores!").unwrap();
                 }
@@ -3609,27 +3631,48 @@ impl FedEvent {
                            free_refill.player_name, free_refill.player_name).unwrap();
                 }
 
-                let mut children: Vec<_> = free_refills.iter()
+                let attraction_child = attraction.map(|attraction| {
+                    write!(suffix, "\nThe {} Attract {}!", attraction.team_nickname, attraction.player_name).unwrap();
+                    player_tags.push(attraction.player_id);
+                    EventBuilderChild::new(&attraction.sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::PlayerAddedToTeam,
+                            category: EventCategory::Changes,
+                            description: format!("The {} Attracted {}!", attraction.team_nickname, attraction.player_name),
+                            player_tags: vec![attraction.player_id],
+                            team_tags: vec![attraction.team_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "location": 2,
+                            "playerId": attraction.player_id,
+                            "playerName": attraction.player_name,
+                            "teamId": attraction.team_id,
+                            "teamName": attraction.team_nickname,
+                        }))
+                });
+
+                let free_refill_children: Vec<_> = free_refills.iter()
                     .map(make_free_refill_child)
                     .collect();
 
-                if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
-                    children.push(
-                        EventBuilderChild::new(sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::RemovedMod,
-                                category: EventCategory::Changes,
-                                description: format!("{batter_name} hit a Magmatic home run!"),
-                                player_tags: vec![batter_id],
-                                team_tags: vec![*team_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "MAGMATIC",
-                                "type": 0, // ?
-                            }))
-                    );
-                }
+                let magmagic_child = if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
+                    Some(EventBuilderChild::new(sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::RemovedMod,
+                            category: EventCategory::Changes,
+                            description: format!("{batter_name} hit a Magmatic home run!"),
+                            player_tags: vec![batter_id],
+                            team_tags: vec![*team_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "mod": "MAGMATIC",
+                            "type": 0, // ?
+                        })))
+                } else {
+                    None
+                };
 
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
@@ -3645,12 +3688,14 @@ impl FedEvent {
                                                  // TODO Turn this into a Result error
                                                  _ => panic!("Unknown num runs in home run")
                                              }),
-                        player_tags: vec![batter_id],
+                        player_tags,
                         ..Default::default()
                     })
                     .stopped_inhabiting(stopped_inhabiting)
                     .spicy(spicy_status, batter_id, batter_name)
-                    .children(children)
+                    .children(attraction_child)
+                    .children(free_refill_children)
+                    .children(magmagic_child)
                     .build()
             }
             FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, ref batter_debt } => {
@@ -6037,7 +6082,6 @@ impl FedEvent {
                     }))
                     .build()
             }
-
         }
     }
 
