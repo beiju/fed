@@ -276,15 +276,11 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
     Ok((input, name))
 }
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<ParsedScores<'a>> {
+pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<&'a str>> {
     move |input| {
         let (input, scorers) = many0(parse_score(score_label)).parse(input)?;
-        let (input, refillers) = many0(parse_free_refill).parse(input)?;
 
-        Ok((input, ParsedScores {
-            scorers,
-            refillers,
-        }))
+        Ok((input, scorers ))
     }
 }
 

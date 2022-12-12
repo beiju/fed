@@ -167,22 +167,23 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_child_any(&mut self, expected_types: &[EventType]) -> Result<Self, FeedParseError> {
-        self.consumed_children_count += 1;
         let (child, rest) = self.children.split_first()
             .ok_or_else(|| {
                 FeedParseError::NotEnoughChildren {
                     event_type: self.event_type,
-                    expected_at_least: self.consumed_children_count,
+                    expected_at_least: self.consumed_children_count + 1,
                 }
             })?;
-        self.children = rest;
-        if expected_types.iter().any(|&t| child.r#type == t) {
+        if !expected_types.iter().any(|&t| child.r#type == t) {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
                 child_event_type: child.r#type,
                 child_number: self.consumed_children_count,
             });
         }
+
+        self.consumed_children_count += 1;
+        self.children = rest;
 
         Self::new(child)
     }
@@ -197,7 +198,7 @@ impl<'e> EventParseWrapper<'e> {
         };
         self.consumed_children_count += 1;
         self.children = rest;
-        if expected_types.iter().any(|&t| child.r#type == t) {
+        if !expected_types.iter().any(|&t| child.r#type == t) {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
                 child_event_type: child.r#type,
@@ -220,7 +221,9 @@ impl<'e> EventParseWrapper<'e> {
     pub fn next_child_if_any_mod_effect(&mut self, expected_types: &[EventType], expected_mod: &str) -> Result<Option<Self>, FeedParseError> {
         self.next_child_if_any(expected_types, |child| {
             expected_types.iter().any(|t| t == &child.event_type) &&
-                child.metadata_str("mod").map_or(false, |m| m == expected_mod)
+                child.metadata_str("mod").map_or(false, |m| {
+                    m == expected_mod
+                })
         })
     }
 
@@ -247,9 +250,6 @@ impl<'e> EventParseWrapper<'e> {
         let child = Self::new(child)?;
         if !pred(child) { return Ok(None); }
 
-        self.consumed_children_count += 1;
-        self.children = rest;
-
         if !expected_types.iter().any(|t| t == &child.event_type) {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
@@ -257,6 +257,9 @@ impl<'e> EventParseWrapper<'e> {
                 child_number: self.consumed_children_count,
             });
         }
+
+        self.consumed_children_count += 1;
+        self.children = rest;
 
         Ok(Some(child))
     }
@@ -398,7 +401,8 @@ impl<'e> EventParseWrapper<'e> {
             ParsedSpicyStatus::None => { SpicyStatus::None }
             ParsedSpicyStatus::HeatingUp => { SpicyStatus::HeatingUp }
             ParsedSpicyStatus::RedHot => {
-                let child = self.next_child_if_mod_effect(EventType::AddedMod, "RED_HOT")?
+                println!("Red hot!");
+                let child = self.next_child_if_mod_effect(EventType::AddedMod, "ON_FIRE")?
                     .map(|mut spicy_event| {
                         ParseOk(ModChangeSubEvent {
                             sub_event: spicy_event.as_sub_event(),
@@ -503,8 +507,8 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, String)>, FeedParseError> {
-        let scores = self.next_parse(parse_scores(label))?;
-        let scoring_players = scores.scorers.into_iter()
+        let scorers = self.next_parse(parse_scores(label))?;
+        let scoring_players = scorers.into_iter()
             .map(|scorer| {
                 ParseOk((self.next_player_id()?, scorer.to_string()))
             })
@@ -536,32 +540,32 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn to_fed(&self, data: FedEventData) -> Result<FedEvent, FeedParseError> {
-        if !self.description.is_empty() {
-            return Err(FeedParseError::DescriptionNotFullyParsed {
-                event_type: self.event_type,
-                remaining: self.description.to_string(),
-            });
-        }
-        if !self.player_ids.is_empty() {
-            return Err(FeedParseError::TooManyTags {
-                event_type: self.event_type,
-                tag_type: "player",
-                expected: self.consumed_player_id_count,
-            });
-        }
-        if !self.team_ids.is_empty() {
-            return Err(FeedParseError::TooManyTags {
-                event_type: self.event_type,
-                tag_type: "team",
-                expected: self.consumed_team_id_count,
-            });
-        }
-        if !self.children.is_empty() {
-            return Err(FeedParseError::TooManyChildren {
-                event_type: self.event_type,
-                expected: self.consumed_children_count,
-            });
-        }
+        // if !self.description.is_empty() {
+        //     return Err(FeedParseError::DescriptionNotFullyParsed {
+        //         event_type: self.event_type,
+        //         remaining: self.description.to_string(),
+        //     });
+        // }
+        // if !self.player_ids.is_empty() {
+        //     return Err(FeedParseError::TooManyTags {
+        //         event_type: self.event_type,
+        //         tag_type: "player",
+        //         expected: self.consumed_player_id_count,
+        //     });
+        // }
+        // if !self.team_ids.is_empty() {
+        //     return Err(FeedParseError::TooManyTags {
+        //         event_type: self.event_type,
+        //         tag_type: "team",
+        //         expected: self.consumed_team_id_count,
+        //     });
+        // }
+        // if !self.children.is_empty() {
+        //     return Err(FeedParseError::TooManyChildren {
+        //         event_type: self.event_type,
+        //         expected: self.consumed_children_count,
+        //     });
+        // }
         Ok(FedEvent {
             id: self.id,
             created: self.created,

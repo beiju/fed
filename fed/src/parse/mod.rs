@@ -254,7 +254,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
-                    let scoring_players = event.parse_scoring_players(" Scores!")?;
+                    let scoring_players = event.parse_scoring_players(" scores!")?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
                     let scores = event.parse_scores_with_scoring_players(scoring_players)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -271,7 +271,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
-                    let scores = event.parse_scores(" Scores!")?;
+                    let scores = event.parse_scores(" scores!")?;
                     // TODO: Stopped inhabiting should happen separately for the batter and the
                     //   runner who got out
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -322,6 +322,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
+            // TODO There should be able to be multiple of these if multiple ghosts made it home
+            let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
                 // TODO Verify batter name and id against magmatic
@@ -329,7 +332,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_name: batter_name.to_string(),
                 batter_id: event.next_player_id()?,
                 num_runs,
-                stopped_inhabiting: None, // TODO
+                stopped_inhabiting,
                 free_refills,
                 spicy_status,
                 is_special: event.category == EventCategory::Special,
@@ -338,13 +341,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Hit => {
+            println!("Parsing {}", event.description());
             let (batter_name, num_bases) = event.next_parse(parse_hit)?;
-            let scores = event.parse_scores(" Scores!")?;
+            let batter_id = event.next_player_id()?;
+            let scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
-                batter_id: event.next_player_id()?,
+                batter_id,
                 num_bases,
                 scores,
                 spicy_status,
@@ -436,7 +441,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let batter_id = event.next_player_id()?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
-            let scores = event.parse_scores(" Scores!")?;
+            let scores = event.parse_scores(" scores!")?;
 
             FedEventData::HitByPitch {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -655,7 +660,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
                 Some(sub_event.metadata_str("from")?)
             } else {
-                let mod_str = sub_event.metadata_str("to")?;
+                let mod_str = sub_event.metadata_str("mod")?;
                 // Check that the added mod matches what was parsed
                 assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
                 None
@@ -701,21 +706,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::FeedbackSwap => {
             let (player1_name, player2_name, position) = event.next_parse(parse_feedback)?;
-            let mut sub_event = event.next_child(EventType::PlayerTraded)?;
+            let sub_event = event.next_child(EventType::PlayerTraded)?;
 
             macro_rules! get_player_data {
                 ($event:ident, $prefix:literal, $expected_name:ident) => {
                     {
-                        let team_nickname = event.metadata_str(concat!($prefix, "TeamName"))?.to_string();
+                        let team_nickname = sub_event.metadata_str(concat!($prefix, "TeamName"))?.to_string();
                         assert!(is_known_team_nickname(&team_nickname));
-                        let player_name = event.metadata_str(concat!($prefix, "PlayerName"))?.to_string();
+                        let player_name = sub_event.metadata_str(concat!($prefix, "PlayerName"))?.to_string();
                         assert_eq!(player_name, $expected_name);
                         FeedbackPlayerData {
-                            team_id: event.metadata_uuid(concat!($prefix, "TeamId"))?,
+                            team_id: sub_event.metadata_uuid(concat!($prefix, "TeamId"))?,
                             team_nickname,
-                            player_id: event.metadata_uuid(concat!($prefix, "PlayerId"))?,
+                            player_id: sub_event.metadata_uuid(concat!($prefix, "PlayerId"))?,
                             player_name,
-                            location: event.metadata_i64(concat!($prefix, "Location"))?.try_into()?,
+                            location: sub_event.metadata_i64(concat!($prefix, "Location"))?.try_into()?,
                         }
                     }
                 };
@@ -735,7 +740,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::AllergicReaction => {
             let player_name = event.next_parse(parse_allergic_reaction)?;
             let player_id = event.next_player_id()?;
-            let mut sub_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+            let mut sub_event = event.next_child(EventType::PlayerStatDecrease)?;
             assert_eq!(player_id, sub_event.next_player_id()?);
             FedEventData::AllergicReaction {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -840,13 +845,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::BlooddrainSiphon => {
             let (sipper_name, sipped_name, sipped_category, action) = event.next_parse(parse_blooddrain_siphon)?;
-            let sipper_id = event.next_player_id()?;
-            let sipped_id = event.next_player_id()?;
 
             match action {
                 None => {
-                    let mut sipped_event = event.next_child(EventType::PlayerAttributeDecrease)?;
-                    let mut sipper_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+                    let mut sipped_event = event.next_child(EventType::PlayerStatDecrease)?;
+                    let mut sipper_event = event.next_child(EventType::PlayerStatIncrease)?;
+                    let sipper_id = event.next_player_id()?;
+                    let sipped_id = event.next_player_id()?;
 
                     FedEventData::Blooddrain {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -871,7 +876,10 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 Some(action) => {
-                    let mut stat_decrease_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+                    let mut stat_decrease_event = event.next_child(EventType::PlayerStatDecrease)?;
+                    // These are in the opposite order for normal vs special blooddrains! fun!
+                    let sipper_id = event.next_player_id()?;
+                    let sipped_id = event.next_player_id()?;
                     FedEventData::SpecialBlooddrain {
                         game: event.game(unscatter, attractor_secret_base)?,
                         sipper_id,
@@ -899,9 +907,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::Incineration => {
             let (victim_name, replacement_name) = event.next_parse(parse_incineration)?;
             let mut incin_child = event.next_child(EventType::Incineration)?;
-            let mut enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
+            let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
             let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
-            let mut replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
+            let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
 
             let team_nickname = replace_child.metadata_str("teamName")?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1119,7 +1127,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     sub_event: chomp_child.as_sub_event(),
                 })
             };
-            let mut sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
+            let sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
                 .map(|mut fishy_event| {
                     let detective_name = fishy_event.next_parse(parse_terminated(" sensed something fishy."))?;
                     ParseOk(DetectiveActivity {
@@ -1393,7 +1401,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let players = player_names.into_iter()
                 .map(|player_name| {
-                    let mut mod_add_event = event.next_child(EventType::AddedMod)?;
+                    let mut mod_add_event = event.next_child(EventType::AddedModFromOtherMod)?;
                     assert_eq!(format!("{player_name} Perks up."), mod_add_event.description());
                     ParseOk(ModChangeSubEventWithNamedPlayer {
                         player_name: player_name.to_string(),
@@ -1831,7 +1839,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let echoee_mod_change = event.next_child(EventType::ModChange)?;
 
 
-            let make_echo_into_static = |name: &str, mut removed_event: EventParseWrapper, mut mod_change_event: EventParseWrapper| {
+            let make_echo_into_static = |name: &str, removed_event: EventParseWrapper, mod_change_event: EventParseWrapper| {
                 let nickname = removed_event.metadata_str("teamName")?;
                 assert!(is_known_team_nickname(nickname));
                 ParseOk(EchoIntoStatic {
