@@ -1170,7 +1170,7 @@ pub enum FedEventData {
         scores: Scores,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
@@ -1207,8 +1207,8 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        /// If the runner was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
@@ -1263,10 +1263,6 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
@@ -1422,10 +1418,6 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
-
         /// If the batter went to a later base with Base Instincts, this is the base number.
         /// Otherwise null.
         base_instincts: Option<i32>,
@@ -1541,10 +1533,6 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Mild pitch that results in a walk
@@ -1568,10 +1556,6 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Player is Beaned with a Tired or Wired
@@ -1868,10 +1852,6 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Player gained a Free Refill
@@ -3085,10 +3065,6 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores,
-
-        /// If the player who scored was Inhabiting, contains metadata about the player losing the
-        /// Inhabiting mod, otherwise null.
-        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
@@ -3634,7 +3610,7 @@ impl FedEvent {
                     .children(observed_child) // slight abuse of IntoIter
                     .build()
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref stopped_inhabiting, ref spicy_status, is_special } => {
+            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref spicy_status, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Hit,
@@ -3651,7 +3627,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
                     .spicy(spicy_status, batter_id, batter_name)
                     .build()
             }
@@ -3800,7 +3775,7 @@ impl FedEvent {
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
-            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref stopped_inhabiting, ref base_instincts, is_special } => {
+            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref base_instincts, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
                     format!("\nBase Instincts take them directly to {} base!", base_name(*base))
                 } else {
@@ -3816,7 +3791,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
@@ -3918,7 +3892,7 @@ impl FedEvent {
                     .metadata(json!({ "winner": winner_id }))
                     .build()
             }
-            FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores, ref stopped_inhabiting } => {
+            FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores } => {
                 let runners_advance_str = if runners_advance {
                     "\nRunners advance on the pathetic play!"
                 } else {
@@ -3934,7 +3908,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, has_mod, ref sub_event, team_id, ref previous } => {
@@ -4191,7 +4164,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, scores, stopped_inhabiting } => {
+            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, scores } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
@@ -4201,7 +4174,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(&scores, " scores!")
-                    .stopped_inhabiting(&stopped_inhabiting)
                     .build()
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
@@ -4257,7 +4229,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores, ref stopped_inhabiting } => {
+            FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::MildPitch,
@@ -4267,7 +4239,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
             FedEventData::PerkUp { ref game, ref players } => {
@@ -5866,7 +5837,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event, scores, stopped_inhabiting } => {
+            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event, scores } => {
                 let child = EventBuilderChild::new(&sub_event)
                     .update(EventBuilderUpdate {
                         category: EventCategory::Changes,
@@ -5890,7 +5861,6 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(&scores, " scores!")
-                    .stopped_inhabiting(&stopped_inhabiting)
                     .child(child)
                     .build()
             }

@@ -169,11 +169,9 @@ pub(crate) enum ParsedGroundOut<'a> {
     Simple {
         batter_name: &'a str,
         fielder_name: &'a str,
-        batter_debt: bool,
     },
     FieldersChoice {
         runner_out_name: &'a str,
-        batter_name: &'a str,
         base: i32,
     },
     DoublePlay {
@@ -181,60 +179,43 @@ pub(crate) enum ParsedGroundOut<'a> {
     },
 }
 
-pub(crate) fn parse_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
+pub(crate) fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
     alt((parse_simple_ground_out, parse_fielders_choice, parse_double_play)).parse(input)
 }
 
-pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
+pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
-
-    // Guessing at where this goes in the order
-    let (input, batter_debt) = opt(parse_batter_debt(batter_name, fielder_name)).parse(input)?;
-
-    let (input, scores) = parse_scores(" advances on the sacrifice.").parse(input)?;
-
-    let (input, cooled_off) = parse_cooled_off(batter_name).parse(input)?;
 
     let parsed = ParsedGroundOut::Simple {
         batter_name,
         fielder_name,
-        batter_debt: batter_debt.is_some(),
     };
-    Ok((input, (parsed, scores, cooled_off)))
+    Ok((input, (parsed)))
 }
 
-pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
+pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut> {
     let (input, runner_out_name) = parse_terminated(" out at ").parse(input)?;
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.").parse(input)?;
 
-    // Scores and free refills are split by fielder's choice text
-    let (input, scorers) = many0(parse_score(" scores!")).parse(input)?;
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, base })))
+}
 
+pub(crate) fn parse_reaches_on_fielders_choice(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.").parse(input)?;
 
-    let (input, refillers) = many0(parse_free_refill).parse(input)?;
-
-    let (input, cooled_off) = parse_cooled_off(batter_name).parse(input)?;
-
-    let scores = ParsedScores { scorers, refillers };
-
-    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base }, scores, cooled_off)))
+    Ok((input, batter_name))
 }
 
-pub(crate) fn parse_double_play(input: &str) -> ParserResult<(ParsedGroundOut, ParsedScores, bool)> {
+pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
     let (input, batter_name) = parse_terminated(" hit into a double play!").parse(input)?;
 
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    let (input, cooled_off) = parse_cooled_off(batter_name).parse(input)?;
-
-    Ok((input, (ParsedGroundOut::DoublePlay { batter_name }, scores, cooled_off)))
+    Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, ParsedSpicyStatus)> {
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32)> {
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, num_bases) = alt((
         tag("Single!").map(|_| 1),
@@ -243,11 +224,7 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32, ParsedScores, P
         tag("Quadruple!").map(|_| 4),
     )).parse(input)?;
 
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    let (input, spicy_status) = parse_spicy_status(batter_name).parse(input)?;
-
-    Ok((input, (batter_name, num_bases, scores, spicy_status)))
+    Ok((input, (batter_name, num_bases)))
 }
 
 #[derive(PartialEq)]
@@ -427,8 +404,8 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 }
 
 pub(crate) enum ParsedWalk<'s> {
-    Ordinary((&'s str, ParsedScores<'s>, Option<i32>)),
-    Charm((&'s str, &'s str, ParsedScores<'s>)),
+    Ordinary((&'s str, Option<i32>)),
+    Charm((&'s str, &'s str)),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -450,26 +427,22 @@ pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<i32> {
     Ok((input, which))
 }
 
-pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, ParsedScores, Option<i32>)> {
+pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<i32>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.").parse(input)?;
 
     let (input, base_instincts) = opt(parse_base_instincts).parse(input)?;
 
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    Ok((input, (batter_name, scores, base_instincts)))
+    Ok((input, (batter_name, base_instincts)))
 }
 
-pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
+pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
     // This will need to be updated if anyone charms in a run
     let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
     let (input, pitcher_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
     let (input, _) = tag(" walks to first base.").parse(input)?;
 
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    Ok((input, (batter_name, pitcher_name, scores)))
+    Ok((input, (batter_name, pitcher_name)))
 }
 
 pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
@@ -527,7 +500,7 @@ pub(crate) fn parse_mild_pitch_ball(input: &str) -> ParserResult<MildPitchType> 
     Ok((input, MildPitchType::Ball(count)))
 }
 
-pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType, bool, ParsedScores)> {
+pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType)> {
     let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n").parse(input)?;
 
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
@@ -536,13 +509,13 @@ pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType
         parse_terminated(" draws a walk.").map(|name| MildPitchType::Walk(name))
     )).parse(input)?;
 
-    let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!")).parse(input)?;
-
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    Ok((input, (pitcher_name, pitch_type, runners_advance.is_some(), scores)))
+    Ok((input, (pitcher_name, pitch_type)))
 }
 
+pub(crate) fn parse_runners_advance_on_mild_pitch(input: &str) -> ParserResult<bool> {
+    let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!")).parse(input)?;
+    Ok((input, runners_advance.is_some()))
+}
 pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {
     let (input, player_name) = parse_terminated(" is Beaned by a ").parse(input)?;
     let (input, roast) = parse_terminated(" roast with ").parse(input)?;
@@ -916,15 +889,13 @@ pub(crate) enum ParsedFloodingEffect<'a> {
     Ego(&'a str),
 }
 
-pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, Vec<&str>, bool)> {
+pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, bool)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!").parse(input)?;
     let (input, effects) = many0(parse_flooding_swept_effect).parse(input)?;
 
     let (input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
 
-    let (input, refillers) = many0(parse_free_refill).parse(input)?;
-
-    Ok((input, (effects, refillers, flumps.is_some())))
+    Ok((input, (effects, flumps.is_some())))
 }
 
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
@@ -1354,15 +1325,13 @@ pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLo
     Ok((input, ParsedTeamRunsLost { runs, name }))
 }
 
-pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str, ParsedScores)> {
+pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
     let (input, pitcher_name) = parse_terminated(" hits ").parse(input)?;
     let (input, batter_name) = parse_terminated(" with a pitch!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
     let (input, _) = tag(" is now being Observed...").parse(input)?; // I'll deal with murder debt later
 
-    let (input, scores) = parse_scores(" scores!").parse(input)?;
-
-    Ok((input, (pitcher_name, batter_name, scores)))
+    Ok((input, (pitcher_name, batter_name)))
 }
 
 pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(i32, &str)> {

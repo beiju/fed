@@ -6,6 +6,7 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
+use serde::Deserialize;
 use uuid::{Uuid, uuid};
 // the second one is a macro
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
@@ -104,147 +105,117 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batting_team_name: team_name.to_string(),
             }
         }
-        // EventType::PitcherChange => {
-        //     let (victim_name, team_name) = event.next_parse(parse_pitcher_change)?;
-        //
-        //     assert!(is_known_team_nickname(team_name));
-        //
-        //     make_fed_event(event, FedEventData::PitcherChange {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_nickname: team_name.to_string(),
-        //         pitcher_id: get_one_player_id(player_tags, event.r#type)?,
-        //         pitcher_name: victim_name.to_string(),
-        //     })
-        // }
-        // EventType::StolenBase => {
-        //     let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = event.next_parse(parse_stolen_base)?;
-        //     if is_successful {
-        //         let runner_id = get_one_player_id_advanced(player_tags, event.r#type, blaserunning)?;
-        //
-        //         make_fed_event(event, FedEventData::StolenBase {
-        //             game: event.game(unscatter, attractor_secret_base)?,
-        //             runner_name: runner_name.to_string(),
-        //             runner_id,
-        //             base_stolen,
-        //             blaserunning,
-        //             free_refill: free_refiller.map(|refiller_name| {
-        //                 let sub_event = get_one_sub_event(event)?;
-        //                 ParseOk(FreeRefill {
-        //                     sub_event: sub_event.as_sub_event(),
-        //                     player_name: refiller_name.to_string(),
-        //                     player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //                     team_id: sub_event.next_team_id()?,
-        //                     sub_play: get_sub_play(sub_event)?,
-        //                 })
-        //             }).transpose()?,
-        //             is_special: event.category == EventCategory::Special,
-        //         })
-        //     } else {
-        //         make_fed_event(event, FedEventData::CaughtStealing {
-        //             game: event.game(unscatter, attractor_secret_base)?,
-        //             runner_name: runner_name.to_string(),
-        //             base_stolen,
-        //         })
-        //     }
-        // }
-        // EventType::Walk => {
-        //     let parsed_walk = event.next_parse(parse_walk)?;
-        //     match parsed_walk {
-        //         ParsedWalk::Ordinary((batter_name, scores, base_instincts)) => {
-        //             let (&batter_id, scorer_ids) = player_tags.split_first()
-        //                 .ok_or_else(|| {
-        //                     FeedParseError::WrongNumberOfTags {
-        //                         event_type: event.r#type,
-        //                         tag_type: "player",
-        //                         expected_num: 1 + scores.scorers.len(),
-        //                         actual_num: player_tags.len(),
-        //                     }
-        //                 })?;
-        //
-        //             let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, &children, event.r#type, 0)?;
-        //
-        //             make_fed_event(event, FedEventData::Walk {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 batter_id,
-        //                 scores,
-        //                 stopped_inhabiting,
-        //                 base_instincts,
-        //                 is_special: event.category == EventCategory::Special,
-        //             })
-        //         }
-        //         ParsedWalk::Charm((batter_name, pitcher_name, scores)) => {
-        //             let (&batter_id, rest_ids) = player_tags.split_first()
-        //                 .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //                     event_type: event.r#type,
-        //                     tag_type: "player",
-        //                     expected_num: 2,
-        //                     actual_num: player_tags.len(),
-        //                 })?;
-        //             let (&charmer_id, rest_ids) = rest_ids.split_first()
-        //                 .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //                     event_type: event.r#type,
-        //                     tag_type: "player",
-        //                     expected_num: 2,
-        //                     actual_num: player_tags.len(),
-        //                 })?;
-        //             assert_eq!(batter_id, charmer_id);
-        //
-        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_ids, &children, event.r#type, 0)?;
-        //
-        //             make_fed_event(event, FedEventData::CharmWalk {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 batter_id,
-        //                 pitcher_name: pitcher_name.to_string(),
-        //                 scores,
-        //                 stopped_inhabiting,
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::Strikeout => {
-        //     match event.next_parse(parse_strikeout)? {
-        //         ParsedStrikeout::Swinging(batter_name) => {
-        //             let (_, stopped_inhabiting) = extract_scores(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
-        //             make_fed_event(event, FedEventData::StrikeoutSwinging {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 stopped_inhabiting,
-        //                 is_special: event.category == EventCategory::Special,
-        //             })
-        //         }
-        //         ParsedStrikeout::Looking(batter_name) => {
-        //             let (_, stopped_inhabiting) = extract_scores(ParsedScores::empty(), &player_tags, &children, event.r#type, 0)?;
-        //             make_fed_event(event, FedEventData::StrikeoutLooking {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 stopped_inhabiting,
-        //                 is_special: event.category == EventCategory::Special,
-        //             })
-        //         }
-        //         ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
-        //             if let Some((&charmer_id, &charmer_id_2, &charmed_id)) = player_tags.iter().collect_tuple() {
-        //                 assert_eq!(charmer_id, charmer_id_2);
-        //                 make_fed_event(event, FedEventData::CharmStrikeout {
-        //                     game: event.game(unscatter, attractor_secret_base)?,
-        //                     charmer_id,
-        //                     charmer_name: charmer_name.to_string(),
-        //                     charmed_id,
-        //                     charmed_name: charmed_name.to_string(),
-        //                     num_swings,
-        //                 })
-        //             } else {
-        //                 Err(FeedParseError::WrongNumberOfTags {
-        //                     event_type: EventType::Strikeout,
-        //                     tag_type: "players",
-        //                     expected_num: 3,
-        //                     actual_num: player_tags.len(),
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
+        EventType::PitcherChange => {
+            let (victim_name, team_name) = event.next_parse(parse_pitcher_change)?;
+
+            assert!(is_known_team_nickname(team_name));
+
+            FedEventData::PitcherChange {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_name.to_string(),
+                pitcher_id: event.next_player_id()?,
+                pitcher_name: victim_name.to_string(),
+            }
+        }
+        EventType::StolenBase => {
+            let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = event.next_parse(parse_stolen_base)?;
+            if is_successful {
+                let runner_id = event.next_player_id()?;
+
+                FedEventData::StolenBase {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    runner_name: runner_name.to_string(),
+                    runner_id,
+                    base_stolen,
+                    blaserunning,
+                    free_refill: free_refiller.map(|refiller_name| {
+                        let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                        ParseOk(FreeRefill {
+                            sub_event: sub_event.as_sub_event(),
+                            player_name: refiller_name.to_string(),
+                            player_id: sub_event.next_player_id()?,
+                            team_id: sub_event.next_team_id()?,
+                        })
+                    }).transpose()?,
+                    is_special: event.category == EventCategory::Special,
+                }
+            } else {
+                FedEventData::CaughtStealing {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    runner_name: runner_name.to_string(),
+                    base_stolen,
+                }
+            }
+        }
+        EventType::Walk => {
+            let parsed_walk = event.next_parse(parse_walk)?;
+            match parsed_walk {
+                ParsedWalk::Ordinary((batter_name, base_instincts)) => {
+                    let batter_id = event.next_player_id()?;
+                    let scores = event.parse_scores(" scores!")?;
+
+                    FedEventData::Walk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        batter_id,
+                        scores,
+                        base_instincts,
+                        is_special: event.category == EventCategory::Special,
+                    }
+                }
+                ParsedWalk::Charm((batter_name, pitcher_name)) => {
+                    let batter_id = event.next_player_id()?;
+                    let charmer_id = event.next_player_id()?;
+                    assert_eq!(batter_id, charmer_id);
+
+                    let scores = event.parse_scores(" scores!")?;
+
+                    FedEventData::CharmWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        batter_id,
+                        pitcher_name: pitcher_name.to_string(),
+                        scores,
+                    }
+                }
+            }
+        }
+        EventType::Strikeout => {
+            match event.next_parse(parse_strikeout)? {
+                ParsedStrikeout::Swinging(batter_name) => {
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    FedEventData::StrikeoutSwinging {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        stopped_inhabiting,
+                        is_special: event.category == EventCategory::Special,
+                    }
+                }
+                ParsedStrikeout::Looking(batter_name) => {
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    FedEventData::StrikeoutLooking {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        stopped_inhabiting,
+                        is_special: event.category == EventCategory::Special,
+                    }
+                }
+                ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
+                    let charmer_id = event.next_player_id()?;
+                    let charmer_id_2 = event.next_player_id()?;
+                    let charmed_id = event.next_player_id()?;
+                    assert_eq!(charmer_id, charmer_id_2);
+                    FedEventData::CharmStrikeout {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        charmer_id,
+                        charmer_name: charmer_name.to_string(),
+                        charmed_id,
+                        charmed_name: charmed_name.to_string(),
+                        num_swings,
+                    }
+                }
+            }
+        }
         EventType::FlyOut => {
             // Order matters
             let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
@@ -263,53 +234,58 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 batter_debt,
             }
         }
-        // EventType::GroundOut => {
-        //     let (parsed_out, scores, cooled_off) = event.next_parse(parse_ground_out)?;
-        //
-        //     let has_batter_debt = if let ParsedGroundOut::Simple { batter_debt, .. } = parsed_out {
-        //         batter_debt
-        //     } else {
-        //         false
-        //     };
-        //     let (batter_debt, remaining_player_tags, children) = extract_batter_debt(children, player_tags, event.r#type, has_batter_debt)?;
-        //     let (score_children, cooled_off, remaining_player_tags) = extract_cooled_off_event(event, children, cooled_off, remaining_player_tags)?;
-        //     let (scores, stopped_inhabiting) = extract_scores(scores, remaining_player_tags, score_children, event.r#type, 0)?;
-        //     match parsed_out {
-        //         ParsedGroundOut::Simple { batter_name, fielder_name, batter_debt: _ } => {
-        //             make_fed_event(event, FedEventData::GroundOut {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 fielder_name: fielder_name.to_string(),
-        //                 scores,
-        //                 stopped_inhabiting,
-        //                 cooled_off,
-        //                 is_special: event.category == EventCategory::Special,
-        //                 batter_debt,
-        //             })
-        //         }
-        //         ParsedGroundOut::FieldersChoice { runner_out_name, batter_name, base } => {
-        //             make_fed_event(event, FedEventData::FieldersChoice {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 runner_out_name: runner_out_name.to_string(),
-        //                 batter_name: batter_name.to_string(),
-        //                 out_at_base: base,
-        //                 scores,
-        //                 stopped_inhabiting,
-        //                 cooled_off,
-        //                 is_special: event.category == EventCategory::Special,
-        //             })
-        //         }
-        //         ParsedGroundOut::DoublePlay { batter_name } => {
-        //             make_fed_event(event, FedEventData::DoublePlay {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 batter_name: batter_name.to_string(),
-        //                 scores,
-        //                 stopped_inhabiting,
-        //                 cooled_off,
-        //             })
-        //         }
-        //     }
-        // }
+        EventType::GroundOut => {
+            match event.next_parse(parse_ground_out)? {
+                ParsedGroundOut::Simple { batter_name, fielder_name } => {
+                    let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
+                    let scores = event.parse_scores(" advances on the sacrifice.")?;
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let cooled_off = event.parse_cooled_off(batter_name)?;
+                    FedEventData::GroundOut {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        fielder_name: fielder_name.to_string(),
+                        scores,
+                        stopped_inhabiting,
+                        cooled_off,
+                        is_special: event.category == EventCategory::Special,
+                        batter_debt,
+                    }
+                }
+                ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
+                    // Breaking up the call to insert "reaches on fielders choice" in the middle
+                    let scoring_players = event.parse_scoring_players(" Scores!")?;
+                    let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players)?;
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let cooled_off = event.parse_cooled_off(batter_name)?;
+                    FedEventData::FieldersChoice {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        runner_out_name: runner_out_name.to_string(),
+                        batter_name: batter_name.to_string(),
+                        out_at_base: base,
+                        scores,
+                        stopped_inhabiting,
+                        cooled_off,
+                        is_special: event.category == EventCategory::Special,
+                    }
+                }
+                ParsedGroundOut::DoublePlay { batter_name } => {
+                    let scores = event.parse_scores(" Scores!")?;
+                    // TODO: Stopped inhabiting should happen separately for the batter and the
+                    //   runner who got out
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let cooled_off = event.parse_cooled_off(batter_name)?;
+                    FedEventData::DoublePlay {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_name: batter_name.to_string(),
+                        scores,
+                        stopped_inhabiting,
+                        cooled_off,
+                    }
+                }
+            }
+        }
         EventType::HomeRun => {
             // In addition to getting a magmatic event, get a player name and id to check against
             // the batter name and id
@@ -361,60 +337,31 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 attraction,
             }
         }
-        // EventType::Hit => {
-        //     let (batter_name, num_bases, scores, spicy_status) = event.next_parse(parse_hit)?;
-        //     if let Some((&batter_id, scorer_ids)) = player_tags.split_first() {
-        //         let scorer_ids = if spicy_status != ParsedSpicyStatus::None {
-        //             scorer_ids.split_last()
-        //                 .ok_or_else(|| {
-        //                     FeedParseError::WrongNumberOfTags {
-        //                         event_type: event.r#type,
-        //                         tag_type: "player",
-        //                         expected_num: scores.scorers.len() + 2, // i think
-        //                         actual_num: scorer_ids.len(),
-        //                     }
-        //                 })?
-        //                 .1
-        //         } else {
-        //             scorer_ids
-        //         };
-        //
-        //         let (score_children, spicy_status) = extract_spicy_event(children, spicy_status)?;
-        //         let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, score_children, event.r#type, 1)?;
-        //
-        //         make_fed_event(event, FedEventData::Hit {
-        //             game: event.game(unscatter, attractor_secret_base)?,
-        //             batter_name: batter_name.to_string(),
-        //             batter_id,
-        //             num_bases,
-        //             scores,
-        //             stopped_inhabiting,
-        //             spicy_status,
-        //             is_special: event.category == EventCategory::Special,
-        //         })
-        //     } else {
-        //         Err(FeedParseError::MissingTags { event_type: event.r#type, tag_type: "player" })
-        //     }
-        // }
-        // EventType::GameEnd => {
-        //     let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = event.next_parse(parse_game_end)?;
-        //     let winner_id = event.metadata.other.as_object()
-        //         .and_then(|map| map.get("winner"))
-        //         .and_then(|obj| obj.as_str())
-        //         .and_then(|uuid_str| Uuid::from_str(uuid_str).ok())
-        //         .ok_or_else(|| FeedParseError::MissingMetadata {
-        //             event_type: event.r#type,
-        //             field: "winner",
-        //         })?;
-        //     make_fed_event(event, FedEventData::GameEnd {
-        //         game: GameEvent::try_from_event_extra_teams(event, unscatter, attractor_secret_base)?,
-        //         winner_id,
-        //         winning_team_name: winning_team_name.to_string(),
-        //         winning_team_score,
-        //         losing_team_name: losing_team_name.to_string(),
-        //         losing_team_score,
-        //     })
-        // }
+        EventType::Hit => {
+            let (batter_name, num_bases) = event.next_parse(parse_hit)?;
+            let scores = event.parse_scores(" Scores!")?;
+            let spicy_status = event.parse_spicy_status(batter_name)?;
+            FedEventData::Hit {
+                game: event.game(unscatter, attractor_secret_base)?,
+                batter_name: batter_name.to_string(),
+                batter_id: event.next_player_id()?,
+                num_bases,
+                scores,
+                spicy_status,
+                is_special: event.category == EventCategory::Special,
+            }
+        }
+        EventType::GameEnd => {
+            let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = event.next_parse(parse_game_end)?;
+            FedEventData::GameEnd {
+                game: event.game(unscatter, attractor_secret_base)?,
+                winner_id: event.metadata_uuid("winner")?,
+                winning_team_name: winning_team_name.to_string(),
+                winning_team_score,
+                losing_team_name: losing_team_name.to_string(),
+                losing_team_score,
+            }
+        }
         EventType::BatterUp => {
             let (batter_name, inhabited, team_name, wielding_item, is_repeating) =
                 event.next_parse(parse_batter_up)?;
@@ -483,110 +430,92 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeFieldAdvantage => { todo!() }
-        // EventType::HitByPitch => {
-        //     let (pitcher_name, batter_name, scores) = event.next_parse(parse_hit_by_pitch)?;
-        //     let (hbp_player_ids, scorer_ids) = player_tags.split_at(2);
-        //
-        //     let (pitcher_id, batter_id) = get_two_player_ids_from_slice(hbp_player_ids, event.r#type)?;
-        //     let (hbp_children, score_children) = children.split_at(1);
-        //     let sub_event = get_one_sub_event_from_slice(hbp_children, event.r#type)?;
-        //
-        //     let (scores, stopped_inhabiting) = extract_scores(scores, scorer_ids, &score_children, event.r#type, 0)?;
-        //
-        //     make_fed_event(event, FedEventData::HitByPitch {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         pitcher_id,
-        //         pitcher_name: pitcher_name.to_string(),
-        //         batter_team_id: sub_event.next_team_id()?,
-        //         batter_id,
-        //         batter_name: batter_name.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //         scores,
-        //         stopped_inhabiting,
-        //     })
-        // }
-        // EventType::BatterSkipped => {
-        //     let (player_name, reason) = event.next_parse(parse_batter_skipped)?;
-        //     make_fed_event(event, FedEventData::BatterSkipped {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         batter_name: player_name.to_string(),
-        //         reason: match reason {
-        //             ParsedBatterSkippedReason::Shelled => { BatterSkippedReason::Shelled }
-        //             ParsedBatterSkippedReason::Elsewhere => {
-        //                 BatterSkippedReason::Elsewhere(get_one_player_id(player_tags, event.r#type)?)
-        //             }
-        //         },
-        //     })
-        // }
-        // EventType::Party => {
-        //     let player_name = event.next_parse(parse_party)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //     make_fed_event(event, FedEventData::Party {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //         rating_before: get_float_metadata(sub_event, "before")?,
-        //         rating_after: get_float_metadata(sub_event, "after")?,
-        //     })
-        // }
-        // EventType::StrikeZapped => {
-        //     parse_fixed_description(event, "The Electricity zaps a strike away!",
-        //                             FedEventData::StrikeZapped {
-        //                                 game: event.game(unscatter, attractor_secret_base)?,
-        //                             })
-        // }
-        // EventType::WeatherChange => { todo!() }
-        // EventType::MildPitch => {
-        //     let (pitcher_name, pitch_type, runners_advance, scores) = event.next_parse(parse_mild_pitch)?;
-        //     let (&pitcher_id, rest_player_ids) = player_tags.split_first()
-        //         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //             event_type: event.r#type,
-        //             tag_type: "player",
-        //             expected_num: 1,
-        //             actual_num: player_tags.len(),
-        //         })?;
-        //
-        //     match pitch_type {
-        //         MildPitchType::Ball((balls, strikes)) => {
-        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_player_ids, &children, event.r#type, 1)?;
-        //
-        //             make_fed_event(event, FedEventData::MildPitch {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 pitcher_id,
-        //                 pitcher_name: pitcher_name.to_string(),
-        //                 balls,
-        //                 strikes,
-        //                 runners_advance,
-        //                 scores,
-        //                 stopped_inhabiting,
-        //             })
-        //         }
-        //         MildPitchType::Walk(batter_name) => {
-        //             let (&batter_id, rest_player_ids) = rest_player_ids.split_first()
-        //                 .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //                     event_type: event.r#type,
-        //                     tag_type: "player",
-        //                     expected_num: 2,
-        //                     actual_num: player_tags.len(),
-        //                 })?;
-        //             let (scores, stopped_inhabiting) = extract_scores(scores, rest_player_ids, &children, event.r#type, 2)?;
-        //
-        //             // I don't believe this should be possible
-        //             assert!(!runners_advance, "Runners \"advanced on the pathetic play\" on a mild pitch that was also a walk");
-        //             make_fed_event(event, FedEventData::MildPitchWalk {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 pitcher_id,
-        //                 pitcher_name: pitcher_name.to_string(),
-        //                 batter_id,
-        //                 batter_name: batter_name.to_string(),
-        //                 scores,
-        //                 stopped_inhabiting,
-        //             })
-        //         }
-        //     }
-        // }
+        EventType::HitByPitch => {
+            let (pitcher_name, batter_name) = event.next_parse(parse_hit_by_pitch)?;
+            let pitcher_id = event.next_player_id()?;
+            let batter_id = event.next_player_id()?;
+            let mut sub_event = event.next_child(EventType::AddedMod)?;
+
+            let scores = event.parse_scores(" Scores!")?;
+
+            FedEventData::HitByPitch {
+                game: event.game(unscatter, attractor_secret_base)?,
+                pitcher_id,
+                pitcher_name: pitcher_name.to_string(),
+                batter_team_id: sub_event.next_team_id()?,
+                batter_id,
+                batter_name: batter_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+                scores,
+            }
+        }
+        EventType::BatterSkipped => {
+            let (player_name, reason) = event.next_parse(parse_batter_skipped)?;
+            FedEventData::BatterSkipped {
+                game: event.game(unscatter, attractor_secret_base)?,
+                batter_name: player_name.to_string(),
+                reason: match reason {
+                    ParsedBatterSkippedReason::Shelled => { BatterSkippedReason::Shelled }
+                    ParsedBatterSkippedReason::Elsewhere => {
+                        BatterSkippedReason::Elsewhere(event.next_player_id()?)
+                    }
+                },
+            }
+        }
+        EventType::Party => {
+            let player_name = event.next_parse(parse_party)?;
+            let mut sub_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+            FedEventData::Party {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id: sub_event.next_player_id()?,
+                player_name: player_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+                rating_before: sub_event.metadata_f64("before")?,
+                rating_after: sub_event.metadata_f64("after")?,
+            }
+        }
+        EventType::StrikeZapped => {
+            let _ = event.next_parse_tag("The Electricity zaps a strike away!")?;
+            FedEventData::StrikeZapped {
+                game: event.game(unscatter, attractor_secret_base)?,
+            }
+        }
+        EventType::WeatherChange => { todo!() }
+        EventType::MildPitch => {
+            let (pitcher_name, pitch_type) = event.next_parse(parse_mild_pitch)?;
+            let pitcher_id = event.next_player_id()?;
+
+            match pitch_type {
+                MildPitchType::Ball((balls, strikes)) => {
+                    let scores = event.parse_scores(" scores!")?;
+                    let runners_advance = event.next_parse(parse_runners_advance_on_mild_pitch)?;
+
+                    FedEventData::MildPitch {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        pitcher_id,
+                        pitcher_name: pitcher_name.to_string(),
+                        balls,
+                        strikes,
+                        runners_advance,
+                        scores,
+                    }
+                }
+                MildPitchType::Walk(batter_name) => {
+                    let batter_id = event.next_player_id()?;
+                    let scores = event.parse_scores(" scores!")?;
+
+                    FedEventData::MildPitchWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        pitcher_id,
+                        pitcher_name: pitcher_name.to_string(),
+                        batter_id,
+                        batter_name: batter_name.to_string(),
+                        scores,
+                    }
+                }
+            }
+        }
         EventType::InningEnd => {
             let (inning_num, lost_triple_threat_names) = event.next_parse(parse_inning_end)?;
 
@@ -613,875 +542,825 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 victim_team_nickname: victim_team.to_string(),
             }
         }
-        // EventType::Sun2 => {
-        //     let (scoring_team, rays_player) = event.next_parse(parse_sun2)?;
-        //     assert!(is_known_team_nickname(scoring_team));
-        //
-        //     let caught_some_rays = if let Some(player_name) = rays_player {
-        //         let child = get_one_sub_event_from_slice(children, event.r#type)?;
-        //         Some(PlayerStatChange {
-        //             sub_event: child.as_sub_event(),
-        //             team_id: child.next_team_id()?,
-        //             player_id: get_one_player_id(&child.player_tags, child.r#type)?,
-        //             player_name: player_name.to_string(),
-        //             rating_before: get_float_metadata(child, "before")?,
-        //             rating_after: get_float_metadata(child, "after")?,
-        //         })
-        //     } else {
-        //         None
-        //     };
-        //
-        //     make_fed_event(event, FedEventData::Sun2 {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_nickname: scoring_team.to_string(),
-        //         caught_some_rays,
-        //     })
-        // }
-        // EventType::BirdsCircle => {
-        //     parse_fixed_description(event, "The Birds circle ... but they don't find what they're looking for.", FedEventData::BirdsCircle {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //     })
-        // }
-        // EventType::AmbushedByCrows => {
-        //     let (pitcher_name, batter_name) = event.next_parse(parse_friend_of_crows)?;
-        //     let (pitcher, batter_id) = if let Some(name) = pitcher_name {
-        //         let (pitcher_id, batter_id) = get_two_player_ids(event)?;
-        //         (Some(PitcherInfo { pitcher_id, pitcher_name: name.to_string() }), batter_id)
-        //     } else {
-        //         (None, get_one_player_id(player_tags, event.r#type)?)
-        //     };
-        //
-        //     make_fed_event(event, FedEventData::AmbushedByCrows {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         batter_id,
-        //         batter_name: batter_name.to_string(),
-        //         friend_of_crows: pitcher,
-        //     })
-        // }
-        // EventType::BirdsUnshell => {
-        //     let player_name = event.next_parse(parse_birds_unshell)?;
-        //
-        //     let (pecked_free, superallergy) = get_two_sub_events(event)?;
-        //     let team_id = pecked_free.next_team_id()?;
-        //     assert_eq!(team_id, superallergy.next_team_id()?);
-        //     let player_id = get_one_player_id(&pecked_free.player_tags, pecked_free.r#type)?;
-        //     assert_eq!(player_id, get_one_player_id(&superallergy.player_tags, superallergy.r#type)?);
-        //
-        //     make_fed_event(event, FedEventData::BirdsUnshell {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id,
-        //         player_id,
-        //         player_name: player_name.to_string(),
-        //         pecked_free_event: pecked_free.as_sub_event(),
-        //         superallergy_event: superallergy.as_sub_event(),
-        //     })
-        // }
-        // EventType::BecomeTripleThreat => {
-        //     let names = event.next_parse(parse_become_triple_threat)?;
-        //
-        //     let pitchers = zip_eq(children, names)
-        //         .map(|(event, pitcher_name)| {
-        //             ParseOk(ModChangeSubEventWithNamedPlayer {
-        //                 sub_event: event.as_sub_event(),
-        //                 team_id: event.next_team_id()?,
-        //                 player_id: get_one_player_id(&event.player_tags, event.r#type)?,
-        //                 player_name: pitcher_name.to_string(),
-        //             })
-        //         })
-        //         .collect::<Result<_, _>>()?;
-        //
-        //     make_fed_event(event, FedEventData::BecomeTripleThreat {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         pitchers,
-        //     })
-        // }
-        // EventType::GainFreeRefill => {
-        //     let (player_name, roast, ingredient1, ingredient2) = event.next_parse(parse_gain_free_refill)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //     let player_id = get_one_player_id(player_tags, event.r#type)?;
-        //     // The player ID should match in the sub event
-        //     assert_eq!(player_id, get_one_player_id(&sub_event.player_tags, sub_event.r#type)?);
-        //     make_fed_event(event, FedEventData::GainFreeRefill {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id,
-        //         player_name: player_name.to_string(),
-        //         roast: roast.to_string(),
-        //         ingredient1: ingredient1.to_string(),
-        //         ingredient2: ingredient2.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //         team_id: sub_event.next_team_id()?,
-        //     })
-        // }
-        // EventType::CoffeeBean => {
-        //     let (player_name, roast, notes, wired, gained) = event.next_parse(parse_coffee_bean)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //     let player_id = get_one_player_id(player_tags, event.r#type)?;
-        //     let prev_mod = if sub_event.r#type == EventType::ModChange {
-        //         let mod_str = get_str_metadata(sub_event, "to")?;
-        //         // Check that the added mod matches what was parsed
-        //         assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
-        //         Some(get_str_metadata(sub_event, "from")?)
-        //     } else {
-        //         let mod_str = get_str_metadata(sub_event, "mod")?;
-        //         // Check that the added mod matches what was parsed
-        //         assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
-        //         None
-        //     };
-        //     // The player ID should match in the sub event
-        //     assert_eq!(player_id, get_one_player_id(&sub_event.player_tags, sub_event.r#type)?);
-        //     make_fed_event(event, FedEventData::CoffeeBean {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id,
-        //         player_name: player_name.to_string(),
-        //         roast: roast.to_string(),
-        //         notes: notes.to_string(),
-        //         which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
-        //         has_mod: gained,
-        //         sub_event: sub_event.as_sub_event(),
-        //         team_id: sub_event.next_team_id()?,
-        //         previous: prev_mod.map(|s| s.try_into()
-        //             .map_err(|_| FeedParseError::UnexpectedMetadataValue {
-        //                 event_type: sub_event.r#type,
-        //                 field: "from",
-        //                 value: s.to_string(),
-        //             })
-        //         ).transpose()?,
-        //     })
-        // }
-        // EventType::FeedbackBlocked => {
-        //     let (resisted_name, tangled_name) = event.next_parse(parse_feedback_blocked)?;
-        //     let (resisted_id, tangled_id) = get_two_player_ids(event)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //
-        //     make_fed_event(event, FedEventData::FeedbackBlocked {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         resisted_id,
-        //         resisted_name: resisted_name.to_string(),
-        //         tangled_id,
-        //         tangled_team_id: sub_event.next_team_id()?,
-        //         tangled_name: tangled_name.to_string(),
-        //         tangled_rating_before: get_float_metadata(sub_event, "before")?,
-        //         tangled_rating_after: get_float_metadata(sub_event, "after")?,
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::FeedbackSwap => {
-        //     let (player1_name, player2_name, position) = event.next_parse(parse_feedback)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //
-        //     macro_rules! get_player_data {
-        //         ($event:ident, $prefix:literal, $expected_name:ident) => {
-        //             {
-        //                 let team_nickname = get_str_metadata($event, concat!($prefix, "TeamName"))?.to_string();
-        //                 assert!(is_known_team_nickname(&team_nickname));
-        //                 let player_name = get_str_metadata($event, concat!($prefix, "PlayerName"))?.to_string();
-        //                 assert_eq!(player_name, $expected_name);
-        //                 FeedbackPlayerData {
-        //                     team_id: get_uuid_metadata($event, concat!($prefix, "TeamId"))?,
-        //                     team_nickname,
-        //                     player_id: get_uuid_metadata($event, concat!($prefix, "PlayerId"))?,
-        //                     player_name,
-        //                     location: get_int_metadata($event, concat!($prefix, "Location"))?.try_into()?,
-        //                 }
-        //             }
-        //         };
-        //     }
-        //
-        //     make_fed_event(event, FedEventData::Feedback {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         players: (
-        //             get_player_data!(sub_event, "a", player1_name),
-        //             get_player_data!(sub_event, "b", player2_name),
-        //         ),
-        //         position_type: position,
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::SuperallergicReaction => { todo!() }
-        // EventType::AllergicReaction => {
-        //     let player_name = event.next_parse(parse_allergic_reaction)?;
-        //     let player_id = get_one_player_id(player_tags, event.r#type)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //     assert_eq!(player_id, get_one_player_id(&sub_event.player_tags, sub_event.r#type)?);
-        //     make_fed_event(event, FedEventData::AllergicReaction {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         player_id,
-        //         player_name: player_name.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //         rating_before: get_float_metadata(sub_event, "before")?,
-        //         rating_after: get_float_metadata(sub_event, "after")?,
-        //     })
-        // }
-        // EventType::ReverbBestowsReverberating => {
-        //     let player_name = event.next_parse(parse_bestow_reverberating)?;
-        //     let player_id = get_one_player_id(player_tags, event.r#type)?;
-        //     let sub_event = get_one_sub_event(event)?;
-        //     assert_eq!(player_id, get_one_player_id(&sub_event.player_tags, sub_event.r#type)?);
-        //     make_fed_event(event, FedEventData::BestowReverberating {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         player_id,
-        //         player_name: player_name.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::ReverbRosterShuffle => {
-        //     let (team_nickname, reverb_type, gravity_player_names) = event.next_parse(parse_roster_shuffle)?;
-        //
-        //     let gravity_players = zip_eq(gravity_player_names, player_tags.iter())
-        //         .map(|(player_name, &player_id)| PlayerInfo { player_id, player_name: player_name.to_string() })
-        //         .collect();
-        //
-        //     match reverb_type {
-        //         ParsedReverbType::Rotation => {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::Reverb {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 reverb_type: ReverbType::Rotation(sub_event.as_sub_event()),
-        //                 gravity_players,
-        //             })
-        //         }
-        //         ParsedReverbType::Lineup => {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::Reverb {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 reverb_type: ReverbType::Lineup(sub_event.as_sub_event()),
-        //                 gravity_players,
-        //             })
-        //         }
-        //         ParsedReverbType::Full => {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::Reverb {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 reverb_type: ReverbType::Full(sub_event.as_sub_event()),
-        //                 gravity_players,
-        //             })
-        //         }
-        //         ParsedReverbType::SeveralPlayers => {
-        //             todo!()
-        //         }
-        //     }
-        // }
-        // EventType::Blooddrain => {
-        //     let (sipper_name, sipped_name, sipped_category) = event.next_parse(parse_blooddrain)?;
-        //     let (sipper_id, sipped_id) = get_two_player_ids(event)?;
-        //
-        //     let (sipped_event, sipper_event) = get_two_sub_events(event)?;
-        //
-        //     make_fed_event(event, FedEventData::Blooddrain {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         is_siphon: false,
-        //         sipper: PlayerStatChange {
-        //             team_id: sipper_event.next_team_id()?,
-        //             player_id: sipper_id,
-        //             player_name: sipper_name.to_string(),
-        //             rating_before: get_float_metadata(sipper_event, "before")?,
-        //             rating_after: get_float_metadata(sipper_event, "after")?,
-        //             sub_event: sipper_event.as_sub_event(),
-        //         },
-        //         sipped: PlayerStatChange {
-        //             team_id: sipped_event.next_team_id()?,
-        //             player_id: sipped_id,
-        //             player_name: sipped_name.to_string(),
-        //             rating_before: get_float_metadata(sipped_event, "before")?,
-        //             rating_after: get_float_metadata(sipped_event, "after")?,
-        //             sub_event: sipped_event.as_sub_event(),
-        //         },
-        //         sipped_category,
-        //     })
-        // }
-        // EventType::BlooddrainSiphon => {
-        //     let (sipper_name, sipped_name, sipped_category, action) = event.next_parse(parse_blooddrain_siphon)?;
-        //     let (sipper_id, sipped_id) = get_two_player_ids(event)?;
-        //
-        //     match action {
-        //         None => {
-        //             let (sipped_event, sipper_event) = get_two_sub_events(event)?;
-        //
-        //             make_fed_event(event, FedEventData::Blooddrain {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 is_siphon: true,
-        //                 sipper: PlayerStatChange {
-        //                     team_id: sipper_event.next_team_id()?,
-        //                     player_id: sipper_id,
-        //                     player_name: sipper_name.to_string(),
-        //                     rating_before: get_float_metadata(sipper_event, "before")?,
-        //                     rating_after: get_float_metadata(sipper_event, "after")?,
-        //                     sub_event: sipper_event.as_sub_event(),
-        //                 },
-        //                 sipped: PlayerStatChange {
-        //                     team_id: sipped_event.next_team_id()?,
-        //                     player_id: sipped_id,
-        //                     player_name: sipped_name.to_string(),
-        //                     rating_before: get_float_metadata(sipped_event, "before")?,
-        //                     rating_after: get_float_metadata(sipped_event, "after")?,
-        //                     sub_event: sipped_event.as_sub_event(),
-        //                 },
-        //                 sipped_category,
-        //             })
-        //         }
-        //         Some(action) => {
-        //             let stat_decrease_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::SpecialBlooddrain {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 sipper_id,
-        //                 sipped_team_id: stat_decrease_event.next_team_id()?,
-        //                 sipper_name: sipper_name.to_string(),
-        //                 sipped_id,
-        //                 sipped_name: sipped_name.to_string(),
-        //                 sipped_category,
-        //                 action: match action {
-        //                     ParsedBlooddrainAction::AddBall => { BlooddrainAction::AddBall }
-        //                     ParsedBlooddrainAction::RemoveBall => { BlooddrainAction::RemoveBall }
-        //                     ParsedBlooddrainAction::AddStrike(name) => { BlooddrainAction::AddStrike(name.map(|s| s.to_string())) }
-        //                     ParsedBlooddrainAction::RemoveStrike => { BlooddrainAction::RemoveStrike }
-        //                     ParsedBlooddrainAction::AddOut => { BlooddrainAction::AddOut }
-        //                     ParsedBlooddrainAction::RemoveOut => { BlooddrainAction::RemoveOut }
-        //                 },
-        //                 sipped_event: stat_decrease_event.as_sub_event(),
-        //                 rating_before: get_float_metadata(stat_decrease_event, "before")?,
-        //                 rating_after: get_float_metadata(stat_decrease_event, "after")?,
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::BlooddrainBlocked => { todo!() }
-        // EventType::Incineration => {
-        //     let (victim_name, replacement_name) = event.next_parse(parse_incineration)?;
-        //     let (incin_child, enter_hall_child, hatch_child, replace_child) =
-        //         children.iter().collect_tuple()
-        //             .ok_or_else(|| {
-        //                 FeedParseError::MissingChild {
-        //                     event_type: event.r#type,
-        //                     expected_num_children: 4,
-        //                 }
-        //             })?;
-        //
-        //     let team_nickname = get_str_metadata(replace_child, "teamName")?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     make_fed_event(event, FedEventData::Incineration {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: incin_child.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         victim_id: get_one_player_id(&incin_child.player_tags, incin_child.r#type)?,
-        //         victim_name: victim_name.to_string(),
-        //         replacement_id: get_one_player_id(&hatch_child.player_tags, hatch_child.r#type)?,
-        //         replacement_name: replacement_name.to_string(),
-        //         location: get_int_metadata(replace_child, "location")?
-        //             .try_into()
-        //             .map_err(|_| FeedParseError::MissingMetadata {
-        //                 event_type: event.r#type,
-        //                 field: "location",
-        //             })?,
-        //         sub_events: (
-        //             incin_child.as_sub_event(),
-        //             enter_hall_child.as_sub_event(),
-        //             hatch_child.as_sub_event(),
-        //             replace_child.as_sub_event(),
-        //         ),
-        //     })
-        // }
-        // EventType::IncinerationBlocked => {
-        //     // For now I only support magmatic, that may have to change
-        //     let (player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
-        //     match blocked_reason {
-        //         IncinerationBlockedReason::Magmatic => {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::BecameMagmatic {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //                 team_id: sub_event.next_team_id()?,
-        //                 mod_add_event: sub_event.as_sub_event(),
-        //             })
-        //         }
-        //         IncinerationBlockedReason::Fireproof => {
-        //             make_fed_event(event, FedEventData::FireproofIncineration {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::FlagPlanted => {
-        //     let (team_nickname, park_name, prefab_name, is_first) = event.next_parse(parse_flag_planted)?;
-        //
-        //     make_fed_event(event, FedEventData::FlagPlanted {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         ballpark_name: park_name.to_string(),
-        //         prefab_name: prefab_name.to_string(),
-        //         renovation_id: get_str_metadata(event, "renoId")?.to_string(),
-        //         votes: get_int_metadata(event, "votes")?,
-        //         is_first,
-        //     })
-        // }
-        // EventType::RenovationBuilt => {
-        //     // Funnily enough, fraudulent renos' make-good events have string values for the
-        //     // metadata instead of ints.
-        //     let is_fraudulent_reno_fix = event.metadata.other
-        //         .as_object()
-        //         .and_then(|obj| obj.get("votes"))
-        //         .ok_or_else(|| FeedParseError::MissingMetadata {
-        //             event_type: event.r#type,
-        //             field: "votes",
-        //         })?
-        //         .is_string();
-        //
-        //     // It may be valuable to parse which reno is built, but there isn't one unified syntax
-        //     // so I'm not going to put in the work now. Contributions welcome.
-        //     make_fed_event(event, FedEventData::RenovationBuilt {
-        //         team_id: event.next_team_id()?,
-        //         description: event.description.clone(),
-        //         renovation_id: get_str_metadata(event, "renoId")?.to_string(),
-        //         renovation_title: get_str_metadata(event, "title")?.to_string(),
-        //         votes: if is_fraudulent_reno_fix {
-        //             RenovationVotes::Manual(get_str_metadata(event, "votes")?.to_string())
-        //         } else {
-        //             RenovationVotes::Normal(get_int_metadata(event, "votes")?)
-        //         },
-        //     })
-        // }
-        // EventType::LightSwitchToggled => { todo!() }
-        // EventType::DecreePassed => {
-        //     let decree_title = event.next_parse(parse_decree_passed)?;
-        //
-        //     make_fed_event(event, FedEventData::DecreePassed {
-        //         decree_title: decree_title.to_string(),
-        //         metadata: event.metadata.clone(),
-        //     })
-        // }
-        // EventType::BlessingOrGiftWon => {
-        //     let blessing_title = event.next_parse(parse_blessing_won)?;
-        //
-        //     make_fed_event(event, FedEventData::BlessingWon {
-        //         team_tags: event.team_tags.clone(),
-        //         blessing_title: blessing_title.to_string(),
-        //         metadata: event.metadata.clone(),
-        //     })
-        // }
-        // EventType::WillRecieved => {
-        //     let will_title = event.next_parse(parse_will_received)?;
-        //
-        //     make_fed_event(event, FedEventData::WillReceived {
-        //         team_id: event.next_team_id()?,
-        //         will_title: will_title.to_string(),
-        //         metadata: event.metadata.clone(),
-        //     })
-        // }
-        // EventType::FloodingSwept => {
-        //     let (parsed_effects, free_refillers, flood_pumps) = event.next_parse(parse_flooding_swept)?;
-        //
-        //     let mut children_iter = children.iter();
-        //     let mut player_tags_iter = player_tags.iter();
-        //
-        //     let expected_num_tags = parsed_effects.iter()
-        //         .filter(|effect| match effect {
-        //             ParsedFloodingEffect::Elsewhere(_) => { false }
-        //             ParsedFloodingEffect::Flippers(_) => { true }
-        //             ParsedFloodingEffect::Ego(_) => { true }
-        //         })
-        //         .count();
-        //
-        //     let effects = parsed_effects.iter()
-        //         .map(|effect| ParseOk(match effect {
-        //             ParsedFloodingEffect::Elsewhere(player_name) => {
-        //                 let sub_event = children_iter.next()
-        //                     .ok_or_else(|| FeedParseError::MissingChild {
-        //                         event_type: event.r#type,
-        //                         expected_num_children: (children.len() + 1) as i32, // At least
-        //                     })?;
-        //
-        //                 FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer {
-        //                     sub_event: sub_event.as_sub_event(),
-        //                     team_id: sub_event.next_team_id()?,
-        //                     player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //                     player_name: player_name.to_string(),
-        //                 })
-        //             }
-        //             ParsedFloodingEffect::Flippers(player_name) => {
-        //                 FloodingSweptEffect::Flippers(PlayerInfo {
-        //                     player_id: *player_tags_iter.next()
-        //                         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //                             event_type: event.r#type,
-        //                             tag_type: "player",
-        //                             expected_num: expected_num_tags,
-        //                             actual_num: player_tags.len(),
-        //                         })?,
-        //                     player_name: player_name.to_string(),
-        //                 })
-        //             }
-        //             ParsedFloodingEffect::Ego(player_name) => {
-        //                 FloodingSweptEffect::Ego(PlayerInfo {
-        //                     player_id: *player_tags_iter.next()
-        //                         .ok_or_else(|| FeedParseError::WrongNumberOfTags {
-        //                             event_type: event.r#type,
-        //                             tag_type: "player",
-        //                             expected_num: expected_num_tags,
-        //                             actual_num: player_tags.len(),
-        //                         })?,
-        //                     player_name: player_name.to_string(),
-        //                 })
-        //             }
-        //         }))
-        //         .collect::<Result<Vec<_>, _>>()?;
-        //
-        //     let free_refills = free_refillers.into_iter()
-        //         .map(|refiller_name| {
-        //             make_free_refill(event.r#type, &mut children_iter, refiller_name)
-        //         })
-        //         .collect::<Result<Vec<_>, _>>()?;
-        //
-        //     if children_iter.next().is_some() {
-        //         Err(FeedParseError::ExtraChild {
-        //             event_type: event.r#type,
-        //             expected_num_children: effects.len() as i32 - expected_num_tags as i32,
-        //         })?
-        //     }
-        //
-        //     if player_tags_iter.next().is_some() {
-        //         Err(FeedParseError::WrongNumberOfTags {
-        //             event_type: event.r#type,
-        //             tag_type: "player",
-        //             expected_num: expected_num_tags,
-        //             actual_num: player_tags.len(),
-        //         })?
-        //     }
-        //
-        //     make_fed_event(event, FedEventData::FloodingSwept {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         effects,
-        //         free_refills,
-        //         flood_pumps,
-        //     })
-        // }
-        // EventType::SalmonSwim => {
-        //     let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
-        //
-        //     make_fed_event(event, FedEventData::SalmonSwim {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         inning_num,
-        //         run_losses: match parsed_runs_lost {
-        //             ParsedSalmonRunsLost::None => { RunLossesFromSalmon::None }
-        //             ParsedSalmonRunsLost::OneTeam(ParsedTeamRunsLost { runs, name }) => {
-        //                 RunLossesFromSalmon::OneTeam(TeamRunsLost { runs_lost: runs, team_name: name.to_string() })
-        //             }
-        //             ParsedSalmonRunsLost::BothTeams((a, b)) => {
-        //                 RunLossesFromSalmon::BothTeams((
-        //                     TeamRunsLost { runs_lost: a.runs, team_name: a.name.to_string() },
-        //                     TeamRunsLost { runs_lost: b.runs, team_name: b.name.to_string() },
-        //                 ))
-        //             }
-        //         },
-        //     })
-        // }
-        // EventType::PolarityShift => { todo!() }
-        // EventType::EnterSecretBase => {
-        //     let player_name = event.next_parse(parse_terminated(" enters the Secret Base..."))?;
-        //
-        //     make_fed_event(event, FedEventData::EnterSecretBase {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //     })
-        // }
-        // EventType::ExitSecretBase => {
-        //     let player_name = event.next_parse(parse_terminated(" exits the Secret Base to Second Base!"))?;
-        //
-        //     make_fed_event(event, FedEventData::ExitSecretBase {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //     })
-        // }
-        // EventType::ConsumersAttack => {
-        //     let (player_name, item_breaks, scattered) = event.next_parse(parse_consumer_attack)?;
-        //
-        //     let (team_id, effect, sensed_something_fishy) = if item_breaks.is_some() {
-        //         let break_child= get_one_sub_event_from_slice(children, event.r#type)?;
-        //
-        //         let item_breaks = ItemDamage {
-        //             item_id: get_uuid_metadata(break_child, "itemId")?,
-        //             item_name: get_str_metadata(break_child, "itemName")?.to_string(),
-        //             item_mods: vec![],
-        //             durability: get_int_metadata(break_child, "itemDurability")?,
-        //             player_item_rating_before: get_float_metadata(break_child, "playerItemRatingBefore")?,
-        //             player_item_rating_after: get_float_metadata(break_child, "playerItemRatingAfter")?,
-        //             player_rating: get_float_metadata(break_child, "playerRating")?,
-        //             sub_event: break_child.as_sub_event(),
-        //         };
-        //
-        //         let team_id = break_child.next_team_id()?;
-        //         (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks), None)
-        //     } else {
-        //         // I'm hoping that detectives only sense something fishy if the attack hit
-        //         // TODO: If this is true, move the something fishy inside the effect
-        //         let (sub_event, sensed_something_fishy) = if children.len() == 2 {
-        //             // Then a detective sensed something fishy
-        //             let (chomp_event, fishy_event) = get_two_sub_events(event)?;
-        //             let detective_name = run_parser(&fishy_event.description, fishy_event.r#type, parse_terminated(" sensed something fishy."))?;
-        //             let detective_activity = DetectiveActivity {
-        //                 detective_id: get_one_player_id(&fishy_event.player_tags, fishy_event.r#type)?,
-        //                 detective_name: detective_name.to_string(),
-        //                 sub_event: fishy_event.as_sub_event(),
-        //             };
-        //
-        //             (chomp_event, Some(detective_activity))
-        //         } else {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             (sub_event, None)
-        //         };
-        //
-        //         let team_id = sub_event.next_team_id()?;
-        //         (team_id, ConsumerAttackEffect::Chomp {
-        //             rating_before: get_float_metadata(sub_event, "before")?,
-        //             rating_after: get_float_metadata(sub_event, "after")?,
-        //             sub_event: sub_event.as_sub_event(),
-        //         }, sensed_something_fishy)
-        //     };
-        //
-        //     make_fed_event(event, FedEventData::ConsumerAttack {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         effect,
-        //         sensed_something_fishy,
-        //         scattered,
-        //     })
-        // }
-        // EventType::EchoChamber => {
-        //     let (player_name, which_mod) = event.next_parse(parse_echo_chamber)?;
-        //
-        //     let child = get_one_sub_event_from_slice(children, event.r#type)?;
-        //     make_fed_event(event, FedEventData::EchoChamber {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: child.next_team_id()?,
-        //         player_id: get_one_player_id(&child.player_tags, child.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         which_mod,
-        //         sub_event: child.as_sub_event(),
-        //     })
-        // }
-        // EventType::GrindRail => {
-        //     let (player_name, first_trick, success) = event.next_parse(parse_grind_rail)?;
-        //
-        //     fn trick_from_parsed(parsed: ParsedGrindRailTrick) -> GrindRailTrick {
-        //         GrindRailTrick {
-        //             trick_name: parsed.name.to_string(),
-        //             points: parsed.score,
-        //         }
-        //     }
-        //
-        //     make_fed_event(event, FedEventData::GrindRail {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         first_trick: trick_from_parsed(first_trick),
-        //         success: match success {
-        //             ParsedGrindRailSuccess::Safe(trick) => {
-        //                 GrindRailSuccess::Safe(trick_from_parsed(trick))
-        //             }
-        //             ParsedGrindRailSuccess::TaggedOut(trick) => {
-        //                 GrindRailSuccess::TaggedOut(trick_from_parsed(trick))
-        //             }
-        //             ParsedGrindRailSuccess::Bailed => {
-        //                 GrindRailSuccess::Bailed
-        //             }
-        //         },
-        //     })
-        // }
-        // EventType::TunnelsUsed => { todo!() }
-        // EventType::PeanutMister => {
-        //     let (player_name, cured_superallergy) = event.next_parse(parse_peanut_mister)?;
-        //
-        //     let superallergy = if cured_superallergy {
-        //         let sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
-        //         Some(ModChangeSubEvent {
-        //             sub_event: sub_event.as_sub_event(),
-        //             team_id: sub_event.next_team_id()?,
-        //         })
-        //     } else {
-        //         None
-        //     };
-        //
-        //     make_fed_event(event, FedEventData::PeanutMister {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         superallergy,
-        //     })
-        // }
-        // EventType::PeanutFlavorText => {
-        //     make_fed_event(event, FedEventData::PeanutFlavorText {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         message: event.description.clone(),
-        //     })
-        // }
-        // EventType::TasteTheInfinite => {
-        //     let (sheller_name, shellee_name) = event.next_parse(parse_taste_the_infinite)?;
-        //     let (sheller_id, shellee_id) = get_two_player_ids(event)?;
-        //
-        //     let sub_event = get_one_sub_event(event)?;
-        //     make_fed_event(event, FedEventData::TasteTheInfinite {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         sheller_id,
-        //         sheller_name: sheller_name.to_string(),
-        //         shellee_team_id: sub_event.next_team_id()?,
-        //         shellee_id,
-        //         shellee_name: shellee_name.to_string(),
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::EventHorizonActivation => { todo!() }
-        // EventType::EventHorizonAwaits => { todo!() }
-        // EventType::SolarPanelsAwait => {
-        //     parse_fixed_description(event, "The Solar Panels are angled toward Sun 2.", FedEventData::SolarPanelsAwait {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //     })
-        // }
-        // EventType::SolarPanelsActivation => {
-        //     let (num_runs, team_nickname) = event.next_parse(parse_solar_panels)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //
-        //     make_fed_event(event, FedEventData::SolarPanelsActivate {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         num_runs,
-        //         team_nickname: team_nickname.to_string(),
-        //     })
-        // }
-        // EventType::TarotReading => {
-        //     make_fed_event(event, FedEventData::TarotReading {
-        //         description: event.description.clone(),
-        //         metadata: event.metadata.other.clone(),
-        //         player_tags: player_tags.into(),
-        //         team_tags: event.team_tags.clone(),
-        //     })
-        // }
-        // EventType::EmergencyAlert => {
-        //     make_fed_event(event, FedEventData::EmergencyAlert {
-        //         message: event.description.clone(),
-        //         team_tags: event.team_tags.clone(),
-        //     })
-        // }
-        // EventType::ReturnFromElsewhere => {
-        //     match event.next_parse(parse_return_from_elsewhere)? {
-        //         ParsedReturnFromElsewhere::Normal((player_name, after_days)) => {
-        //             let (return_sub_event, scattered) = if children.len() == 2 {
-        //                 let (scattered_sub_event, return_sub_event) = get_two_sub_events(event)?;
-        //                 let scattered_name = run_parser(&scattered_sub_event.description, scattered_sub_event.r#type, parse_terminated(" was Scattered..."))?;
-        //
-        //                 let scattered = Scattered {
-        //                     scattered_name: scattered_name.to_string(),
-        //                     sub_event: scattered_sub_event.as_sub_event(),
-        //                 };
-        //                 (return_sub_event, Some(scattered))
-        //             } else {
-        //                 (get_one_sub_event(event)?, None)
-        //             };
-        //
-        //             make_fed_event(event, FedEventData::ReturnFromElsewhere {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 player_name: player_name.to_string(),
-        //                 flavor: ReturnFromElsewhereFlavor::Full {
-        //                     team_id: return_sub_event.next_team_id()?,
-        //                     player_id: get_one_player_id(&return_sub_event.player_tags, return_sub_event.r#type)?,
-        //                     sub_event: return_sub_event.as_sub_event(),
-        //                     number_of_days: after_days,
-        //                     scattered,
-        //                 },
-        //             })
-        //         }
-        //         ParsedReturnFromElsewhere::Short(player_name) => {
-        //             if children.is_empty() {
-        //                 make_fed_event(event, FedEventData::ReturnFromElsewhere {
-        //                     game: event.game(unscatter, attractor_secret_base)?,
-        //                     player_name: player_name.to_string(),
-        //                     flavor: ReturnFromElsewhereFlavor::False,
-        //                 })
-        //             } else {
-        //                 let return_sub_event = get_one_sub_event_from_slice(children, event.r#type)?;
-        //                 make_fed_event(event, FedEventData::ReturnFromElsewhere {
-        //                     game: event.game(unscatter, attractor_secret_base)?,
-        //                     player_name: player_name.to_string(),
-        //                     flavor: ReturnFromElsewhereFlavor::Short {
-        //                         team_id: return_sub_event.next_team_id()?,
-        //                         player_id: get_one_player_id(&return_sub_event.player_tags, return_sub_event.r#type)?,
-        //                         sub_event: return_sub_event.as_sub_event(),
-        //                     },
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
-        // EventType::OverUnder => {
-        //     let (player_name, on) = event.next_parse(parse_under_over_over_under("Over Under"))?;
-        //
-        //     let sub_event = get_one_sub_event(event)?;
-        //     make_fed_event(event, FedEventData::OverUnder {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         on,
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::UnderOver => {
-        //     let (player_name, on) = event.next_parse(parse_under_over_over_under("Under Over"))?;
-        //
-        //     let sub_event = get_one_sub_event(event)?;
-        //     make_fed_event(event, FedEventData::UnderOver {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         player_id: get_one_player_id(&sub_event.player_tags, sub_event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         on,
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::Undersea => {
-        //     let team_name = event.next_parse(parse_undersea)?;
-        //     assert!(is_known_team_name(team_name));
-        //
-        //     let mod_add_event = get_one_sub_event(event)?;
-        //
-        //     make_fed_event(event, FedEventData::Undersea {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: mod_add_event.next_team_id()?,
-        //         team_name: team_name.to_string(),
-        //         sub_event: mod_add_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::Homebody => {
-        //     let players = event.next_parse(parse_homebody)?;
-        //
-        //     let homebodies = zip_eq(players, children)
-        //         .map(|((player_name, is_overperforming), mod_add_event)| {
-        //             ParseOk(TogglePerforming {
-        //                 player_id: get_one_player_id(&mod_add_event.player_tags, mod_add_event.r#type)?,
-        //                 team_id: mod_add_event.next_team_id()?,
-        //                 player_name: player_name.to_string(),
-        //                 is_overperforming,
-        //                 is_first_proc: mod_add_event.r#type == EventType::AddedModFromOtherMod,
-        //                 sub_event: mod_add_event.as_sub_event(),
-        //             })
-        //         })
-        //         .collect::<Result<_, _>>()?;
-        //
-        //     make_fed_event(event, FedEventData::HomebodyGameStart {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         homebodies,
-        //     })
-        // }
+        EventType::Sun2 => {
+            let (scoring_team, rays_player) = event.next_parse(parse_sun2)?;
+            assert!(is_known_team_nickname(scoring_team));
+
+            let caught_some_rays = if let Some(player_name) = rays_player {
+                let mut child = event.next_child(EventType::PlayerAttributeIncrease)?;
+                Some(PlayerStatChange {
+                    sub_event: child.as_sub_event(),
+                    team_id: child.next_team_id()?,
+                    player_id: child.next_player_id()?,
+                    player_name: player_name.to_string(),
+                    rating_before: child.metadata_f64("before")?,
+                    rating_after: child.metadata_f64("after")?,
+                })
+            } else {
+                None
+            };
+
+            FedEventData::Sun2 {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: scoring_team.to_string(),
+                caught_some_rays,
+            }
+        }
+        EventType::BirdsCircle => {
+            event.next_parse_tag("The Birds circle ... but they don't find what they're looking for.")?;
+            FedEventData::BirdsCircle {
+                game: event.game(unscatter, attractor_secret_base)?,
+            }
+        }
+        EventType::AmbushedByCrows => {
+            let (pitcher_name, batter_name) = event.next_parse(parse_friend_of_crows)?;
+            let (pitcher, batter_id) = if let Some(name) = pitcher_name {
+                let pitcher_id = event.next_player_id()?;
+                let batter_id = event.next_player_id()?;
+                (Some(PitcherInfo { pitcher_id, pitcher_name: name.to_string() }), batter_id)
+            } else {
+                (None, event.next_player_id()?)
+            };
+
+            FedEventData::AmbushedByCrows {
+                game: event.game(unscatter, attractor_secret_base)?,
+                batter_id,
+                batter_name: batter_name.to_string(),
+                friend_of_crows: pitcher,
+            }
+        }
+        EventType::BirdsUnshell => {
+            let player_name = event.next_parse(parse_birds_unshell)?;
+
+            let mut pecked_free = event.next_child(EventType::RemovedMod)?;
+            let mut superallergy = event.next_child(EventType::AddedMod)?;
+            let team_id = pecked_free.next_team_id()?;
+            assert_eq!(team_id, superallergy.next_team_id()?);
+            let player_id = pecked_free.next_player_id()?;
+            assert_eq!(player_id, superallergy.next_player_id()?);
+
+            FedEventData::BirdsUnshell {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id,
+                player_id,
+                player_name: player_name.to_string(),
+                pecked_free_event: pecked_free.as_sub_event(),
+                superallergy_event: superallergy.as_sub_event(),
+            }
+        }
+        EventType::BecomeTripleThreat => {
+            let names = event.next_parse(parse_become_triple_threat)?;
+
+            let pitchers = names.into_iter()
+                .map(|pitcher_name| {
+                    let mut sub_event = event.next_child(EventType::ModChange)?;
+                    ParseOk(ModChangeSubEventWithNamedPlayer {
+                        sub_event: sub_event.as_sub_event(),
+                        team_id: sub_event.next_team_id()?,
+                        player_id: sub_event.next_player_id()?,
+                        player_name: pitcher_name.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::BecomeTripleThreat {
+                game: event.game(unscatter, attractor_secret_base)?,
+                pitchers,
+            }
+        }
+        EventType::GainFreeRefill => {
+            let (player_name, roast, ingredient1, ingredient2) = event.next_parse(parse_gain_free_refill)?;
+            let mut sub_event = event.next_child(EventType::AddedMod)?;
+            let player_id = event.next_player_id()?;
+            // The player ID should match in the sub event
+            assert_eq!(player_id, sub_event.next_player_id()?);
+            FedEventData::GainFreeRefill {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id,
+                player_name: player_name.to_string(),
+                roast: roast.to_string(),
+                ingredient1: ingredient1.to_string(),
+                ingredient2: ingredient2.to_string(),
+                sub_event: sub_event.as_sub_event(),
+                team_id: sub_event.next_team_id()?,
+            }
+        }
+        EventType::CoffeeBean => {
+            let (player_name, roast, notes, wired, gained) = event.next_parse(parse_coffee_bean)?;
+            let mut sub_event = event.next_child_any(&[EventType::AddedMod, EventType::ModChange])?;
+            let player_id = event.next_player_id()?;
+            let prev_mod = if sub_event.event_type == EventType::ModChange {
+                let mod_str = sub_event.metadata_str("to")?;
+                // Check that the added mod matches what was parsed
+                assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
+                Some(sub_event.metadata_str("from")?)
+            } else {
+                let mod_str = sub_event.metadata_str("to")?;
+                // Check that the added mod matches what was parsed
+                assert_eq!(mod_str, if wired { "WIRED" } else { "TIRED" });
+                None
+            };
+            // The player ID should match in the sub event
+            assert_eq!(player_id, sub_event.next_player_id()?);
+            FedEventData::CoffeeBean {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id,
+                player_name: player_name.to_string(),
+                roast: roast.to_string(),
+                notes: notes.to_string(),
+                which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
+                has_mod: gained,
+                sub_event: sub_event.as_sub_event(),
+                team_id: sub_event.next_team_id()?,
+                previous: prev_mod.map(|s| s.try_into()
+                    .map_err(|_| FeedParseError::UnexpectedMetadataValue {
+                        event_type: sub_event.event_type,
+                        field: "from",
+                        value: s.to_string(),
+                    })
+                ).transpose()?,
+            }
+        }
+        EventType::FeedbackBlocked => {
+            let (resisted_name, tangled_name) = event.next_parse(parse_feedback_blocked)?;
+            let resisted_id = event.next_player_id()?;
+            let tangled_id = event.next_player_id()?;
+            let mut sub_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+
+            FedEventData::FeedbackBlocked {
+                game: event.game(unscatter, attractor_secret_base)?,
+                resisted_id,
+                resisted_name: resisted_name.to_string(),
+                tangled_id,
+                tangled_team_id: sub_event.next_team_id()?,
+                tangled_name: tangled_name.to_string(),
+                tangled_rating_before: sub_event.metadata_f64("before")?,
+                tangled_rating_after: sub_event.metadata_f64("after")?,
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::FeedbackSwap => {
+            let (player1_name, player2_name, position) = event.next_parse(parse_feedback)?;
+            let mut sub_event = event.next_child(EventType::PlayerTraded)?;
+
+            macro_rules! get_player_data {
+                ($event:ident, $prefix:literal, $expected_name:ident) => {
+                    {
+                        let team_nickname = event.metadata_str(concat!($prefix, "TeamName"))?.to_string();
+                        assert!(is_known_team_nickname(&team_nickname));
+                        let player_name = event.metadata_str(concat!($prefix, "PlayerName"))?.to_string();
+                        assert_eq!(player_name, $expected_name);
+                        FeedbackPlayerData {
+                            team_id: event.metadata_uuid(concat!($prefix, "TeamId"))?,
+                            team_nickname,
+                            player_id: event.metadata_uuid(concat!($prefix, "PlayerId"))?,
+                            player_name,
+                            location: event.metadata_i64(concat!($prefix, "Location"))?.try_into()?,
+                        }
+                    }
+                };
+            }
+
+            FedEventData::Feedback {
+                game: event.game(unscatter, attractor_secret_base)?,
+                players: (
+                    get_player_data!(sub_event, "a", player1_name),
+                    get_player_data!(sub_event, "b", player2_name),
+                ),
+                position_type: position,
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::SuperallergicReaction => { todo!() }
+        EventType::AllergicReaction => {
+            let player_name = event.next_parse(parse_allergic_reaction)?;
+            let player_id = event.next_player_id()?;
+            let mut sub_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+            assert_eq!(player_id, sub_event.next_player_id()?);
+            FedEventData::AllergicReaction {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id,
+                player_name: player_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+                rating_before: sub_event.metadata_f64("before")?,
+                rating_after: sub_event.metadata_f64("after")?,
+            }
+        }
+        EventType::ReverbBestowsReverberating => {
+            let player_name = event.next_parse(parse_bestow_reverberating)?;
+            let player_id = event.next_player_id()?;
+            let mut sub_event = event.next_child(EventType::AddedMod)?;
+            assert_eq!(player_id, sub_event.next_player_id()?);
+            FedEventData::BestowReverberating {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id,
+                player_name: player_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::ReverbRosterShuffle => {
+            let (team_nickname, reverb_type, gravity_player_names) = event.next_parse(parse_roster_shuffle)?;
+
+            let gravity_players = gravity_player_names.into_iter()
+                .map(|player_name| {
+                    ParseOk(PlayerInfo {
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            match reverb_type {
+                ParsedReverbType::Rotation => {
+                    let mut sub_event = event.next_child(EventType::ReverbRotationShuffle)?;
+                    FedEventData::Reverb {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Rotation(sub_event.as_sub_event()),
+                        gravity_players,
+                    }
+                }
+                ParsedReverbType::Lineup => {
+                    let mut sub_event = event.next_child(EventType::ReverbLineupShuffle)?;
+                    FedEventData::Reverb {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Lineup(sub_event.as_sub_event()),
+                        gravity_players,
+                    }
+                }
+                ParsedReverbType::Full => {
+                    let mut sub_event = event.next_child(EventType::ReverbFullShuffle)?;
+                    FedEventData::Reverb {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::Full(sub_event.as_sub_event()),
+                        gravity_players,
+                    }
+                }
+                ParsedReverbType::SeveralPlayers => {
+                    todo!()
+                }
+            }
+        }
+        EventType::Blooddrain => {
+            let (sipper_name, sipped_name, sipped_category) = event.next_parse(parse_blooddrain)?;
+            let sipper_id = event.next_player_id()?;
+            let sipped_id = event.next_player_id()?;
+
+            let mut sipped_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+            let mut sipper_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+
+            FedEventData::Blooddrain {
+                game: event.game(unscatter, attractor_secret_base)?,
+                is_siphon: false,
+                sipper: PlayerStatChange {
+                    team_id: sipper_event.next_team_id()?,
+                    player_id: sipper_id,
+                    player_name: sipper_name.to_string(),
+                    rating_before: sipper_event.metadata_f64("before")?,
+                    rating_after: sipper_event.metadata_f64("after")?,
+                    sub_event: sipper_event.as_sub_event(),
+                },
+                sipped: PlayerStatChange {
+                    team_id: sipped_event.next_team_id()?,
+                    player_id: sipped_id,
+                    player_name: sipped_name.to_string(),
+                    rating_before: sipped_event.metadata_f64("before")?,
+                    rating_after: sipped_event.metadata_f64("after")?,
+                    sub_event: sipped_event.as_sub_event(),
+                },
+                sipped_category,
+            }
+        }
+        EventType::BlooddrainSiphon => {
+            let (sipper_name, sipped_name, sipped_category, action) = event.next_parse(parse_blooddrain_siphon)?;
+            let sipper_id = event.next_player_id()?;
+            let sipped_id = event.next_player_id()?;
+
+            match action {
+                None => {
+                    let mut sipped_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+                    let mut sipper_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+
+                    FedEventData::Blooddrain {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        is_siphon: true,
+                        sipper: PlayerStatChange {
+                            team_id: sipper_event.next_team_id()?,
+                            player_id: sipper_id,
+                            player_name: sipper_name.to_string(),
+                            rating_before: sipper_event.metadata_f64("before")?,
+                            rating_after: sipper_event.metadata_f64("after")?,
+                            sub_event: sipper_event.as_sub_event(),
+                        },
+                        sipped: PlayerStatChange {
+                            team_id: sipped_event.next_team_id()?,
+                            player_id: sipped_id,
+                            player_name: sipped_name.to_string(),
+                            rating_before: sipped_event.metadata_f64("before")?,
+                            rating_after: sipped_event.metadata_f64("after")?,
+                            sub_event: sipped_event.as_sub_event(),
+                        },
+                        sipped_category,
+                    }
+                }
+                Some(action) => {
+                    let mut stat_decrease_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+                    FedEventData::SpecialBlooddrain {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        sipper_id,
+                        sipped_team_id: stat_decrease_event.next_team_id()?,
+                        sipper_name: sipper_name.to_string(),
+                        sipped_id,
+                        sipped_name: sipped_name.to_string(),
+                        sipped_category,
+                        action: match action {
+                            ParsedBlooddrainAction::AddBall => { BlooddrainAction::AddBall }
+                            ParsedBlooddrainAction::RemoveBall => { BlooddrainAction::RemoveBall }
+                            ParsedBlooddrainAction::AddStrike(name) => { BlooddrainAction::AddStrike(name.map(|s| s.to_string())) }
+                            ParsedBlooddrainAction::RemoveStrike => { BlooddrainAction::RemoveStrike }
+                            ParsedBlooddrainAction::AddOut => { BlooddrainAction::AddOut }
+                            ParsedBlooddrainAction::RemoveOut => { BlooddrainAction::RemoveOut }
+                        },
+                        sipped_event: stat_decrease_event.as_sub_event(),
+                        rating_before: stat_decrease_event.metadata_f64("before")?,
+                        rating_after: stat_decrease_event.metadata_f64("after")?,
+                    }
+                }
+            }
+        }
+        EventType::BlooddrainBlocked => { todo!() }
+        EventType::Incineration => {
+            let (victim_name, replacement_name) = event.next_parse(parse_incineration)?;
+            let mut incin_child = event.next_child(EventType::Incineration)?;
+            let mut enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
+            let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
+            let mut replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
+
+            let team_nickname = replace_child.metadata_str("teamName")?;
+            assert!(is_known_team_nickname(team_nickname));
+            FedEventData::Incineration {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: incin_child.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                victim_id: incin_child.next_player_id()?,
+                victim_name: victim_name.to_string(),
+                replacement_id: hatch_child.next_player_id()?,
+                replacement_name: replacement_name.to_string(),
+                location: replace_child.metadata_enum("location")?,
+                sub_events: (
+                    incin_child.as_sub_event(),
+                    enter_hall_child.as_sub_event(),
+                    hatch_child.as_sub_event(),
+                    replace_child.as_sub_event(),
+                ),
+            }
+        }
+        EventType::IncinerationBlocked => {
+            // For now I only support magmatic, that may have to change
+            let (player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
+            match blocked_reason {
+                IncinerationBlockedReason::Magmatic => {
+                    let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    FedEventData::BecameMagmatic {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        team_id: sub_event.next_team_id()?,
+                        mod_add_event: sub_event.as_sub_event(),
+                    }
+                }
+                IncinerationBlockedReason::Fireproof => {
+                    FedEventData::FireproofIncineration {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    }
+                }
+            }
+        }
+        EventType::FlagPlanted => {
+            let (team_nickname, park_name, prefab_name, is_first) = event.next_parse(parse_flag_planted)?;
+
+            FedEventData::FlagPlanted {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                ballpark_name: park_name.to_string(),
+                prefab_name: prefab_name.to_string(),
+                renovation_id: event.metadata_str("renoId")?.to_string(),
+                votes: event.metadata_i64("votes")?,
+                is_first,
+            }
+        }
+        EventType::RenovationBuilt => {
+            // Funnily enough, fraudulent renos' make-good events have string values for the
+            // metadata instead of ints.
+            let is_fraudulent_reno_fix = event.metadata()
+                .as_object()
+                .and_then(|obj| obj.get("votes"))
+                .ok_or_else(|| FeedParseError::MissingMetadata {
+                    event_type: event.event_type,
+                    field: "votes",
+                })?
+                .is_string();
+
+            // It may be valuable to parse which reno is built, but there isn't one unified syntax
+            // so I'm not going to put in the work now. Contributions welcome.
+            FedEventData::RenovationBuilt {
+                team_id: event.next_team_id()?,
+                description: event.description().to_string(),
+                renovation_id: event.metadata_str("renoId")?.to_string(),
+                renovation_title: event.metadata_str("title")?.to_string(),
+                votes: if is_fraudulent_reno_fix {
+                    RenovationVotes::Manual(event.metadata_str("votes")?.to_string())
+                } else {
+                    RenovationVotes::Normal(event.metadata_i64("votes")?)
+                },
+            }
+        }
+        EventType::LightSwitchToggled => { todo!() }
+        EventType::DecreePassed => {
+            let decree_title = event.next_parse(parse_decree_passed)?;
+
+            FedEventData::DecreePassed {
+                decree_title: decree_title.into(),
+                metadata: event.full_metadata().clone(),
+            }
+        }
+        EventType::BlessingOrGiftWon => {
+            let blessing_title = event.next_parse(parse_blessing_won)?;
+
+            FedEventData::BlessingWon {
+                team_tags: event.team_tags().into(),
+                blessing_title: blessing_title.into(),
+                metadata: event.full_metadata().clone(),
+            }
+        }
+        EventType::WillRecieved => {
+            let will_title = event.next_parse(parse_will_received)?;
+
+            FedEventData::WillReceived {
+                team_id: event.next_team_id()?,
+                will_title: will_title.to_string(),
+                metadata: event.full_metadata().clone(),
+            }
+        }
+        EventType::FloodingSwept => {
+            let (parsed_effects, flood_pumps) = event.next_parse(parse_flooding_swept)?;
+
+            let effects = parsed_effects.into_iter()
+                .map(|effect| ParseOk(match effect {
+                    ParsedFloodingEffect::Elsewhere(player_name) => {
+                        let mut sub_event = event.next_child(EventType::AddedMod)?;
+
+                        FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer {
+                            sub_event: sub_event.as_sub_event(),
+                            team_id: sub_event.next_team_id()?,
+                            player_id: sub_event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                    ParsedFloodingEffect::Flippers(player_name) => {
+                        FloodingSweptEffect::Flippers(PlayerInfo {
+                            player_id: event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                    ParsedFloodingEffect::Ego(player_name) => {
+                        FloodingSweptEffect::Ego(PlayerInfo {
+                            player_id: event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        })
+                    }
+                }))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let free_refills = event.parse_free_refills()?;
+
+            FedEventData::FloodingSwept {
+                game: event.game(unscatter, attractor_secret_base)?,
+                effects,
+                free_refills,
+                flood_pumps,
+            }
+        }
+        EventType::SalmonSwim => {
+            let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
+
+            FedEventData::SalmonSwim {
+                game: event.game(unscatter, attractor_secret_base)?,
+                inning_num,
+                run_losses: match parsed_runs_lost {
+                    ParsedSalmonRunsLost::None => { RunLossesFromSalmon::None }
+                    ParsedSalmonRunsLost::OneTeam(ParsedTeamRunsLost { runs, name }) => {
+                        RunLossesFromSalmon::OneTeam(TeamRunsLost { runs_lost: runs, team_name: name.to_string() })
+                    }
+                    ParsedSalmonRunsLost::BothTeams((a, b)) => {
+                        RunLossesFromSalmon::BothTeams((
+                            TeamRunsLost { runs_lost: a.runs, team_name: a.name.to_string() },
+                            TeamRunsLost { runs_lost: b.runs, team_name: b.name.to_string() },
+                        ))
+                    }
+                },
+            }
+        }
+        EventType::PolarityShift => { todo!() }
+        EventType::EnterSecretBase => {
+            let player_name = event.next_parse(parse_terminated(" enters the Secret Base..."))?;
+
+            FedEventData::EnterSecretBase {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            }
+        }
+        EventType::ExitSecretBase => {
+            let player_name = event.next_parse(parse_terminated(" exits the Secret Base to Second Base!"))?;
+
+            FedEventData::ExitSecretBase {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            }
+        }
+        EventType::ConsumersAttack => {
+            let (player_name, item_breaks, scattered) = event.next_parse(parse_consumer_attack)?;
+
+            let (team_id, effect) = if item_breaks.is_some() {
+                let mut break_child = event.next_child(EventType::ItemBreaks)?;
+
+                let item_breaks = ItemDamage {
+                    item_id: break_child.metadata_uuid("itemId")?,
+                    item_name: break_child.metadata_str("itemName")?.to_string(),
+                    item_mods: vec![],
+                    durability: break_child.metadata_i64("itemDurability")?,
+                    player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: break_child.metadata_f64("playerRating")?,
+                    sub_event: break_child.as_sub_event(),
+                };
+
+                let team_id = break_child.next_team_id()?;
+                (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks))
+            } else {
+                // I'm hoping that detectives only sense something fishy if the attack hit
+                // TODO: If this is true, move the something fishy inside the effect
+                let mut chomp_child = event.next_child(EventType::PlayerStatDecrease)?;
+                let team_id = chomp_child.next_team_id()?;
+                (team_id, ConsumerAttackEffect::Chomp {
+                    rating_before: chomp_child.metadata_f64("before")?,
+                    rating_after: chomp_child.metadata_f64("after")?,
+                    sub_event: chomp_child.as_sub_event(),
+                })
+            };
+            let mut sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
+                .map(|mut fishy_event| {
+                    let detective_name = fishy_event.next_parse(parse_terminated(" sensed something fishy."))?;
+                    ParseOk(DetectiveActivity {
+                        detective_id: fishy_event.next_player_id()?,
+                        detective_name: detective_name.to_string(),
+                        sub_event: fishy_event.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
+
+            FedEventData::ConsumerAttack {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                effect,
+                sensed_something_fishy,
+                scattered,
+            }
+        }
+        EventType::EchoChamber => {
+            let (player_name, which_mod) = event.next_parse(parse_echo_chamber)?;
+
+            let mut child = event.next_child(EventType::AddedMod)?;
+            FedEventData::EchoChamber {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: child.next_team_id()?,
+                player_id: child.next_player_id()?,
+                player_name: player_name.to_string(),
+                which_mod,
+                sub_event: child.as_sub_event(),
+            }
+        }
+        EventType::GrindRail => {
+            let (player_name, first_trick, success) = event.next_parse(parse_grind_rail)?;
+
+            fn trick_from_parsed(parsed: ParsedGrindRailTrick) -> GrindRailTrick {
+                GrindRailTrick {
+                    trick_name: parsed.name.to_string(),
+                    points: parsed.score,
+                }
+            }
+
+            FedEventData::GrindRail {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                first_trick: trick_from_parsed(first_trick),
+                success: match success {
+                    ParsedGrindRailSuccess::Safe(trick) => {
+                        GrindRailSuccess::Safe(trick_from_parsed(trick))
+                    }
+                    ParsedGrindRailSuccess::TaggedOut(trick) => {
+                        GrindRailSuccess::TaggedOut(trick_from_parsed(trick))
+                    }
+                    ParsedGrindRailSuccess::Bailed => {
+                        GrindRailSuccess::Bailed
+                    }
+                },
+            }
+        }
+        EventType::TunnelsUsed => { todo!() }
+        EventType::PeanutMister => {
+            let (player_name, cured_superallergy) = event.next_parse(parse_peanut_mister)?;
+
+            let superallergy = if cured_superallergy {
+                let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                Some(ModChangeSubEvent {
+                    sub_event: sub_event.as_sub_event(),
+                    team_id: sub_event.next_team_id()?,
+                })
+            } else {
+                None
+            };
+
+            FedEventData::PeanutMister {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                superallergy,
+            }
+        }
+        EventType::PeanutFlavorText => {
+            FedEventData::PeanutFlavorText {
+                game: event.game(unscatter, attractor_secret_base)?,
+                message: event.description().into(),
+            }
+        }
+        EventType::TasteTheInfinite => {
+            let (sheller_name, shellee_name) = event.next_parse(parse_taste_the_infinite)?;
+            let sheller_id = event.next_player_id()?;
+            let shellee_id = event.next_player_id()?;
+
+            let mut sub_event = event.next_child(EventType::AddedMod)?;
+            FedEventData::TasteTheInfinite {
+                game: event.game(unscatter, attractor_secret_base)?,
+                sheller_id,
+                sheller_name: sheller_name.to_string(),
+                shellee_team_id: sub_event.next_team_id()?,
+                shellee_id,
+                shellee_name: shellee_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::EventHorizonActivation => { todo!() }
+        EventType::EventHorizonAwaits => { todo!() }
+        EventType::SolarPanelsAwait => {
+            let _ = event.next_parse_tag("The Solar Panels are angled toward Sun 2.")?;
+            FedEventData::SolarPanelsAwait {
+                game: event.game(unscatter, attractor_secret_base)?,
+            }
+        }
+        EventType::SolarPanelsActivation => {
+            let (num_runs, team_nickname) = event.next_parse(parse_solar_panels)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            FedEventData::SolarPanelsActivate {
+                game: event.game(unscatter, attractor_secret_base)?,
+                num_runs,
+                team_nickname: team_nickname.to_string(),
+            }
+        }
+        EventType::TarotReading => {
+            FedEventData::TarotReading {
+                description: event.description().into(),
+                metadata: event.metadata().clone(),
+                player_tags: event.player_tags().into(),
+                team_tags: event.team_tags().into(),
+            }
+        }
+        EventType::EmergencyAlert => {
+            FedEventData::EmergencyAlert {
+                message: event.description().into(),
+                team_tags: event.team_tags().into(),
+            }
+        }
+        EventType::ReturnFromElsewhere => {
+            let (player_name, flavor) = match event.next_parse(parse_return_from_elsewhere)? {
+                ParsedReturnFromElsewhere::Normal((player_name, after_days)) => {
+                    let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
+                        .map(|mut scattered_sub_event| {
+                            let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
+
+                            ParseOk(Scattered {
+                                scattered_name: scattered_name.to_string(),
+                                sub_event: scattered_sub_event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
+
+                    let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
+
+                    (player_name, ReturnFromElsewhereFlavor::Full {
+                        team_id: return_sub_event.next_team_id()?,
+                        player_id: return_sub_event.next_player_id()?,
+                        sub_event: return_sub_event.as_sub_event(),
+                        number_of_days: after_days,
+                        scattered,
+                    })
+                }
+                ParsedReturnFromElsewhere::Short(player_name) => {
+                    if let Some(mut return_sub_event) = event.next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")? {
+                        (player_name, ReturnFromElsewhereFlavor::Short {
+                            team_id: return_sub_event.next_team_id()?,
+                            player_id: return_sub_event.next_player_id()?,
+                            sub_event: return_sub_event.as_sub_event(),
+                        })
+                    } else {
+                        (player_name, ReturnFromElsewhereFlavor::False)
+                    }
+                }
+            };
+
+            FedEventData::ReturnFromElsewhere {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_name: player_name.to_string(),
+                flavor,
+            }
+        }
+        EventType::OverUnder => {
+            let (player_name, on) = event.next_parse(parse_under_over_over_under("Over Under"))?;
+
+            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+            FedEventData::OverUnder {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id: sub_event.next_player_id()?,
+                player_name: player_name.to_string(),
+                on,
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::UnderOver => {
+            let (player_name, on) = event.next_parse(parse_under_over_over_under("Under Over"))?;
+
+            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+            FedEventData::UnderOver {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id: sub_event.next_player_id()?,
+                player_name: player_name.to_string(),
+                on,
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::Undersea => {
+            let team_name = event.next_parse(parse_undersea)?;
+            assert!(is_known_team_name(team_name));
+
+            let mut mod_add_event = event.next_child(EventType::AddedModFromOtherMod)?;
+
+            FedEventData::Undersea {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: mod_add_event.next_team_id()?,
+                team_name: team_name.to_string(),
+                sub_event: mod_add_event.as_sub_event(),
+            }
+        }
+        EventType::Homebody => {
+            let players = event.next_parse(parse_homebody)?;
+
+            let homebodies = players.into_iter()
+                .map(|(player_name, is_overperforming)| {
+                    let mut mod_add_event = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::ChangedModFromOtherMod])?;
+                    ParseOk(TogglePerforming {
+                        player_id: mod_add_event.next_player_id()?,
+                        team_id: mod_add_event.next_team_id()?,
+                        player_name: player_name.to_string(),
+                        is_overperforming,
+                        is_first_proc: mod_add_event.event_type == EventType::AddedModFromOtherMod,
+                        sub_event: mod_add_event.as_sub_event(),
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::HomebodyGameStart {
+                game: event.game(unscatter, attractor_secret_base)?,
+                homebodies,
+            }
+        }
         EventType::Superyummy => {
             let (player_name, peanuts_present) = event.next_parse(parse_superyummy)?;
 
@@ -1509,661 +1388,609 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
             }
         }
-        // EventType::Perk => {
-        //     let player_names = event.next_parse(parse_perk_up)?;
-        //
-        //     make_fed_event(event, FedEventData::PerkUp {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         players: children.iter()
-        //             .zip(player_names)
-        //             .map(|(mod_add_event, player_name)| {
-        //                 assert_eq!(format!("{player_name} Perks up."), mod_add_event.description);
-        //                 ParseOk(ModChangeSubEventWithNamedPlayer {
-        //                     player_name: player_name.to_string(),
-        //                     sub_event: mod_add_event.as_sub_event(),
-        //                     player_id: get_one_player_id(&mod_add_event.player_tags, mod_add_event.r#type)?,
-        //                     team_id: mod_add_event.next_team_id()?,
-        //                 })
-        //             })
-        //             .collect::<Result<_, _>>()?,
-        //     })
-        // }
-        // EventType::Earlbird => {
-        //     match event.next_parse(parse_earlbird)? {
-        //         EarlbirdsChange::Added(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::EarlbirdsAdded {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 sub_event: sub_event.as_sub_event(),
-        //             })
-        //         }
-        //         EarlbirdsChange::Removed => {
-        //             let sub_event = get_one_sub_event(event)?;
-        //             make_fed_event(event, FedEventData::EarlbirdsRemoved {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.next_team_id()?,
-        //                 sub_event: sub_event.as_sub_event(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::LateToTheParty => {
-        //     match event.next_parse(parse_late_to_the_party)? {
-        //         LateToThePartyChange::Added(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //
-        //             let sub_event = get_one_or_zero_sub_events(event)?;
-        //             make_fed_event(event, FedEventData::LateToThePartyAdded {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_id: sub_event.map(|e| e.next_team_id()).transpose()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 sub_event: sub_event.map(SubEvent::from_event),
-        //             })
-        //         }
-        //         LateToThePartyChange::Removed(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //
-        //             make_fed_event(event, FedEventData::LateToThePartyRemoved {
-        //                 game: event.game(unscatter, attractor_secret_base)?,
-        //                 team_nickname: team_nickname.to_string(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::ShameDonor => { todo!() }
-        // EventType::AddedMod => {
-        //     if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
-        //         // Then it's a tarot event and we can forget parsing. Thankfully
-        //         make_fed_event(event, FedEventData::TarotReadingAddedMod {
-        //             team_id: event.next_team_id()?,
-        //             player_id: get_one_or_zero_player_ids(event)?,
-        //             description: event.description.clone(),
-        //             r#mod: get_str_metadata(event, "mod")?.to_string(),
-        //             mod_duration: get_int_metadata(event, "type")?,
-        //         })
-        //     } else {
-        //         match event.next_parse(parse_added_mod)? {
-        //             ParsedAddedMod::EnteredPartyTime(team_nickname) => {
-        //                 assert!(is_known_team_nickname(team_nickname));
-        //                 make_fed_event(event, FedEventData::TeamEnteredPartyTime {
-        //                     team_id: event.next_team_id()?,
-        //                     team_nickname: team_nickname.to_string(),
-        //                 })
-        //             }
-        //             ParsedAddedMod::GainFreeWill(team_nickname) => {
-        //                 assert!(is_known_team_nickname(team_nickname));
-        //                 make_fed_event(event, FedEventData::TeamGainedFreeWill {
-        //                     team_id: event.next_team_id()?,
-        //                     team_nickname: team_nickname.to_string(),
-        //                 })
-        //             }
-        //             ParsedAddedMod::MVP(player_name) => {
-        //                 make_fed_event(event, FedEventData::PlayerNamedMvp {
-        //                     team_id: event.next_team_id()?,
-        //                     player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                     player_name: player_name.to_string(),
-        //                     level: 1,
-        //                 })
-        //             }
-        //         }
-        //     }
-        // }
-        // EventType::RemovedMod => {
-        //     match event.next_parse(parse_removed_mod)? {
-        //         ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //             make_fed_event(event, FedEventData::TeamLeftPartyTimeForPostseason {
-        //                 team_id: event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //             })
-        //         }
-        //         ParsedRemovedMod::TeamUsedFreeWill(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //             make_fed_event(event, FedEventData::TeamUsedFreeWill {
-        //                 team_id: event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //             })
-        //         }
-        //         ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
-        //             make_fed_event(event, FedEventData::PlayerLostMod {
-        //                 team_id: event.next_team_id()?,
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //                 r#mod: get_str_metadata(event, "mod")?.to_string(),
-        //                 mod_name: mod_name.to_string(),
-        //             })
-        //         }
-        //         ParsedRemovedMod::InvestigationConcluded(stadium_name) => {
-        //             make_fed_event(event, FedEventData::InvestigationConcluded {
-        //                 team_id: event.next_team_id()?,
-        //                 stadium_name: stadium_name.to_string(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::ModExpires => {
-        //     if player_tags.is_empty() {
-        //         let (team_nickname, mod_duration) = event.next_parse(parse_team_mod_expires)?;
-        //         assert!(is_known_team_nickname(team_nickname));
-        //         let mods = get_str_vec_metadata(event, "mods")?;
-        //         make_fed_event(event, FedEventData::TeamModExpires {
-        //             team_id: event.next_team_id()?,
-        //             team_nickname: team_nickname.to_string(),
-        //             mods: mods.into_iter().map(String::from).collect(),
-        //             mod_duration,
-        //         })
-        //     } else {
-        //         let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
-        //         let mods = get_str_vec_metadata(event, "mods")?;
-        //         make_fed_event(event, FedEventData::PlayerModExpires {
-        //             team_id: event.next_team_id()?,
-        //             player_id: get_one_player_id(player_tags, event.r#type)?,
-        //             player_name: player_name.to_string(),
-        //             mods: mods.into_iter().map(String::from).collect(),
-        //             mod_duration,
-        //         })
-        //     }
-        // }
-        // EventType::PlayerAddedToTeam => {
-        //     match event.next_parse(parse_player_added_to_team)? {
-        //         ParsedPlayerAddedToTeam::PostseasonBirth(team_nickname) => {
-        //             make_fed_event(event, FedEventData::PostseasonBirth {
-        //                 team_id: event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: get_str_metadata(event, "playerName")?.to_string(),
-        //                 location: get_int_metadata(event, "location")?
-        //                     .try_into()
-        //                     .map_err(|_| FeedParseError::MissingMetadata {
-        //                         event_type: event.r#type,
-        //                         field: "location",
-        //                     })?,
-        //             })
-        //         }
-        //         ParsedPlayerAddedToTeam::Localized { player_name, team_nickname, .. } => {
-        //             // TODO Check location from parsing against location from metadata
-        //             make_fed_event(event, FedEventData::PlayerLocalized {
-        //                 team_id: event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //                 location: get_int_metadata(event, "location")?
-        //                     .try_into()
-        //                     .map_err(|_| FeedParseError::MissingMetadata {
-        //                         event_type: event.r#type,
-        //                         field: "location",
-        //                     })?,
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::PlayerReplacedByNecromancy => { todo!() }
-        // EventType::PlayerReplacesReturned => {
-        //     let team_nickname = event.next_parse(parse_player_replaces_returned)?;
-        //
-        //     make_fed_event(event, FedEventData::ReplaceReturnedPlayerFromShadows {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         promoted_player_id: get_uuid_metadata(event, "promotePlayerId")?,
-        //         promoted_player_name: get_str_metadata(event, "promotePlayerName")?.to_string(),
-        //         promoted_location: get_int_metadata(event, "promoteLocation")?
-        //             .try_into()
-        //             .map_err(|_| FeedParseError::MissingMetadata {
-        //                 event_type: event.r#type,
-        //                 field: "promoteLocation",
-        //             })?,
-        //         removed_player_id: get_uuid_metadata(event, "removePlayerId")?,
-        //         removed_player_name: get_str_metadata(event, "removePlayerName")?.to_string(),
-        //         removed_location: get_int_metadata(event, "removeLocation")?
-        //             .try_into()
-        //             .map_err(|_| FeedParseError::MissingMetadata {
-        //                 event_type: event.r#type,
-        //                 field: "removeLocation",
-        //             })?,
-        //     })
-        // }
-        // EventType::PlayerRemovedFromTeam => { todo!() }
-        // EventType::PlayerTraded => { todo!() }
-        // EventType::PlayerSwap => { todo!() }
-        // EventType::PlayerMoved => {
-        //     match event.next_parse(parse_player_moved)? {
-        //         ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
-        //             make_fed_event(event, FedEventData::ReturnFromInvestigation {
-        //                 player_id: get_uuid_metadata(event, "playerId")?,
-        //                 player_name: get_str_metadata(event, "playerName")?.to_string(),
-        //                 previous_team_id: get_uuid_metadata(event, "sendTeamId")?,
-        //                 previous_team_name: get_str_metadata(event, "sendTeamName")?.to_string(),
-        //                 new_location: get_int_metadata(event, "receiveLocation")?
-        //                     .try_into()
-        //                     .map_err(|_| FeedParseError::MissingMetadata {
-        //                         event_type: event.r#type,
-        //                         field: "receiveLocation",
-        //                     })?,
-        //                 new_team_id: get_uuid_metadata(event, "receiveTeamId")?,
-        //                 new_team_name: get_str_metadata(event, "receiveTeamName")?.to_string(),
-        //                 emptyhanded,
-        //             })
-        //         }
-        //         ParsedPlayerMoved::Roamin(_player_name) => {
-        //             make_fed_event(event, FedEventData::Roam {
-        //                 player_id: get_uuid_metadata(event, "playerId")?,
-        //                 player_name: get_str_metadata(event, "playerName")?.to_string(),
-        //                 location: get_int_metadata(event, "location")?
-        //                     .try_into()
-        //                     .map_err(|_| FeedParseError::MissingMetadata {
-        //                         event_type: event.r#type,
-        //                         field: "receiveLocation",
-        //                     })?,
-        //                 previous_team_id: get_uuid_metadata(event, "sendTeamId")?,
-        //                 previous_team_name: get_str_metadata(event, "sendTeamName")?.to_string(),
-        //                 new_team_id: get_uuid_metadata(event, "receiveTeamId")?,
-        //                 new_team_name: get_str_metadata(event, "receiveTeamName")?.to_string(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::PlayerBornFromIncineration => { todo!() }
-        // EventType::PlayerStatIncrease => {
-        //     match event.next_parse(parse_player_stat_increase)? {
-        //         ParsedPlayerStatIncrease::PlayerBoosted(player_name) => {
-        //             make_fed_event(event, FedEventData::PlayerBoosted {
-        //                 team_id: event.next_team_id()?,
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //                 rating_before: get_float_metadata(event, "before")?,
-        //                 rating_after: get_float_metadata(event, "after")?,
-        //             })
-        //         }
-        //         ParsedPlayerStatIncrease::BottomDwellers(team_nickname) => {
-        //             assert!(is_known_team_nickname(team_nickname));
-        //             make_fed_event(event, FedEventData::BottomDwellers {
-        //                 team_id: event.next_team_id()?,
-        //                 team_nickname: team_nickname.to_string(),
-        //                 rating_before: get_float_metadata(event, "before")?,
-        //                 rating_after: get_float_metadata(event, "after")?,
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::PlayerStatDecrease => { todo!() }
-        // EventType::PlayerStatReroll => { todo!() }
-        // EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
-        // EventType::PlayerMoveFailedForce => { todo!() }
-        // EventType::EnterHallOfFlame => {
-        //     // In Beta, this event type is only top-level for return-to-hall events. That was no
-        //     // longer true in Short Circuits.
-        //     assert_eq!(event.sim, "thisidisstaticyo");
-        //
-        //     let player_name = event.next_parse(parse_terminated(" entered the Hall of Flame."))?;
-        //
-        //     make_fed_event(event, FedEventData::PlayerCalledBackToHall {
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //     })
-        // }
-        // EventType::ExitHallOfFlame => { todo!() }
-        // EventType::PlayerGainedItem => { todo!() }
-        // EventType::PlayerLostItem => { todo!() }
-        // EventType::ReverbFullShuffle => { todo!() }
-        // EventType::ReverbLineupShuffle => { todo!() }
-        // EventType::ReverbRotationShuffle => { todo!() }
-        // EventType::PlayerHatched => {
-        //     // For now this only has the breach events, it will need to be updated for s24
-        //     let player_name = event.next_parse(parse_player_hatched)?;
-        //
-        //     make_fed_event(event, FedEventData::PlayerHatched {
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //     })
-        // }
-        // EventType::PlayerEvolves => { todo!() }
-        // EventType::TeamDivisionMove => {
-        //     // For now this only has the breach events, it will need to be updated for s24
-        //     let (team_nickname, division_name) = event.next_parse(parse_team_division_move)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     assert_eq!(team_nickname, get_str_metadata(event, "teamName")?);
-        //     assert_eq!(division_name, get_str_metadata(event, "divisionName")?);
-        //     let team_id = event.next_team_id()?;
-        //     assert_eq!(team_id, get_uuid_metadata(event, "teamId")?);
-        //
-        //     make_fed_event(event, FedEventData::TeamJoinedILB {
-        //         team_id,
-        //         team_nickname: team_nickname.to_string(),
-        //         division_id: get_uuid_metadata(event, "divisionId")?,
-        //         division_name: division_name.to_string(),
-        //     })
-        // }
-        // EventType::PlayerDivisionMove => {
-        //     match event.next_parse(parse_player_division_move)? {
-        //         ParsedPlayerDivisionMove::JoinedIlb(player_name) => {
-        //             make_fed_event(event, FedEventData::PlayerJoinedILB {
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //             })
-        //         }
-        //         ParsedPlayerDivisionMove::PulledThroughRift(player_name) => {
-        //             make_fed_event(event, FedEventData::PlayerPulledThroughRift {
-        //                 player_id: get_one_player_id(player_tags, event.r#type)?,
-        //                 player_name: player_name.to_string(),
-        //             })
-        //         }
-        //     }
-        // }
-        // EventType::TeamWonInternetSeries => {
-        //     let (team_nickname, season_num) = event.next_parse(parse_team_won_internet_series)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     assert_eq!(season_num, event.season + 1);
-        //
-        //     make_fed_event(event, FedEventData::TeamWonInternetSeries {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         championships: get_int_metadata(event, "championships")?,
-        //     })
-        // }
-        // EventType::EarnedPostseasonSlot => {
-        //     let (team_nickname, season_num) = event.next_parse(parse_earned_postseason_slot)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     assert_eq!(season_num, event.season + 1);
-        //
-        //     make_fed_event(event, FedEventData::EarnedPostseasonSlot {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //     })
-        // }
-        // EventType::FinalStandings => {
-        //     let (team_nickname, place, division_name) = event.next_parse(parse_final_standings)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //
-        //     make_fed_event(event, FedEventData::FinalStandings {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         place,
-        //         division_name: division_name.to_string(),
-        //     })
-        // }
-        // EventType::ModChange => {
-        //     // This is only a top-level event for MVPs
-        //     let (player_name, level) = event.next_parse(parse_repeat_mvp)?;
-        //
-        //     make_fed_event(event, FedEventData::PlayerNamedMvp {
-        //         team_id: event.next_team_id()?,
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //         level,
-        //     })
-        // }
-        // EventType::PlayerAlternated => { todo!() }
-        // EventType::AddedModFromOtherMod => { todo!() }
-        // EventType::ChangedModFromOtherMod => { todo!() }
-        // EventType::NecromancyOrPlunderNarration => { todo!() }
-        // EventType::PlayerPermittedToStay => {
-        //     let player_name = event.next_parse(parse_terminated(" has been permitted to stay."))?;
-        //
-        //     make_fed_event(event, FedEventData::PlayerPermittedToStay {
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         player_name: player_name.to_string(),
-        //     })
-        // }
-        // EventType::DecreeNarration => { todo!() }
-        // EventType::WillResults => { todo!() }
-        // EventType::TeamStatAdjustment => { todo!() }
-        // EventType::TeamWasShamed => {
-        //     let (shaming_team, shamed_team) = event.next_parse(parse_team_was_shamed)?;
-        //     assert!(is_known_team_nickname(shaming_team));
-        //     assert!(is_known_team_nickname(shamed_team));
-        //
-        //     make_fed_event(event, FedEventData::TeamWasShamed {
-        //         shamed_team_id: event.next_team_id()?,
-        //         shaming_team_nickname: shaming_team.to_string(),
-        //         shamed_team_nickname: shamed_team.to_string(),
-        //         total_shames: get_int_metadata(event, "totalShames")?,
-        //         total_shamings: get_int_metadata(event, "totalShamings")?,
-        //     })
-        // }
-        // EventType::TeamDidShame => {
-        //     let (shaming_team, shamed_team) = event.next_parse(parse_team_did_shame)?;
-        //     assert!(is_known_team_nickname(shaming_team));
-        //     assert!(is_known_team_nickname(shamed_team));
-        //
-        //     make_fed_event(event, FedEventData::TeamDidShame {
-        //         shaming_team_id: event.next_team_id()?,
-        //         shaming_team_nickname: shaming_team.to_string(),
-        //         shamed_team_nickname: shamed_team.to_string(),
-        //         total_shames: get_int_metadata(event, "totalShames")?,
-        //         total_shamings: get_int_metadata(event, "totalShamings")?,
-        //     })
-        // }
-        // EventType::Echo => {
-        //     let (echoer_name, echoee_name) = event.next_parse(parse_echo)?;
-        //
-        //     // I would prefer to use try_group_by but it doesn't exist and I don't feel like
-        //     // writing it
-        //     let child_groups = {
-        //         let mut child_groups = Vec::new();
-        //         let mut remove_mods_event = None;
-        //         for child in children {
-        //             if child.r#type == EventType::RemovedModsFromAnotherMod {
-        //                 if remove_mods_event.is_some() {
-        //                     Err(FeedParseError::UnexpectedChildPattern {
-        //                         event_type: event.r#type,
-        //                         err: format!("Encountered two {:?} events in a row",
-        //                                      EventType::RemovedModsFromAnotherMod),
-        //                     })?;
-        //                 } else {
-        //                     remove_mods_event = Some(child);
-        //                 }
-        //             } else if child.r#type == EventType::AddedModsFromAnotherMod {
-        //                 child_groups.push((remove_mods_event.take(), child));
-        //             } else {
-        //                 Err(FeedParseError::UnexpectedChildType {
-        //                     event_type: event.r#type,
-        //                     child_event_type: child.r#type,
-        //                 })?;
-        //             }
-        //         };
-        //
-        //         child_groups
-        //     };
-        //
-        //     let (main_echo_event, sub_echo_events) = child_groups.split_first()
-        //         .ok_or_else(|| FeedParseError::MissingChild {
-        //             event_type: event.r#type,
-        //             expected_num_children: 1, // At least
-        //         })?;
-        //
-        //     let parse_str = format!("'s Echoed an Echo from {echoer_name}!");
-        //     let sub_echos = sub_echo_events.iter()
-        //         .map(move |event| {
-        //             let echoer_name = run_parser(&event.1.description, event.1.r#type, parse_terminated(&parse_str))?;
-        //             make_echo(echoer_name, event)
-        //         })
-        //         .collect::<Result<_, _>>()?;
-        //
-        //     make_fed_event(event, FedEventData::Echo {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         echoee_name: echoee_name.to_string(),
-        //         primary_echo: make_echo(echoer_name, main_echo_event)?,
-        //         receiver_echos: sub_echos,
-        //     })
-        // }
-        // EventType::EchoIntoStatic => {
-        //     let (echoer_name, echoee_name) = event.next_parse(parse_echo_into_static)?;
-        //
-        //     let (echoer_removed, echoee_removed, echoer_mod_change, echoee_mod_change) = children.iter()
-        //         .collect_tuple()
-        //         .ok_or_else(|| FeedParseError::MissingChild {
-        //             event_type: event.r#type,
-        //             expected_num_children: 4,
-        //         })?;
-        //
-        //     let make_echo_into_static = |name: &str, removed_event: &EventuallyEvent, mod_change_event: &EventuallyEvent| {
-        //         let nickname = get_str_metadata(removed_event, "teamName")?;
-        //         assert!(is_known_team_nickname(nickname));
-        //         ParseOk(EchoIntoStatic {
-        //             team_id: get_uuid_metadata(removed_event, "teamId")?,
-        //             team_nickname: nickname.to_string(),
-        //             player_id: get_uuid_metadata(removed_event, "playerId")?,
-        //             player_name: name.to_string(),
-        //             removed_from_team_sub_event: removed_event.as_sub_event(),
-        //             mod_changed_sub_event: mod_change_event.as_sub_event(),
-        //         })
-        //     };
-        //
-        //     make_fed_event(event, FedEventData::EchoIntoStatic {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         echoer: make_echo_into_static(echoer_name, echoer_removed, echoer_mod_change)?,
-        //         echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
-        //     })
-        // }
-        // EventType::RemovedModsFromAnotherMod => { todo!() }
-        // EventType::AddedModsFromAnotherMod => { todo!() }
-        // EventType::Psychoacoustics => {
-        //     // For some reason the description on the main event is empty and the description is
-        //     // only on the child event
-        //     let child = get_one_sub_event_from_slice(children, event.r#type)?;
-        //     let (stadium_name, mod_name, team_nickname) = run_parser(&child.description, child.r#type, parse_psychoacoustics)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     make_fed_event(event, FedEventData::Psychoacoustics {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         stadium_name: stadium_name.to_string(),
-        //         team_id: child.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         mod_name: mod_name.to_string(),
-        //         mod_id: get_str_metadata(child, "mod")?.to_string(),
-        //         sub_event: child.as_sub_event(),
-        //     })
-        // }
-        // EventType::EchoReciever => {
-        //     let (echoer_name, echoee_name) = event.next_parse(parse_echo_receiver)?;
-        //
-        //     let child = get_one_sub_event_from_slice(children, event.r#type)?;
-        //     make_fed_event(event, FedEventData::EchoReceiver {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         echoer_name: echoer_name.to_string(),
-        //         echoee_name: echoee_name.to_string(),
-        //         echoee_id: get_one_player_id(&child.player_tags, child.r#type)?,
-        //         echoee_team_id: child.next_team_id()?,
-        //         sub_event: child.as_sub_event(),
-        //     })
-        // }
-        // EventType::InvestigationMessage => {
-        //     make_fed_event(event, FedEventData::InvestigationMessage {
-        //         player_id: get_one_player_id(player_tags, event.r#type)?,
-        //         message: event.description.clone(),
-        //     })
-        // }
-        // EventType::Tidings => {
-        //     make_fed_event(event, FedEventData::Tidings {
-        //         message: event.description.clone(),
-        //         metadata: event.metadata.clone(),
-        //         player_tags: player_tags.into(),
-        //     })
-        // }
-        // EventType::Middling => {
-        //     let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //
-        //     let child = get_one_sub_event_from_slice(children, event.r#type)?;
-        //     make_fed_event(event, FedEventData::Middling {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_nickname: team_nickname.to_string(),
-        //         is_middling,
-        //         change_event: ModChangeSubEvent {
-        //             sub_event: child.as_sub_event(),
-        //             team_id: child.next_team_id()?,
-        //         },
-        //     })
-        // }
-        // EventType::PlayerAttributeIncrease => { todo!() }
-        // EventType::PlayerAttributeDecrease => { todo!() }
-        // EventType::EnterCrimeScene => {
-        //     let (_player_name, stadium_nickname) = event.next_parse(parse_enter_crime_scene)?;
-        //
-        //     let (crime_scene_event, shadows_event) = get_two_sub_events_from_slice(children, event.r#type)?;
-        //
-        //     make_fed_event(event, FedEventData::EnterCrimeScene {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         player_id: get_uuid_metadata(crime_scene_event, "playerId")?,
-        //         player_name: get_str_metadata(crime_scene_event, "playerName")?.to_string(),
-        //         previous_team_id: get_uuid_metadata(crime_scene_event, "sendTeamId")?,
-        //         previous_team_name: get_str_metadata(crime_scene_event, "sendTeamName")?.to_string(),
-        //         previous_location: get_int_metadata(crime_scene_event, "location")?
-        //             .try_into()
-        //             .map_err(|_| FeedParseError::MissingMetadata {
-        //                 event_type: event.r#type,
-        //                 field: "location",
-        //             })?,
-        //         new_team_id: get_uuid_metadata(crime_scene_event, "receiveTeamId")?,
-        //         new_team_name: get_str_metadata(crime_scene_event, "receiveTeamName")?.to_string(),
-        //         stadium_name: stadium_nickname.to_string(),
-        //         rating_before: get_float_metadata(shadows_event, "before")?,
-        //         rating_after: get_float_metadata(shadows_event, "after")?,
-        //         enter_crime_scene_sub_event: crime_scene_event.as_sub_event(),
-        //         enter_shadows_sub_event: shadows_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::ItemBreaks => { todo!() }
-        // EventType::Announcement => { todo!() }
-        // EventType::RunsScored => { todo!() }
-        // EventType::WinCollectedRegular => { todo!() }
-        // EventType::WinCollectedPostseason => { todo!() }
-        // EventType::GameOver => { todo!() }
-        // EventType::StormWarning => { todo!() }
-        // EventType::Snowflakes => { todo!() }
-        // EventType::Sun2SetWin => {
-        //     let team_name = event.next_parse(parse_sun2_set_win)?;
-        //     assert!(is_known_team_nickname(team_name));
-        //     make_fed_event(event, FedEventData::Sun2SetWin {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_name.to_string(),
-        //     })
-        // }
-        // EventType::BlackHoleSwallowedWin => {
-        //     let team_name = event.next_parse(parse_black_hole_swallowed_win)?;
-        //     assert!(is_known_team_nickname(team_name));
-        //     make_fed_event(event, FedEventData::BlackHoleSwallowedWin {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_name.to_string(),
-        //     })
-        // }
-        // EventType::RemovedModFromOtherMod => { todo!() }
-        // EventType::PostseasonAdvance => {
-        //     let (team_nickname, round_num, season_num) = event.next_parse(parse_postseason_advance)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     make_fed_event(event, FedEventData::PostseasonAdvance {
-        //         team_id: event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         round: round_num,
-        //         season: season_num,
-        //     })
-        // }
-        // EventType::GainBloodType => { todo!() }
-        // EventType::HighPressure => {
-        //     let (team_nickname, is_on) = event.next_parse(parse_high_pressure)?;
-        //     assert!(is_known_team_nickname(team_nickname));
-        //     let sub_event = get_one_sub_event(event)?;
-        //     make_fed_event(event, FedEventData::HighPressure {
-        //         game: event.game(unscatter, attractor_secret_base)?,
-        //         team_id: sub_event.next_team_id()?,
-        //         team_nickname: team_nickname.to_string(),
-        //         is_on,
-        //         sub_event: sub_event.as_sub_event(),
-        //     })
-        // }
-        // EventType::LineupSorted => {
-        //     // This happened as a top-level event exactly once (and really it should have been a
-        //     // child of the lovers' getting Base Dealing)
-        //     parse_fixed_description(event, "The Lovers' lineup has been optimized.",
-        //                             FedEventData::LineupSorted {
-        //                                 team_id: event.next_team_id()?,
-        //                                 team_nickname: "Lovers".to_string(),
-        //                             })
-        // }
-        // EventType::NutButton => { todo!() }
+        EventType::Perk => {
+            let player_names = event.next_parse(parse_perk_up)?;
+
+            let players = player_names.into_iter()
+                .map(|player_name| {
+                    let mut mod_add_event = event.next_child(EventType::AddedMod)?;
+                    assert_eq!(format!("{player_name} Perks up."), mod_add_event.description());
+                    ParseOk(ModChangeSubEventWithNamedPlayer {
+                        player_name: player_name.to_string(),
+                        sub_event: mod_add_event.as_sub_event(),
+                        player_id: mod_add_event.next_player_id()?,
+                        team_id: mod_add_event.next_team_id()?,
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::PerkUp {
+                game: event.game(unscatter, attractor_secret_base)?,
+                players,
+            }
+        }
+        EventType::Earlbird => {
+            match event.next_parse(parse_earlbird)? {
+                EarlbirdsChange::Added(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    FedEventData::EarlbirdsAdded {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        sub_event: sub_event.as_sub_event(),
+                    }
+                }
+                EarlbirdsChange::Removed => {
+                    let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                    FedEventData::EarlbirdsRemoved {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        sub_event: sub_event.as_sub_event(),
+                    }
+                }
+            }
+        }
+        EventType::LateToTheParty => {
+            match event.next_parse(parse_late_to_the_party)? {
+                LateToThePartyChange::Added(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    let mut sub_event = event.next_child_if_mod_effect(EventType::AddedMod, "OVERPERFORMING")?;
+                    FedEventData::LateToThePartyAdded {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.as_mut().map(|e| e.next_team_id()).transpose()?,
+                        team_nickname: team_nickname.to_string(),
+                        sub_event: sub_event.map(|e| e.as_sub_event()),
+                    }
+                }
+                LateToThePartyChange::Removed(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    FedEventData::LateToThePartyRemoved {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_nickname: team_nickname.to_string(),
+                    }
+                }
+            }
+        }
+        EventType::ShameDonor => { todo!() }
+        EventType::AddedMod => {
+            if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                // Then it's a tarot event and we can forget parsing. Thankfully
+                FedEventData::TarotReadingAddedMod {
+                    team_id: event.next_team_id()?,
+                    player_id: event.next_player_id_opt(),
+                    description: event.description().into(),
+                    r#mod: event.metadata_str("mod")?.to_string(),
+                    mod_duration: event.metadata_i64("type")?,
+                }
+            } else {
+                match event.next_parse(parse_added_mod)? {
+                    ParsedAddedMod::EnteredPartyTime(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::TeamEnteredPartyTime {
+                            team_id: event.next_team_id()?,
+                            team_nickname: team_nickname.to_string(),
+                        }
+                    }
+                    ParsedAddedMod::GainFreeWill(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::TeamGainedFreeWill {
+                            team_id: event.next_team_id()?,
+                            team_nickname: team_nickname.to_string(),
+                        }
+                    }
+                    ParsedAddedMod::MVP(player_name) => {
+                        FedEventData::PlayerNamedMvp {
+                            team_id: event.next_team_id()?,
+                            player_id: event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                            level: 1,
+                        }
+                    }
+                }
+            }
+        }
+        EventType::RemovedMod => {
+            match event.next_parse(parse_removed_mod)? {
+                ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    FedEventData::TeamLeftPartyTimeForPostseason {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                    }
+                }
+                ParsedRemovedMod::TeamUsedFreeWill(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    FedEventData::TeamUsedFreeWill {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                    }
+                }
+                ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
+                    FedEventData::PlayerLostMod {
+                        team_id: event.next_team_id()?,
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        r#mod: event.metadata_str("mod")?.to_string(),
+                        mod_name: mod_name.to_string(),
+                    }
+                }
+                ParsedRemovedMod::InvestigationConcluded(stadium_name) => {
+                    FedEventData::InvestigationConcluded {
+                        team_id: event.next_team_id()?,
+                        stadium_name: stadium_name.to_string(),
+                    }
+                }
+            }
+        }
+        EventType::ModExpires => {
+            let mods = event.metadata_str_vec("mods")?
+                .into_iter().map(String::from).collect();
+            if let Some(player_id) = event.next_player_id_opt() {
+                let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
+                FedEventData::PlayerModExpires {
+                    team_id: event.next_team_id()?,
+                    player_id,
+                    player_name: player_name.to_string(),
+                    mods,
+                    mod_duration,
+                }
+            } else {
+                let (team_nickname, mod_duration) = event.next_parse(parse_team_mod_expires)?;
+                assert!(is_known_team_nickname(team_nickname));
+                FedEventData::TeamModExpires {
+                    team_id: event.next_team_id()?,
+                    team_nickname: team_nickname.to_string(),
+                    mods,
+                    mod_duration,
+                }
+            }
+        }
+        EventType::PlayerAddedToTeam => {
+            match event.next_parse(parse_player_added_to_team)? {
+                ParsedPlayerAddedToTeam::PostseasonBirth(team_nickname) => {
+                    FedEventData::PostseasonBirth {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        player_id: event.next_player_id()?,
+                        player_name: event.metadata_str("playerName")?.to_string(),
+                        location: event.metadata_enum("location")?,
+                    }
+                }
+                ParsedPlayerAddedToTeam::Localized { player_name, team_nickname, .. } => {
+                    // TODO Check location from parsing against location from metadata
+                    FedEventData::PlayerLocalized {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        location: event.metadata_enum("location")?,
+                    }
+                }
+            }
+        }
+        EventType::PlayerReplacedByNecromancy => { todo!() }
+        EventType::PlayerReplacesReturned => {
+            let team_nickname = event.next_parse(parse_player_replaces_returned)?;
+
+            FedEventData::ReplaceReturnedPlayerFromShadows {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                promoted_player_id: event.metadata_uuid("promotePlayerId")?,
+                promoted_player_name: event.metadata_str("promotePlayerName")?.to_string(),
+                promoted_location: event.metadata_enum("promoteLocation")?,
+                removed_player_id: event.metadata_uuid("removePlayerId")?,
+                removed_player_name: event.metadata_str("removePlayerName")?.to_string(),
+                removed_location: event.metadata_enum("removeLocation")?,
+            }
+        }
+        EventType::PlayerRemovedFromTeam => { todo!() }
+        EventType::PlayerTraded => { todo!() }
+        EventType::PlayerSwap => { todo!() }
+        EventType::PlayerMoved => {
+            match event.next_parse(parse_player_moved)? {
+                ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
+                    FedEventData::ReturnFromInvestigation {
+                        player_id: event.metadata_uuid("playerId")?,
+                        player_name: event.metadata_str("playerName")?.to_string(),
+                        previous_team_id: event.metadata_uuid("sendTeamId")?,
+                        previous_team_name: event.metadata_str("sendTeamName")?.to_string(),
+                        new_location: event.metadata_enum("receiveLocation")?,
+                        new_team_id: event.metadata_uuid("receiveTeamId")?,
+                        new_team_name: event.metadata_str("receiveTeamName")?.to_string(),
+                        emptyhanded,
+                    }
+                }
+                ParsedPlayerMoved::Roamin(_player_name) => {
+                    FedEventData::Roam {
+                        player_id: event.metadata_uuid("playerId")?,
+                        player_name: event.metadata_str("playerName")?.to_string(),
+                        location: event.metadata_enum("location")?,
+                        previous_team_id: event.metadata_uuid("sendTeamId")?,
+                        previous_team_name: event.metadata_str("sendTeamName")?.to_string(),
+                        new_team_id: event.metadata_uuid("receiveTeamId")?,
+                        new_team_name: event.metadata_str("receiveTeamName")?.to_string(),
+                    }
+                }
+            }
+        }
+        EventType::PlayerBornFromIncineration => { todo!() }
+        EventType::PlayerStatIncrease => {
+            match event.next_parse(parse_player_stat_increase)? {
+                ParsedPlayerStatIncrease::PlayerBoosted(player_name) => {
+                    FedEventData::PlayerBoosted {
+                        team_id: event.next_team_id()?,
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        rating_before: event.metadata_f64("before")?,
+                        rating_after: event.metadata_f64("after")?,
+                    }
+                }
+                ParsedPlayerStatIncrease::BottomDwellers(team_nickname) => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    FedEventData::BottomDwellers {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        rating_before: event.metadata_f64("before")?,
+                        rating_after: event.metadata_f64("after")?,
+                    }
+                }
+            }
+        }
+        EventType::PlayerStatDecrease => { todo!() }
+        EventType::PlayerStatReroll => { todo!() }
+        EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
+        EventType::PlayerMoveFailedForce => { todo!() }
+        EventType::EnterHallOfFlame => {
+            // In Beta, this event type is only top-level for return-to-hall events. That was no
+            // longer true in Short Circuits.
+            assert_eq!(event.sim, "thisidisstaticyo");
+
+            let player_name = event.next_parse(parse_terminated(" entered the Hall of Flame."))?;
+
+            FedEventData::PlayerCalledBackToHall {
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            }
+        }
+        EventType::ExitHallOfFlame => { todo!() }
+        EventType::PlayerGainedItem => { todo!() }
+        EventType::PlayerLostItem => { todo!() }
+        EventType::ReverbFullShuffle => { todo!() }
+        EventType::ReverbLineupShuffle => { todo!() }
+        EventType::ReverbRotationShuffle => { todo!() }
+        EventType::PlayerHatched => {
+            // For now this only has the breach events, it will need to be updated for s24
+            let player_name = event.next_parse(parse_player_hatched)?;
+
+            FedEventData::PlayerHatched {
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            }
+        }
+        EventType::PlayerEvolves => { todo!() }
+        EventType::TeamDivisionMove => {
+            // For now this only has the breach events, it will need to be updated for s24
+            let (team_nickname, division_name) = event.next_parse(parse_team_division_move)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(team_nickname, event.metadata_str("teamName")?);
+            assert_eq!(division_name, event.metadata_str("divisionName")?);
+            let team_id = event.next_team_id()?;
+            assert_eq!(team_id, event.metadata_uuid("teamId")?);
+
+            FedEventData::TeamJoinedILB {
+                team_id,
+                team_nickname: team_nickname.to_string(),
+                division_id: event.metadata_uuid("divisionId")?,
+                division_name: division_name.to_string(),
+            }
+        }
+        EventType::PlayerDivisionMove => {
+            match event.next_parse(parse_player_division_move)? {
+                ParsedPlayerDivisionMove::JoinedIlb(player_name) => {
+                    FedEventData::PlayerJoinedILB {
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    }
+                }
+                ParsedPlayerDivisionMove::PulledThroughRift(player_name) => {
+                    FedEventData::PlayerPulledThroughRift {
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    }
+                }
+            }
+        }
+        EventType::TeamWonInternetSeries => {
+            let (team_nickname, season_num) = event.next_parse(parse_team_won_internet_series)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(season_num, event.season + 1);
+
+            FedEventData::TeamWonInternetSeries {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                championships: event.metadata_i64("championships")?,
+            }
+        }
+        EventType::EarnedPostseasonSlot => {
+            let (team_nickname, season_num) = event.next_parse(parse_earned_postseason_slot)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(season_num, event.season + 1);
+
+            FedEventData::EarnedPostseasonSlot {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+            }
+        }
+        EventType::FinalStandings => {
+            let (team_nickname, place, division_name) = event.next_parse(parse_final_standings)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            FedEventData::FinalStandings {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                place,
+                division_name: division_name.to_string(),
+            }
+        }
+        EventType::ModChange => {
+            // This is only a top-level event for MVPs
+            let (player_name, level) = event.next_parse(parse_repeat_mvp)?;
+
+            FedEventData::PlayerNamedMvp {
+                team_id: event.next_team_id()?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                level,
+            }
+        }
+        EventType::PlayerAlternated => { todo!() }
+        EventType::AddedModFromOtherMod => { todo!() }
+        EventType::ChangedModFromOtherMod => { todo!() }
+        EventType::NecromancyOrPlunderNarration => { todo!() }
+        EventType::PlayerPermittedToStay => {
+            let player_name = event.next_parse(parse_terminated(" has been permitted to stay."))?;
+
+            FedEventData::PlayerPermittedToStay {
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            }
+        }
+        EventType::DecreeNarration => { todo!() }
+        EventType::WillResults => { todo!() }
+        EventType::TeamStatAdjustment => { todo!() }
+        EventType::TeamWasShamed => {
+            let (shaming_team, shamed_team) = event.next_parse(parse_team_was_shamed)?;
+            assert!(is_known_team_nickname(shaming_team));
+            assert!(is_known_team_nickname(shamed_team));
+
+            FedEventData::TeamWasShamed {
+                shamed_team_id: event.next_team_id()?,
+                shaming_team_nickname: shaming_team.to_string(),
+                shamed_team_nickname: shamed_team.to_string(),
+                total_shames: event.metadata_i64("totalShames")?,
+                total_shamings: event.metadata_i64("totalShamings")?,
+            }
+        }
+        EventType::TeamDidShame => {
+            let (shaming_team, shamed_team) = event.next_parse(parse_team_did_shame)?;
+            assert!(is_known_team_nickname(shaming_team));
+            assert!(is_known_team_nickname(shamed_team));
+
+            FedEventData::TeamDidShame {
+                shaming_team_id: event.next_team_id()?,
+                shaming_team_nickname: shaming_team.to_string(),
+                shamed_team_nickname: shamed_team.to_string(),
+                total_shames: event.metadata_i64("totalShames")?,
+                total_shamings: event.metadata_i64("totalShamings")?,
+            }
+        }
+        EventType::Echo => {
+            // This could be written better with the new interface but I'm just doing a
+            // straightforward transformation for now. It was hard enough to write once.
+            let (echoer_name, echoee_name) = event.next_parse(parse_echo)?;
+            let first_remove_mods_event = event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
+            let first_add_mods_event = event.next_child(EventType::AddedModsFromAnotherMod)?;
+            let main_echo_event = (first_remove_mods_event, first_add_mods_event);
+
+            let mut sub_echo_events = Vec::new();
+            loop {
+                let remove_mods_event = event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
+                let add_mods_event = event.next_child_opt(EventType::AddedModsFromAnotherMod)?;
+
+                if let Some(add_mods_event) = add_mods_event {
+                    sub_echo_events.push((remove_mods_event, add_mods_event))
+                } else {
+                    break;
+                }
+            }
+
+            let parse_str = format!("'s Echoed an Echo from {echoer_name}!");
+            let sub_echos = sub_echo_events.into_iter()
+                .map(|(removed, mut added)| {
+                    let echoer_name = added.next_parse(parse_terminated(&parse_str))?;
+                    make_echo(echoer_name, (removed, added))
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::Echo {
+                game: event.game(unscatter, attractor_secret_base)?,
+                echoee_name: echoee_name.to_string(),
+                primary_echo: make_echo(echoer_name, main_echo_event)?,
+                receiver_echos: sub_echos,
+            }
+        }
+        EventType::EchoIntoStatic => {
+            let (echoer_name, echoee_name) = event.next_parse(parse_echo_into_static)?;
+            let echoer_removed = event.next_child(EventType::PlayerRemovedFromTeam)?;
+            let echoee_removed = event.next_child(EventType::PlayerRemovedFromTeam)?;
+            let echoer_mod_change = event.next_child(EventType::ModChange)?;
+            let echoee_mod_change = event.next_child(EventType::ModChange)?;
+
+
+            let make_echo_into_static = |name: &str, mut removed_event: EventParseWrapper, mut mod_change_event: EventParseWrapper| {
+                let nickname = removed_event.metadata_str("teamName")?;
+                assert!(is_known_team_nickname(nickname));
+                ParseOk(EchoIntoStatic {
+                    team_id: removed_event.metadata_uuid("teamId")?,
+                    team_nickname: nickname.to_string(),
+                    player_id: removed_event.metadata_uuid("playerId")?,
+                    player_name: name.to_string(),
+                    removed_from_team_sub_event: removed_event.as_sub_event(),
+                    mod_changed_sub_event: mod_change_event.as_sub_event(),
+                })
+            };
+
+            FedEventData::EchoIntoStatic {
+                game: event.game(unscatter, attractor_secret_base)?,
+                echoer: make_echo_into_static(echoer_name, echoer_removed, echoer_mod_change)?,
+                echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
+            }
+        }
+        EventType::RemovedModsFromAnotherMod => { todo!() }
+        EventType::AddedModsFromAnotherMod => { todo!() }
+        EventType::Psychoacoustics => {
+            // For some reason the description on the main event is empty and the description is
+            // only on the child event
+            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            let (stadium_name, mod_name, team_nickname) = child.next_parse(parse_psychoacoustics)?;
+            assert!(is_known_team_nickname(team_nickname));
+            FedEventData::Psychoacoustics {
+                game: event.game(unscatter, attractor_secret_base)?,
+                stadium_name: stadium_name.to_string(),
+                team_id: child.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                mod_name: mod_name.to_string(),
+                mod_id: child.metadata_str("mod")?.to_string(),
+                sub_event: child.as_sub_event(),
+            }
+        }
+        EventType::EchoReciever => {
+            let (echoer_name, echoee_name) = event.next_parse(parse_echo_receiver)?;
+
+            let mut child = event.next_child(EventType::ModChange)?;
+            FedEventData::EchoReceiver {
+                game: event.game(unscatter, attractor_secret_base)?,
+                echoer_name: echoer_name.to_string(),
+                echoee_name: echoee_name.to_string(),
+                echoee_id: child.next_player_id()?,
+                echoee_team_id: child.next_team_id()?,
+                sub_event: child.as_sub_event(),
+            }
+        }
+        EventType::InvestigationMessage => {
+            FedEventData::InvestigationMessage {
+                player_id: event.next_player_id()?,
+                message: event.description().into(),
+            }
+        }
+        EventType::Tidings => {
+            FedEventData::Tidings {
+                message: event.description().into(),
+                metadata: event.full_metadata().clone(),
+                player_tags: event.player_tags().into(),
+            }
+        }
+        EventType::Middling => {
+            let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            FedEventData::Middling {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                is_middling,
+                change_event: ModChangeSubEvent {
+                    sub_event: child.as_sub_event(),
+                    team_id: child.next_team_id()?,
+                },
+            }
+        }
+        EventType::PlayerAttributeIncrease => { todo!() }
+        EventType::PlayerAttributeDecrease => { todo!() }
+        EventType::EnterCrimeScene => {
+            let (_player_name, stadium_nickname) = event.next_parse(parse_enter_crime_scene)?;
+
+            let mut crime_scene_event = event.next_child(EventType::PlayerMoved)?;
+            let mut shadows_event = event.next_child(EventType::PlayerStatIncrease)?;
+
+            FedEventData::EnterCrimeScene {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_id: crime_scene_event.metadata_uuid("playerId")?,
+                player_name: crime_scene_event.metadata_str("playerName")?.to_string(),
+                previous_team_id: crime_scene_event.metadata_uuid("sendTeamId")?,
+                previous_team_name: crime_scene_event.metadata_str("sendTeamName")?.to_string(),
+                previous_location: crime_scene_event.metadata_enum("location")?,
+                new_team_id: crime_scene_event.metadata_uuid("receiveTeamId")?,
+                new_team_name: crime_scene_event.metadata_str("receiveTeamName")?.to_string(),
+                stadium_name: stadium_nickname.to_string(),
+                rating_before: shadows_event.metadata_f64("before")?,
+                rating_after: shadows_event.metadata_f64("after")?,
+                enter_crime_scene_sub_event: crime_scene_event.as_sub_event(),
+                enter_shadows_sub_event: shadows_event.as_sub_event(),
+            }
+        }
+        EventType::ItemBreaks => { todo!() }
+        EventType::Announcement => { todo!() }
+        EventType::RunsScored => { todo!() }
+        EventType::WinCollectedRegular => { todo!() }
+        EventType::WinCollectedPostseason => { todo!() }
+        EventType::GameOver => { todo!() }
+        EventType::StormWarning => { todo!() }
+        EventType::Snowflakes => { todo!() }
+        EventType::Sun2SetWin => {
+            let team_name = event.next_parse(parse_sun2_set_win)?;
+            assert!(is_known_team_nickname(team_name));
+            FedEventData::Sun2SetWin {
+                team_id: event.next_team_id()?,
+                team_nickname: team_name.to_string(),
+            }
+        }
+        EventType::BlackHoleSwallowedWin => {
+            let team_name = event.next_parse(parse_black_hole_swallowed_win)?;
+            assert!(is_known_team_nickname(team_name));
+            FedEventData::BlackHoleSwallowedWin {
+                team_id: event.next_team_id()?,
+                team_nickname: team_name.to_string(),
+            }
+        }
+        EventType::RemovedModFromOtherMod => { todo!() }
+        EventType::PostseasonAdvance => {
+            let (team_nickname, round_num, season_num) = event.next_parse(parse_postseason_advance)?;
+            assert!(is_known_team_nickname(team_nickname));
+            FedEventData::PostseasonAdvance {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                round: round_num,
+                season: season_num,
+            }
+        }
+        EventType::GainBloodType => { todo!() }
+        EventType::HighPressure => {
+            let (team_nickname, is_on) = event.next_parse(parse_high_pressure)?;
+            assert!(is_known_team_nickname(team_nickname));
+            let mut sub_event = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+            FedEventData::HighPressure {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                is_on,
+                sub_event: sub_event.as_sub_event(),
+            }
+        }
+        EventType::LineupSorted => {
+            // This happened as a top-level event exactly once (and really it should have been a
+            // child of the lovers' getting Base Dealing)
+            let _ = event.next_parse_tag("The Lovers' lineup has been optimized.")?;
+            FedEventData::LineupSorted {
+                team_id: event.next_team_id()?,
+                team_nickname: "Lovers".to_string(),
+            }
+        }
+        EventType::NutButton => { todo!() }
         EventType::PostseasonEliminated => {
             let (team_nickname, season_num) = event.next_parse(parse_postseason_eliminated)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -2173,86 +2000,64 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 season: season_num,
             }
         }
-        _ => { todo!("Remove me after refactoring") }
     };
 
     event.to_fed(data)
 }
 
-fn extract_batter_debt(event: &mut EventParseWrapper, batter_debt: bool) -> Result<Option<BatterDebt>, FeedParseError> {
-    Ok(if batter_debt {
-        let sub_event = event.next_child_if_mod_effect(EventType::AddedMod, "OBSERVED")?
-            .map(|mut child| {
-                ParseOk(ModChangeSubEvent {
-                    team_id: child.next_team_id()?,
-                    sub_event: child.as_sub_event(),
-                })
-            })
-            .transpose()?;
-
-        Some(BatterDebt {
-            batter_id: event.next_player_id()?,
-            fielder_id: event.next_player_id()?,
-            sub_event,
-        })
-    } else {
-        None
+fn make_echo(echoer_name: &str, events: (Option<EventParseWrapper>, EventParseWrapper)) -> Result<Echo, FeedParseError> {
+    let (removed, mut added) = events;
+    // I could verify that the IDs all match, but the round-trip test should verify that
+    Ok(Echo {
+        receiver_team_id: added.next_team_id()?,
+        receiver_id: added.next_player_id()?,
+        receiver_name: echoer_name.to_string(),
+        mods_removed: removed.map(get_mods_removed).transpose()?,
+        mods_added: get_mods_added(added)?,
     })
 }
 
-// fn make_echo(echoer_name: &str, events: &(Option<&EventuallyEvent>, &EventuallyEvent)) -> Result<Echo, FeedParseError> {
-//     let (removed, added) = events;
-//     // I could verify that the IDs all match, but the round-trip test should verify that
-//     Ok(Echo {
-//         receiver_team_id: added.next_team_id()?,
-//         receiver_id: get_one_player_id(&added.player_tags, added.r#type)?,
-//         receiver_name: echoer_name.to_string(),
-//         mods_removed: removed.map(get_mods_removed).transpose()?,
-//         mods_added: get_mods_added(added)?,
-//     })
-// }
-//
-// #[derive(Deserialize)]
-// struct ModAndType {
-//     r#mod: String,
-//     // r#type: i32,
-// }
-//
-// fn get_mods_removed(event: &EventuallyEvent) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
-//     #[derive(Deserialize)]
-//     struct EchoMetadata {
-//         removes: Vec<ModAndType>,
-//     }
-//
-//     let des: EchoMetadata = serde_json::from_value(event.metadata.other.clone())
-//         .map_err(|_| FeedParseError::MissingMetadata {
-//             event_type: event.r#type,
-//             field: "removes",
-//         })?;
-//
-//     let mod_ids = des.removes.into_iter()
-//         .map(|mod_and_type| mod_and_type.r#mod)
-//         .collect();
-//     Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
-// }
-//
-// fn get_mods_added(event: &EventuallyEvent) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
-//     #[derive(Deserialize)]
-//     struct EchoMetadata {
-//         adds: Vec<ModAndType>,
-//     }
-//
-//     let des: EchoMetadata = serde_json::from_value(event.metadata.other.clone())
-//         .map_err(|_| FeedParseError::MissingMetadata {
-//             event_type: event.r#type,
-//             field: "adds",
-//         })?;
-//
-//     let mod_ids = des.adds.into_iter()
-//         .map(|mod_and_type| mod_and_type.r#mod)
-//         .collect();
-//     Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
-// }
+#[derive(Deserialize)]
+struct ModAndType {
+    r#mod: String,
+    // r#type: i32,
+}
+
+fn get_mods_removed(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
+    #[derive(Deserialize)]
+    struct EchoMetadata {
+        removes: Vec<ModAndType>,
+    }
+
+    let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
+        .map_err(|_| FeedParseError::MissingMetadata {
+            event_type: event.event_type,
+            field: "removes",
+        })?;
+
+    let mod_ids = des.removes.into_iter()
+        .map(|mod_and_type| mod_and_type.r#mod)
+        .collect();
+    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
+}
+
+fn get_mods_added(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
+    #[derive(Deserialize)]
+    struct EchoMetadata {
+        adds: Vec<ModAndType>,
+    }
+
+    let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
+        .map_err(|_| FeedParseError::MissingMetadata {
+            event_type: event.event_type,
+            field: "adds",
+        })?;
+
+    let mod_ids = des.adds.into_iter()
+        .map(|mod_and_type| mod_and_type.r#mod)
+        .collect();
+    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
+}
 
 fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
     names.into_iter()

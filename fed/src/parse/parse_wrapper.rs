@@ -1,8 +1,9 @@
+use std::fmt::Display;
 use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
 use nom::error::convert_error;
 use uuid::Uuid;
-use eventually_api::{EventCategory, EventType, EventuallyEvent};
+use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::ParseOk;
 use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
@@ -23,7 +24,7 @@ pub struct EventParseWrapper<'e> {
 
     // Managed specially
     description: &'e str,
-    metadata: &'e serde_json::Value,
+    metadata: &'e EventMetadata,
 
     consumed_player_id_count: usize,
     player_ids: &'e [Uuid],
@@ -55,7 +56,7 @@ impl<'e> EventParseWrapper<'e> {
             nuts: event.nuts,
             play: event.metadata.play,
             description: &event.description,
-            metadata: &event.metadata.other,
+            metadata: &event.metadata,
             consumed_player_id_count: 0,
             player_ids: event.player_tags.as_slice(),
             consumed_team_id_count: 0,
@@ -140,6 +141,13 @@ impl<'e> EventParseWrapper<'e> {
         Some(id)
     }
 
+    pub fn next_player_id_opt(&mut self) -> Option<Uuid> {
+        let (&id, rest) = self.player_ids.split_first()?;
+        self.consumed_player_id_count += 1;
+        self.player_ids = rest;
+        Some(id)
+    }
+
     fn next_game_id(&mut self) -> Result<Uuid, FeedParseError> {
         self.consumed_game_id_count += 1;
         let (&id, rest) = self.game_ids.split_first()
@@ -155,6 +163,10 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_child(&mut self, expected_type: EventType) -> Result<Self, FeedParseError> {
+        self.next_child_any(&[expected_type])
+    }
+
+    pub fn next_child_any(&mut self, expected_types: &[EventType]) -> Result<Self, FeedParseError> {
         self.consumed_children_count += 1;
         let (child, rest) = self.children.split_first()
             .ok_or_else(|| {
@@ -164,7 +176,7 @@ impl<'e> EventParseWrapper<'e> {
                 }
             })?;
         self.children = rest;
-        if child.r#type != expected_type {
+        if expected_types.iter().any(|&t| child.r#type == t) {
             return Err(FeedParseError::UnexpectedChildType {
                 event_type: self.event_type,
                 child_event_type: child.r#type,
@@ -173,6 +185,27 @@ impl<'e> EventParseWrapper<'e> {
         }
 
         Self::new(child)
+    }
+
+    pub fn next_child_opt(&mut self, expected_type: EventType) -> Result<Option<Self>, FeedParseError> {
+        self.next_child_any_opt(&[expected_type])
+    }
+
+    pub fn next_child_any_opt(&mut self, expected_types: &[EventType]) -> Result<Option<Self>, FeedParseError> {
+        let Some((child, rest)) = self.children.split_first() else {
+            return Ok(None)
+        };
+        self.consumed_children_count += 1;
+        self.children = rest;
+        if expected_types.iter().any(|&t| child.r#type == t) {
+            return Err(FeedParseError::UnexpectedChildType {
+                event_type: self.event_type,
+                child_event_type: child.r#type,
+                child_number: self.consumed_children_count,
+            });
+        }
+
+        Self::new(child).map(Some)
     }
 
     pub fn next_child_if<F>(&mut self, expected_type: EventType, pred: F) -> Result<Option<Self>, FeedParseError>
@@ -237,7 +270,7 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     fn get_metadata(&self, key: &'static str) -> Result<&'e serde_json::Value, FeedParseError> {
-        self.metadata
+        self.metadata.other
             .as_object()
             .ok_or_else(|| {
                 FeedParseError::MetadataWasNotAnObject {
@@ -289,16 +322,34 @@ impl<'e> EventParseWrapper<'e> {
             })
     }
 
-    pub fn metadata_uuid(&self, key: &'static str) -> Result<Uuid, FeedParseError> {
+    pub fn metadata_str_vec(&self, key: &'static str) -> Result<Vec<&'e str>, FeedParseError> {
         self.get_metadata(key)?
-            .as_str()
+            .as_array()
             .ok_or_else(|| {
                 FeedParseError::MetadataTypeError {
                     event_type: self.event_type,
                     field: key,
-                    ty: "str",
+                    ty: "array",
                 }
-            })?
+            })
+            .and_then(|vec| {
+                vec.iter()
+                    .map(|item| {
+                        item.as_str()
+                            .ok_or_else(|| {
+                                FeedParseError::MetadataTypeError {
+                                    event_type: self.event_type,
+                                    field: key,
+                                    ty: "array[str]",
+                                }
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+    }
+
+    pub fn metadata_uuid(&self, key: &'static str) -> Result<Uuid, FeedParseError> {
+        self.metadata_str(key)?
             .try_into()
             .map_err(|err| {
                 FeedParseError::MetadataStrToUuidError {
@@ -307,6 +358,39 @@ impl<'e> EventParseWrapper<'e> {
                     err,
                 }
             })
+    }
+
+    pub fn metadata_enum<T>(&self, key: &'static str) -> Result<T, FeedParseError>
+        where i64: TryInto<T>, <i64 as TryInto<T>>::Error: Display {
+        self.metadata_i64(key)?
+            .try_into()
+            .map_err(|err| {
+                FeedParseError::MetadataIntToEnumError {
+                    event_type: self.event_type,
+                    field: key,
+                    err: err.to_string(),
+                }
+            })
+    }
+
+    pub fn description(&self) -> &'e str {
+        self.description
+    }
+
+    pub fn metadata(&self) -> &'e serde_json::Value {
+        &self.metadata.other
+    }
+
+    pub fn full_metadata(&self) -> &'e EventMetadata {
+        self.metadata
+    }
+
+    pub fn player_tags(&self) -> &'e [Uuid] {
+        self.player_ids
+    }
+
+    pub fn team_tags(&self) -> &'e [Uuid] {
+        self.team_ids
     }
 
     pub fn parse_spicy_status(&mut self, batter_name: &str) -> Result<SpicyStatus, FeedParseError> {
@@ -394,15 +478,12 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
-
     pub fn parse_scores(&mut self, label: &'static str) -> Result<Scores, FeedParseError> {
-        let scores = self.next_parse(parse_scores(label))?;
-        let scoring_players = scores.scorers.into_iter()
-            .map(|scorer| {
-                ParseOk((self.next_player_id()?, scorer.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?; // Need to be eager to mutate event in the right order
+        let scoring_players = self.parse_scoring_players(label)?;
+        self.parse_scores_with_scoring_players(scoring_players)
+    }
 
+    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, String)>) -> Result<Scores, FeedParseError> {
         let free_refills = self.parse_free_refills()?;
 
         let scores = scoring_players.into_iter()
@@ -419,6 +500,16 @@ impl<'e> EventParseWrapper<'e> {
             scores,
             free_refills,
         })
+    }
+
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, String)>, FeedParseError> {
+        let scores = self.next_parse(parse_scores(label))?;
+        let scoring_players = scores.scorers.into_iter()
+            .map(|scorer| {
+                ParseOk((self.next_player_id()?, scorer.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(scoring_players)
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

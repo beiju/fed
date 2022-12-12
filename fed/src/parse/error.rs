@@ -85,6 +85,13 @@ pub enum FeedParseError {
         err: uuid::Error,
     },
 
+    #[error("Couldn't convert field \"{field}\" for {event_type:?} event to Enum: {err}")]
+    MetadataIntToEnumError {
+        event_type: EventType,
+        field: &'static str,
+        err: String,
+    },
+
     #[error("Unexpected value \"{value}\" in metadata field \"{field}\" for {event_type:?} event")]
     UnexpectedMetadataValue {
         event_type: EventType,
