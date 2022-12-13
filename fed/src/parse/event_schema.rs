@@ -150,10 +150,6 @@ pub struct ScoringPlayer {
 
     /// Player name
     pub player_name: String,
-
-    /// Info about the player who stopped inhabiting by going home on this score, if any, otherwise
-    /// null
-    pub stopped_inhabiting: Option<StoppedInhabiting>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1267,6 +1263,10 @@ pub enum FedEventData {
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
 
+        /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
+        /// Otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
+
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players scored with Tired or Wired the event was
         /// Special but that was the only way of knowing. (It's possible that there are other
@@ -1421,6 +1421,10 @@ pub enum FedEventData {
         /// If the batter went to a later base with Base Instincts, this is the base number.
         /// Otherwise null.
         base_instincts: Option<i32>,
+
+        /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
+        /// Otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players scored with Tired or Wired the event was
@@ -3610,8 +3614,8 @@ impl FedEvent {
                     .children(observed_child) // slight abuse of IntoIter
                     .build()
             }
-            FedEventData::Hit { ref game, ref batter_name, batter_id, num_bases, ref scores, ref spicy_status, is_special } => {
-                event_builder.for_game(game)
+            FedEventData::Hit { game, batter_name, batter_id, num_bases, scores, spicy_status, stopped_inhabiting, is_special } => {
+                event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Hit,
                         category: EventCategory::special_if(scores.used_refill() || spicy_status.is_special() || is_special),
@@ -3626,8 +3630,9 @@ impl FedEvent {
                         player_tags: vec![batter_id],
                         ..Default::default()
                     })
-                    .scores(scores, " scores!")
-                    .spicy(spicy_status, batter_id, batter_name)
+                    .scores(&scores, " scores!")
+                    .spicy(&spicy_status, batter_id, &batter_name)
+                    .stopped_inhabiting(&stopped_inhabiting)
                     .build()
             }
             FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction } => {
@@ -3775,14 +3780,14 @@ impl FedEvent {
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
-            FedEventData::Walk { ref game, ref batter_name, batter_id, ref scores, ref base_instincts, is_special } => {
+            FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, stopped_inhabiting, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
-                    format!("\nBase Instincts take them directly to {} base!", base_name(*base))
+                    format!("\nBase Instincts take them directly to {} base!", base_name(base))
                 } else {
                     String::new()
                 };
 
-                event_builder.for_game(game)
+                event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
                         category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special),
@@ -3790,7 +3795,8 @@ impl FedEvent {
                         player_tags: vec![batter_id],
                         ..Default::default()
                     })
-                    .scores(scores, " scores!")
+                    .scores(&scores, " scores!")
+                    .stopped_inhabiting(&stopped_inhabiting)
                     .build()
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
@@ -5533,6 +5539,8 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Echo { game, echoee_name, primary_echo: main_echo, receiver_echos: sub_echos, } => {
+                dbg!(&main_echo);
+                dbg!(&sub_echos);
                 let make_children_for_echo = |echo: Echo, mod_type: i64, source: &str, echo_description: &str| {
                     let child_removed = echo.mods_removed.map(|mods_removed| {
                         let removes: Vec<_> = mods_removed.mod_ids.into_iter()
@@ -5589,7 +5597,10 @@ impl FedEvent {
                     .chain(sub_echo_children)
                     .map(|(removed, added)| [removed, Some(added)])
                     .flatten() // This one should flatten the array
-                    .flatten(); // This one should flatten the options
+                    .flatten() // This one should flatten the options
+                    .collect_vec(); // for debugging
+
+                dbg!(&children);
 
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {

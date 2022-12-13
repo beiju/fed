@@ -196,15 +196,11 @@ impl<'e> EventParseWrapper<'e> {
         let Some((child, rest)) = self.children.split_first() else {
             return Ok(None)
         };
+        if !expected_types.iter().any(|&t| child.r#type == t) {
+            return Ok(None)
+        }
         self.consumed_children_count += 1;
         self.children = rest;
-        if !expected_types.iter().any(|&t| child.r#type == t) {
-            return Err(FeedParseError::UnexpectedChildType {
-                event_type: self.event_type,
-                child_event_type: child.r#type,
-                child_number: self.consumed_children_count,
-            });
-        }
 
         Self::new(child).map(Some)
     }
@@ -401,7 +397,6 @@ impl<'e> EventParseWrapper<'e> {
             ParsedSpicyStatus::None => { SpicyStatus::None }
             ParsedSpicyStatus::HeatingUp => { SpicyStatus::HeatingUp }
             ParsedSpicyStatus::RedHot => {
-                println!("Red hot!");
                 let child = self.next_child_if_mod_effect(EventType::AddedMod, "ON_FIRE")?
                     .map(|mut spicy_event| {
                         ParseOk(ModChangeSubEvent {
@@ -495,7 +490,6 @@ impl<'e> EventParseWrapper<'e> {
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
-                    stopped_inhabiting: self.parse_stopped_inhabiting(Some(player_id))?,
                 })
             })
             .collect::<Result<_, _>>()?;

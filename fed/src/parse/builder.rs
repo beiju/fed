@@ -60,6 +60,7 @@ impl EventBuilderChild {
     }
 }
 
+#[derive(Debug)]
 pub struct EventBuilderChildFull {
     pub common: SubEvent,
     pub update: EventBuilderUpdate,
@@ -75,7 +76,7 @@ impl EventBuilderChildFull {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct EventBuilderUpdate {
     pub r#type: EventType,
     pub category: EventCategory,

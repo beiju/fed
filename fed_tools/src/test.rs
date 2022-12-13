@@ -35,7 +35,11 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
             .context("Failed to convert reconstructed event to serde_json::Value")?;
         JsonDiff::diff_string(&reconstructed_event_json, &original_event_json, false)
             .map_or_else(|| Ok(()),
-                         |str| Err(anyhow!("{str}")))
+                         |str| {
+                             let expected = serde_json::to_string_pretty(&original_event_json).unwrap();
+                             let actual = serde_json::to_string_pretty(&reconstructed_event_json).unwrap();
+                             Err(anyhow!("Expected: {expected}\nProduced:{actual}\nDiff:{str}"))
+                         })
             .with_context(|| format!("Event not reconstructed exactly: {}", original_event_json.get("description").unwrap().as_str().unwrap()))?;
     }
     Ok((i, parsed_event))

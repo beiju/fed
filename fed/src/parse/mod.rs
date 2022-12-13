@@ -154,12 +154,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let batter_id = event.next_player_id()?;
                     let scores = event.parse_scores(" scores!")?;
 
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
                     FedEventData::Walk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         scores,
                         base_instincts,
+                        stopped_inhabiting,
                         is_special: event.category == EventCategory::Special,
                     }
                 }
@@ -272,8 +274,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
                     let scores = event.parse_scores(" scores!")?;
-                    // TODO: Stopped inhabiting should happen separately for the batter and the
-                    //   runner who got out
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::DoublePlay {
@@ -322,15 +322,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
-            // TODO There should be able to be multiple of these if multiple ghosts made it home
-            let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+            let batter_id = event.next_player_id()?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
                 // TODO Verify batter name and id against magmatic
                 magmatic: magmatic_expanded.map(|(m, _, _)| m),
                 batter_name: batter_name.to_string(),
-                batter_id: event.next_player_id()?,
+                batter_id,
                 num_runs,
                 stopped_inhabiting,
                 free_refills,
@@ -341,11 +341,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Hit => {
-            println!("Parsing {}", event.description());
             let (batter_name, num_bases) = event.next_parse(parse_hit)?;
             let batter_id = event.next_player_id()?;
             let scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
+
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
+
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
@@ -353,6 +355,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 num_bases,
                 scores,
                 spicy_status,
+                stopped_inhabiting,
                 is_special: event.category == EventCategory::Special,
             }
         }
@@ -469,7 +472,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Party => {
             let player_name = event.next_parse(parse_party)?;
-            let mut sub_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+            let mut sub_event = event.next_child(EventType::PlayerStatIncrease)?;
             FedEventData::Party {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id: sub_event.next_team_id()?,
@@ -493,8 +496,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             match pitch_type {
                 MildPitchType::Ball((balls, strikes)) => {
-                    let scores = event.parse_scores(" scores!")?;
                     let runners_advance = event.next_parse(parse_runners_advance_on_mild_pitch)?;
+                    let scores = event.parse_scores(" scores!")?;
 
                     FedEventData::MildPitch {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -618,7 +621,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let pitchers = names.into_iter()
                 .map(|pitcher_name| {
-                    let mut sub_event = event.next_child(EventType::ModChange)?;
+                    let mut sub_event = event.next_child(EventType::AddedMod)?;
                     ParseOk(ModChangeSubEventWithNamedPlayer {
                         sub_event: sub_event.as_sub_event(),
                         team_id: sub_event.next_team_id()?,
@@ -690,7 +693,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (resisted_name, tangled_name) = event.next_parse(parse_feedback_blocked)?;
             let resisted_id = event.next_player_id()?;
             let tangled_id = event.next_player_id()?;
-            let mut sub_event = event.next_child(EventType::PlayerAttributeDecrease)?;
+            let mut sub_event = event.next_child(EventType::PlayerStatDecrease)?;
 
             FedEventData::FeedbackBlocked {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -818,8 +821,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let sipper_id = event.next_player_id()?;
             let sipped_id = event.next_player_id()?;
 
-            let mut sipped_event = event.next_child(EventType::PlayerAttributeDecrease)?;
-            let mut sipper_event = event.next_child(EventType::PlayerAttributeIncrease)?;
+            let mut sipped_event = event.next_child(EventType::PlayerStatDecrease)?;
+            let mut sipper_event = event.next_child(EventType::PlayerStatIncrease)?;
 
             FedEventData::Blooddrain {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1311,7 +1314,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::OverUnder => {
             let (player_name, on) = event.next_parse(parse_under_over_over_under("Over Under"))?;
 
-            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+            let mut sub_event = event.next_child(if on {
+                EventType::AddedModFromOtherMod
+            } else {
+                EventType::RemovedModFromOtherMod
+            })?;
             FedEventData::OverUnder {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id: sub_event.next_team_id()?,
@@ -1324,7 +1331,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::UnderOver => {
             let (player_name, on) = event.next_parse(parse_under_over_over_under("Under Over"))?;
 
-            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+            let mut sub_event = event.next_child(if on {
+                EventType::AddedModFromOtherMod
+            } else {
+                EventType::RemovedModFromOtherMod
+            })?;
             FedEventData::UnderOver {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id: sub_event.next_team_id()?,
@@ -1422,7 +1433,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 EarlbirdsChange::Added(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
-                    let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
                     FedEventData::EarlbirdsAdded {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_id: sub_event.next_team_id()?,
@@ -1431,7 +1442,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 EarlbirdsChange::Removed => {
-                    let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                    let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
                     FedEventData::EarlbirdsRemoved {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_id: sub_event.next_team_id()?,
@@ -1445,7 +1456,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 LateToThePartyChange::Added(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
-                    let mut sub_event = event.next_child_if_mod_effect(EventType::AddedMod, "OVERPERFORMING")?;
+                    let mut sub_event = event.next_child_if_mod_effect(EventType::AddedModFromOtherMod, "OVERPERFORMING")?;
                     FedEventData::LateToThePartyAdded {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_id: sub_event.as_mut().map(|e| e.next_team_id()).transpose()?,
@@ -1922,8 +1933,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::EnterCrimeScene => {
             let (_player_name, stadium_nickname) = event.next_parse(parse_enter_crime_scene)?;
 
-            let mut crime_scene_event = event.next_child(EventType::PlayerMoved)?;
-            let mut shadows_event = event.next_child(EventType::PlayerStatIncrease)?;
+            let crime_scene_event = event.next_child(EventType::PlayerMoved)?;
+            let shadows_event = event.next_child(EventType::PlayerStatIncrease)?;
 
             FedEventData::EnterCrimeScene {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -2070,7 +2081,7 @@ fn get_mods_added(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved
 fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
     names.into_iter()
         .map(|name| {
-            let mut sub_event = event.next_child(EventType::ModChange)?;
+            let mut sub_event = event.next_child(EventType::RemovedMod)?;
             Ok(ModChangeSubEventWithNamedPlayer {
                 sub_event: sub_event.as_sub_event(),
                 team_id: sub_event.next_team_id()?,
