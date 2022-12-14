@@ -163,7 +163,7 @@ pub struct Scores {
     ///
     /// It's almost possible to attribute each one to the specific score that caused it, but not
     /// quite because FlyOut events don't have pitcher and batter uuids.
-    pub free_refills: Vec<FreeRefill>
+    pub free_refills: Vec<FreeRefill>,
 }
 
 impl Scores {
@@ -201,7 +201,7 @@ pub struct Score {
 
     /// List of free refills used on this event, if any. This should always be empty if `score` is
     /// null, but if `scores` is non-null it may contain more than one element.
-    pub free_refills: Vec<FreeRefill>
+    pub free_refills: Vec<FreeRefill>,
 }
 
 impl Score {
@@ -915,6 +915,12 @@ pub struct ItemDamage {
     /// The player's star rating. TODO: Is this with or without items?
     pub player_rating: f64,
 
+    /// Team Uuid of team whose item broke
+    pub team_id: Uuid,
+
+    /// Uuid of player whose item broke
+    pub player_id: Uuid,
+
     /// Metadata for the event associated with the item being damaged
     pub sub_event: SubEvent,
 }
@@ -1182,6 +1188,12 @@ pub enum FedEventData {
         /// If the batter has Debt and hit the fielder with the ball, this contains the information
         /// about adding Unstable/Observed/whatever. Otherwise it will be null.
         batter_debt: Option<BatterDebt>,
+
+        /// Damage that the batter's item took, if any
+        batter_item_damage: Option<ItemDamage>,
+
+        /// Damage that the fielder's item took, if any
+        fielder_item_damage: Option<ItemDamage>,
     },
 
     /// Fielders choice event
@@ -1421,6 +1433,9 @@ pub enum FedEventData {
         /// If the batter went to a later base with Base Instincts, this is the base number.
         /// Otherwise null.
         base_instincts: Option<i32>,
+
+        /// Damage that the batter's item took, if any
+        batter_item_damage: Option<ItemDamage>,
 
         /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
         /// Otherwise null.
@@ -3713,10 +3728,10 @@ impl FedEvent {
                     .children(magmagic_child)
                     .build()
             }
-            FedEventData::GroundOut { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, ref batter_debt } => {
-                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, batter_name, fielder_name);
+            FedEventData::GroundOut { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage } => {
+                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
 
-                event_builder.for_game(game)
+                event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
@@ -3724,9 +3739,11 @@ impl FedEvent {
                         player_tags,
                         ..Default::default()
                     })
-                    .scores(scores, " advances on the sacrifice.")
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .cooled_off(cooled_off, batter_name)
+                    .scores(&scores, " advances on the sacrifice.")
+                    .stopped_inhabiting(&stopped_inhabiting)
+                    .cooled_off(&cooled_off, &batter_name)
+                    .item_damage(&batter_item_damage, &batter_name)
+                    .item_damage(&fielder_item_damage, &fielder_name)
                     .children(observed_child)
                     .build()
             }
@@ -3780,7 +3797,7 @@ impl FedEvent {
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
-            FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, stopped_inhabiting, is_special } => {
+            FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
                     format!("\nBase Instincts take them directly to {} base!", base_name(base))
                 } else {
@@ -3797,6 +3814,7 @@ impl FedEvent {
                     })
                     .scores(&scores, " scores!")
                     .stopped_inhabiting(&stopped_inhabiting)
+                    .item_damage(&batter_item_damage, &batter_name)
                     .build()
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
@@ -6135,15 +6153,6 @@ fn base_name(base_stolen: i32) -> &'static str {
         4 => "fourth",
         5 => "fifth",
         _ => panic!("What base is this")
-    }
-}
-
-// Sometimes in the metadata, an 0 needs to be an int even if the value is a float. ballclark.
-fn zero_int(value: f64) -> serde_json::Value {
-    if value == 0.0 {
-        serde_json::Value::from(0)
-    } else {
-        serde_json::Value::from(value)
     }
 }
 

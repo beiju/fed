@@ -154,6 +154,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let batter_id = event.next_player_id()?;
                     let scores = event.parse_scores(" scores!")?;
 
+                    let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
                     FedEventData::Walk {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -161,6 +162,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         batter_id,
                         scores,
                         base_instincts,
+                        batter_item_damage,
                         stopped_inhabiting,
                         is_special: event.category == EventCategory::Special,
                     }
@@ -243,6 +245,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
+                    let batter_item_damage = event.parse_item_damage(batter_name)?;
+                    let fielder_item_damage = event.parse_item_damage(fielder_name)?;
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
@@ -252,6 +256,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
                         batter_debt,
+                        batter_item_damage,
+                        fielder_item_damage,
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
@@ -1105,6 +1111,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let (team_id, effect) = if item_breaks.is_some() {
                 let mut break_child = event.next_child(EventType::ItemBreaks)?;
+                let team_id = break_child.next_team_id()?;
 
                 let item_breaks = ItemDamage {
                     item_id: break_child.metadata_uuid("itemId")?,
@@ -1114,10 +1121,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
                     player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
                     player_rating: break_child.metadata_f64("playerRating")?,
+                    team_id,
+                    player_id: break_child.next_player_id()?,
                     sub_event: break_child.as_sub_event(),
                 };
 
-                let team_id = break_child.next_team_id()?;
                 (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks))
             } else {
                 // I'm hoping that detectives only sense something fishy if the attack hit

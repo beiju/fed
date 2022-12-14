@@ -3,6 +3,7 @@ use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use std::fmt::Write;
+use crate::ItemDamage;
 
 use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, Scores, SpicyStatus, StoppedInhabiting, SubEvent};
 
@@ -18,7 +19,7 @@ pub struct EventBuilderCommon {
 }
 
 impl EventBuilderCommon {
-    pub fn fill(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static> {
+    pub fn fill(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static, 'static> {
         EventBuilderFull {
             common: self,
             game: None,
@@ -28,6 +29,7 @@ impl EventBuilderCommon {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
+            item_damage: Vec::new()
         }
     }
 
@@ -111,7 +113,7 @@ pub enum SpicyChange<'s> {
 }
 
 impl EventBuilderForGame {
-    pub fn fill(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static> {
+    pub fn fill(self, update: EventBuilderUpdate) -> EventBuilderFull<'static, 'static, 'static, 'static> {
         EventBuilderFull {
             common: self.common,
             game: Some(self.game),
@@ -121,11 +123,12 @@ impl EventBuilderForGame {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
+            item_damage: Vec::new(),
         }
     }
 }
 
-pub struct EventBuilderFull<'s, 'i, 'c> {
+pub struct EventBuilderFull<'s, 'i, 'c, 't> {
     pub common: EventBuilderCommon,
     pub game: Option<GameEvent>,
     pub update: EventBuilderUpdate,
@@ -134,11 +137,12 @@ pub struct EventBuilderFull<'s, 'i, 'c> {
     pub scores: Option<(&'s Scores, &'static str)>,
     pub stopped_inhabiting: Option<&'i StoppedInhabiting>,
     pub spicy_change: SpicyChange<'c>,
+    pub item_damage: Vec<(&'t ItemDamage, &'t str)>,
 }
 
 
-impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
-    pub fn scores<'s>(self, scores: &'s Scores, score_text: &'static str) -> EventBuilderFull<'s, 'ti, 'tc> {
+impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
+    pub fn scores<'s>(self, scores: &'s Scores, score_text: &'static str) -> EventBuilderFull<'s, 'ti, 'tc, 'tt> {
         EventBuilderFull {
             common: self.common,
             game: self.game,
@@ -148,10 +152,11 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
             scores: Some((scores, score_text)),
             stopped_inhabiting: self.stopped_inhabiting,
             spicy_change: self.spicy_change,
+            item_damage: self.item_damage,
         }
     }
 
-    pub fn stopped_inhabiting<'i>(self, stopped_inhabiting: &'i Option<StoppedInhabiting>) -> EventBuilderFull<'ts, 'i, 'tc> {
+    pub fn stopped_inhabiting<'i>(self, stopped_inhabiting: &'i Option<StoppedInhabiting>) -> EventBuilderFull<'ts, 'i, 'tc, 'tt> {
         EventBuilderFull {
             common: self.common,
             game: self.game,
@@ -161,10 +166,11 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
             scores: self.scores,
             stopped_inhabiting: stopped_inhabiting.as_ref(),
             spicy_change: self.spicy_change,
+            item_damage: self.item_damage,
         }
     }
 
-    pub fn cooled_off<'c>(self, cooled_off: &'c Option<ModChangeSubEventWithPlayer>, player_name: &'c str) -> EventBuilderFull<'ts, 'ti, 'c> {
+    pub fn cooled_off<'c>(self, cooled_off: &'c Option<ModChangeSubEventWithPlayer>, player_name: &'c str) -> EventBuilderFull<'ts, 'ti, 'c, 'tt> {
         EventBuilderFull {
             common: self.common,
             game: self.game,
@@ -177,11 +183,11 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
                 None => { SpicyChange::None }
                 Some(cooled_off) => { SpicyChange::CooledOff { cooled_off, player_name } }
             },
-
+            item_damage: self.item_damage,
         }
     }
 
-    pub fn spicy<'c>(self, spicy: &'c SpicyStatus, player_id: Uuid, player_name: &'c str) -> EventBuilderFull<'ts, 'ti, 'c> {
+    pub fn spicy<'c>(self, spicy: &'c SpicyStatus, player_id: Uuid, player_name: &'c str) -> EventBuilderFull<'ts, 'ti, 'c, 'tt> {
         EventBuilderFull {
             common: self.common,
             game: self.game,
@@ -195,8 +201,13 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
                 SpicyStatus::HeatingUp => { SpicyChange::HeatingUp { player_id, player_name } }
                 SpicyStatus::RedHot(red_hot) => { SpicyChange::RedHot { red_hot, player_id, player_name } }
             },
-
+            item_damage: self.item_damage,
         }
+    }
+
+    pub fn item_damage(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+        self.item_damage.extend(item_damage.into_iter().map(|d| (d, player_name)));
+        self
     }
 
     pub fn metadata(self, metadata: serde_json::Value) -> Self {
@@ -343,6 +354,33 @@ impl<'ts, 'ti, 'tc> EventBuilderFull<'ts, 'ti, 'tc> {
             }
         }
 
+        for (item_damage, player_name) in self.item_damage {
+            write!(suffix, "\n {player_name}'s {} broke!", item_damage.item_name).unwrap();
+            children_builders.push(
+                EventBuilderChild::new(&item_damage.sub_event)
+                    .update(EventBuilderUpdate {
+                        r#type: EventType::ItemBreaks,
+                        category: EventCategory::Changes,
+                        description: format!(" {player_name}'s {} broke!", item_damage.item_name),
+                        team_tags: vec![item_damage.team_id],
+                        player_tags: vec![item_damage.player_id],
+                        ..Default::default()
+                    })
+                    .metadata(json!({
+                        "itemDurability": item_damage.durability,
+                        "itemHealthAfter": 0,
+                        "itemHealthBefore": 1,
+                        "itemId": item_damage.item_id,
+                        "itemName": item_damage.item_name,
+                        "mods": Vec::<String>::new(), // TODO vec of what?
+                        "playerItemRatingAfter": zero_int(item_damage.player_item_rating_after),
+                        "playerItemRatingBefore": zero_int(item_damage.player_item_rating_before),
+                        "playerRating": zero_int(item_damage.player_rating),
+                    }))
+            );
+
+        }
+
         children_builders.extend(self.children.into_iter());
         let children = children_builders.into_iter()
             .enumerate()
@@ -411,6 +449,15 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
                 "mod": "COFFEE_RALLY",
                 "type": 0, // ?
             }))
+}
+
+// Sometimes in the metadata, an 0 needs to be an int even if the value is a float. ballclark.
+pub(crate) fn zero_int(value: f64) -> serde_json::Value {
+    if value == 0.0 {
+        serde_json::Value::from(0)
+    } else {
+        serde_json::Value::from(value)
+    }
 }
 
 

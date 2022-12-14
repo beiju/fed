@@ -1,12 +1,13 @@
 use std::fmt::Display;
 use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
+use nom::combinator::opt;
 use nom::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
+use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamage, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::ParseOk;
-use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_item_damage, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -508,6 +509,27 @@ impl<'e> EventParseWrapper<'e> {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(scoring_players)
+    }
+
+    pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage(batter_name)))?
+            .map(|_item_name| {
+                let mut break_child = self.next_child(EventType::ItemBreaks)?;
+
+                Ok(ItemDamage {
+                    item_id: break_child.metadata_uuid("itemId")?,
+                    item_name: break_child.metadata_str("itemName")?.to_string(),
+                    item_mods: vec![],
+                    durability: break_child.metadata_i64("itemDurability")?,
+                    player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: break_child.metadata_f64("playerRating")?,
+                    team_id: break_child.next_team_id()?,
+                    player_id: break_child.next_player_id()?,
+                    sub_event: break_child.as_sub_event(),
+                })
+            })
+            .transpose()
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

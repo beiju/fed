@@ -253,20 +253,6 @@ pub(crate) fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserR
     }
 }
 
-pub(crate) struct ParsedScores<'a> {
-    pub(crate) scorers: Vec<&'a str>,
-    pub(crate) refillers: Vec<&'a str>,
-}
-
-impl ParsedScores<'_> {
-    pub(crate) fn empty() -> Self {
-        ParsedScores {
-            scorers: Vec::new(),
-            refillers: Vec::new(),
-        }
-    }
-}
-
 pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, name) = parse_terminated(" used their Free Refill.\n").parse(input)?;
@@ -1438,4 +1424,15 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     )).parse(input)?;
 
     Ok((input, (player_name, mod_)))
+}
+
+pub(crate) fn parse_item_damage<'a>(player_name: &str) -> impl FnMut(&'a str) -> ParserResult<&'a str> + '_ {
+    move |input| {
+        let (input, _) = tag("\n ").parse(input)?;
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag("'s ").parse(input)?;
+        let (input, item_name) = parse_terminated(" broke!").parse(input)?;
+
+        Ok((input, item_name))
+    }
 }
