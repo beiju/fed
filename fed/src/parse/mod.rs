@@ -555,7 +555,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             assert!(is_known_team_nickname(scoring_team));
 
             let caught_some_rays = if let Some(player_name) = rays_player {
-                let mut child = event.next_child(EventType::PlayerAttributeIncrease)?;
+                let mut child = event.next_child(EventType::PlayerStatIncrease)?;
                 Some(PlayerStatChange {
                     sub_event: child.as_sub_event(),
                     team_id: child.next_team_id()?,
@@ -1917,7 +1917,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
             assert!(is_known_team_nickname(team_nickname));
 
-            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            let mut child = event.next_child(if is_middling {
+                EventType::AddedModFromOtherMod
+            } else {
+                EventType::RemovedModFromOtherMod
+            })?;
             FedEventData::Middling {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),

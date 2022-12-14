@@ -38,7 +38,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
                          |str| {
                              let expected = serde_json::to_string_pretty(&original_event_json).unwrap();
                              let actual = serde_json::to_string_pretty(&reconstructed_event_json).unwrap();
-                             Err(anyhow!("Expected: {expected}\nProduced:{actual}\nDiff:{str}"))
+                             Err(anyhow!("Received from Feed: {expected}\nParsed into: {parsed_event:#?}\n Produced: {actual}\nDiff: {str}"))
                          })
             .with_context(|| format!("Event not reconstructed exactly: {}", original_event_json.get("description").unwrap().as_str().unwrap()))?;
     }
@@ -73,8 +73,8 @@ fn run_test(args: Args) -> anyhow::Result<()> {
 
     let iter = reader.lines()
         .enumerate()
-        .map(|args| check_json_line(args));
-        // .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
+        // .map(|args| check_json_line(args));
+        .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
 
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 

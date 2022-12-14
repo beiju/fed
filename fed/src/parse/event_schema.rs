@@ -5539,8 +5539,6 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Echo { game, echoee_name, primary_echo: main_echo, receiver_echos: sub_echos, } => {
-                dbg!(&main_echo);
-                dbg!(&sub_echos);
                 let make_children_for_echo = |echo: Echo, mod_type: i64, source: &str, echo_description: &str| {
                     let child_removed = echo.mods_removed.map(|mods_removed| {
                         let removes: Vec<_> = mods_removed.mod_ids.into_iter()
@@ -5599,8 +5597,6 @@ impl FedEvent {
                     .flatten() // This one should flatten the array
                     .flatten() // This one should flatten the options
                     .collect_vec(); // for debugging
-
-                dbg!(&children);
 
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
