@@ -1178,6 +1178,11 @@ pub enum FedEventData {
 
         /// Damage that the fielder's item took, if any
         fielder_item_damage: Option<ItemDamage>,
+
+        /// Damage that any non-batter and non-fielder player's item took, if any. It's not possible
+        /// to know the role of the other player (pitcher, runner?) from the event alone.
+        other_player_item_damage: Option<(String, ItemDamage)>,
+
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -1310,6 +1315,13 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// Damage that the batter's item took, if any
+        batter_item_damage: Option<ItemDamage>,
+
+        /// Damage that any non-batter player's item took, if any. It's not possible to know the
+        /// role of the other player (pitcher, fielder, runner?) from the event alone.
+        other_player_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Home run, including Grand Slam
@@ -1631,8 +1643,8 @@ pub enum FedEventData {
         /// Metadata of the sub-event associated with adding or removing the Tired/Wired mod
         sub_event: SubEvent,
 
-        /// Uuid for the team whose player was Beaned
-        team_id: Uuid,
+        /// Uuid for the team whose player was Beaned. Sometimes this is null and I don't know why
+        team_id: Option<Uuid>,
 
         /// The mod this player previously had, if any. This isn't visible in the text of the event
         /// but it is in the metadata.
@@ -3632,7 +3644,7 @@ impl FedEvent {
                     .named_item_damage(batter_item_damage.as_ref())
                     .build()
             }
-            FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage } => {
+            FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage } => {
                 let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
 
                 event_builder.for_game(&game)
@@ -3649,9 +3661,10 @@ impl FedEvent {
                     .children(observed_child) // slight abuse of IntoIter
                     .item_damage(&batter_item_damage, &batter_name)
                     .item_damage(&fielder_item_damage, &fielder_name)
+                    .named_item_damage(&other_player_item_damage)
                     .build()
             }
-            FedEventData::Hit { game, batter_name, batter_id, num_bases, scores, spicy_status, stopped_inhabiting, is_special } => {
+            FedEventData::Hit { game, batter_name, batter_id, num_bases, scores, spicy_status, stopped_inhabiting, is_special, batter_item_damage, other_player_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Hit,
@@ -3670,6 +3683,8 @@ impl FedEvent {
                     .scores(&scores, " scores!")
                     .spicy(&spicy_status, batter_id, &batter_name)
                     .stopped_inhabiting(&stopped_inhabiting)
+                    .item_damage(&batter_item_damage, &batter_name)
+                    .named_item_damage(&other_player_item_damage)
                     .build()
             }
             FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction } => {
@@ -3968,7 +3983,7 @@ impl FedEvent {
                         r#type: if previous.is_some() { EventType::ModChange } else { EventType::AddedMod },
                         category: EventCategory::Changes,
                         description: format!("{player_name} {change_str} {mod_str}"),
-                        team_tags: vec![team_id],
+                        team_tags: team_id.into_iter().collect(),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })

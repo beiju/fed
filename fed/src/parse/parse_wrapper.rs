@@ -122,15 +122,15 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_team_id(&mut self) -> Result<Uuid, FeedParseError> {
-        self.consumed_team_id_count += 1;
         let (&id, rest) = self.team_ids.split_first()
             .ok_or_else(|| {
                 FeedParseError::NotEnoughTags {
                     event_type: self.event_type,
                     tag_type: "team",
-                    expected_at_least: self.consumed_team_id_count,
+                    expected_at_least: self.consumed_team_id_count + 1,
                 }
             })?;
+        self.consumed_team_id_count += 1;
         self.team_ids = rest;
         Ok(id)
     }
@@ -515,8 +515,8 @@ impl<'e> EventParseWrapper<'e> {
         Ok(scoring_players)
     }
 
-    pub fn parse_item_damage(&mut self, batter_name: &str, extra_space: bool) -> Result<Option<ItemDamage>, FeedParseError> {
-        self.next_parse(opt(parse_item_damage(batter_name, extra_space)))?
+    pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage(batter_name, (self.season, self.day) < (15, 3))))?
             .map(|_item_name| {
                 self.next_item_damage()
             })
