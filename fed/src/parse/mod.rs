@@ -243,10 +243,10 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
-                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let cooled_off = event.parse_cooled_off(batter_name)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
@@ -1278,7 +1278,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::ReturnFromElsewhere => {
             let (player_name, flavor) = match event.next_parse(parse_return_from_elsewhere)? {
-                ParsedReturnFromElsewhere::Normal((player_name, after_days)) => {
+                ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere)) => {
                     let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
                         .map(|mut scattered_sub_event| {
                             let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
@@ -1296,7 +1296,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         team_id: return_sub_event.next_team_id()?,
                         player_id: return_sub_event.next_player_id()?,
                         sub_event: return_sub_event.as_sub_event(),
-                        number_of_days: after_days,
+                        time_elsewhere,
                         scattered,
                     })
                 }

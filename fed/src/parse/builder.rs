@@ -278,6 +278,11 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         }
 
         if let Some((scores, score_text)) = self.scores {
+            children_builders.extend(scores.scores.iter().filter_map(|score| {
+                score.item_damage.as_ref().map(|item_damage| {
+                    make_item_damage_child(possessive(score.player_name.clone()), item_damage)
+                })
+            }));
             suffix += &*scores.to_description_with_text_between(score_text,
                                                                 &self.update.description_after_score);
             children_builders.extend(scores.free_refills.iter()
@@ -355,29 +360,9 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         }
 
         for (item_damage, player_name) in self.item_damage {
-            write!(suffix, "\n {player_name}'s {} broke!", item_damage.item_name).unwrap();
-            children_builders.push(
-                EventBuilderChild::new(&item_damage.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::ItemBreaks,
-                        category: EventCategory::Changes,
-                        description: format!(" {player_name}'s {} broke!", item_damage.item_name),
-                        team_tags: vec![item_damage.team_id],
-                        player_tags: vec![item_damage.player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "itemDurability": item_damage.durability,
-                        "itemHealthAfter": 0,
-                        "itemHealthBefore": 1,
-                        "itemId": item_damage.item_id,
-                        "itemName": item_damage.item_name,
-                        "mods": Vec::<String>::new(), // TODO vec of what?
-                        "playerItemRatingAfter": zero_int(item_damage.player_item_rating_after),
-                        "playerItemRatingBefore": zero_int(item_damage.player_item_rating_before),
-                        "playerRating": zero_int(item_damage.player_rating),
-                    }))
-            );
+            let player_name_possessive = possessive(player_name.to_string());
+            write!(suffix, "\n {player_name_possessive} {} broke!", item_damage.item_name).unwrap();
+            children_builders.push(make_item_damage_child(player_name_possessive, item_damage));
 
         }
 
@@ -432,6 +417,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
 
         build_final(self.common, self.game, self.update, metadata, prefix, suffix, player_tags, has_attractor)
     }
+
 }
 
 
@@ -451,6 +437,30 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
             }))
 }
 
+fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamage) -> EventBuilderChildFull {
+    EventBuilderChild::new(&item_damage.sub_event)
+        .update(EventBuilderUpdate {
+            r#type: EventType::ItemBreaks,
+            category: EventCategory::Changes,
+            description: format!(" {player_name_possessive} {} broke!", item_damage.item_name),
+            team_tags: vec![item_damage.team_id],
+            player_tags: vec![item_damage.player_id],
+            ..Default::default()
+        })
+        .metadata(json!({
+            "itemDurability": item_damage.durability,
+            "itemHealthAfter": 0,
+            "itemHealthBefore": 1,
+            "itemId": item_damage.item_id,
+            "itemName": item_damage.item_name,
+            "mods": Vec::<String>::new(), // TODO vec of what?
+            "playerItemRatingAfter": zero_int(item_damage.player_item_rating_after),
+            "playerItemRatingBefore": zero_int(item_damage.player_item_rating_before),
+            "playerRating": zero_int(item_damage.player_rating),
+        }))
+}
+
+
 // Sometimes in the metadata, an 0 needs to be an int even if the value is a float. ballclark.
 pub(crate) fn zero_int(value: f64) -> serde_json::Value {
     if value == 0.0 {
@@ -460,6 +470,14 @@ pub(crate) fn zero_int(value: f64) -> serde_json::Value {
     }
 }
 
+
+pub(crate) fn possessive(name: String) -> String {
+    if name.chars().last().unwrap() == 's' {
+        name + "'"
+    } else {
+        name + "'s"
+    }
+}
 
 pub struct EventBuilderWithFullMetadata {
     pub common: EventBuilderCommon,

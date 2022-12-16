@@ -150,6 +150,9 @@ pub struct ScoringPlayer {
 
     /// Player name
     pub player_name: String,
+
+    /// Item damaged by player scoring, if any
+    pub item_damage: Option<ItemDamage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -170,6 +173,10 @@ impl Scores {
     pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
         let mut output = String::new();
         for score in &self.scores {
+            if let Some(damage) = &score.item_damage {
+                write!(output, "\n {} {} broke!", possessive(score.player_name.clone()), damage.item_name).unwrap();
+            }
+
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
         }
 
@@ -661,6 +668,13 @@ pub struct EchoIntoStatic {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[serde(tag = "time_elsewhere_type", content="time_elsewhere", rename_all = "camelCase")]
+pub enum TimeElsewhere {
+    Days(i32),
+    Seasons(i32),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "flavor", rename_all = "camelCase")]
 pub enum ReturnFromElsewhereFlavor {
     /// The normal one
@@ -675,9 +689,8 @@ pub enum ReturnFromElsewhereFlavor {
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 
-        /// Number of days the player was Elsewhere, or null if the player was elsewhere for one
-        /// season. No player has ever returned after more than one season
-        number_of_days: Option<i32>,
+        /// Number of days or seasons the player was Elsewhere
+        time_elsewhere: TimeElsewhere,
 
         /// Scattered sub-event, if the player was scattered, or null otherwise
         scattered: Option<Scattered>,
@@ -3345,14 +3358,6 @@ trait GameEventForBuilder {
     fn for_sub_event(self, sub: &SubEvent) -> Self;
 }
 
-fn possessive(name: String) -> String {
-    if name.chars().last().unwrap() == 's' {
-        name + "'"
-    } else {
-        name + "'s"
-    }
-}
-
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
     let mod_name = if toggle.is_overperforming { "OVERPERFORMING" } else { "UNDERPERFORMING" };
     let opposite_mod_name = if toggle.is_overperforming { "UNDERPERFORMING" } else { "OVERPERFORMING" };
@@ -4754,12 +4759,18 @@ impl FedEvent {
             }
             FedEventData::ReturnFromElsewhere { ref game, ref player_name, ref flavor } => {
                 let (description, children) = match flavor {
-                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, number_of_days, scattered } => {
-                        let description = if let Some(days) = number_of_days {
-                            let s = if *days == 1 { "" } else { "s" };
-                            format!("{player_name} has returned from Elsewhere after {days} day{s}!")
-                        } else {
-                            format!("{player_name} has returned from Elsewhere after one season!")
+                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, time_elsewhere, scattered } => {
+                        let description = match time_elsewhere {
+                            TimeElsewhere::Days(days) => {
+                                let s = if *days == 1 { "" } else { "s" };
+                                format!("{player_name} has returned from Elsewhere after {days} day{s}!")
+                            }
+                            TimeElsewhere::Seasons(1) => {
+                                format!("{player_name} has returned from Elsewhere after one season!")
+                            }
+                            TimeElsewhere::Seasons(seasons) => {
+                                format!("{player_name} has returned from Elsewhere after {seasons} seasons!")
+                            }
                         };
                         let elsewhere_child = EventBuilderChild::new(sub_event)
                             .update(EventBuilderUpdate {

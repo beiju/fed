@@ -483,14 +483,18 @@ impl<'e> EventParseWrapper<'e> {
         self.parse_scores_with_scoring_players(scoring_players)
     }
 
-    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, String)>) -> Result<Scores, FeedParseError> {
+    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<String>, String)>) -> Result<Scores, FeedParseError> {
         let free_refills = self.parse_free_refills()?;
 
         let scores = scoring_players.into_iter()
-            .map(|(player_id, player_name)| {
+            .map(|(player_id, item_name, player_name)| {
+                let item_damage = item_name
+                    .map(|_name| self.next_item_damage())
+                    .transpose()?;
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
+                    item_damage,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -501,11 +505,11 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, String)>, FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<String>, String)>, FeedParseError> {
         let scorers = self.next_parse(parse_scores(label))?;
         let scoring_players = scorers.into_iter()
-            .map(|scorer| {
-                ParseOk((self.next_player_id()?, scorer.to_string()))
+            .map(|(item, scorer)| {
+                ParseOk((self.next_player_id()?, item.map(str::to_string), scorer.to_string()))
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(scoring_players)
@@ -514,22 +518,26 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
         self.next_parse(opt(parse_item_damage(batter_name)))?
             .map(|_item_name| {
-                let mut break_child = self.next_child(EventType::ItemBreaks)?;
-
-                Ok(ItemDamage {
-                    item_id: break_child.metadata_uuid("itemId")?,
-                    item_name: break_child.metadata_str("itemName")?.to_string(),
-                    item_mods: vec![],
-                    durability: break_child.metadata_i64("itemDurability")?,
-                    player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
-                    player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
-                    player_rating: break_child.metadata_f64("playerRating")?,
-                    team_id: break_child.next_team_id()?,
-                    player_id: break_child.next_player_id()?,
-                    sub_event: break_child.as_sub_event(),
-                })
+                self.next_item_damage()
             })
             .transpose()
+    }
+
+    fn next_item_damage(&mut self) -> Result<ItemDamage, FeedParseError> {
+        let mut break_child = self.next_child(EventType::ItemBreaks)?;
+
+        Ok(ItemDamage {
+            item_id: break_child.metadata_uuid("itemId")?,
+            item_name: break_child.metadata_str("itemName")?.to_string(),
+            item_mods: vec![],
+            durability: break_child.metadata_i64("itemDurability")?,
+            player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
+            player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
+            player_rating: break_child.metadata_f64("playerRating")?,
+            team_id: break_child.next_team_id()?,
+            player_id: break_child.next_player_id()?,
+            sub_event: break_child.as_sub_event(),
+        })
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

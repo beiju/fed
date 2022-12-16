@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::EchoChamberModAdded;
+use crate::{EchoChamberModAdded, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -262,7 +262,9 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
     Ok((input, name))
 }
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<&'a str>> {
+type ParsedScore<'a> = (Option<&'a str>, &'a str);
+
+pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
     move |input| {
         let (input, scorers) = many0(parse_score(score_label)).parse(input)?;
 
@@ -270,12 +272,20 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str)
     }
 }
 
-pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<&str> {
+pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
+        let (input, item) = opt(parse_item_damage_unknown_name).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
-        let (input, name) = parse_terminated(score_label).parse(input)?;
+        if let Some((item_name, player_name)) = item {
+            let (input, _) = tag(player_name).parse(input)?;
+            let (input, _) = tag(score_label).parse(input)?;
 
-        Ok((input, name))
+            Ok((input, (Some(item_name), player_name)))
+        } else {
+            let (input, name) = parse_terminated(score_label).parse(input)?;
+            Ok((input, (None, name)))
+        }
+
     }
 }
 
@@ -893,7 +903,7 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
 
 pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Short(&'a str),
-    Normal((&'a str, Option<i32>)),
+    Normal((&'a str, TimeElsewhere)),
 }
 
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
@@ -903,18 +913,14 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
     )).parse(input)
 }
 
-pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, Option<i32>)> {
+pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, TimeElsewhere)> {
     let (input, player_name) = parse_terminated(" has returned from Elsewhere after ").parse(input)?;
     let (input, after_days) = alt((
-        tag("one season!").map(|_| None),
-        parse_whole_number.map(|n| Some(n)),
+        tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
+        terminated(parse_whole_number, tag(" seasons!")).map(|n| TimeElsewhere::Seasons(n)),
+        tag("1 day!").map(|_| TimeElsewhere::Days(1)),
+        terminated(parse_whole_number, tag(" days!")).map(|n| TimeElsewhere::Days(n)),
     )).parse(input)?;
-    let input = if let Some(after_days) = after_days {
-        let (input, _) = if after_days == 1 { tag(" day!") } else { tag(" days!") }.parse(input)?;
-        input
-    } else {
-        input
-    };
 
     Ok((input, (player_name, after_days)))
 }
@@ -1426,11 +1432,19 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     Ok((input, (player_name, mod_)))
 }
 
+pub(crate) fn parse_item_damage_unknown_name(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("\n ").parse(input)?;
+    let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
+    let (input, item_name) = parse_terminated(" broke!").parse(input)?;
+
+    Ok((input, (item_name, player_name)))
+}
+
 pub(crate) fn parse_item_damage<'a>(player_name: &str) -> impl FnMut(&'a str) -> ParserResult<&'a str> + '_ {
     move |input| {
         let (input, _) = tag("\n ").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
-        let (input, _) = tag("'s ").parse(input)?;
+        let (input, _) = alt((tag("'s "), tag("' "))).parse(input)?;
         let (input, item_name) = parse_terminated(" broke!").parse(input)?;
 
         Ok((input, item_name))
