@@ -154,7 +154,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let batter_id = event.next_player_id()?;
                     let scores = event.parse_scores(" scores!")?;
 
-                    let batter_item_damage = event.parse_item_damage(batter_name)?;
+                    let batter_item_damage = event.parse_item_damage(batter_name, true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
                     FedEventData::Walk {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -224,7 +224,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             // Order matters
             let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
+            let fielder_item_damage = event.parse_item_damage(fielder_name, (event.season, event.day) < (15, 3))?;
             let scores = event.parse_scores(" tags up and scores!")?;
+            let batter_item_damage = event.parse_item_damage(batter_name, (event.season, event.day) < (15, 3))?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
             FedEventData::Flyout {
@@ -236,15 +238,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 cooled_off,
                 is_special: event.category == EventCategory::Special,
                 batter_debt,
+                batter_item_damage,
+                fielder_item_damage,
             }
         }
         EventType::GroundOut => {
             match event.next_parse(parse_ground_out)? {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
+                    let fielder_item_damage = event.parse_item_damage(fielder_name, (event.season, event.day) < (15, 3))?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
-                    let batter_item_damage = event.parse_item_damage(batter_name)?;
-                    let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+                    let batter_item_damage = event.parse_item_damage(batter_name, (event.season, event.day) < (15, 3))?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
@@ -429,10 +433,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::FoulBall => {
             // Eventually this will need very foul support, but I'll get to that when it comes up
             let (balls, strikes) = event.next_parse(parse_foul_ball)?;
+            let batter_item_damage = event.parse_item_damage_and_name()?;
             FedEventData::FoulBall {
                 game: event.game(unscatter, attractor_secret_base)?,
                 balls,
                 strikes,
+                batter_item_damage,
             }
         }
         EventType::RunsOverflowing => {

@@ -29,7 +29,8 @@ impl EventBuilderCommon {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
-            item_damage: Vec::new()
+            item_damage_before_score: Vec::new(),
+            item_damage_after_score: Vec::new(),
         }
     }
 
@@ -123,7 +124,8 @@ impl EventBuilderForGame {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
-            item_damage: Vec::new(),
+            item_damage_before_score: Vec::new(),
+            item_damage_after_score: Vec::new(),
         }
     }
 }
@@ -137,7 +139,8 @@ pub struct EventBuilderFull<'s, 'i, 'c, 't> {
     pub scores: Option<(&'s Scores, &'static str)>,
     pub stopped_inhabiting: Option<&'i StoppedInhabiting>,
     pub spicy_change: SpicyChange<'c>,
-    pub item_damage: Vec<(&'t ItemDamage, &'t str)>,
+    pub item_damage_before_score: Vec<(&'t ItemDamage, &'t str)>,
+    pub item_damage_after_score: Vec<(&'t ItemDamage, &'t str)>,
 }
 
 
@@ -152,7 +155,8 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             scores: Some((scores, score_text)),
             stopped_inhabiting: self.stopped_inhabiting,
             spicy_change: self.spicy_change,
-            item_damage: self.item_damage,
+            item_damage_before_score: self.item_damage_before_score,
+            item_damage_after_score: self.item_damage_after_score,
         }
     }
 
@@ -166,7 +170,8 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             scores: self.scores,
             stopped_inhabiting: stopped_inhabiting.as_ref(),
             spicy_change: self.spicy_change,
-            item_damage: self.item_damage,
+            item_damage_before_score: self.item_damage_before_score,
+            item_damage_after_score: self.item_damage_after_score,
         }
     }
 
@@ -183,7 +188,8 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 None => { SpicyChange::None }
                 Some(cooled_off) => { SpicyChange::CooledOff { cooled_off, player_name } }
             },
-            item_damage: self.item_damage,
+            item_damage_before_score: self.item_damage_before_score,
+            item_damage_after_score: self.item_damage_after_score,
         }
     }
 
@@ -201,12 +207,28 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 SpicyStatus::HeatingUp => { SpicyChange::HeatingUp { player_id, player_name } }
                 SpicyStatus::RedHot(red_hot) => { SpicyChange::RedHot { red_hot, player_id, player_name } }
             },
-            item_damage: self.item_damage,
+            item_damage_before_score: self.item_damage_before_score,
+            item_damage_after_score: self.item_damage_after_score,
         }
     }
 
     pub fn item_damage(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
-        self.item_damage.extend(item_damage.into_iter().map(|d| (d, player_name)));
+        self.item_damage_before_score.extend(item_damage.into_iter().map(|d| (d, player_name)));
+        self
+    }
+
+    pub fn named_item_damage(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+        self.item_damage_before_score.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
+        self
+    }
+
+    pub fn item_damage_after_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+        self.item_damage_after_score.extend(item_damage.into_iter().map(|d| (d, player_name)));
+        self
+    }
+
+    pub fn named_item_damage_after_score(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+        self.item_damage_after_score.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
         self
     }
 
@@ -277,20 +299,25 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             );
         }
 
+        self.build_item_damage(&self.item_damage_before_score, &mut suffix, &mut children_builders);
+
         if let Some((scores, score_text)) = self.scores {
             children_builders.extend(scores.scores.iter().filter_map(|score| {
                 score.item_damage.as_ref().map(|item_damage| {
-                    make_item_damage_child(possessive(score.player_name.clone()), item_damage)
+                    make_item_damage_child(possessive(score.player_name.clone()), item_damage, true)
                 })
             }));
             suffix += &*scores.to_description_with_text_between(score_text,
-                                                                &self.update.description_after_score);
+                                                                &self.update.description_after_score,
+                                                                (self.common.season, self.common.day) < (15, 3));
             children_builders.extend(scores.free_refills.iter()
                 .map(|free_refill| make_free_refill_child(free_refill)));
             player_tags.extend(scores.scorer_ids());
         } else {
             suffix += &*self.update.description_after_score;
         }
+
+        self.build_item_damage(&self.item_damage_after_score, &mut suffix, &mut children_builders);
 
         if let Some(inh) = self.stopped_inhabiting {
             children_builders.push(
@@ -315,7 +342,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             SpicyChange::HeatingUp { player_id, player_name } => {
                 player_tags.push(player_id);
                 suffix = format!("{suffix}\n{player_name} is Heating Up!")
-            },
+            }
             SpicyChange::RedHot { red_hot, player_id, player_name } => {
                 if let Some(red_hot) = red_hot {
                     children_builders.push(
@@ -329,9 +356,9 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                                 ..Default::default()
                             })
                             .metadata(json!({
-                            "mod": "ON_FIRE",
-                            "type": 0, // ?
-                        })),
+                                "mod": "ON_FIRE",
+                                "type": 0, // ?
+                            })),
                     );
                 }
                 player_tags.push(player_id);
@@ -349,9 +376,9 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                             ..Default::default()
                         })
                         .metadata(json!({
-                        "mod": "ON_FIRE",
-                        "type": 0, // ?
-                    }))
+                            "mod": "ON_FIRE",
+                            "type": 0, // ?
+                        }))
                 );
 
                 player_tags.push(cooled_off.player_id);
@@ -359,12 +386,6 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             }
         }
 
-        for (item_damage, player_name) in self.item_damage {
-            let player_name_possessive = possessive(player_name.to_string());
-            write!(suffix, "\n {player_name_possessive} {} broke!", item_damage.item_name).unwrap();
-            children_builders.push(make_item_damage_child(player_name_possessive, item_damage));
-
-        }
 
         children_builders.extend(self.children.into_iter());
         let children = children_builders.into_iter()
@@ -418,6 +439,16 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         build_final(self.common, self.game, self.update, metadata, prefix, suffix, player_tags, has_attractor)
     }
 
+    fn build_item_damage(&self, v: &Vec<(&ItemDamage, &str)>, suffix: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
+        for (item_damage, player_name) in v {
+            let player_name_possessive = possessive(player_name.to_string());
+            write!(suffix, "\n{}{player_name_possessive} {} broke!",
+                   if (self.common.season, self.common.day) < (15, 3) { " " } else { "" },
+                   item_damage.item_name).unwrap();
+            children_builders.push(make_item_damage_child(player_name_possessive, item_damage,
+                                                          (self.common.season, self.common.day) < (15, 3)));
+        }
+    }
 }
 
 
@@ -437,12 +468,12 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
             }))
 }
 
-fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamage) -> EventBuilderChildFull {
+fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamage, extra_space: bool) -> EventBuilderChildFull {
     EventBuilderChild::new(&item_damage.sub_event)
         .update(EventBuilderUpdate {
             r#type: EventType::ItemBreaks,
             category: EventCategory::Changes,
-            description: format!(" {player_name_possessive} {} broke!", item_damage.item_name),
+            description: format!("{}{player_name_possessive} {} broke!", if extra_space { " " } else { "" }, item_damage.item_name),
             team_tags: vec![item_damage.team_id],
             player_tags: vec![item_damage.player_id],
             ..Default::default()

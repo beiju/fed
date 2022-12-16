@@ -170,11 +170,12 @@ pub struct Scores {
 }
 
 impl Scores {
-    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
+    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str, extra_space: bool) -> String {
         let mut output = String::new();
         for score in &self.scores {
             if let Some(damage) = &score.item_damage {
-                write!(output, "\n {} {} broke!", possessive(score.player_name.clone()), damage.item_name).unwrap();
+                write!(output, "\n{}{} {} broke!", if extra_space { " " } else { "" },
+                       possessive(score.player_name.clone()), damage.item_name).unwrap();
             }
 
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
@@ -668,7 +669,7 @@ pub struct EchoIntoStatic {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
-#[serde(tag = "time_elsewhere_type", content="time_elsewhere", rename_all = "camelCase")]
+#[serde(tag = "time_elsewhere_type", content = "time_elsewhere", rename_all = "camelCase")]
 pub enum TimeElsewhere {
     Days(i32),
     Seasons(i32),
@@ -1087,6 +1088,9 @@ pub enum FedEventData {
 
         /// Number of strikes in the count
         strikes: i32,
+
+        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        batter_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Strike, swinging
@@ -1165,6 +1169,12 @@ pub enum FedEventData {
         /// If the batter has Debt and hit the fielder with the ball, this contains the information
         /// about adding Unstable/Observed/whatever. Otherwise it will be null.
         batter_debt: Option<BatterDebt>,
+
+        /// Damage that the batter's item took, if any
+        batter_item_damage: Option<ItemDamage>,
+
+        /// Damage that the fielder's item took, if any
+        fielder_item_damage: Option<ItemDamage>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -3608,19 +3618,20 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::FoulBall { game, balls, strikes } => {
+            FedEventData::FoulBall { game, balls, strikes, batter_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FoulBall,
                         description: format!("Foul Ball. {balls}-{strikes}"),
                         ..Default::default()
                     })
+                    .named_item_damage(batter_item_damage.as_ref())
                     .build()
             }
-            FedEventData::Flyout { ref game, ref batter_name, ref fielder_name, ref scores, ref stopped_inhabiting, ref cooled_off, is_special, batter_debt } => {
-                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, batter_name, fielder_name);
+            FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage } => {
+                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
 
-                event_builder.for_game(game)
+                event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::FlyOut,
                         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
@@ -3628,10 +3639,12 @@ impl FedEvent {
                         player_tags,
                         ..Default::default()
                     })
-                    .scores(scores, " tags up and scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .cooled_off(cooled_off, batter_name)
+                    .scores(&scores, " tags up and scores!")
+                    .stopped_inhabiting(&stopped_inhabiting)
+                    .cooled_off(&cooled_off, &batter_name)
                     .children(observed_child) // slight abuse of IntoIter
+                    .item_damage(&batter_item_damage, &batter_name)
+                    .item_damage(&fielder_item_damage, &fielder_name)
                     .build()
             }
             FedEventData::Hit { game, batter_name, batter_id, num_bases, scores, spicy_status, stopped_inhabiting, is_special } => {
@@ -3747,8 +3760,8 @@ impl FedEvent {
                     .scores(&scores, " advances on the sacrifice.")
                     .stopped_inhabiting(&stopped_inhabiting)
                     .cooled_off(&cooled_off, &batter_name)
-                    .item_damage(&batter_item_damage, &batter_name)
                     .item_damage(&fielder_item_damage, &fielder_name)
+                    .item_damage_after_score(&batter_item_damage, &batter_name)
                     .children(observed_child)
                     .build()
             }

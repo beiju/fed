@@ -7,7 +7,7 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamage, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::ParseOk;
-use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_item_damage, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -506,7 +506,7 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<String>, String)>, FeedParseError> {
-        let scorers = self.next_parse(parse_scores(label))?;
+        let scorers = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
             .map(|(item, scorer)| {
                 ParseOk((self.next_player_id()?, item.map(str::to_string), scorer.to_string()))
@@ -515,10 +515,18 @@ impl<'e> EventParseWrapper<'e> {
         Ok(scoring_players)
     }
 
-    pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
-        self.next_parse(opt(parse_item_damage(batter_name)))?
+    pub fn parse_item_damage(&mut self, batter_name: &str, extra_space: bool) -> Result<Option<ItemDamage>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage(batter_name, extra_space)))?
             .map(|_item_name| {
                 self.next_item_damage()
+            })
+            .transpose()
+    }
+
+    pub fn parse_item_damage_and_name(&mut self) -> Result<Option<(String, ItemDamage)>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3))))?
+            .map(|(_item_name, player_name)| {
+                Ok((player_name.to_string(), self.next_item_damage()?))
             })
             .transpose()
     }

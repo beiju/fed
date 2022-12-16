@@ -264,17 +264,17 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
 
 type ParsedScore<'a> = (Option<&'a str>, &'a str);
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
+pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
     move |input| {
-        let (input, scorers) = many0(parse_score(score_label)).parse(input)?;
+        let (input, scorers) = many0(parse_score(score_label, extra_space)).parse(input)?;
 
-        Ok((input, scorers ))
+        Ok((input, scorers))
     }
 }
 
-pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserResult<ParsedScore> {
+pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
-        let (input, item) = opt(parse_item_damage_unknown_name).parse(input)?;
+        let (input, item) = opt(parse_item_damage_unknown_name(extra_space)).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
         if let Some((item_name, player_name)) = item {
             let (input, _) = tag(player_name).parse(input)?;
@@ -285,7 +285,6 @@ pub(crate) fn parse_score(score_label: &'static str) -> impl Fn(&str) -> ParserR
             let (input, name) = parse_terminated(score_label).parse(input)?;
             Ok((input, (None, name)))
         }
-
     }
 }
 
@@ -315,7 +314,6 @@ pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &st
     let (input, player_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (team_nickname, player_name)))
-
 }
 
 pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
@@ -508,6 +506,7 @@ pub(crate) fn parse_runners_advance_on_mild_pitch(input: &str) -> ParserResult<b
     let (input, runners_advance) = opt(tag("\nRunners advance on the pathetic play!")).parse(input)?;
     Ok((input, runners_advance.is_some()))
 }
+
 pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {
     let (input, player_name) = parse_terminated(" is Beaned by a ").parse(input)?;
     let (input, roast) = parse_terminated(" roast with ").parse(input)?;
@@ -1432,17 +1431,19 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     Ok((input, (player_name, mod_)))
 }
 
-pub(crate) fn parse_item_damage_unknown_name(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, _) = tag("\n ").parse(input)?;
-    let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
-    let (input, item_name) = parse_terminated(" broke!").parse(input)?;
+pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
+    move |input| {
+        let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
+        let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
+        let (input, item_name) = parse_terminated(" broke!").parse(input)?;
 
-    Ok((input, (item_name, player_name)))
+        Ok((input, (item_name, player_name)))
+    }
 }
 
-pub(crate) fn parse_item_damage<'a>(player_name: &str) -> impl FnMut(&'a str) -> ParserResult<&'a str> + '_ {
+pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<&'a str> + '_ {
     move |input| {
-        let (input, _) = tag("\n ").parse(input)?;
+        let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = alt((tag("'s "), tag("' "))).parse(input)?;
         let (input, item_name) = parse_terminated(" broke!").parse(input)?;
