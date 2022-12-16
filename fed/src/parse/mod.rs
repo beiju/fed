@@ -424,10 +424,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Ball => {
             let (balls, strikes) = event.next_parse(parse_ball)?;
+            let batter_item_damage = event.parse_item_damage_and_name()?;
             FedEventData::Ball {
                 game: event.game(unscatter, attractor_secret_base)?,
                 balls,
                 strikes,
+                batter_item_damage,
             }
         }
         EventType::FoulBall => {

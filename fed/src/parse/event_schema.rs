@@ -1074,6 +1074,9 @@ pub enum FedEventData {
 
         /// Number of strikes in the count
         strikes: i32,
+
+        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        batter_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Foul Ball
@@ -3582,13 +3585,14 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Ball { game, balls, strikes } => {
+            FedEventData::Ball { game, balls, strikes, batter_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Ball,
                         description: format!("Ball. {}-{}", balls, strikes),
                         ..Default::default()
                     })
+                    .named_item_damage(batter_item_damage.as_ref())
                     .build()
             }
             FedEventData::StrikeSwinging { game, balls, strikes } => {
