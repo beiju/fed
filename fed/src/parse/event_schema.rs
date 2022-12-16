@@ -3121,7 +3121,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// Number of runs saved for the team's next game
-        num_runs: i32,
+        num_runs: f32,
 
         /// Nickname of the team who activted Solar Panels
         team_nickname: String,
@@ -3138,7 +3138,7 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// Number of Runs (positive) or Unruns (negative) gained
-        num_runs: i32,
+        num_runs: f32,
     },
 
     /// Team gains or loses Middling
@@ -5934,9 +5934,9 @@ impl FedEvent {
                         category: EventCategory::Special,
                         description: format!("Runs are Overflowing!\n{team_nickname} gain {}.",
                                              match num_runs {
-                                                 x if x < -1 => { format!("{} Unruns", -x) }
-                                                 -1 => { format!("1 Unrun") }
-                                                 1 => { format!("1 Run") }
+                                                 x if x < -1. => { format!("{} Unruns", -x) }
+                                                 -1. => { format!("1 Unrun") }
+                                                 1. => { format!("1 Run") }
                                                  x => { format!("{x} Runs") }
                                              }),
                         ..Default::default()

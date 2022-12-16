@@ -227,11 +227,6 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         self
     }
 
-    pub fn named_item_damage_after_score(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
-        self.item_damage_after_score.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
-        self
-    }
-
     pub fn metadata(self, metadata: serde_json::Value) -> Self {
         Self {
             metadata,

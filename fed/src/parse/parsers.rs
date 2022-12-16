@@ -1321,19 +1321,19 @@ pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (pitcher_name, batter_name)))
 }
 
-pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(i32, &str)> {
+pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
     let (input, _) = tag("The Solar Panels absorb Sun 2's energy!\n").parse(input)?;
-    let (input, num_runs) = parse_whole_number(input)?;
+    let (input, num_runs) = float.parse(input)?;
     let (input, _) = tag(" Runs are collected and saved for the ").parse(input)?;
     let (input, team_nickname) = parse_terminated("'s next game.").parse(input)?;
 
     Ok((input, (num_runs, team_nickname)))
 }
 
-pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, i32, bool)> {
+pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f32, bool)> {
     let (input, _) = tag("Runs are Overflowing!\n").parse(input)?;
     let (input, team_nickname) = parse_terminated(" gain ").parse(input)?;
-    let (input, num_runs) = parse_whole_number(input)?;
+    let (input, num_runs) = float.parse(input)?;
     let (input, unruns) = alt((
         tag(" Run").map(|_| false),
         tag(" Unrun").map(|_| true),
