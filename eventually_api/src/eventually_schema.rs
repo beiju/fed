@@ -319,6 +319,7 @@ pub enum EventType {
     EchoReciever = 174,
     InvestigationMessage = 175,
     Tidings = 176,
+    GlitterCrateDrop = 177,
     Middling = 178,
     PlayerAttributeIncrease = 179,
     PlayerAttributeDecrease = 180,

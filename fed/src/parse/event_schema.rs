@@ -3659,8 +3659,8 @@ impl FedEvent {
                     .stopped_inhabiting(&stopped_inhabiting)
                     .cooled_off(&cooled_off, &batter_name)
                     .children(observed_child) // slight abuse of IntoIter
-                    .item_damage(&batter_item_damage, &batter_name)
-                    .item_damage(&fielder_item_damage, &fielder_name)
+                    .item_damage_before_score(&batter_item_damage, &batter_name)
+                    .item_damage_before_score(&fielder_item_damage, &fielder_name)
                     .named_item_damage(&other_player_item_damage)
                     .build()
             }
@@ -3683,7 +3683,7 @@ impl FedEvent {
                     .scores(&scores, " scores!")
                     .spicy(&spicy_status, batter_id, &batter_name)
                     .stopped_inhabiting(&stopped_inhabiting)
-                    .item_damage(&batter_item_damage, &batter_name)
+                    .item_damage_before_event(&batter_item_damage, &batter_name)
                     .named_item_damage(&other_player_item_damage)
                     .build()
             }
@@ -3779,7 +3779,7 @@ impl FedEvent {
                     .scores(&scores, " advances on the sacrifice.")
                     .stopped_inhabiting(&stopped_inhabiting)
                     .cooled_off(&cooled_off, &batter_name)
-                    .item_damage(&fielder_item_damage, &fielder_name)
+                    .item_damage_before_score(&fielder_item_damage, &fielder_name)
                     .item_damage_after_score(&batter_item_damage, &batter_name)
                     .children(observed_child)
                     .build()
@@ -3851,7 +3851,7 @@ impl FedEvent {
                     })
                     .scores(&scores, " scores!")
                     .stopped_inhabiting(&stopped_inhabiting)
-                    .item_damage(&batter_item_damage, &batter_name)
+                    .item_damage_before_score(&batter_item_damage, &batter_name)
                     .build()
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {

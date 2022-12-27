@@ -215,8 +215,19 @@ pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32)> {
-    let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32, Option<&str>)> {
+    let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
+    let (input, batter_name, broken_item_name) = if let Some((broken_item_name, batter_name)) = broke {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" hits a ").parse(input)?;
+
+        (input, batter_name, Some(broken_item_name))
+    } else {
+        let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
+
+        (input, batter_name, None)
+    };
     let (input, num_bases) = alt((
         tag("Single!").map(|_| 1),
         tag("Double!").map(|_| 2),
@@ -224,7 +235,7 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32)> {
         tag("Quadruple!").map(|_| 4),
     )).parse(input)?;
 
-    Ok((input, (batter_name, num_bases)))
+    Ok((input, (batter_name, num_bases, broken_item_name)))
 }
 
 #[derive(PartialEq)]
@@ -274,7 +285,7 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> 
 
 pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
-        let (input, item) = opt(parse_item_damage_unknown_name(extra_space)).parse(input)?;
+        let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
         if let Some((item_name, player_name)) = item {
             let (input, _) = tag(player_name).parse(input)?;
@@ -1431,9 +1442,10 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     Ok((input, (player_name, mod_)))
 }
 
-pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
+pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
     move |input| {
-        let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
+        let (input, _) = if newline { tag("\n").parse(input)? } else { (input, "") };
+        let (input, _) = if extra_space { tag(" ").parse(input)? } else { (input, "") };
         let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
         let (input, item_name) = parse_terminated(" broke!").parse(input)?;
 

@@ -524,14 +524,15 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_item_damage_and_name(&mut self) -> Result<Option<(String, ItemDamage)>, FeedParseError> {
-        self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3))))?
+
+        self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3), true)))?
             .map(|(_item_name, player_name)| {
                 Ok((player_name.to_string(), self.next_item_damage()?))
             })
             .transpose()
     }
 
-    fn next_item_damage(&mut self) -> Result<ItemDamage, FeedParseError> {
+    pub fn next_item_damage(&mut self) -> Result<ItemDamage, FeedParseError> {
         let mut break_child = self.next_child(EventType::ItemBreaks)?;
 
         Ok(ItemDamage {

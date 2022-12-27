@@ -353,11 +353,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Hit => {
-            let (batter_name, num_bases) = event.next_parse(parse_hit)?;
+            let (batter_name, num_bases, broken_item_name) = event.next_parse(parse_hit)?;
+            let batter_item_damage = if let Some(_item_name) = broken_item_name {
+                Some(event.next_item_damage()?)
+            } else {
+                None
+            };
             let batter_id = event.next_player_id()?;
             let scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
-            let batter_item_damage = event.parse_item_damage(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name()?;
 
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
@@ -1935,6 +1939,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 player_tags: event.player_tags().into(),
             }
         }
+        EventType::GlitterCrateDrop => { todo!() }
         EventType::Middling => {
             let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
             assert!(is_known_team_nickname(team_nickname));

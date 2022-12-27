@@ -29,6 +29,7 @@ impl EventBuilderCommon {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
+            item_damage_before_event: Vec::new(),
             item_damage_before_score: Vec::new(),
             item_damage_after_score: Vec::new(),
         }
@@ -124,6 +125,7 @@ impl EventBuilderForGame {
             scores: None,
             stopped_inhabiting: None,
             spicy_change: SpicyChange::None,
+            item_damage_before_event: Vec::new(),
             item_damage_before_score: Vec::new(),
             item_damage_after_score: Vec::new(),
         }
@@ -139,10 +141,17 @@ pub struct EventBuilderFull<'s, 'i, 'c, 't> {
     pub scores: Option<(&'s Scores, &'static str)>,
     pub stopped_inhabiting: Option<&'i StoppedInhabiting>,
     pub spicy_change: SpicyChange<'c>,
+    pub item_damage_before_event: Vec<(&'t ItemDamage, &'t str)>,
     pub item_damage_before_score: Vec<(&'t ItemDamage, &'t str)>,
     pub item_damage_after_score: Vec<(&'t ItemDamage, &'t str)>,
 }
 
+macro_rules! push_description {
+    ($description:ident, $($t:tt)*) => {{
+        if !$description.is_empty() { write!($description, "\n").unwrap() }
+        write!($description, $($t)*).unwrap();
+    }};
+}
 
 impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
     pub fn scores<'s>(self, scores: &'s Scores, score_text: &'static str) -> EventBuilderFull<'s, 'ti, 'tc, 'tt> {
@@ -155,6 +164,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             scores: Some((scores, score_text)),
             stopped_inhabiting: self.stopped_inhabiting,
             spicy_change: self.spicy_change,
+            item_damage_before_event: self.item_damage_before_event,
             item_damage_before_score: self.item_damage_before_score,
             item_damage_after_score: self.item_damage_after_score,
         }
@@ -170,6 +180,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             scores: self.scores,
             stopped_inhabiting: stopped_inhabiting.as_ref(),
             spicy_change: self.spicy_change,
+            item_damage_before_event: self.item_damage_before_event,
             item_damage_before_score: self.item_damage_before_score,
             item_damage_after_score: self.item_damage_after_score,
         }
@@ -188,6 +199,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 None => { SpicyChange::None }
                 Some(cooled_off) => { SpicyChange::CooledOff { cooled_off, player_name } }
             },
+            item_damage_before_event: self.item_damage_before_event,
             item_damage_before_score: self.item_damage_before_score,
             item_damage_after_score: self.item_damage_after_score,
         }
@@ -207,12 +219,18 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 SpicyStatus::HeatingUp => { SpicyChange::HeatingUp { player_id, player_name } }
                 SpicyStatus::RedHot(red_hot) => { SpicyChange::RedHot { red_hot, player_id, player_name } }
             },
+            item_damage_before_event: self.item_damage_before_event,
             item_damage_before_score: self.item_damage_before_score,
             item_damage_after_score: self.item_damage_after_score,
         }
     }
 
-    pub fn item_damage(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+    pub fn item_damage_before_event(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+        self.item_damage_before_event.extend(item_damage.into_iter().map(|d| (d, player_name)));
+        self
+    }
+
+    pub fn item_damage_before_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
         self.item_damage_before_score.extend(item_damage.into_iter().map(|d| (d, player_name)));
         self
     }
@@ -263,13 +281,12 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
 
     pub fn build(self) -> EventuallyEvent {
         let mut children_builders = Vec::new();
-        let mut prefix = String::new();
-        let mut suffix = String::new();
+        let mut description = String::new();
         let mut player_tags = Vec::new();
 
         // Just guessing that attractor is before unscatter
         let has_attractor = if let Some(attractor) = self.game.as_ref().and_then(|game| game.attractor_secret_base.as_ref()) {
-            write!(prefix, "{} enters the Secret Base...\n", attractor.player_name).unwrap();
+            push_description!(description, "{} enters the Secret Base...", attractor.player_name);
             player_tags.push(attractor.player_id);
             true
         } else {
@@ -294,7 +311,11 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             );
         }
 
-        self.build_item_damage(&self.item_damage_before_score, &mut suffix, &mut children_builders);
+        self.build_item_damage(&self.item_damage_before_event, &mut description, &mut children_builders);
+
+        push_description!(description, "{}", self.update.description);
+
+        self.build_item_damage(&self.item_damage_before_score, &mut description, &mut children_builders);
 
         if let Some((scores, score_text)) = self.scores {
             children_builders.extend(scores.scores.iter().filter_map(|score| {
@@ -302,17 +323,17 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                     make_item_damage_child(possessive(score.player_name.clone()), item_damage, true)
                 })
             }));
-            suffix += &*scores.to_description_with_text_between(score_text,
-                                                                &self.update.description_after_score,
-                                                                (self.common.season, self.common.day) < (15, 3));
+            description += &*scores.to_description_with_text_between(score_text,
+                                                                     &self.update.description_after_score,
+                                                                     (self.common.season, self.common.day) < (15, 3));
             children_builders.extend(scores.free_refills.iter()
                 .map(|free_refill| make_free_refill_child(free_refill)));
             player_tags.extend(scores.scorer_ids());
         } else {
-            suffix += &*self.update.description_after_score;
+            description += &*self.update.description_after_score;
         }
 
-        self.build_item_damage(&self.item_damage_after_score, &mut suffix, &mut children_builders);
+        self.build_item_damage(&self.item_damage_after_score, &mut description, &mut children_builders);
 
         if let Some(inh) = self.stopped_inhabiting {
             children_builders.push(
@@ -336,7 +357,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             SpicyChange::None => {}
             SpicyChange::HeatingUp { player_id, player_name } => {
                 player_tags.push(player_id);
-                suffix = format!("{suffix}\n{player_name} is Heating Up!")
+                push_description!(description, "{player_name} is Heating Up!");
             }
             SpicyChange::RedHot { red_hot, player_id, player_name } => {
                 if let Some(red_hot) = red_hot {
@@ -357,7 +378,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                     );
                 }
                 player_tags.push(player_id);
-                suffix = format!("{suffix}\n{player_name} is Red Hot!")
+                push_description!(description, "{player_name} is Red Hot!");
             }
             SpicyChange::CooledOff { cooled_off, player_name } => {
                 children_builders.push(
@@ -377,7 +398,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 );
 
                 player_tags.push(cooled_off.player_id);
-                suffix = format!("{suffix}\n{player_name} cooled off.")
+                push_description!(description, "{player_name} cooled off.")
             }
         }
 
@@ -429,23 +450,20 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             ..Default::default()
         };
 
-        let suffix = &suffix;
-
-        build_final(self.common, self.game, self.update, metadata, prefix, suffix, player_tags, has_attractor)
+        build_final(self.common, self.game, self.update, metadata, description, player_tags, has_attractor)
     }
 
-    fn build_item_damage(&self, v: &Vec<(&ItemDamage, &str)>, suffix: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
+    fn build_item_damage(&self, v: &Vec<(&ItemDamage, &str)>, description: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
         for (item_damage, player_name) in v {
             let player_name_possessive = possessive(player_name.to_string());
-            write!(suffix, "\n{}{player_name_possessive} {} broke!",
-                   if (self.common.season, self.common.day) < (15, 3) { " " } else { "" },
-                   item_damage.item_name).unwrap();
+            push_description!(description, "{}{player_name_possessive} {} broke!",
+                              if (self.common.season, self.common.day) < (15, 3) { " " } else { "" },
+                              item_damage.item_name);
             children_builders.push(make_item_damage_child(player_name_possessive, item_damage,
                                                           (self.common.season, self.common.day) < (15, 3)));
         }
     }
 }
-
 
 pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull {
     EventBuilderChild::new(&free_refill.sub_event)
@@ -514,7 +532,8 @@ pub struct EventBuilderWithFullMetadata {
 
 impl EventBuilderWithFullMetadata {
     pub fn build(self) -> EventuallyEvent {
-        build_final(self.common, self.game, self.update, self.metadata, String::new(), "", Vec::new(), false)
+        let description = self.update.description.clone();
+        build_final(self.common, self.game, self.update, self.metadata, description, Vec::new(), false)
     }
 }
 
@@ -523,8 +542,7 @@ fn build_final(
     game: Option<GameEvent>,
     update: EventBuilderUpdate,
     metadata: EventMetadata,
-    prefix: String,
-    suffix: &str,
+    description: String,
     additional_player_tags: impl IntoIterator<Item=Uuid>,
     override_category: bool,
 ) -> EventuallyEvent {
@@ -545,7 +563,7 @@ fn build_final(
         category: if override_category { EventCategory::Special } else { update.category },
         metadata,
         blurb: "".to_string(),
-        description: prefix + &update.description + suffix,
+        description,
         player_tags: update.player_tags.into_iter().chain(additional_player_tags.into_iter()).collect(),
         game_tags: game.as_ref().map_or_else(|| Vec::new(), |g| vec![g.game_id]),
         team_tags,
