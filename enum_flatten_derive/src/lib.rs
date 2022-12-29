@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 use ::proc_macro::TokenStream;
 use std::collections::HashMap;
 use ::proc_macro2::{TokenStream as TokenStream2};
@@ -5,9 +7,11 @@ use syn::{parse_macro_input, DeriveInput, Data, DataStruct};
 use quote::{quote, ToTokens};
 use ::syn::{*, Result};
 use itertools::Itertools;
-use macro_state::{has_state, init_state, proc_write_state, read_state};
+use macro_state::{proc_init_state, proc_write_state};
 use proc_macro2::Span;
 use serde::{Deserialize, Serialize};
+
+const PROPAGATED_ATTRS: [&str; 1] = ["doc"];
 
 #[proc_macro_derive(EnumFlatten, attributes(enum_flatten))]
 pub fn enum_flatten_derive(input: TokenStream) -> TokenStream {
@@ -63,7 +67,7 @@ impl From<&Ident> for SerializableIdent {
 impl From<&Type> for SerializableIdent {
     fn from(value: &Type) -> Self {
         Self(match value {
-            Type::Path(TypePath { qself: None, path }) => {
+            Type::Path(TypePath { qself, path }) if qself.is_none() => {
                 path.segments.last().as_ref()
                     .expect("Type path cannot be empty")
                     .ident
@@ -76,25 +80,42 @@ impl From<&Type> for SerializableIdent {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
+struct SerializableAttribute {
+    path: String,
+    tokens: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 struct StructField {
-    attrs: Vec<String>,
+    attrs: Vec<SerializableAttribute>,
     vis: String,
     name: String,
     ty: String,
 }
 
 impl StructField {
-    pub fn to_token_stream(&self) -> TokenStream2 {
-        let attrs = self.attrs.iter()
-            .map(|attr| attr.parse().unwrap())
-            .collect::<Vec<proc_macro2::TokenStream>>();
-        let field_vis: proc_macro2::TokenStream = self.vis.parse().unwrap();
-        let field_name: proc_macro2::TokenStream = self.name.parse().unwrap();
-        let field_ty: proc_macro2::TokenStream = self.ty.parse().unwrap();
-        quote! {
-            #(#attrs)*
-            #field_vis #field_name: #field_ty
+    pub fn to_field_with_attrs(&self, allowed_attrs: &[&str]) -> Field {
+        Field {
+            attrs: self.attrs.iter()
+                .filter_map(|attr| {
+                    if allowed_attrs.iter().any(|&a| a == &attr.path) {
+                        Some(Attribute {
+                            pound_token: Default::default(),
+                            style: AttrStyle::Outer,
+                            bracket_token: Default::default(),
+                            path: parse_str(&attr.path).expect("Error parsing attribute path"),
+                            tokens: parse_str(&attr.tokens).expect("Error parsing attribute tokens"),
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            vis: parse_str(&self.vis).expect("Error parsing field vis"),
+            ident: parse_str(&self.name).expect("Error parsing field ident"),
+            colon_token: Some(Default::default()),
+            ty: parse_str(&self.ty).expect("Error parsing field type"),
         }
     }
 }
@@ -103,7 +124,12 @@ impl From<&Field> for StructField {
     fn from(field: &Field) -> Self {
         Self {
             attrs: field.attrs.iter()
-                .map(|attr| attr.to_token_stream().to_string())
+                .map(|attr| {
+                    SerializableAttribute {
+                        path: attr.path.to_token_stream().to_string(),
+                        tokens: attr.tokens.to_string(),
+                    }
+                })
                 .collect(),
             vis: field.vis.to_token_stream().to_string(),
             name: field.ident.to_token_stream().to_string(),
@@ -127,22 +153,30 @@ struct FlattenableEnumMeta {
 struct FlattenEnumMeta {
     item_vis: String,
     name: String,
+    flatten_item_name: String,
+    flatten_item_type: String,
     fields: Vec<StructField>,
 }
 
 fn find_stored_enum(ty: &Type) -> Option<FlattenableEnumMeta> {
-    let map_str = init_state!("enum_flatten_derive_enums", "{}");
-    let mut map: HashMap<SerializableIdent, FlattenableEnumMeta> = serde_json::from_str(&map_str)
-        .expect("Internal error: Map structure on disk is invalid");
+    let mut map = get_map("enum_flatten_derive_enums");
     // Using remove because I want to move out of the map. It doesn't matter because it will be
     // discarded immediately after
     map.remove(&ty.into())
 }
 
+fn get_map<T: Serialize + for<'de> Deserialize<'de>>(key: &str) -> HashMap<SerializableIdent, T> {
+    let empty_map = HashMap::<SerializableIdent, T>::new();
+    let empty_map_str = serde_json::to_string(&empty_map)
+        .expect("Error stringifying empty map");
+    let map_str = proc_init_state(key, &empty_map_str)
+        .expect("Internal error: Reading map from disk failed");
+    serde_json::from_str(&map_str)
+        .expect("Internal error: Map structure on disk is invalid")
+}
+
 fn store_struct(ty: &Type, st: FlattenEnumMeta) {
-    let map_str = init_state!("enum_flatten_derive_structs", "{}");
-    let mut map: HashMap<SerializableIdent, FlattenEnumMeta> = serde_json::from_str(&map_str)
-            .expect("Internal error: Map structure on disk is invalid");
+    let mut map = get_map("enum_flatten_derive_enums");
 
     // Using remove because I want to move out of the map. It doesn't matter because it will be
     // discarded immediately after
@@ -151,7 +185,7 @@ fn store_struct(ty: &Type, st: FlattenEnumMeta) {
     let save_str = serde_json::to_string(&map)
         .expect("Internal error: Map structure on disk is invalid");
     proc_write_state("enum_flatten_derive_structs", &save_str)
-        .expect("Error saving struct");
+        .expect("Internal error: Failed to save struct");
 }
 
 fn impl_enum_flatten_for_struct(item_vis: Visibility, name: Ident, s: DataStruct, flatten_field_name: Ident) -> Result<TokenStream2> {
@@ -178,12 +212,20 @@ fn impl_enum_flatten_for_struct(item_vis: Visibility, name: Ident, s: DataStruct
     };
 
     let fields = s.fields.iter()
-        .map(|field| field.into())
+        .filter_map(|field| {
+            if let Some(ident) = &field.ident && ident != &flatten_field_name {
+                Some(field.into())
+            } else {
+                None
+            }
+        })
         .collect();
 
     let st = FlattenEnumMeta {
         item_vis: item_vis.to_token_stream().to_string(),
         name: name.to_string(),
+        flatten_item_name: flatten_field_name.to_string(),
+        flatten_item_type: flatten_field_type.to_token_stream().to_string(),
         fields,
     };
 
@@ -212,33 +254,20 @@ fn impl_enum_flattenable(ast: DeriveInput) -> Result<TokenStream2> {
 }
 
 fn find_stored_struct(ident: &Ident) -> Option<FlattenEnumMeta> {
-    if !has_state!("enum_flatten_derive_structs") {
-        return None;
-    }
+    let mut map = get_map("enum_flatten_derive_structs");
 
-    let map_str = read_state!("enum_flatten_derive_structs");
-    let mut map: HashMap<SerializableIdent, FlattenEnumMeta> = serde_json::from_str(&map_str)
-        .expect("Internal error: Map structure on disk is invalid");
     // Using remove because I want to move out of the map. It doesn't matter because it will be
     // discarded immediately after
     map.remove(&ident.into())
 }
 
 fn store_enum(ident: &Ident, st: FlattenableEnumMeta) {
-    let mut map: HashMap<SerializableIdent, FlattenableEnumMeta> = if has_state!("enum_flatten_derive_enums") {
-        let map_str = read_state!("enum_flatten_derive_enums");
-        serde_json::from_str(&map_str)
-            .expect("Internal error: Map structure on disk is invalid")
-    } else {
-        HashMap::new()
-    };
+    let mut map = get_map("enum_flatten_derive_enums");
 
-    // Using remove because I want to move out of the map. It doesn't matter because it will be
-    // discarded immediately after
     map.insert(ident.into(), st);
 
     let save_str = serde_json::to_string(&map)
-        .expect("Internal error: Map structure on disk is invalid");
+        .expect("Internal error: Map structure is invalid");
     proc_write_state("enum_flatten_derive_enums", &save_str)
         .expect("Error saving struct");
 }
@@ -266,21 +295,91 @@ fn impl_enum_flattenable_for_enum(name: Ident, e: DataEnum) -> Result<TokenStrea
 }
 
 fn generate_enum_flatten_impl(st: FlattenEnumMeta, en: FlattenableEnumMeta) -> Result<TokenStream2> {
-    let item_vis = st.item_vis;
-    let common_fields: Vec<_> = st.fields.into_iter()
-        .map(|field| field.to_token_stream())
+    let struct_vis: Visibility = parse_str(&st.item_vis).expect("Error parsing struct_vis");
+    let struct_name: Ident = parse_str(&st.name).expect("Error parsing struct_name");
+    let flattened_field_name: Ident = parse_str(&st.flatten_item_name).expect("Error parsing flatten item name");
+    let flattened_field_type: Type = parse_str(&st.flatten_item_type).expect("Error parsing flatten item type");
+    let flat_enum_name = Ident::new(&format!("{}Flat", st.name), Span::call_site());
+    let common_fields: Vec<_> = st.fields.iter()
+        .map(|field| field.to_field_with_attrs(&PROPAGATED_ATTRS))
         .collect();
-    let child_structs: Vec<_> = en.variants.into_iter()
+    let common_field_names: Vec<Ident> = st.fields.iter()
+        .map(|field| parse_str(&field.name).expect("Error parsing common field name"))
+        .collect();
+    let child_structs: Vec<_> = en.variants.iter()
         .map(|variant| {
+            let variant_name: Ident = parse_str(&variant.name).expect("Error parsing variant name");
             let child_struct_name = Ident::new(&format!("{}{}", st.name, variant.name), Span::call_site());
-            let child_fields: Vec<_> = variant.fields.into_iter()
-                .map(|field| field.to_token_stream())
+            let child_fields: Vec<_> = variant.fields.iter()
+                .map(|field| field.to_field_with_attrs(&PROPAGATED_ATTRS))
                 .collect();
 
             quote! {
-                #item_vis struct #child_struct_name {
-                    #(#common_fields),*
-                    #(#child_fields),*
+                // TODO: Let user specify derives for this
+                #[derive(Debug, Clone)]
+                #struct_vis struct #child_struct_name {
+                    #(#common_fields,)*
+                    #(#child_fields,)*
+                }
+
+                impl Into<#flat_enum_name> for #child_struct_name {
+                    fn into(self) -> #flat_enum_name {
+                        #flat_enum_name::#variant_name(self)
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let flat_enum_variants: Vec<_> = en.variants.iter()
+        .map(|variant| {
+            let variant_name: Ident = parse_str(&variant.name).expect("Error parsing variant name");
+            let child_struct_name = Ident::new(&format!("{}{}", st.name, variant.name), Span::call_site());
+
+            quote! {
+                #variant_name(#child_struct_name)
+            }
+        })
+        .collect();
+
+    let flatten_match_arms: Vec<_> = en.variants.iter()
+        .map(|variant| {
+            let variant_name: Ident = parse_str(&variant.name).expect("Error parsing variant name");
+            let child_struct_name = Ident::new(&format!("{}{}", st.name, variant.name), Span::call_site());
+            let child_field_names: Vec<Ident> = variant.fields.iter()
+                .map(|field| {
+                    parse_str(&field.name).expect("Error parsing field name")
+                })
+                .collect();
+
+            quote! {
+                #flattened_field_type::#variant_name { #(#child_field_names,)* } => {
+                    #child_struct_name {
+                        #(#common_field_names: self.#common_field_names,)*
+                        #(#child_field_names,)*
+                    }.into()
+                }
+            }
+        })
+        .collect();
+
+    let unflatten_match_arms: Vec<_> = en.variants.iter()
+        .map(|variant| {
+            let variant_name: Ident = parse_str(&variant.name).expect("Error parsing variant name");
+            let child_field_names: Vec<Ident> = variant.fields.iter()
+                .map(|field| {
+                    parse_str(&field.name).expect("Error parsing field name")
+                })
+                .collect();
+
+            quote! {
+                #flat_enum_name::#variant_name(inner) => {
+                    #struct_name {
+                        #(#common_field_names: inner.#common_field_names,)*
+                        #flattened_field_name: #flattened_field_type::#variant_name {
+                            #(#child_field_names: inner.#child_field_names,)*
+                        }
+                    }
                 }
             }
         })
@@ -288,9 +387,47 @@ fn generate_enum_flatten_impl(st: FlattenEnumMeta, en: FlattenableEnumMeta) -> R
 
     Ok({
         quote! {
-             #(#child_structs)*
+            #(#child_structs)*
 
-            // TODO Impls
+            // TODO: Let user specify derives for this
+            #[derive(Debug, Clone)]
+            #struct_vis enum #flat_enum_name {
+                #(#flat_enum_variants,)*
+            }
+
+            impl ::enum_flatten::EnumFlatten for #struct_name {
+                type Flattened = #flat_enum_name;
+
+                fn flatten(self) -> Self::Flattened {
+                    match self.#flattened_field_name {
+                        #(#flatten_match_arms)*
+                    }
+                }
+            }
+
+            impl Into<#flat_enum_name> for #struct_name {
+                fn into(self) -> #flat_enum_name {
+                    ::enum_flatten::EnumFlatten::flatten(self)
+                }
+            }
+
+            pub struct ThisIsADebugStructToGrepFor2;
+
+            impl ::enum_flatten::EnumFlattened for #flat_enum_name {
+                type Unflattened = #struct_name;
+
+                fn unflatten(self) -> Self::Unflattened {
+                    match self {
+                        #(#unflatten_match_arms)*
+                    }
+                }
+            }
+
+            impl Into<#struct_name> for #flat_enum_name {
+                fn into(self) -> #struct_name {
+                    ::enum_flatten::EnumFlattened::unflatten(self)
+                }
+            }
         }
     })
 }

@@ -10,6 +10,7 @@ use indicatif::{ProgressDrawTarget, ProgressStyle};
 use fed::FedEvent;
 use flate2::read::GzDecoder;
 use with_structure::WithStructure;
+use enum_flatten::{EnumFlatten, EnumFlattened};
 use clap::Parser;
 
 const NUM_EVENTS: u64 = 8299172;
@@ -23,6 +24,11 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
     let parsed_event = fed::parse_feed_event(&feed_event)
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
+
+    let prased_event_flat = EnumFlatten::flatten(parsed_event.clone());
+    let prased_event_inflat = EnumFlattened::unflatten(prased_event_flat.clone());
+
+    assert!(prased_event_inflat == parsed_event);
 
     let reconstructed_event = parsed_event.clone().into_feed_event();
 

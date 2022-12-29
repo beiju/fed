@@ -2467,7 +2467,7 @@ pub enum FedEventData {
         round: Option<i32>,
 
         /// One-indexed season number
-        season: i32,
+        displayed_season: i32,
     },
 
     /// Team was eliminated from the postseason
@@ -2481,7 +2481,7 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// One-indexed season number
-        season: i32,
+        displayed_season: i32,
     },
 
     /// Player was boosted during election
@@ -5049,7 +5049,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::PostseasonAdvance { team_id, team_nickname, round, season } => {
+            FedEventData::PostseasonAdvance { team_id, team_nickname, round, displayed_season: season } => {
                 let round_str = if let Some(round) = round {
                     format!("Round {round}")
                 } else {
@@ -5065,7 +5065,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::PostseasonEliminated { team_id, team_nickname, season } => {
+            FedEventData::PostseasonEliminated { team_id, team_nickname, displayed_season: season } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::PostseasonEliminated,

@@ -769,6 +769,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "enum_flatten",
  "eventually_api",
  "fed",
  "flate2",

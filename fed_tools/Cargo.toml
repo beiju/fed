@@ -27,6 +27,7 @@ json-structural-diff = "0.1.0"
 par-iter-sync = "0.1.10"
 schemars = { version = "0.8.11", features = ["chrono", "uuid1", "preserve_order"] }
 with_structure = { path = "../with_structure" }
+enum_flatten = { path = "../enum_flatten" }
 serde = "1.0.147"
 serde_json = "1.0.82"
 chrono = "0.4.23"

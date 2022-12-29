@@ -2015,7 +2015,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
                 round: round_num,
-                season: season_num,
+                displayed_season: season_num,
             }
         }
         EventType::GainBloodType => { todo!() }
@@ -2047,7 +2047,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             FedEventData::PostseasonEliminated {
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
-                season: season_num,
+                displayed_season: season_num,
             }
         }
     };
