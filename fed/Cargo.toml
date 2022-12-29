@@ -23,3 +23,5 @@ thiserror = "1.0.31"
 uuid = { version = "1.2.2", features = ["serde"] }
 with_structure = { path = "../with_structure" }
 with_structure_derive = { path = "../with_structure_derive" }
+enum_flatten = { path = "../enum_flatten" }
+enum_flatten_derive = { path = "../enum_flatten_derive" }

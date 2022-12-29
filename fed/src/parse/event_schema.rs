@@ -14,6 +14,7 @@ use schemars::JsonSchema;
 use strum_macros::AsRefStr;
 use with_structure::WithStructure;
 use with_structure_derive::WithStructure;
+use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
@@ -957,7 +958,7 @@ pub struct Attraction {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay, EnumFlattenable)]
 #[enum_access(get_some(game = "pub"))]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3328,8 +3329,9 @@ pub enum SimPhase {
 }
 
 /// Represents the parsed data for any Feed event
-#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, WithStructure)]
+#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, WithStructure, EnumFlatten)]
 #[serde(rename_all = "camelCase")]
+#[enum_flatten(data)]
 pub struct FedEvent {
     /// Uuid of the event itself
     pub id: Uuid,
