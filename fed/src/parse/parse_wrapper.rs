@@ -533,19 +533,20 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_item_damage(&mut self) -> Result<ItemDamage, FeedParseError> {
-        let mut break_child = self.next_child(EventType::ItemBreaks)?;
+        let mut damage_child = self.next_child_any(&[EventType::ItemDamaged, EventType::ItemBreaks])?;
 
         Ok(ItemDamage {
-            item_id: break_child.metadata_uuid("itemId")?,
-            item_name: break_child.metadata_str("itemName")?.to_string(),
+            item_id: damage_child.metadata_uuid("itemId")?,
+            item_name: damage_child.metadata_str("itemName")?.to_string(),
             item_mods: vec![],
-            durability: break_child.metadata_i64("itemDurability")?,
-            player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
-            player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
-            player_rating: break_child.metadata_f64("playerRating")?,
-            team_id: break_child.next_team_id()?,
-            player_id: break_child.next_player_id()?,
-            sub_event: break_child.as_sub_event(),
+            durability: damage_child.metadata_i64("itemDurability")?,
+            health: damage_child.metadata_i64("itemHealthAfter")?,
+            player_item_rating_before: damage_child.metadata_f64("playerItemRatingBefore")?,
+            player_item_rating_after: damage_child.metadata_f64("playerItemRatingAfter")?,
+            player_rating: damage_child.metadata_f64("playerRating")?,
+            team_id: damage_child.next_team_id()?,
+            player_id: damage_child.next_player_id()?,
+            sub_event: damage_child.as_sub_event(),
         })
     }
 

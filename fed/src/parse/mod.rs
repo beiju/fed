@@ -1216,6 +1216,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     item_name: break_child.metadata_str("itemName")?.to_string(),
                     item_mods: vec![],
                     durability: break_child.metadata_i64("itemDurability")?,
+                    health: break_child.metadata_i64("itemHealthAfter")?,
                     player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
                     player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
                     player_rating: break_child.metadata_f64("playerRating")?,

@@ -176,8 +176,9 @@ impl Scores {
         let mut output = String::new();
         for score in &self.scores {
             if let Some(damage) = &score.item_damage {
-                write!(output, "\n{}{} {} broke!", if extra_space { " " } else { "" },
-                       possessive(score.player_name.clone()), damage.item_name).unwrap();
+                write!(output, "\n{}{} {} {}", if extra_space { " " } else { "" },
+                       possessive(score.player_name.clone()), damage.item_name,
+                       if damage.health == 0 { "broke!" } else { "was damaged." }).unwrap();
             }
 
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
@@ -700,7 +701,7 @@ pub enum ReturnFromElsewhereFlavor {
 
         /// "Re-congealed differently" sub-event, if player re-congealed differently, or null
         /// otherwise
-        recongealed_differently: Option<PlayerStatChange>
+        recongealed_differently: Option<PlayerStatChange>,
     },
     /// The short one that happens when the player went Elsewhere via salmon cannons or fleeing a
     /// failed heist. Players can't get Scattered on this one.
@@ -923,6 +924,9 @@ pub struct ItemDamage {
 
     /// Durability of item. This is its max health.
     pub durability: i64,
+
+    /// Current health of item
+    pub health: i64,
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
     /// before being damaged (TODO Clarify damage vs. breaking)
@@ -3496,8 +3500,7 @@ pub enum FedEventData {
         /// Info about the item that was received form the crate
         #[serde(flatten)]
         gained_item: ItemGained,
-    }
-
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4425,7 +4428,7 @@ impl FedEvent {
                 if let Some(carc_full) = carcinization {
                     let carc = carc_full.mv; // convenience
                     let carc_description = format!("The {} steal {} for the remainder of the game.",
-                                         carc_full.new_team_name, carc.player_name);
+                                                   carc_full.new_team_name, carc.player_name);
                     let mod_add_description = format!("{} was temporarily stolen.", carc.player_name);
                     eb.push_description(&carc_description);
                     eb.push_child(carc.sub_event, |mut child| {
@@ -5115,20 +5118,20 @@ impl FedEvent {
 
                         if let Some(recongeal) = recongealed_differently {
                             children.push(
-                            EventBuilderChild::new(&recongeal.sub_event)
-                                .update(EventBuilderUpdate {
-                                    category: EventCategory::Changes,
-                                    r#type: if recongeal.rating_after > recongeal.rating_before {
-                                        EventType::PlayerStatIncrease
-                                    } else {
-                                        EventType::PlayerStatDecrease
-                                    },
-                                    description: format!("{} re-congealed differently.", recongeal.player_name),
-                                    team_tags: vec![recongeal.team_id],
-                                    player_tags: vec![recongeal.player_id],
-                                    ..Default::default()
-                                })
-                                .metadata(json!({
+                                EventBuilderChild::new(&recongeal.sub_event)
+                                    .update(EventBuilderUpdate {
+                                        category: EventCategory::Changes,
+                                        r#type: if recongeal.rating_after > recongeal.rating_before {
+                                            EventType::PlayerStatIncrease
+                                        } else {
+                                            EventType::PlayerStatDecrease
+                                        },
+                                        description: format!("{} re-congealed differently.", recongeal.player_name),
+                                        team_tags: vec![recongeal.team_id],
+                                        player_tags: vec![recongeal.player_id],
+                                        ..Default::default()
+                                    })
+                                    .metadata(json!({
                                     "after": recongeal.rating_after,
                                     "before": recongeal.rating_before,
                                     "type": 4,
@@ -6060,8 +6063,8 @@ impl FedEvent {
                             })
                             .metadata(json!({
                                 "itemDurability": damage.durability,
-                                "itemHealthAfter": 0,
-                                "itemHealthBefore": 1,
+                                "itemHealthAfter": damage.health,
+                                "itemHealthBefore": damage.health + 1,
                                 "itemId": damage.item_id,
                                 "itemName": damage.item_name,
                                 "mods": damage.item_mods,

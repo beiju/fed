@@ -1451,7 +1451,10 @@ pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline: boo
         let (input, _) = if newline { tag("\n").parse(input)? } else { (input, "") };
         let (input, _) = if extra_space { tag(" ").parse(input)? } else { (input, "") };
         let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
-        let (input, item_name) = parse_terminated(" broke!").parse(input)?;
+        let (input, item_name) = alt((
+            parse_terminated(" was damaged."),
+            parse_terminated(" broke!"),
+        )).parse(input)?;
 
         Ok((input, (item_name, player_name)))
     }
@@ -1462,7 +1465,10 @@ pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> imp
         let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = alt((tag("'s "), tag("' "))).parse(input)?;
-        let (input, item_name) = parse_terminated(" broke!").parse(input)?;
+        let (input, item_name) = alt((
+            parse_terminated(" was damaged."),
+            parse_terminated(" broke!"),
+        )).parse(input)?;
 
         Ok((input, item_name))
     }
