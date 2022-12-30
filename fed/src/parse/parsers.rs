@@ -1294,7 +1294,7 @@ pub(crate) fn parse_single_homebody(input: &str) -> ParserResult<(&str, bool)> {
 }
 
 pub(crate) struct ParsedTeamRunsLost<'a> {
-    pub(crate) runs: i32,
+    pub(crate) runs: f32,
     pub(crate) name: &'a str,
 }
 
@@ -1320,7 +1320,7 @@ pub(crate) fn parse_salmon(input: &str) -> ParserResult<(i32, ParsedSalmonRunsLo
 
 pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLost> {
     let (input, _) = tag("\n").parse(input)?;
-    let (input, runs) = parse_whole_number(input)?;
+    let (input, runs) = float.parse(input)?;
     let (input, _) = tag(" of the ").parse(input)?;
     let (input, name) = parse_terminated("'s Runs are lost!").parse(input)?;
 

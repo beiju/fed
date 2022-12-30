@@ -726,7 +726,7 @@ pub enum ReturnFromElsewhereFlavor {
 #[serde(rename_all = "camelCase")]
 pub struct TeamRunsLost {
     /// Number of runs lost
-    pub runs_lost: i32,
+    pub runs_lost: f32,
 
     /// Name of team who lost the runs
     pub team_name: String,
