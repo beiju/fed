@@ -2102,8 +2102,10 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the team of the player who gained the Free Refill
-        team_id: Uuid,
+        /// Uuid of the team of the player who gained the Free Refill. This will be null if the
+        /// player is Inhabiting a Haunted player and they died before team ids were stored in the
+        /// player object (i.e. during Discipline)
+        team_id: Option<Uuid>,
 
         /// Uuid of player who gained the Free Refill
         player_id: Uuid,
@@ -4541,7 +4543,7 @@ impl FedEvent {
                         r#type: EventType::AddedMod,
                         category: EventCategory::Changes,
                         description: format!("{player_name} got a Free Refill."),
-                        team_tags: vec![team_id],
+                        team_tags: team_id.into_iter().collect(),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })

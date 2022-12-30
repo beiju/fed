@@ -742,7 +742,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ingredient1: ingredient1.to_string(),
                 ingredient2: ingredient2.to_string(),
                 sub_event: sub_event.as_sub_event(),
-                team_id: sub_event.next_team_id()?,
+                team_id: sub_event.next_team_id_opt(),
             }
         }
         EventType::CoffeeBean => {
