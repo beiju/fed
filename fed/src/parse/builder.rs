@@ -318,17 +318,44 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         self.build_item_damage(&self.item_damage_before_score, &mut description, &mut children_builders);
 
         if let Some((scores, score_text)) = self.scores {
-            children_builders.extend(scores.scores.iter().filter_map(|score| {
-                score.item_damage.as_ref().map(|item_damage| {
-                    make_item_damage_child(possessive(score.player_name.clone()), item_damage, true)
-                })
-            }));
+            for score in &scores.scores {
+                if let Some(item_damage) = &score.item_damage {
+                    children_builders.push(make_item_damage_child(
+                        possessive(score.player_name.clone()), item_damage, true)
+                    )
+                }
+            }
             description += &*scores.to_description_with_text_between(score_text,
                                                                      &self.update.description_after_score,
                                                                      (self.common.season, self.common.day) < (15, 3));
             children_builders.extend(scores.free_refills.iter()
                 .map(|free_refill| make_free_refill_child(free_refill)));
             player_tags.extend(scores.scorer_ids());
+
+            for score in &scores.scores {
+                if let Some(attraction) = &score.attraction {
+                    push_description!(description, "The {} Attract {}!", attraction.team_nickname, score.player_name);
+                }
+                if let Some(attraction) = &score.attraction {
+                    player_tags.push(score.player_id);
+                    children_builders.push(EventBuilderChild::new(&attraction.sub_event)
+                        .update(EventBuilderUpdate {
+                            r#type: EventType::PlayerAddedToTeam,
+                            category: EventCategory::Changes,
+                            description: format!("The {} Attracted {}!", attraction.team_nickname, score.player_name),
+                            team_tags: vec![attraction.team_id],
+                            player_tags: vec![score.player_id],
+                            ..Default::default()
+                        })
+                        .metadata(json!({
+                            "location": 2, // always shadows
+                            "playerId": score.player_id,
+                            "playerName": score.player_name,
+                            "teamId": attraction.team_id,
+                            "teamName": attraction.team_nickname,
+                        })))
+                }
+            }
         } else {
             description += &*self.update.description_after_score;
         }

@@ -5,8 +5,8 @@ use nom::combinator::opt;
 use nom::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamage, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
-use crate::parse::ParseOk;
+use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamage, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
+use crate::parse::{is_known_team_nickname, ParseOk};
 use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
@@ -195,10 +195,10 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn next_child_any_opt(&mut self, expected_types: &[EventType]) -> Result<Option<Self>, FeedParseError> {
         let Some((child, rest)) = self.children.split_first() else {
-            return Ok(None)
+            return Ok(None);
         };
         if !expected_types.iter().any(|&t| child.r#type == t) {
-            return Ok(None)
+            return Ok(None);
         }
         self.consumed_children_count += 1;
         self.children = rest;
@@ -483,18 +483,30 @@ impl<'e> EventParseWrapper<'e> {
         self.parse_scores_with_scoring_players(scoring_players)
     }
 
-    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<String>, String)>) -> Result<Scores, FeedParseError> {
+    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<String>, String, Option<String>)>) -> Result<Scores, FeedParseError> {
         let free_refills = self.parse_free_refills()?;
 
         let scores = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name)| {
+            .map(|(player_id, item_name, player_name, attraction)| {
                 let item_damage = item_name
                     .map(|_name| self.next_item_damage())
+                    .transpose()?;
+                let attraction = attraction
+                    .map(|team_nickname| {
+                        assert!(is_known_team_nickname(&team_nickname));
+                        let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
+                        ParseOk(Attraction {
+                            team_nickname,
+                            team_id: child.next_team_id()?,
+                            sub_event: child.as_sub_event(),
+                        })
+                    })
                     .transpose()?;
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
                     item_damage,
+                    attraction,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -505,11 +517,15 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<String>, String)>, FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<String>, String, Option<String>)>, FeedParseError> {
         let scorers = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
-            .map(|(item, scorer)| {
-                ParseOk((self.next_player_id()?, item.map(str::to_string), scorer.to_string()))
+            .map(|score| {
+                ParseOk((self.next_player_id()?,
+                         score.damaged_item_name.map(str::to_string),
+                         score.player_name.to_string(),
+                         score.attraction.map(str::to_string),
+                ))
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(scoring_players)
@@ -524,7 +540,6 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_item_damage_and_name(&mut self) -> Result<Option<(String, ItemDamage)>, FeedParseError> {
-
         self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3), true)))?
             .map(|(_item_name, player_name)| {
                 Ok((player_name.to_string(), self.next_item_damage()?))

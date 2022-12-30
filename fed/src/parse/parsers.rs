@@ -273,7 +273,11 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
     Ok((input, name))
 }
 
-type ParsedScore<'a> = (Option<&'a str>, &'a str);
+pub(crate) struct ParsedScore<'a> {
+    pub(crate) damaged_item_name: Option<&'a str>,
+    pub(crate) player_name: &'a str,
+    pub(crate) attraction: Option<&'a str>,
+}
 
 pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
     move |input| {
@@ -287,18 +291,37 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl 
     move |input| {
         let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
-        if let Some((item_name, player_name)) = item {
+        let (input, (damaged_item_name, player_name)) = if let Some((item_name, player_name)) = item {
             let (input, _) = tag(player_name).parse(input)?;
             let (input, _) = tag(score_label).parse(input)?;
 
-            Ok((input, (Some(item_name), player_name)))
+            (input, (Some(item_name), player_name))
         } else {
             let (input, name) = parse_terminated(score_label).parse(input)?;
-            Ok((input, (None, name)))
-        }
+            (input, (None, name))
+        };
+
+        let (input, attraction) = opt(parse_attraction(player_name)).parse(input)?;
+
+        Ok((input, ParsedScore {
+            damaged_item_name,
+            player_name,
+            attraction,
+        }))
     }
 }
 
+pub(crate) fn parse_attraction(player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+    move |input: &str| {
+        let (input, _) = tag("\nThe ").parse(input)?;
+        let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag("!").parse(input)?;
+
+
+        Ok((input, team_nickname))
+    }
+}
 pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }

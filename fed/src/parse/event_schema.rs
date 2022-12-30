@@ -155,6 +155,9 @@ pub struct ScoringPlayer {
 
     /// Item damaged by player scoring, if any
     pub item_damage: Option<ItemDamage>,
+
+    /// Info about the player attracted by this score, if any
+    pub attraction: Option<Attraction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1091,7 +1094,7 @@ pub struct Carcinization {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct Attraction {
+pub struct AttractionWithPlayer {
     /// Nickname of team who attracted this player
     pub team_nickname: String,
 
@@ -1103,6 +1106,19 @@ pub struct Attraction {
 
     /// Uuid of player who was attracted
     pub player_id: Uuid,
+
+    /// Metadata about the player being added to the team
+    pub sub_event: SubEvent,
+}
+
+// Use this in contexts where the player name and ID are stored outside
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Attraction {
+    /// Nickname of team who attracted this player
+    pub team_nickname: String,
+
+    /// Uuid of team who attracted this player
+    pub team_id: Uuid,
 
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
@@ -1527,7 +1543,7 @@ pub enum FedEventData {
         big_bucket: bool,
 
         /// Info about an Attractor being Attracted, if any. Otherwise null.
-        attraction: Option<Attraction>,
+        attraction: Option<AttractionWithPlayer>,
     },
 
     /// Stolen base

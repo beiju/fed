@@ -331,7 +331,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     assert!(is_known_team_nickname(team_nickname));
 
                     let mut child = event.next_child(EventType::PlayerAddedToTeam)?;
-                    ParseOk(Attraction {
+                    ParseOk(AttractionWithPlayer {
                         team_nickname: team_nickname.to_string(),
                         team_id: child.next_team_id()?,
                         player_name: player_name.to_string(),
