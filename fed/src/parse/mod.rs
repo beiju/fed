@@ -98,6 +98,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HalfInning => {
+            // Starting in s16, subseasonal mods (mods that apply only during Earl/Mid/Lateseason)
+            // announce when they start or end in the first HalfInning of the game. It's
+            // theoretically possible that there would be some starting and others ending in the
+            // same event (the days coincide) but it didn't happen in Beta, so I don't know the
+            // order it would apply in. I'm assuming it would be interleaved.
+            let mut subseasonal_mod_effects = Vec::new();
+            while let Some(mut child) = event.next_child_any_opt(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])? {
+                // The nickname and mod name are on both child and parent, but we need to consume
+                // the description from the parent anyway, so it's better to parse it from there
+                let (team_nickname, source_mod_name) = event.next_parse(parse_subseasonal_mod_change)?;
+                assert!(is_known_team_nickname(team_nickname));
+                subseasonal_mod_effects.push(TeamPerformingChanged {
+                    team_id: child.next_team_id()?,
+                    team_nickname: team_nickname.to_string(),
+                    source_mod_id: child.metadata_str("source")?.to_string(),
+                    source_mod_name: source_mod_name.to_string(),
+                    was_added: child.event_type == EventType::AddedModFromOtherMod,
+                    sub_event: child.as_sub_event(),
+                })
+            }
+
             let (top_of_inning, inning, team_name) = event.next_parse(parse_half_inning)?;
             assert!(is_known_team_name(team_name));
 
@@ -106,6 +127,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 top_of_inning,
                 inning,
                 batting_team_name: team_name.to_string(),
+                subseasonal_mod_effects,
             }
         }
         EventType::PitcherChange => {

@@ -456,6 +456,30 @@ pub enum SpicyStatus {
     RedHot(Option<ModChangeSubEvent>),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamPerformingChanged {
+    /// Nickname of the team who gained or lost Over or Underperforming
+    pub team_nickname: String,
+
+    /// Uuid of the team who gained or lost Over or Underperforming
+    pub team_id: Uuid,
+
+    /// Internal ID of the mod which caused the addition or removal. Which mod was added or removed
+    /// is not stored, but is inferred from this ID.
+    // TODO: Make this an enum?
+    pub source_mod_id: String,
+
+    /// Name of the mod which caused the addition or removal
+    pub source_mod_name: String,
+
+    /// True if the mod was added, false if it was removed
+    pub was_added: bool,
+
+    /// Metadata for the sub-event associated with the mod change
+    pub sub_event: SubEvent,
+}
+
 impl SpicyStatus {
     pub fn is_none(&self) -> bool {
         match self {
@@ -1184,6 +1208,18 @@ pub enum FedEventData {
 
         /// Full name of the team at bat
         batting_team_name: String,
+
+        /// List of subseasonal mods that came into effect on this HalfInning. Currently, all of
+        /// these mods add either Overperforming or Underperforming for the subseason.
+        ///
+        /// This array is only populated on the first HalfInning event of a game on the first game a
+        /// team plays in a given subseason (Earlseason, Midseason, Lateseason, or Postseason). Most
+        /// of the time this is the first day of the subseason, but the wildcard rounds in the
+        /// Postseason mean that some teams don't have their first game on the first day.
+        ///
+        /// Subseasonal mods only started working like this in season 16. Prior to season 16 there
+        /// was a separate event for these effects.
+        subseasonal_mod_effects: Vec<TeamPerformingChanged>,
     },
 
     /// Marks a new batter stepping up to the plate
@@ -3788,15 +3824,31 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::HalfInning,
-                        description: format!("{} of {inning}, {batting_team_name} batting.",
-                                             if top_of_inning { "Top" } else { "Bottom" }),
-                        ..Default::default()
+            FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, subseasonal_mod_effects } => {
+                eb.set_game(game);
+                for effect in subseasonal_mod_effects {
+                    let description = format!("The {} are {}.", effect.team_nickname, effect.source_mod_name);
+                    eb.push_description(&description);
+                    eb.push_child(effect.sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_team_tag(effect.team_id);
+                        child.push_metadata_str("mod", match effect.source_mod_id.as_str() {
+                            "MIDDLING" | "LATE_TO_PARTY" => "OVERPERFORMING",
+                            "EARLY_TO_PARTY" => "UNDERPERFORMING",
+                            other => panic!("Unexpected mod in TeamPerformingChanged: '{other}'")
+                        });
+                        child.push_metadata_str("source", effect.source_mod_id);
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(if effect.was_added {
+                            EventType::AddedModFromOtherMod
+                        } else {
+                            EventType::RemovedModFromOtherMod
+                        })
                     })
-                    .build()
+                }
+                eb.push_description(&format!("{} of {inning}, {batting_team_name} batting.",
+                                             if top_of_inning { "Top" } else { "Bottom" }));
+                eb.build(EventType::HalfInning)
             }
             FedEventData::BatterUp { ref game, ref batter_name, ref team_name, ref wielding_item, ref inhabiting, is_repeating } => {
                 let item_suffix = if let Some(item_name) = wielding_item {
