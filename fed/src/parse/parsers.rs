@@ -1494,3 +1494,18 @@ pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str)> {
 
     Ok((input, (player_name, item_name)))
 }
+
+pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("\nThe ").parse(input)?;
+    let (input, team_name) = parse_terminated(" steal ").parse(input)?;
+    let (input, player_name) = parse_terminated(" for the remainder of the game.").parse(input)?;
+
+    Ok((input, (team_name, player_name)))
+}
+
+pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\nThe Black Hole burps!\n").parse(input)?;
+    let (input, player_name) = parse_terminated(" is compressed by gamma!").parse(input)?;
+
+    Ok((input, player_name))
+}

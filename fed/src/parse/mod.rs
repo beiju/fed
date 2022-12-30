@@ -386,6 +386,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::GameEnd => {
             let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = event.next_parse(parse_game_end)?;
+
+            let temp_stolen_player_returned = event.next_child_opt(EventType::PlayerMoved)?
+                .map(|child| {
+                    Ok::<_, FeedParseError>(PlayerMovedTeams {
+                        player_id: child.metadata_uuid("playerId")?,
+                        player_name: child.metadata_str("playerName")?.to_string(),
+                        location: child.metadata_enum("location")?,
+                        previous_team_id: child.metadata_uuid("sendTeamId")?,
+                        previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
+                        new_team_id: child.metadata_uuid("receiveTeamId")?,
+                        new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
+                        sub_event: child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
             FedEventData::GameEnd {
                 game: event.game(unscatter, attractor_secret_base)?,
                 winner_id: event.metadata_uuid("winner")?,
@@ -393,6 +409,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 winning_team_score,
                 losing_team_name: losing_team_name.to_string(),
                 losing_team_score,
+                temp_stolen_player_returned,
             }
         }
         EventType::BatterUp => {
@@ -573,10 +590,49 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (scoring_team, victim_team) = event.next_parse(parse_black_hole)?;
             assert!(is_known_team_nickname(scoring_team));
             assert!(is_known_team_nickname(victim_team));
+
+            let carcinization = event.next_parse_opt(parse_carcinization)
+                .map(|(team_name, _player_name)| {
+                    assert!(is_known_team_name(team_name));
+                    let child = event.next_child(EventType::PlayerMoved)?;
+                    let mod_add_child = event.next_child(EventType::AddedMod)?;
+                    Ok::<_, FeedParseError>(Carcinization {
+                        mv: PlayerMovedTeams {
+                            player_id: child.metadata_uuid("playerId")?,
+                            player_name: child.metadata_str("playerName")?.to_string(),
+                            location: child.metadata_enum("location")?,
+                            previous_team_id: child.metadata_uuid("sendTeamId")?,
+                            previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
+                            new_team_id: child.metadata_uuid("receiveTeamId")?,
+                            new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
+                            sub_event: child.as_sub_event(),
+                        },
+                        new_team_name: team_name.to_string(),
+                        mod_added_sub_event: mod_add_child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
+            let compressed_by_gamma = event.next_parse_opt(parse_compressed_by_gamma)
+                .map(|player_name| {
+                    let mut child = event.next_child(EventType::PlayerStatDecrease)?;
+                    Ok::<_, FeedParseError>(PlayerStatChange {
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        rating_before: child.metadata_f64("before")?,
+                        rating_after: child.metadata_f64("after")?,
+                        sub_event: child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
             FedEventData::BlackHole {
                 game: event.game(unscatter, attractor_secret_base)?,
                 scoring_team_nickname: scoring_team.to_string(),
                 victim_team_nickname: victim_team.to_string(),
+                carcinization,
+                compressed_by_gamma,
             }
         }
         EventType::Sun2 => {
@@ -1679,9 +1735,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         player_name: event.metadata_str("playerName")?.to_string(),
                         location: event.metadata_enum("location")?,
                         previous_team_id: event.metadata_uuid("sendTeamId")?,
-                        previous_team_name: event.metadata_str("sendTeamName")?.to_string(),
+                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
                         new_team_id: event.metadata_uuid("receiveTeamId")?,
-                        new_team_name: event.metadata_str("receiveTeamName")?.to_string(),
+                        new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
                     }
                 }
             }

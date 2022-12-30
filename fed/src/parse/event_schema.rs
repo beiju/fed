@@ -522,7 +522,7 @@ pub enum ShadowPositionType {
     Bullpen = 3,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum PositionType {
@@ -532,7 +532,7 @@ pub enum PositionType {
     Bullpen = 3,
 }
 
-impl From<num_enum::TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
+impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
     fn from(value: TryFromPrimitiveError<ActivePositionType>) -> Self {
         FeedParseError::InvalidLocation {
             expected: &[1, 2],
@@ -1041,6 +1041,45 @@ pub struct ItemDroppedForNewItem {
 
     /// Metadata for the event associated with dropping the item
     pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerMovedTeams {
+    /// Uuid of player who moved teams
+    pub player_id: Uuid,
+
+    /// Name of player who moved teams
+    pub player_name: String,
+
+    /// Location of player within the teams
+    pub location: PositionType,
+
+    /// Uuid of player's previous team
+    pub previous_team_id: Uuid,
+
+    /// Nickname of player's previous team
+    pub previous_team_nickname: String,
+
+    /// Uuid of player's new team
+    pub new_team_id: Uuid,
+
+    /// Nickname of player's new team
+    pub new_team_nickname: String,
+
+    /// Sub-event associated with the player moving
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Carcinization {
+    #[serde(flatten)]
+    pub mv: PlayerMovedTeams,
+
+    /// Full name of player's new team
+    pub new_team_name: String,
+
+    /// Metadata for sub-event associated with adding the TEMP_STOLEN mod
+    pub mod_added_sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1673,6 +1712,10 @@ pub enum FedEventData {
 
         /// Score of the team who lost
         losing_team_score: f32,
+
+        /// Information about a temp stolen player being returned at the end of the game, if
+        /// applicable. Otherwise null.
+        temp_stolen_player_returned: Option<PlayerMovedTeams>,
     },
 
     /// Mild pitch that does not result in a walk
@@ -1959,6 +2002,14 @@ pub enum FedEventData {
 
         /// Nickname of the team whose Win was swallowed
         victim_team_nickname: String,
+
+        /// If a player was Carcinized on this event, contains details about the carcinization.
+        /// Otherwise null.
+        carcinization: Option<Carcinization>,
+
+        /// If a player was compressed by gamma on this event, contains details about the stat
+        /// change. Otherwise null.
+        compressed_by_gamma: Option<PlayerStatChange>,
     },
 
     /// Team shamed another team
@@ -3408,14 +3459,26 @@ pub enum FedEventData {
     #[serde(rename_all = "camelCase")]
     #[enum_inner_struct]
     Roam {
-        // TODO Document these
+        /// Uuid of player who roamed
         player_id: Uuid,
+
+        /// Name of player who roamed
         player_name: String,
+
+        /// Location of player within the teams
         location: PositionType,
+
+        /// Uuid of player's previous team
         previous_team_id: Uuid,
-        previous_team_name: String,
+
+        /// Nickname of player's previous team
+        previous_team_nickname: String,
+
+        /// Uuid of player's new team
         new_team_id: Uuid,
-        new_team_name: String,
+
+        /// Nickname of player's new team
+        new_team_nickname: String,
     },
 
     /// A shimmering Crate descends during Glitter weather
@@ -4078,7 +4141,30 @@ impl FedEvent {
                     .cooled_off(cooled_off, batter_name)
                     .build()
             }
-            FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score } => {
+            FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score, temp_stolen_player_returned } => {
+                let child = temp_stolen_player_returned
+                    .map(|ret| {
+                        EventBuilderChild::new(&ret.sub_event)
+                            .update(EventBuilderUpdate {
+                                r#type: EventType::PlayerMoved,
+                                category: EventCategory::Changes,
+                                description: format!("{} is returned to the {}.",
+                                                     ret.player_name, ret.new_team_nickname),
+                                player_tags: vec![ret.player_id],
+                                team_tags: vec![ret.previous_team_id, ret.new_team_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "location": ret.location as i64,
+                                "playerId": ret.player_id,
+                                "playerName": ret.player_name,
+                                "receiveLocation": ret.location as i64,
+                                "receiveTeamId": ret.new_team_id,
+                                "receiveTeamName": ret.new_team_nickname,
+                                "sendTeamId": ret.previous_team_id,
+                                "sendTeamName": ret.previous_team_nickname,
+                            }))
+                    });
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GameEnd,
@@ -4091,6 +4177,7 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .metadata(json!({ "winner": winner_id }))
+                    .children(child)
                     .build()
             }
             FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores } => {
@@ -4325,15 +4412,59 @@ impl FedEvent {
                     .children(child)
                     .build()
             }
-            FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BlackHole,
-                        category: EventCategory::Special,
-                        description: format!("The {scoring_team_nickname} collect 10!\nThe Black Hole swallows the Runs and a {victim_team_nickname} Win."),
-                        ..Default::default()
+            FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname, carcinization, compressed_by_gamma } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("The {scoring_team_nickname} collect 10!"));
+                eb.push_description(&format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));
+
+                if let Some(carc_full) = carcinization {
+                    let carc = carc_full.mv; // convenience
+                    let carc_description = format!("The {} steal {} for the remainder of the game.",
+                                         carc_full.new_team_name, carc.player_name);
+                    let mod_add_description = format!("{} was temporarily stolen.", carc.player_name);
+                    eb.push_description(&carc_description);
+                    eb.push_child(carc.sub_event, |mut child| {
+                        child.push_description(&carc_description);
+                        child.push_player_tag(carc.player_id);
+                        child.push_team_tag(carc.previous_team_id);
+                        child.push_team_tag(carc.new_team_id);
+                        child.push_metadata_i64("location", carc.location);
+                        child.push_metadata_uuid("playerId", carc.player_id);
+                        child.push_metadata_str("playerName", carc.player_name);
+                        child.push_metadata_i64("receiveLocation", carc.location);
+                        child.push_metadata_uuid("receiveTeamId", carc.new_team_id);
+                        child.push_metadata_str("receiveTeamName", carc.new_team_nickname);
+                        child.push_metadata_uuid("sendTeamId", carc.previous_team_id);
+                        child.push_metadata_str("sendTeamName", carc.previous_team_nickname);
+                        child.build(EventType::PlayerMoved)
+                    });
+                    eb.push_child(carc_full.mod_added_sub_event, |mut child| {
+                        child.push_description(&mod_add_description);
+                        child.push_player_tag(carc.player_id);
+                        child.push_team_tag(carc.new_team_id);
+                        child.push_metadata_str("mod", "TEMP_STOLEN");
+                        child.push_metadata_i64("type", 3);
+                        child.build(EventType::AddedMod)
+                    });
+                }
+
+                if let Some(gamma) = compressed_by_gamma {
+                    eb.push_description("The Black Hole burps!");
+                    eb.push_description(&format!("{} is compressed by gamma!", gamma.player_name));
+                    eb.push_player_tag(gamma.player_id);
+                    eb.push_child(gamma.sub_event, |mut child| {
+                        child.push_description(&format!("{} was compressed by gamma!", gamma.player_name));
+                        child.push_player_tag(gamma.player_id);
+                        child.push_team_tag(gamma.team_id);
+                        child.push_metadata_f64("before", gamma.rating_before);
+                        child.push_metadata_f64("after", gamma.rating_after);
+                        child.push_metadata_i64("type", 4);
+                        child.build(EventType::PlayerStatDecrease)
                     })
-                    .build()
+                }
+
+                eb.build(EventType::BlackHole)
             }
             FedEventData::TeamDidShame { shaming_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
                 event_builder
@@ -6300,7 +6431,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_name, new_team_id, new_team_name } => {
+            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_nickname, new_team_id, new_team_nickname } => {
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerMoved,
@@ -6316,9 +6447,9 @@ impl FedEvent {
                         "playerName": player_name,
                         "receiveLocation": location as i64,
                         "receiveTeamId": new_team_id,
-                        "receiveTeamName": new_team_name,
+                        "receiveTeamName": new_team_nickname,
                         "sendTeamId": previous_team_id,
-                        "sendTeamName": previous_team_name,
+                        "sendTeamName": previous_team_nickname,
                     }))
                     .build()
             }

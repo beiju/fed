@@ -108,9 +108,9 @@ impl EventBuilder {
             .insert(key.into(), Value::String(value.to_string()));
     }
 
-    pub fn push_metadata_i64(&mut self, key: impl Into<String>, value: i64) {
+    pub fn push_metadata_i64(&mut self, key: impl Into<String>, value: impl Into<i64>) {
         self.metadata_mut()
-            .insert(key.into(), value.into());
+            .insert(key.into(), value.into().into());
     }
 
     pub fn push_metadata_f64_forced(&mut self, key: impl Into<String>, value: f64) {
