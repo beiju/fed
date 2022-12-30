@@ -1298,12 +1298,19 @@ pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> 
 }
 
 
-pub(crate) fn parse_psychoacoustics(input: &str) -> ParserResult<(&str, &str, &str)> {
-    let (input, stadium_name) = parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input)?;
-    let (input, mod_name) = parse_terminated(" at the ").parse(input)?;
-    let (input, team_nickname) = parse_terminated(".").parse(input)?;
+pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<(&str, &str, &str)> {
+    move |input: &str| {
+        let (input, stadium_name) = parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input) ?;
+        // They changed the text in s16
+        let (input, mod_name) = if at {
+            parse_terminated(" at the ").parse(input)?
+        } else {
+            parse_terminated(" to the ").parse(input)?
+        };
+        let (input, team_nickname) = parse_terminated(".").parse(input) ?;
 
-    Ok((input, (stadium_name, mod_name, team_nickname)))
+        Ok((input, (stadium_name, mod_name, team_nickname)))
+    }
 }
 
 

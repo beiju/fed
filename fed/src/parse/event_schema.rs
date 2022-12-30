@@ -6303,11 +6303,13 @@ impl FedEvent {
                     .build()
             }
             FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
+                let description = format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} {} the {team_nickname}.",
+                                          if (self.season, self.day) < (15, 33) { "at" } else { "to" });
                 let child = EventBuilderChild::new(&sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedModFromOtherMod,
                         category: EventCategory::Changes,
-                        description: format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} at the {team_nickname}."),
+                        description: description.clone(),
                         team_tags: vec![team_id],
                         ..Default::default()
                     })
@@ -6321,7 +6323,11 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Psychoacoustics,
                         category: EventCategory::Special,
-                        description: String::new(), // yeah. it's weird
+                        description: if (self.season, self.day) < (15, 33) {
+                            String::new() // tgb did a whoopsie
+                        } else {
+                            description
+                        },
                         ..Default::default()
                     })
                     .child(child)

@@ -2145,7 +2145,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             // For some reason the description on the main event is empty and the description is
             // only on the child event
             let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
-            let (stadium_name, mod_name, team_nickname) = child.next_parse(parse_psychoacoustics)?;
+            // They changed the format slightly in the middle of s16
+            let (stadium_name, mod_name, team_nickname) = child.next_parse(parse_psychoacoustics((event.season, event.day) < (15, 33)))?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::Psychoacoustics {
                 game: event.game(unscatter, attractor_secret_base)?,
