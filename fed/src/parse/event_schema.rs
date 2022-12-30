@@ -185,6 +185,10 @@ impl Scores {
             }
 
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
+
+            if let Some(attraction) = &score.attraction {
+                write!(output, "\nThe {} Attract {}!", attraction.team_nickname, score.player_name).unwrap();
+            }
         }
 
         write!(output, "{}", text_between).unwrap();

@@ -333,14 +333,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
             description += &*scores.to_description_with_text_between(score_text,
                                                                      &self.update.description_after_score,
                                                                      (self.common.season, self.common.day) < (15, 3));
-            children_builders.extend(scores.free_refills.iter()
-                .map(|free_refill| make_free_refill_child(free_refill)));
-            player_tags.extend(scores.scorer_ids());
-
             for score in &scores.scores {
-                if let Some(attraction) = &score.attraction {
-                    push_description!(description, "The {} Attract {}!", attraction.team_nickname, score.player_name);
-                }
                 if let Some(attraction) = &score.attraction {
                     player_tags.push(score.player_id);
                     children_builders.push(EventBuilderChild::new(&attraction.sub_event)
@@ -361,6 +354,11 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                         })))
                 }
             }
+
+            children_builders.extend(scores.free_refills.iter()
+                .map(|free_refill| make_free_refill_child(free_refill)));
+            player_tags.extend(scores.scorer_ids());
+
         } else {
             description += &*self.update.description_after_score;
         }

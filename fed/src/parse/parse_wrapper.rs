@@ -484,8 +484,6 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<String>, String, Option<String>)>) -> Result<Scores, FeedParseError> {
-        let free_refills = self.parse_free_refills()?;
-
         let scores = scoring_players.into_iter()
             .map(|(player_id, item_name, player_name, attraction)| {
                 let item_damage = item_name
@@ -510,6 +508,8 @@ impl<'e> EventParseWrapper<'e> {
                 })
             })
             .collect::<Result<_, _>>()?;
+
+        let free_refills = self.parse_free_refills()?;
 
         Ok(Scores {
             scores,
