@@ -932,7 +932,33 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 ParsedReverbType::SeveralPlayers => {
-                    todo!()
+                    let mut reverbs = Vec::new();
+                    let mut team_id = None;
+                    while let Some(mut child) = event.next_child_opt(EventType::PlayerSwap)? {
+                        reverbs.push(PlayerReverb {
+                            first_player_id: child.metadata_uuid("aPlayerId")?,
+                            first_player_name: child.metadata_str("aPlayerName")?.to_string(),
+                            first_player_new_location: child.metadata_enum("aLocation")?,
+                            second_player_id: child.metadata_uuid("bPlayerId")?,
+                            second_player_name: child.metadata_str("bPlayerName")?.to_string(),
+                            second_player_new_location: child.metadata_enum("bLocation")?,
+                            sub_event: child.as_sub_event(),
+                        });
+                        if let Some(team_id) = team_id {
+                            // TODO: Make this a Result
+                            assert_eq!(team_id, child.next_team_id()?);
+                        } else {
+                            team_id = Some(child.next_team_id()?);
+                        }
+                    }
+                    FedEventData::Reverb {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        // TODO Turn this Expect into a Result
+                        team_id: team_id.expect("There must be at least one child to set the team id"),
+                        team_nickname: team_nickname.to_string(),
+                        reverb_type: ReverbType::SeveralPlayers(reverbs),
+                        gravity_players,
+                    }
                 }
             }
         }

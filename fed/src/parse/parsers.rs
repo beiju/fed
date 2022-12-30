@@ -789,7 +789,20 @@ pub(crate) enum ParsedReverbType {
 }
 
 pub(crate) fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
-    alt((parse_roster_shuffle_unsafe, parse_roster_shuffle_dangerous)).parse(input)
+    alt((
+        parse_roster_shuffle_high,
+        parse_roster_shuffle_unsafe,
+        parse_roster_shuffle_dangerous,
+    )).parse(input)
+}
+
+pub(crate) fn parse_roster_shuffle_high(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    let (input, _) = tag("Reverberations are at high levels!\nThe ").parse(input)?;
+    let (input, team_name) = parse_terminated(" had several players shuffled in the Reverb!").parse(input)?;
+
+    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
+
+    Ok((input, (team_name, ParsedReverbType::SeveralPlayers, gravity_players)))
 }
 
 pub(crate) fn parse_roster_shuffle_unsafe(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
@@ -797,7 +810,6 @@ pub(crate) fn parse_roster_shuffle_unsafe(input: &str) -> ParserResult<(&str, Pa
     let (input, (team_name, reverb_type)) = alt((
         parse_terminated(" had their rotation shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Rotation)),
         parse_terminated(" had their lineup shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Lineup)),
-        parse_terminated(" had several players shuffled in the Reverb!").map(|n| (n, ParsedReverbType::SeveralPlayers)),
     )).parse(input)?;
 
     let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;

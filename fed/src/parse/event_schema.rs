@@ -581,12 +581,40 @@ pub struct FeedbackPlayerData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerReverb {
+    /// Uuid of the first player involved in this reverb
+    pub first_player_id: Uuid,
+
+    /// Name of the first player involved in this reverb
+    pub first_player_name: String,
+
+    /// New location (lineup or rotation) of the first player involved in this reverb. Also the 
+    /// previous location of the second player in the reverb.
+    pub first_player_new_location: ActivePositionType,
+
+    /// Uuid of the second player involved in this reverb
+    pub second_player_id: Uuid,
+
+    /// Name of the second player involved in this reverb
+    pub second_player_name: String,
+
+    /// New location (lineup or rotation) of the second player involved in this reverb. Also the 
+    /// previous location of the second player in the reverb.
+    pub second_player_new_location: ActivePositionType,
+
+    /// Metadata associated with the player swap sub-event
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 // This uses a combo of flatten and adjacent tagging
 #[serde(rename_all = "camelCase", tag = "type", content = "subEvent")]
 pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
     Full(SubEvent),
+    SeveralPlayers(Vec<PlayerReverb>)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -4858,7 +4886,7 @@ impl FedEvent {
                     .map(|player| format!("\n{}'s Gravity kept them in place!", player.player_name))
                     .join("");
 
-                let player_tags = gravity_players.iter()
+                let mut player_tags = gravity_players.iter()
                     .map(|player| player.player_id)
                     .collect();
 
@@ -4897,6 +4925,44 @@ impl FedEvent {
                                 ..Default::default()
                             })
                             .child(get_child(sub_event, EventType::ReverbFullShuffle, "were"))
+                            .build()
+                    }
+                    ReverbType::SeveralPlayers(player_reverbs) => {
+                        let children = player_reverbs.iter()
+                            .map(|reverb| {
+                                player_tags.push(reverb.first_player_id);
+                                player_tags.push(reverb.second_player_id);
+                                EventBuilderChild::new(&reverb.sub_event)
+                                    .update(EventBuilderUpdate {
+                                        r#type: EventType::PlayerSwap,
+                                        category: EventCategory::Changes,
+                                        description: format!("The {team_nickname} had several players shuffled in the Reverb!"),
+                                        team_tags: vec![team_id],
+                                        player_tags: vec![reverb.first_player_id, reverb.second_player_id],
+                                        ..Default::default()
+                                    })
+                                    .metadata(json!({
+                                        "aLocation": reverb.first_player_new_location as i64,
+                                        "aPlayerId": reverb.first_player_id,
+                                        "aPlayerName": reverb.first_player_name,
+                                        "bLocation": reverb.second_player_new_location as i64,
+                                        "bPlayerId": reverb.second_player_id,
+                                        "bPlayerName": reverb.second_player_name,
+                                        "teamId": team_id,
+                                        "teamName": team_nickname,
+                                    }))
+                            })
+                            // Need to collect to clear the borrow of player_tags
+                            .collect_vec();
+                        event_builder.for_game(game)
+                            .fill(EventBuilderUpdate {
+                                r#type: EventType::ReverbRosterShuffle,
+                                category: EventCategory::Special,
+                                description: format!("Reverberations are at high levels!\nThe {team_nickname} had several players shuffled in the Reverb!{gravity_suffix}"),
+                                player_tags,
+                                ..Default::default()
+                            })
+                            .children(children)
                             .build()
                     }
                 }
