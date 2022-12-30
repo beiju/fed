@@ -642,7 +642,7 @@ impl<'e> EventParseWrapper<'e> {
             sub_event: child.as_sub_event(),
             player_name: name.to_string(),
             player_id: child.next_player_id()?,
-            team_id: child.next_team_id()?,
+            team_id: child.next_team_id_opt(),
         })
     }
 }

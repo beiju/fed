@@ -355,15 +355,9 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                 }
             }
 
-            children_builders.extend(scores.free_refills.iter()
-                .map(|free_refill| make_free_refill_child(free_refill)));
-            player_tags.extend(scores.scorer_ids());
-
         } else {
             description += &*self.update.description_after_score;
         }
-
-        self.build_item_damage(&self.item_damage_after_score, &mut description, &mut children_builders);
 
         if let Some(inh) = self.stopped_inhabiting {
             children_builders.push(
@@ -382,6 +376,14 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
                     }))
             )
         }
+
+        if let Some((scores, _)) = self.scores {
+            children_builders.extend(scores.free_refills.iter()
+                .map(|free_refill| make_free_refill_child(free_refill)));
+            player_tags.extend(scores.scorer_ids());
+        }
+
+        self.build_item_damage(&self.item_damage_after_score, &mut description, &mut children_builders);
 
         match self.spicy_change {
             SpicyChange::None => {}
@@ -502,7 +504,7 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
             r#type: EventType::RemovedMod,
             category: EventCategory::Changes,
             description: format!("{} used their Free Refill.", free_refill.player_name),
-            team_tags: vec![free_refill.team_id],
+            team_tags: free_refill.team_id.into_iter().collect(),
             player_tags: vec![free_refill.player_id],
             ..Default::default()
         })

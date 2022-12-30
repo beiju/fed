@@ -140,8 +140,9 @@ pub struct FreeRefill {
     /// Uuid of the player who used their Free Refill
     pub player_id: Uuid,
 
-    /// Uuid of the team of the player who used their Free Refill
-    pub team_id: Uuid,
+    /// Uuid of the team of the player who used their Free Refill. This is usually populated, but
+    /// when a ghost who died before player objects stored team ids uses their free refill it's null
+    pub team_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

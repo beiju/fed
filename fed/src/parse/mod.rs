@@ -161,7 +161,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             sub_event: sub_event.as_sub_event(),
                             player_name: refiller_name.to_string(),
                             player_id: sub_event.next_player_id()?,
-                            team_id: sub_event.next_team_id()?,
+                            team_id: sub_event.next_team_id_opt(),
                         })
                     }).transpose()?,
                     runner_item_damage,
@@ -411,12 +411,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             } else {
                 None
             };
+
             let batter_id = event.next_player_id()?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
             let scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
-
-            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,

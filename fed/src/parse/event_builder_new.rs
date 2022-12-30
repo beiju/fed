@@ -214,7 +214,7 @@ impl EventBuilder {
         self.push_child(fr.sub_event, |mut child| {
             child.push_description(&common_description);
             child.push_player_tag(fr.player_id);
-            child.push_team_tag(fr.team_id);
+            if let Some(t) = fr.team_id { child.push_team_tag(t) };
             child.push_metadata_str("mod", "COFFEE_RALLY");
             child.push_metadata_i64("type", ModDuration::Permanent as i64);
             child.build(EventType::RemovedMod)
