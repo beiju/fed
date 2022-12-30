@@ -562,10 +562,7 @@ pub(crate) fn parse_incineration_blocked(input: &str) -> ParserResult<(&str, Inc
 
 pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
     // This message treats possessives of names ending in s correctly
-    let (input, player_name) = alt((
-        parse_terminated("'s "),
-        parse_terminated("' ")
-    )).parse(input)?;
+    let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, duration) = alt((
         tag("game").map(|_| ModDuration::Game),
         tag("weekly").map(|_| ModDuration::Weekly),
@@ -573,6 +570,13 @@ pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDu
     )).parse(input)?;
     let (input, _) = tag(" mods wore off.").parse(input)?;
     Ok((input, (player_name, duration)))
+}
+
+fn parse_terminated_by_possessive(input: &str) -> ParserResult<&str> {
+    alt((
+        parse_terminated("'s "),
+        parse_terminated("' ")
+    )).parse(input)
 }
 
 pub(crate) fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
@@ -1464,17 +1468,29 @@ pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> imp
     }
 }
 
-pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
+pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<(&str, bool)>)> {
     let (input, _) = tag("A shimmering Crate descends.\n").parse(input)?;
     let (input, player_name) = parse_terminated(" gained ").parse(input)?;
-    let (input, gained_with_loss) = opt(parse_terminated(" and dropped ")).parse(input)?;
-    let (input, (gained, lost)) = if let Some(gained) = gained_with_loss {
+    // Ditched is when the item is broken, dropped is when it isn't.
+    let (input, gained_with_loss) = opt(alt((
+        parse_terminated(" and dropped ").map(|s| (s, false)),
+        parse_terminated(" and ditched ").map(|s| (s, true)),
+    ))).parse(input)?;
+    let (input, (gained, lost)) = if let Some((gained, was_broken)) = gained_with_loss {
         let (input, lost) = parse_terminated(".").parse(input)?;
-        (input, (gained, Some(lost)))
+        (input, (gained, Some((lost, was_broken))))
     } else {
         let (input, gained) = parse_terminated(".").parse(input)?;
         (input, (gained, None))
     };
 
     Ok((input, (player_name, gained, lost)))
+}
+
+pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
+    let (input, item_name) = parse_terminated(" was restored!").parse(input)?;
+
+    Ok((input, (player_name, item_name)))
 }

@@ -976,27 +976,70 @@ pub struct ItemGained {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemRestored {
+    /// Uuid of item that was restored
+    pub item_id: Uuid,
+
+    /// Name of item that was restored
+    pub item_name: String,
+
+    /// Mods bestowed by item that was restored
+    pub item_mods: Vec<String>,
+
+    /// Durability of item. This is its max health.
+    pub durability: i64,
+
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before being restored (TODO Clarify damage vs. breaking)
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's items now cause to their star
+    /// rating.
+    pub player_item_rating_after: f64,
+
+    /// The player's star rating. TODO: Is this with or without items?
+    pub player_rating: f64,
+
+    /// Team Uuid of team whose item broke
+    pub team_id: Uuid,
+
+    /// Uuid of player whose item broke
+    pub player_id: Uuid,
+
+    // TODO: Move this out if it turns out there are other restoring events with the name stored
+    //   outside the ItemRestored struct
+    /// Name of player whose item broke
+    pub player_name: String,
+
+    /// Metadata for the event associated with the item being damaged
+    pub sub_event: SubEvent,
+}
+
 // This event is intended for situations where the player's id and team are already encoded in a
 // ItemGained struct. If a player
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemDroppedForNewItem {
-    /// Uuid of item that was gained
+    /// Uuid of item that was dropped
     pub item_id: Uuid,
 
-    /// Name of item that was gained
+    /// Name of item that was dropped
     pub item_name: String,
 
-    /// Mods bestowed by item that was gained
+    /// Mods bestowed by item that was dropped
     pub item_mods: Vec<String>,
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before gaining this item
+    /// before dropping this item
     pub player_item_rating_before: f64,
 
     /// The increase or decrease that all the wielding player's items now cause to their star rating
     pub player_item_rating_after: f64,
 
-    /// Metadata for the event associated with gaining/losing the item
+    /// True if the item was broken, otherwise false
+    pub item_was_broken: bool,
+
+    /// Metadata for the event associated with dropping the item
     pub sub_event: SubEvent,
 }
 
@@ -1485,6 +1528,9 @@ pub enum FedEventData {
         /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
 
+        /// Information about the pitcher's item being damaged, if any
+        pitcher_item_damage: Option<(String, ItemDamage)>,
+
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players got Unrun strikeouts the event was
         /// Special but that was the only way of knowing. (It's possible that there are other
@@ -1505,6 +1551,9 @@ pub enum FedEventData {
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,
+
+        /// Information about the pitcher's item being damaged, if any
+        pitcher_item_damage: Option<(String, ItemDamage)>,
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players got Unrun strikeouts the event was
@@ -3154,6 +3203,9 @@ pub enum FedEventData {
 
         /// Runs lost to the Salmon
         run_losses: RunLossesFromSalmon,
+
+        /// Item restored by the salmon, if any
+        item_restored: Option<ItemRestored>,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
@@ -3898,7 +3950,7 @@ impl FedEvent {
                     )
                     .build()
             }
-            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
+            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, ref pitcher_item_damage, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Strikeout,
@@ -3906,10 +3958,11 @@ impl FedEvent {
                         description: format!("{} strikes out swinging.", batter_name),
                         ..Default::default()
                     })
+                    .named_item_damage(pitcher_item_damage.as_ref())
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
-            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, is_special } => {
+            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, ref pitcher_item_damage, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Strikeout,
@@ -3917,6 +3970,7 @@ impl FedEvent {
                         description: format!("{} strikes out looking.", batter_name),
                         ..Default::default()
                     })
+                    .named_item_damage(pitcher_item_damage.as_ref())
                     .stopped_inhabiting(stopped_inhabiting)
                     .build()
             }
@@ -5982,14 +6036,37 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::SalmonSwim { game, inning_num, run_losses: runs_lost } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::SalmonSwim,
-                        description: format!("The Salmon swim upstream!\nInning {inning_num} begins again.\n{runs_lost}"),
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::SalmonSwim { game, inning_num, run_losses, item_restored } => {
+                eb.set_game(game);
+                eb.push_description("The Salmon swim upstream!");
+                eb.push_description(&format!("Inning {inning_num} begins again."));
+                eb.push_description(&run_losses.to_string());
+
+                if let Some(item_restored) = item_restored {
+                    let restored_description = format!("{} {} was restored!",
+                                                       possessive(item_restored.player_name),
+                                                       item_restored.item_name);
+                    eb.push_description(&restored_description);
+                    eb.push_child(item_restored.sub_event, |mut child| {
+                        // Yes, the parent says swim and the child says swam
+                        child.push_description("The Salmon swam upstream!");
+                        child.push_description(&restored_description);
+                        child.push_player_tag(item_restored.player_id);
+                        child.push_team_tag(item_restored.team_id);
+                        child.push_metadata_i64("itemDurability", item_restored.durability);
+                        child.push_metadata_i64("itemHealthAfter", 1);
+                        child.push_metadata_i64("itemHealthBefore", 0);
+                        child.push_metadata_uuid("itemId", item_restored.item_id);
+                        child.push_metadata_str("itemName", item_restored.item_name);
+                        child.push_metadata_str_vec("mods", item_restored.item_mods);
+                        child.push_metadata_f64("playerItemRatingAfter", item_restored.player_item_rating_after);
+                        child.push_metadata_f64("playerItemRatingBefore", item_restored.player_item_rating_before);
+                        child.push_metadata_f64("playerRating", item_restored.player_rating);
+                        child.build(EventType::BrokenItemRepaired)
+                    });
+                }
+
+                eb.build(EventType::SalmonSwim)
             }
             FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event, scores } => {
                 let child = EventBuilderChild::new(&sub_event)

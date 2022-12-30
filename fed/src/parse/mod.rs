@@ -189,19 +189,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             match event.next_parse(parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
+                        pitcher_item_damage,
                         is_special: event.category == EventCategory::Special,
                     }
                 }
                 ParsedStrikeout::Looking(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
+                        pitcher_item_damage,
                         is_special: event.category == EventCategory::Special,
                     }
                 }
@@ -1088,6 +1092,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::SalmonSwim => {
             let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
+            let item_restored = event.next_parse_opt(parse_item_restored)
+                .map(|(player_name, _item_name)| {
+                    let mut child = event.next_child(EventType::BrokenItemRepaired)?;
+                    Ok::<_, FeedParseError>(ItemRestored {
+                        item_id: child.metadata_uuid("itemId")?,
+                        item_name: child.metadata_str("itemName")?.to_string(),
+                        item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                        durability: child.metadata_i64("itemDurability")?,
+                        player_item_rating_before: child.metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_after: child.metadata_f64("playerItemRatingAfter")?,
+                        player_rating: child.metadata_f64("playerRating")?,
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        sub_event: child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
 
             FedEventData::SalmonSwim {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1104,6 +1126,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         ))
                     }
                 },
+                item_restored,
             }
         }
         EventType::PolarityShift => { todo!() }
@@ -1945,7 +1968,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             // Drop event is first in the data
             let dropped_item = lost_item_name
-                .map(|_name| {
+                .map(|(_name, item_was_broken)| {
                     let drop_event = event.next_child(EventType::PlayerLostItem)?;
                     Ok::<_, FeedParseError>(ItemDroppedForNewItem {
                         item_id: drop_event.metadata_uuid("itemId")?,
@@ -1953,6 +1976,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         item_mods: drop_event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
                         player_item_rating_before: drop_event.metadata_f64("playerItemRatingBefore")?,
                         player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
+                        item_was_broken,
                         sub_event: drop_event.as_sub_event(),
                     })
                 })
@@ -2022,6 +2046,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::ItemBreaks => { todo!() }
+        EventType::BrokenItemRepaired => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

@@ -63,6 +63,8 @@ impl EventBuilder {
     
     pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F) where F: FnOnce(Self) -> EventuallyEvent {
         let mut child_builder = Self::new(sub_event.id, sub_event.created, self.0.sim.clone(), self.0.day, self.0.season, self.0.tournament, self.0.phase, sub_event.nuts);
+        // Childrens' categories are usually Changes
+        child_builder.0.category = EventCategory::Changes;
         child_builder.0.metadata.parent = Some(self.0.id);
         child_builder.0.game_tags = self.0.game_tags.clone();
         child_builder.0.metadata.play = self.0.metadata.play;
@@ -128,7 +130,8 @@ impl EventBuilder {
 
     pub fn push_gained_item(&mut self, player_name: String, gained_item: ItemGained) {
         if let Some(lost_item) = gained_item.dropped_item {
-            self.push_description(&format!("{player_name} gained {} and dropped {}.",
+            let dropped_or_ditched = if lost_item.item_was_broken { "ditched" } else { "dropped" };
+            self.push_description(&format!("{player_name} gained {} and {dropped_or_ditched} {}.",
                                           gained_item.item_name, lost_item.item_name));
             self.push_child(lost_item.sub_event, |mut child| {
                 child.set_category(EventCategory::Changes);
