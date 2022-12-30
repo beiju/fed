@@ -218,7 +218,6 @@ pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
 pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32, Option<&str>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, batter_name, broken_item_name) = if let Some((broken_item_name, batter_name)) = broke {
-        let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(batter_name).parse(input)?;
         let (input, _) = tag(" hits a ").parse(input)?;
 
@@ -465,7 +464,6 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
     // pitcher and once as the charmer) but I'm not going to worry about that right now
     let (input, broken_item) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, item_name, batter_name, pitcher_name) = if let Some((item_name, player_name)) = broken_item {
-        let (input, _) = tag("\n").parse(input)?;
         // We don't yet know which player broke the item
         // Try batter first
         let (input, batter_was_damaged) = opt(tag(player_name)).parse(input)?;
@@ -1511,15 +1509,16 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     Ok((input, (player_name, mod_)))
 }
 
-pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
+pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline_before: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
     move |input| {
-        let (input, _) = if newline { tag("\n").parse(input)? } else { (input, "") };
+        let (input, _) = if newline_before { tag("\n").parse(input)? } else { (input, "") };
         let (input, _) = if extra_space { tag(" ").parse(input)? } else { (input, "") };
         let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
         let (input, item_name) = alt((
             parse_terminated(" was damaged."),
             parse_terminated(" broke!"),
         )).parse(input)?;
+        let (input, _) = if !newline_before { tag("\n").parse(input)? } else { (input, "") };
 
         Ok((input, (item_name, player_name)))
     }

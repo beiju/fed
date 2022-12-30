@@ -531,22 +531,6 @@ impl<'e> EventParseWrapper<'e> {
         Ok(scoring_players)
     }
 
-    pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
-        self.next_parse(opt(parse_item_damage(batter_name, (self.season, self.day) < (15, 3))))?
-            .map(|_item_name| {
-                self.next_item_damage()
-            })
-            .transpose()
-    }
-
-    pub fn parse_item_damage_and_name(&mut self) -> Result<Option<(String, ItemDamage)>, FeedParseError> {
-        self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3), true)))?
-            .map(|(_item_name, player_name)| {
-                Ok((player_name.to_string(), self.next_item_damage()?))
-            })
-            .transpose()
-    }
-
     pub fn next_item_damage(&mut self) -> Result<ItemDamage, FeedParseError> {
         let mut damage_child = self.next_child_any(&[EventType::ItemDamaged, EventType::ItemBreaks])?;
 
@@ -563,6 +547,30 @@ impl<'e> EventParseWrapper<'e> {
             player_id: damage_child.next_player_id()?,
             sub_event: damage_child.as_sub_event(),
         })
+    }
+
+    pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamage>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage(batter_name, (self.season, self.day) < (15, 3))))?
+            .map(|_item_name| {
+                self.next_item_damage()
+            })
+            .transpose()
+    }
+
+    pub fn parse_item_damage_and_name(&mut self, newline_before: bool) -> Result<Option<(String, ItemDamage)>, FeedParseError> {
+        self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3), newline_before)))?
+            .map(|(_item_name, player_name)| {
+                Ok((player_name.to_string(), self.next_item_damage()?))
+            })
+            .transpose()
+    }
+
+    pub fn parse_item_damages_and_names(&mut self, newline_before: bool) -> Result<Vec<(String, ItemDamage)>, FeedParseError> {
+        let mut broken_items = Vec::new();
+        while let Some(d) = self.parse_item_damage_and_name(newline_before)? {
+            broken_items.push(d);
+        }
+        Ok(broken_items)
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

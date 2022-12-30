@@ -227,7 +227,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             match event.next_parse(parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -240,7 +240,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
                 ParsedStrikeout::Looking(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -274,7 +274,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let scores = event.parse_scores(" tags up and scores!")?;
             let batter_item_damage = event.parse_item_damage(batter_name)?;
-            let other_player_item_damage = event.parse_item_damage_and_name()?;
+            let other_player_item_damage = event.parse_item_damage_and_name(true)?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
             FedEventData::Flyout {
@@ -297,7 +297,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage = event.parse_item_damage(fielder_name)?;
                     // just guessing about where this belongs
-                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -349,6 +349,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
+            let damaged_items = event.parse_item_damages_and_names(false)?;
             // In addition to getting a magmatic event, get a player name and id to check against
             // the batter name and id
             let magmatic_expanded = event.next_parse(parse_magmatic)?
@@ -400,6 +401,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 is_special: event.category == EventCategory::Special,
                 big_bucket,
                 attraction,
+                damaged_items,
             }
         }
         EventType::Hit => {
@@ -412,7 +414,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let batter_id = event.next_player_id()?;
             let scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
-            let other_player_item_damage = event.parse_item_damage_and_name()?;
+            let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
@@ -492,7 +494,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Strike => {
             let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
-            let pitcher_item_damage = event.parse_item_damage_and_name()?;
+            let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
             let game = event.game(unscatter, attractor_secret_base)?;
             match strike_type {
                 StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage },
@@ -502,7 +504,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Ball => {
             let (balls, strikes) = event.next_parse(parse_ball)?;
-            let batter_item_damage = event.parse_item_damage_and_name()?;
+            let batter_item_damage = event.parse_item_damage_and_name(true)?;
             FedEventData::Ball {
                 game: event.game(unscatter, attractor_secret_base)?,
                 balls,
@@ -513,7 +515,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::FoulBall => {
             // Eventually this will need very foul support, but I'll get to that when it comes up
             let (balls, strikes) = event.next_parse(parse_foul_ball)?;
-            let batter_item_damage = event.parse_item_damage_and_name()?;
+            let batter_item_damage = event.parse_item_damage_and_name(true)?;
             FedEventData::FoulBall {
                 game: event.game(unscatter, attractor_secret_base)?,
                 balls,

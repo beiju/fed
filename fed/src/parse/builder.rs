@@ -235,8 +235,13 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         self
     }
 
-    pub fn named_item_damage(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+    pub fn named_item_damage_before_score(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
         self.item_damage_before_score.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
+        self
+    }
+
+    pub fn named_item_damage_before_event(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+        self.item_damage_before_event.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
         self
     }
 

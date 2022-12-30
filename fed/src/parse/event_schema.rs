@@ -1617,6 +1617,13 @@ pub enum FedEventData {
 
         /// Info about an Attractor being Attracted, if any. Otherwise null.
         attraction: Option<AttractionWithPlayer>,
+
+        /// Info about player items that were damaged, if any.
+        ///
+        /// Home Run events don't really give enough information to attribute these damages to
+        /// anybody. We could compare the name to the batter name, but since batters can also be
+        /// on base that doesn't really give us any certain information.
+        damaged_items: Vec<(String, ItemDamage)>
     },
 
     /// Stolen base
@@ -3977,7 +3984,7 @@ impl FedEvent {
                         description: format!("Ball. {}-{}", balls, strikes),
                         ..Default::default()
                     })
-                    .named_item_damage(batter_item_damage.as_ref())
+                    .named_item_damage_before_score(batter_item_damage.as_ref())
                     .build()
             }
             FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage } => {
@@ -3987,7 +3994,7 @@ impl FedEvent {
                         description: format!("Strike, swinging. {balls}-{strikes}"),
                         ..Default::default()
                     })
-                    .named_item_damage(&pitcher_item_damage)
+                    .named_item_damage_before_score(&pitcher_item_damage)
                     .build()
             }
             FedEventData::StrikeLooking { game, balls, strikes, pitcher_item_damage } => {
@@ -3997,7 +4004,7 @@ impl FedEvent {
                         description: format!("Strike, looking. {balls}-{strikes}"),
                         ..Default::default()
                     })
-                    .named_item_damage(&pitcher_item_damage)
+                    .named_item_damage_before_score(&pitcher_item_damage)
                     .build()
             }
             FedEventData::StrikeFlinching { game, balls, strikes, pitcher_item_damage } => {
@@ -4007,7 +4014,7 @@ impl FedEvent {
                         description: format!("Strike, flinching. {balls}-{strikes}"),
                         ..Default::default()
                     })
-                    .named_item_damage(&pitcher_item_damage)
+                    .named_item_damage_before_score(&pitcher_item_damage)
                     .build()
             }
             FedEventData::FoulBall { game, balls, strikes, batter_item_damage } => {
@@ -4017,7 +4024,7 @@ impl FedEvent {
                         description: format!("Foul Ball. {balls}-{strikes}"),
                         ..Default::default()
                     })
-                    .named_item_damage(batter_item_damage.as_ref())
+                    .named_item_damage_before_score(batter_item_damage.as_ref())
                     .build()
             }
             FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage } => {
@@ -4037,7 +4044,7 @@ impl FedEvent {
                     .children(observed_child) // slight abuse of IntoIter
                     .item_damage_before_score(&batter_item_damage, &batter_name)
                     .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                    .named_item_damage(&other_player_item_damage)
+                    .named_item_damage_before_score(&other_player_item_damage)
                     .build()
             }
             FedEventData::Hit { game, batter_name, batter_id, num_bases, scores, spicy_status, stopped_inhabiting, is_special, batter_item_damage, other_player_item_damage } => {
@@ -4060,10 +4067,10 @@ impl FedEvent {
                     .spicy(&spicy_status, batter_id, &batter_name)
                     .stopped_inhabiting(&stopped_inhabiting)
                     .item_damage_before_event(&batter_item_damage, &batter_name)
-                    .named_item_damage(&other_player_item_damage)
+                    .named_item_damage_before_score(&other_player_item_damage)
                     .build()
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction } => {
+            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction, damaged_items } => {
                 let mut suffix = String::new();
                 let mut player_tags = vec![batter_id];
                 if big_bucket {
@@ -4139,6 +4146,7 @@ impl FedEvent {
                     .children(attraction_child)
                     .children(free_refill_children)
                     .children(magmagic_child)
+                    .named_item_damage_before_event(&damaged_items)
                     .build()
             }
             FedEventData::GroundOut { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
@@ -4156,7 +4164,7 @@ impl FedEvent {
                     .stopped_inhabiting(&stopped_inhabiting)
                     .cooled_off(&cooled_off, &batter_name)
                     .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                    .named_item_damage(&pitcher_item_damage)
+                    .named_item_damage_before_score(&pitcher_item_damage)
                     .item_damage_after_score(&batter_item_damage, &batter_name)
                     .children(observed_child)
                     .build()
