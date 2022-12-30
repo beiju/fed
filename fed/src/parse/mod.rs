@@ -2,6 +2,7 @@ pub mod error;
 pub mod event_schema;
 mod feed_event_util;
 pub mod builder;
+pub mod event_builder_new;
 mod parsers;
 pub mod stream;
 mod parse_wrapper;
@@ -1939,7 +1940,44 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 player_tags: event.player_tags().into(),
             }
         }
-        EventType::GlitterCrateDrop => { todo!() }
+        EventType::GlitterCrateDrop => {
+            let (player_name, _gained_item_name, lost_item_name) = event.next_parse(parse_glitter)?;
+
+            // Drop event is first in the data
+            let dropped_item = lost_item_name
+                .map(|_name| {
+                    let drop_event = event.next_child(EventType::PlayerLostItem)?;
+                    Ok::<_, FeedParseError>(ItemDroppedForNewItem {
+                        item_id: drop_event.metadata_uuid("itemId")?,
+                        item_name: drop_event.metadata_str("itemName")?.to_string(),
+                        item_mods: drop_event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                        player_item_rating_before: drop_event.metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
+                        sub_event: drop_event.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
+            let mut gain_event = event.next_child(EventType::PlayerGainedItem)?;
+            let gained_item = ItemGained {
+                item_id: gain_event.metadata_uuid("itemId")?,
+                item_name: gain_event.metadata_str("itemName")?.to_string(),
+                item_mods: gain_event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                player_item_rating_before: gain_event.metadata_f64("playerItemRatingBefore")?,
+                player_item_rating_after: gain_event.metadata_f64("playerItemRatingAfter")?,
+                player_rating: gain_event.metadata_f64("playerRating")?,
+                team_id: gain_event.next_team_id()?,
+                player_id: gain_event.next_player_id()?,
+                sub_event: gain_event.as_sub_event(),
+                dropped_item,
+            };
+
+            FedEventData::GlitterCrate {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_name: player_name.to_string(),
+                gained_item,
+            }
+        }
         EventType::Middling => {
             let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
             assert!(is_known_team_nickname(team_nickname));

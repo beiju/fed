@@ -23,3 +23,16 @@ impl<T> WithStructure for Vec<T> {
 
     fn structure(&self) -> Self::Structure { MonostateStructure }
 }
+
+impl<T: ItemStructure> ItemStructure for Option<T> {}
+
+impl<T: WithStructure> WithStructure for Option<T> {
+    type Structure = Option<T::Structure>;
+
+    fn structure(&self) -> Self::Structure {
+        match self {
+            None => { None }
+            Some(inner) => { Some(inner.structure()) }
+        }
+    }
+}

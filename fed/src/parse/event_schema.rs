@@ -18,6 +18,7 @@ use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
+use crate::parse::event_builder_new::EventBuilder;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -937,6 +938,65 @@ pub struct ItemDamage {
     pub player_id: Uuid,
 
     /// Metadata for the event associated with the item being damaged
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemGained {
+    /// Uuid of item that was gained
+    pub item_id: Uuid,
+
+    /// Name of item that was gained
+    pub item_name: String,
+
+    /// Mods bestowed by item that was gained
+    pub item_mods: Vec<String>,
+
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before gaining this item
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    pub player_item_rating_after: f64,
+
+    /// The player's star rating. TODO: Is this with or without items?
+    pub player_rating: f64,
+
+    /// Team Uuid of team who gained the item
+    pub team_id: Uuid,
+
+    /// Uuid of player who gained the item
+    pub player_id: Uuid,
+
+    /// Metadata for the event associated with gaining/losing the item
+    pub sub_event: SubEvent,
+
+    /// If the player dropped an item as a result of gaining this item, contains information about
+    /// the dropped item. Otherwise null.
+    pub dropped_item: Option<ItemDroppedForNewItem>,
+}
+
+// This event is intended for situations where the player's id and team are already encoded in a
+// ItemGained struct. If a player
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemDroppedForNewItem {
+    /// Uuid of item that was gained
+    pub item_id: Uuid,
+
+    /// Name of item that was gained
+    pub item_name: String,
+
+    /// Mods bestowed by item that was gained
+    pub item_mods: Vec<String>,
+
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before gaining this item
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    pub player_item_rating_after: f64,
+
+    /// Metadata for the event associated with gaining/losing the item
     pub sub_event: SubEvent,
 }
 
@@ -3306,6 +3366,19 @@ pub enum FedEventData {
         new_team_name: String,
     },
 
+    /// A shimmering Crate descends during Glitter weather
+    GlitterCrate {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who received the item from the crate
+        player_name: String,
+
+        /// Info about the item that was received form the crate
+        #[serde(flatten)]
+        gained_item: ItemGained,
+    }
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -3469,6 +3542,17 @@ impl FedEvent {
             tournament: self.tournament,
             nuts: self.nuts,
         };
+
+        let mut eb = EventBuilder::new(
+            self.id,
+            self.created,
+            self.sim.clone(),
+            self.day,
+            self.season,
+            self.tournament,
+            self.phase.into(),
+            self.nuts,
+        );
 
         match self.data {
             FedEventData::BeingSpeech { being, message } => {
@@ -6160,6 +6244,12 @@ impl FedEvent {
                         "sendTeamName": previous_team_name,
                     }))
                     .build()
+            }
+            FedEventData::GlitterCrate { game, player_name, gained_item } => {
+                eb.set_game(game);
+                eb.push_description("A shimmering Crate descends.");
+                eb.push_gained_item(player_name, gained_item);
+                eb.build(EventType::GlitterCrateDrop)
             }
         }
     }

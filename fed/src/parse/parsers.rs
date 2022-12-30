@@ -1463,3 +1463,18 @@ pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> imp
         Ok((input, item_name))
     }
 }
+
+pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
+    let (input, _) = tag("A shimmering Crate descends.\n").parse(input)?;
+    let (input, player_name) = parse_terminated(" gained ").parse(input)?;
+    let (input, gained_with_loss) = opt(parse_terminated(" and dropped ")).parse(input)?;
+    let (input, (gained, lost)) = if let Some(gained) = gained_with_loss {
+        let (input, lost) = parse_terminated(".").parse(input)?;
+        (input, (gained, Some(lost)))
+    } else {
+        let (input, gained) = parse_terminated(".").parse(input)?;
+        (input, (gained, None))
+    };
+
+    Ok((input, (player_name, gained, lost)))
+}
