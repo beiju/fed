@@ -7,7 +7,7 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamage, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::{is_known_team_nickname, ParseOk};
-use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -429,16 +429,15 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_free_refills(&mut self) -> Result<Vec<FreeRefill>, FeedParseError> {
         self.next_parse(parse_free_refills)?.into_iter()
-            .map(|name| {
-                let mut child = self.next_child(EventType::RemovedMod)?;
-                ParseOk(FreeRefill {
-                    sub_event: child.as_sub_event(),
-                    player_name: name.to_string(),
-                    player_id: child.next_player_id()?,
-                    team_id: child.next_team_id()?,
-                })
-            })
+            .map(|name| self.build_free_refill(name))
             .collect()
+    }
+
+    // Use when only one free refill is allowed
+    pub fn parse_free_refill(&mut self) -> Result<Option<FreeRefill>, FeedParseError> {
+        self.next_parse(opt(parse_free_refill))?
+            .map(|name| self.build_free_refill(name))
+            .transpose()
     }
 
     pub fn parse_batter_debt(&mut self, batter_name: &str, fielder_name: &str) -> Result<Option<BatterDebt>, FeedParseError> {
@@ -626,6 +625,16 @@ impl<'e> EventParseWrapper<'e> {
             phase: self.phase,
             nuts: self.nuts,
             data,
+        })
+    }
+
+    fn build_free_refill(&mut self, name: &str) -> Result<FreeRefill, FeedParseError> {
+        let mut child = self.next_child(EventType::RemovedMod)?;
+        Ok(FreeRefill {
+            sub_event: child.as_sub_event(),
+            player_name: name.to_string(),
+            player_id: child.next_player_id()?,
+            team_id: child.next_team_id()?,
         })
     }
 }

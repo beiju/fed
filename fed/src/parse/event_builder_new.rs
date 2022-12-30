@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{GameEvent, ItemGained, SubEvent};
+use crate::{FreeRefill, GameEvent, ItemDamage, ItemGained, ModDuration, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -168,7 +168,57 @@ impl EventBuilder {
             child.push_metadata_f64("playerRating", gained_item.player_rating);
             child.build(EventType::PlayerGainedItem)
         });
+    }
 
+    pub fn push_named_item_damage(&mut self, item_damage: Option<(String, ItemDamage)>) {
+        let Some((player_name, dmg)) = item_damage else { return };
+        let description = format!("{player_name}'s {} {}", dmg.item_name,
+                                         if dmg.health == 0 { "broke!" } else { "was damaged." });
+        self.push_description(&description);
+        self.push_child(dmg.sub_event, |mut child| {
+            child.push_description(&description);
+            child.push_player_tag(dmg.player_id);
+            child.push_team_tag(dmg.team_id);
+            child.push_metadata_i64("itemDurability", dmg.durability);
+            child.push_metadata_i64("itemHealthAfter", dmg.health);
+            child.push_metadata_i64("itemHealthBefore", dmg.health + 1);
+            child.push_metadata_uuid("itemId", dmg.item_id);
+            child.push_metadata_str("itemName", dmg.item_name);
+            child.push_metadata_str_vec("mods", dmg.item_mods);
+            child.push_metadata_f64("playerItemRatingAfter", dmg.player_item_rating_after);
+            child.push_metadata_f64("playerItemRatingBefore", dmg.player_item_rating_before);
+            child.push_metadata_f64("playerRating", dmg.player_rating);
+            child.build(if dmg.health == 0 { EventType::ItemBreaks } else { EventType::ItemDamaged })
+        })
+    }
+
+    pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<StoppedInhabiting>) {
+        let Some(si) = stopped_inhabiting else { return };
+        self.push_child(si.sub_event, |mut child| {
+            child.push_description(&format!("{} stopped Inhabiting.", si.inhabiting_player_name));
+            child.push_player_tag(si.inhabiting_player_id);
+            if let Some(team_id) = si.inhabiting_player_team_id {
+                child.push_team_tag(team_id);
+            }
+            child.push_metadata_str("mod", "INHABITING");
+            child.push_metadata_i64("type", ModDuration::Permanent as i64);
+            child.build(EventType::RemovedMod)
+        })
+    }
+
+    pub fn push_free_refill(&mut self, free_refill: Option<FreeRefill>) {
+        let Some(fr) = free_refill else { return };
+        let common_description = format!("{} used their Free Refill.", fr.player_name);
+        self.push_description(&common_description);
+        self.push_description(&format!("{} Refills the In!", fr.player_name));
+        self.push_child(fr.sub_event, |mut child| {
+            child.push_description(&common_description);
+            child.push_player_tag(fr.player_id);
+            child.push_team_tag(fr.team_id);
+            child.push_metadata_str("mod", "COFFEE_RALLY");
+            child.push_metadata_i64("type", ModDuration::Permanent as i64);
+            child.build(EventType::RemovedMod)
+        })
     }
 
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {

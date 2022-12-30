@@ -217,22 +217,26 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedStrikeout::Swinging(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let pitcher_item_damage = event.parse_item_damage_and_name()?;
+                    let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
                         pitcher_item_damage,
+                        free_refill,
                         is_special: event.category == EventCategory::Special,
                     }
                 }
                 ParsedStrikeout::Looking(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let pitcher_item_damage = event.parse_item_damage_and_name()?;
+                    let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
                         pitcher_item_damage,
+                        free_refill,
                         is_special: event.category == EventCategory::Special,
                     }
                 }

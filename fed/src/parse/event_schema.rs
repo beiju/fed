@@ -1654,6 +1654,10 @@ pub enum FedEventData {
         /// Information about the pitcher's item being damaged, if any
         pitcher_item_damage: Option<(String, ItemDamage)>,
 
+        /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
+        /// thanks to Triple Threat.
+        free_refill: Option<FreeRefill>,
+
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players got Unrun strikeouts the event was
         /// Special but that was the only way of knowing. (It's possible that there are other
@@ -1677,6 +1681,10 @@ pub enum FedEventData {
 
         /// Information about the pitcher's item being damaged, if any
         pitcher_item_damage: Option<(String, ItemDamage)>,
+
+        /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
+        /// thanks to Triple Threat.
+        free_refill: Option<FreeRefill>,
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players got Unrun strikeouts the event was
@@ -4148,29 +4156,23 @@ impl FedEvent {
                     .item_damage_after_score(runner_item_damage, runner_name)
                     .build()
             }
-            FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, ref pitcher_item_damage, is_special } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strikeout,
-                        category: EventCategory::special_if(is_special),
-                        description: format!("{} strikes out swinging.", batter_name),
-                        ..Default::default()
-                    })
-                    .named_item_damage(pitcher_item_damage.as_ref())
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .build()
+            FedEventData::StrikeoutSwinging { game, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::special_if(is_special));
+                eb.push_description(&format!("{} strikes out swinging.", batter_name));
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_free_refill(free_refill);
+                eb.build(EventType::Strikeout)
             }
-            FedEventData::StrikeoutLooking { ref game, ref batter_name, ref stopped_inhabiting, ref pitcher_item_damage, is_special } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strikeout,
-                        category: EventCategory::special_if(is_special),
-                        description: format!("{} strikes out looking.", batter_name),
-                        ..Default::default()
-                    })
-                    .named_item_damage(pitcher_item_damage.as_ref())
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .build()
+            FedEventData::StrikeoutLooking { game, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::special_if(is_special));
+                eb.push_description(&format!("{} strikes out looking.", batter_name));
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_free_refill(free_refill);
+                eb.build(EventType::Strikeout)
             }
             FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
