@@ -123,6 +123,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             if is_successful {
                 let runner_id = event.next_player_id()?;
 
+                let runner_item_damage = event.parse_item_damage(runner_name)?;
+
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
                     runner_name: runner_name.to_string(),
@@ -138,6 +140,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             team_id: sub_event.next_team_id()?,
                         })
                     }).transpose()?,
+                    runner_item_damage,
                     is_special: event.category == EventCategory::Special,
                 }
             } else {
@@ -254,6 +257,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+                    // just guessing about where this belongs
+                    let pitcher_item_damage = event.parse_item_damage_and_name()?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -268,6 +273,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         is_special: event.category == EventCategory::Special,
                         batter_debt,
                         batter_item_damage,
+                        pitcher_item_damage,
                         fielder_item_damage,
                     }
                 }
@@ -447,11 +453,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Strike => {
             let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
+            let pitcher_item_damage = event.parse_item_damage_and_name()?;
             let game = event.game(unscatter, attractor_secret_base)?;
             match strike_type {
-                StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes },
-                StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes },
-                StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes },
+                StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage },
+                StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes, pitcher_item_damage },
+                StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes, pitcher_item_damage },
             }
         }
         EventType::Ball => {

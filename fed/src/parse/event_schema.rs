@@ -1259,6 +1259,9 @@ pub enum FedEventData {
 
         /// Number of strikes in the count
         strikes: i32,
+
+        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        pitcher_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Strike, looking
@@ -1273,6 +1276,9 @@ pub enum FedEventData {
 
         /// Number of strikes in the count
         strikes: i32,
+
+        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        pitcher_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Strike, flinching
@@ -1288,6 +1294,9 @@ pub enum FedEventData {
         /// Number of strikes in the count. Should always be 0, but still present in the data for
         /// forward-compatibility and convenience.
         strikes: i32,
+
+        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        pitcher_item_damage: Option<(String, ItemDamage)>,
     },
 
     /// Flyout
@@ -1373,6 +1382,9 @@ pub enum FedEventData {
 
         /// Damage that the batter's item took, if any
         batter_item_damage: Option<ItemDamage>,
+
+        /// Damage that the pitcher's item took, if any
+        pitcher_item_damage: Option<(String, ItemDamage)>,
 
         /// Damage that the fielder's item took, if any
         fielder_item_damage: Option<ItemDamage>,
@@ -1539,6 +1551,9 @@ pub enum FedEventData {
 
         /// Free Refill data if one was used, otherwise null
         free_refill: Option<FreeRefill>,
+
+        /// Baserunner item damage if any, otherwise null
+        runner_item_damage: Option<ItemDamage>,
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players scored with Tired or Wired the event was
@@ -3815,31 +3830,34 @@ impl FedEvent {
                     .named_item_damage(batter_item_damage.as_ref())
                     .build()
             }
-            FedEventData::StrikeSwinging { game, balls, strikes } => {
+            FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, swinging. {balls}-{strikes}"),
                         ..Default::default()
                     })
+                    .named_item_damage(&pitcher_item_damage)
                     .build()
             }
-            FedEventData::StrikeLooking { game, balls, strikes } => {
+            FedEventData::StrikeLooking { game, balls, strikes, pitcher_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, looking. {balls}-{strikes}"),
                         ..Default::default()
                     })
+                    .named_item_damage(&pitcher_item_damage)
                     .build()
             }
-            FedEventData::StrikeFlinching { game, balls, strikes } => {
+            FedEventData::StrikeFlinching { game, balls, strikes, pitcher_item_damage } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Strike,
                         description: format!("Strike, flinching. {balls}-{strikes}"),
                         ..Default::default()
                     })
+                    .named_item_damage(&pitcher_item_damage)
                     .build()
             }
             FedEventData::FoulBall { game, balls, strikes, batter_item_damage } => {
@@ -3973,7 +3991,7 @@ impl FedEvent {
                     .children(magmagic_child)
                     .build()
             }
-            FedEventData::GroundOut { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage } => {
+            FedEventData::GroundOut { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
                 let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
 
                 event_builder.for_game(&game)
@@ -3988,11 +4006,12 @@ impl FedEvent {
                     .stopped_inhabiting(&stopped_inhabiting)
                     .cooled_off(&cooled_off, &batter_name)
                     .item_damage_before_score(&fielder_item_damage, &fielder_name)
+                    .named_item_damage(&pitcher_item_damage)
                     .item_damage_after_score(&batter_item_damage, &batter_name)
                     .children(observed_child)
                     .build()
             }
-            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, is_special } => {
+            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, ref runner_item_damage, is_special } => {
                 let blaserunning_str = if blaserunning {
                     format!("\n{} scores with Blaserunning!", runner_name)
                 } else {
@@ -4018,6 +4037,7 @@ impl FedEvent {
                             .map(|free_refill| make_free_refill_child(free_refill))
                             .into_iter()
                     )
+                    .item_damage_after_score(runner_item_damage, runner_name)
                     .build()
             }
             FedEventData::StrikeoutSwinging { ref game, ref batter_name, ref stopped_inhabiting, ref pitcher_item_damage, is_special } => {
