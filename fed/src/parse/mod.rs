@@ -1390,12 +1390,27 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
                     let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
+                    let recongealed_differently = event.next_child_any_opt(&[EventType::PlayerStatIncrease, EventType::PlayerStatDecrease])?
+                        .map(|mut child| {
+                            let player_name = child.next_parse(parse_terminated(" re-congealed differently."))?;
+                            Ok::<_, FeedParseError>(PlayerStatChange {
+                                team_id: child.next_team_id()?,
+                                player_id: child.next_player_id()?,
+                                player_name: player_name.to_string(),
+                                rating_before: child.metadata_f64("before")?,
+                                rating_after: child.metadata_f64("after")?,
+                                sub_event: child.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
+
                     (player_name, ReturnFromElsewhereFlavor::Full {
                         team_id: return_sub_event.next_team_id()?,
                         player_id: return_sub_event.next_player_id()?,
                         sub_event: return_sub_event.as_sub_event(),
                         time_elsewhere,
                         scattered,
+                        recongealed_differently,
                     })
                 }
                 ParsedReturnFromElsewhere::Short(player_name) => {
@@ -2102,6 +2117,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::ItemBreaks => { todo!() }
+        EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }

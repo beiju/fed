@@ -697,6 +697,10 @@ pub enum ReturnFromElsewhereFlavor {
 
         /// Scattered sub-event, if the player was scattered, or null otherwise
         scattered: Option<Scattered>,
+
+        /// "Re-congealed differently" sub-event, if player re-congealed differently, or null
+        /// otherwise
+        recongealed_differently: Option<PlayerStatChange>
     },
     /// The short one that happens when the player went Elsewhere via salmon cannons or fleeing a
     /// failed heist. Players can't get Scattered on this one.
@@ -5062,7 +5066,7 @@ impl FedEvent {
             }
             FedEventData::ReturnFromElsewhere { ref game, ref player_name, ref flavor } => {
                 let (description, children) = match flavor {
-                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, time_elsewhere, scattered } => {
+                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, time_elsewhere, scattered, recongealed_differently } => {
                         let description = match time_elsewhere {
                             TimeElsewhere::Days(days) => {
                                 let s = if *days == 1 { "" } else { "s" };
@@ -5089,7 +5093,7 @@ impl FedEvent {
                                 "type": 0, // ?
                             }));
 
-                        let children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
+                        let mut children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
                             let scattered_child = EventBuilderChild::new(sub_event)
                                 .update(EventBuilderUpdate {
                                     category: EventCategory::Changes,
@@ -5100,14 +5104,37 @@ impl FedEvent {
                                     ..Default::default()
                                 })
                                 .metadata(json!({
-                            "mod": "SCATTERED",
-                            "type": 0, // ?
-                        }));
+                                    "mod": "SCATTERED",
+                                    "type": 0, // ?
+                                }));
 
                             vec![scattered_child, elsewhere_child]
                         } else {
                             vec![elsewhere_child]
                         };
+
+                        if let Some(recongeal) = recongealed_differently {
+                            children.push(
+                            EventBuilderChild::new(&recongeal.sub_event)
+                                .update(EventBuilderUpdate {
+                                    category: EventCategory::Changes,
+                                    r#type: if recongeal.rating_after > recongeal.rating_before {
+                                        EventType::PlayerStatIncrease
+                                    } else {
+                                        EventType::PlayerStatDecrease
+                                    },
+                                    description: format!("{} re-congealed differently.", recongeal.player_name),
+                                    team_tags: vec![recongeal.team_id],
+                                    player_tags: vec![recongeal.player_id],
+                                    ..Default::default()
+                                })
+                                .metadata(json!({
+                                    "after": recongeal.rating_after,
+                                    "before": recongeal.rating_before,
+                                    "type": 4,
+                                }))
+                            );
+                        }
 
                         (description, children)
                     }
