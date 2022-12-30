@@ -1538,3 +1538,10 @@ pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<&str> {
 
     Ok((input, player_name))
 }
+
+pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated("'s mods caused by ").parse(input)?;
+    let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
+
+    Ok((input, (player_name, mod_name)))
+}

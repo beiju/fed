@@ -68,13 +68,13 @@ pub enum FeedParseError {
     #[error("Expected metadata field \"{field}\" for {event_type:?} event")]
     MissingMetadata {
         event_type: EventType,
-        field: &'static str,
+        field: String,
     },
 
     #[error("Expected metadata field \"{field}\" for {event_type:?} event to have type {ty}")]
     MetadataTypeError {
         event_type: EventType,
-        field: &'static str,
+        field: String,
         ty: &'static str,
     },
 
@@ -88,7 +88,7 @@ pub enum FeedParseError {
     #[error("Couldn't convert field \"{field}\" for {event_type:?} event to Enum: {err}")]
     MetadataIntToEnumError {
         event_type: EventType,
-        field: &'static str,
+        field: String,
         err: String,
     },
 

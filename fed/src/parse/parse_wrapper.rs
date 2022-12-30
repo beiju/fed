@@ -269,7 +269,7 @@ impl<'e> EventParseWrapper<'e> {
         }
     }
 
-    fn get_metadata(&self, key: &'static str) -> Result<&'e serde_json::Value, FeedParseError> {
+    pub fn get_metadata(&self, key: &'static str) -> Result<&'e serde_json::Value, FeedParseError> {
         self.metadata.other
             .as_object()
             .ok_or_else(|| {
@@ -281,7 +281,7 @@ impl<'e> EventParseWrapper<'e> {
             .ok_or_else(|| {
                 FeedParseError::MissingMetadata {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                 }
             })
     }
@@ -292,7 +292,7 @@ impl<'e> EventParseWrapper<'e> {
             .ok_or_else(|| {
                 FeedParseError::MetadataTypeError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     ty: "i64",
                 }
             })
@@ -304,7 +304,7 @@ impl<'e> EventParseWrapper<'e> {
             .ok_or_else(|| {
                 FeedParseError::MetadataTypeError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     ty: "f64",
                 }
             })
@@ -316,7 +316,7 @@ impl<'e> EventParseWrapper<'e> {
             .ok_or_else(|| {
                 FeedParseError::MetadataTypeError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     ty: "str",
                 }
             })
@@ -328,19 +328,20 @@ impl<'e> EventParseWrapper<'e> {
             .ok_or_else(|| {
                 FeedParseError::MetadataTypeError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     ty: "array",
                 }
             })
             .and_then(|vec| {
                 vec.iter()
-                    .map(|item| {
+                    .enumerate()
+                    .map(|(i, item)| {
                         item.as_str()
                             .ok_or_else(|| {
                                 FeedParseError::MetadataTypeError {
                                     event_type: self.event_type,
-                                    field: key,
-                                    ty: "array[str]",
+                                    field: format!("{key}[{i}]"),
+                                    ty: "str",
                                 }
                             })
                     })
@@ -367,7 +368,7 @@ impl<'e> EventParseWrapper<'e> {
             .map_err(|err| {
                 FeedParseError::MetadataIntToEnumError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     err: err.to_string(),
                 }
             })
@@ -580,7 +581,7 @@ impl<'e> EventParseWrapper<'e> {
                 .ok_or_else(|| {
                     FeedParseError::MissingMetadata {
                         event_type: self.event_type,
-                        field: "play",
+                        field: "play".to_string(),
                     }
                 })?,
             unscatter,

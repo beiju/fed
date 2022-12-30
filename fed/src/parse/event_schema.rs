@@ -372,11 +372,11 @@ impl Display for BlooddrainAction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[repr(i32)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema, WithStructure, TryFromPrimitive, IntoPrimitive)]
+#[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ModDuration {
-    // Permanent = 0,
+    Permanent = 0,
     Seasonal = 1,
     Weekly = 2,
     Game = 3,
@@ -385,7 +385,7 @@ pub enum ModDuration {
 impl Display for ModDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            // ModDuration::Permanent => { write!(f, "permanent") }
+            ModDuration::Permanent => { write!(f, "permanent") }
             ModDuration::Seasonal => { write!(f, "seasonal") }
             ModDuration::Weekly => { write!(f, "weekly") }
             ModDuration::Game => { write!(f, "game") }
@@ -1122,6 +1122,15 @@ pub struct Attraction {
 
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ModDesc {
+    /// Internal name of the mod
+    pub mod_id: String,
+
+    /// Duration of the mod
+    pub mod_duration: ModDuration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumAccess, EnumDisplay, EnumFlattenable)]
@@ -2257,24 +2266,27 @@ pub enum FedEventData {
         team_tags: Vec<Uuid>,
     },
 
-    /// Added a mod as a result of a Tarot reading
+    /// Added or removed a mod as a result of a Tarot reading
     #[serde(rename_all = "camelCase")]
     #[enum_inner_struct]
-    TarotReadingAddedMod {
-        /// Uuid of team who gained the mod or team of player who gained the mod
+    TarotReadingAddedOrRemovedMod {
+        /// Uuid of team who gained/lost the mod or team of player who gained/lost the mod
         team_id: Uuid,
 
-        /// Uuid of player who gained the mod, if it was a player. Null if it was a team.
+        /// Uuid of player who gained/lost the mod, if it was a player. Null if it was a team.
         player_id: Option<Uuid>,
 
-        /// Description of the event that added the mod
+        /// Description of the event that added/removed the mod
         description: String,
 
-        /// Internal ID of the mod that was gained
+        /// Internal ID of the mod that was gained/lost
         r#mod: String,
 
-        /// I'm pretty sure this indicates mod duration. TODO: Make this an enum
-        mod_duration: i64,
+        /// Duration of the mod that was gained/lost
+        mod_duration: ModDuration,
+
+        /// True if the mod was lost, false if it was gained
+        mod_removed: bool,
     },
 
     /// Team entered Party Time!
@@ -3523,6 +3535,8 @@ pub enum FedEventData {
     },
 
     /// A shimmering Crate descends during Glitter weather
+    #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
     GlitterCrate {
         #[serde(flatten)]
         game: GameEvent,
@@ -3533,6 +3547,30 @@ pub enum FedEventData {
         /// Info about the item that was received form the crate
         #[serde(flatten)]
         gained_item: ItemGained,
+    },
+
+    /// A player's mods created from another mod were removed
+    #[serde(rename_all = "camelCase")]
+    #[enum_inner_struct]
+    ModsFromAnotherModRemoved {
+        /// Uuid of the team who lost the mod(s)
+        team_id: Uuid,
+
+        /// Uuid of the player who lost the mod(s)
+        player_id: Uuid,
+
+        /// Name of the player who lost the mod(s)
+        player_name: String,
+
+        /// List of mods that were removed
+        mods_removed: Vec<ModDesc>,
+
+        /// Name of the mod that had originally added the removed mods. It's implied that this mod
+        /// was just removed, which caused these others to be removed as well.
+        source_mod_name: String,
+
+        /// Internal name of the mod that had originally added the removed mods
+        source_mod_id: String,
     },
 }
 
@@ -4822,10 +4860,10 @@ impl FedEvent {
                     .metadata(metadata)
                     .build()
             }
-            FedEventData::TarotReadingAddedMod { team_id, player_id, description, r#mod, mod_duration } => {
+            FedEventData::TarotReadingAddedOrRemovedMod { team_id, player_id, description, r#mod, mod_duration, mod_removed } => {
                 event_builder
                     .fill(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
+                        r#type: if mod_removed { EventType::RemovedMod } else { EventType::AddedMod },
                         category: EventCategory::Changes,
                         description,
                         team_tags: vec![team_id],
@@ -4834,7 +4872,7 @@ impl FedEvent {
                     })
                     .metadata(json!({
                         "mod": r#mod,
-                        "type": mod_duration,
+                        "type": mod_duration as i64,
                     }))
                     .build()
             }
@@ -6310,11 +6348,14 @@ impl FedEvent {
                         r#type: EventType::RunsOverflowing,
                         category: EventCategory::Special,
                         description: format!("Runs are Overflowing!\n{team_nickname} gain {}.",
-                                             match num_runs {
-                                                 x if x < -1. => { format!("{} Unruns", -x) }
-                                                 -1. => { format!("1 Unrun") }
-                                                 1. => { format!("1 Run") }
-                                                 x => { format!("{x} Runs") }
+                                             if num_runs == -1. {
+                                                  format!("1 Unrun")
+                                             } else if num_runs == 1. {
+                                                 format!("1 Run")
+                                             } else if num_runs < 0. {
+                                                 format!("{} Unruns", -num_runs)
+                                             } else {
+                                                 format!("{num_runs} Runs")
                                              }),
                         ..Default::default()
                     })
@@ -6526,6 +6567,18 @@ impl FedEvent {
                 eb.push_description("A shimmering Crate descends.");
                 eb.push_gained_item(player_name, gained_item);
                 eb.build(EventType::GlitterCrateDrop)
+            }
+            FedEventData::ModsFromAnotherModRemoved { team_id, player_id, player_name, mods_removed, source_mod_name, source_mod_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name}'s mods caused by {source_mod_name} were removed."));
+                eb.push_player_tag(player_id);
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("source", source_mod_id);
+                eb.push_metadata_json_vec("removes", mods_removed.iter()
+                    .map(|r| json!({ "mod": r.mod_id, "type": r.mod_duration as i64 }))
+                    .collect());
+
+                eb.build(EventType::RemovedModsFromAnotherMod)
             }
         }
     }

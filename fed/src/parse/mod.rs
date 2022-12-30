@@ -26,7 +26,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 8] = [
+const TAROT_EVENTS: [Uuid; 10] = [
     uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
     uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
     uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
@@ -35,6 +35,8 @@ const TAROT_EVENTS: [Uuid; 8] = [
     uuid!("b0457046-0e88-482a-b3b4-aed27c598a5c"), // Moses gets Receiver
     uuid!("77df7273-e3c3-49b1-9ce5-4baec629d75a"), // Mints get Middling
     uuid!("9cd56488-5ee2-436e-9196-37a76593cdaf"), // Flowers get After Party
+    uuid!("1bb3708a-a43f-472b-a7df-a4b2f52c313f"), // Melon loses Alternate
+    uuid!("00bb210e-d0c6-41bf-a6f7-01de9070582a"), // Jimmy loses Superyummy
 ];
 
 #[allow(non_snake_case)]
@@ -1069,7 +1071,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 .and_then(|obj| obj.get("votes"))
                 .ok_or_else(|| FeedParseError::MissingMetadata {
                     event_type: event.event_type,
-                    field: "votes",
+                    field: "votes".to_string(),
                 })?
                 .is_string();
 
@@ -1607,13 +1609,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::AddedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully
-                FedEventData::TarotReadingAddedMod {
-                    team_id: event.next_team_id()?,
-                    player_id: event.next_player_id_opt(),
-                    description: event.description().into(),
-                    r#mod: event.metadata_str("mod")?.to_string(),
-                    mod_duration: event.metadata_i64("type")?,
-                }
+                make_tarot_event(&mut event, false)?
             } else {
                 match event.next_parse(parse_added_mod)? {
                     ParsedAddedMod::EnteredPartyTime(team_nickname) => {
@@ -1642,34 +1638,39 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::RemovedMod => {
-            match event.next_parse(parse_removed_mod)? {
-                ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    FedEventData::TeamLeftPartyTimeForPostseason {
-                        team_id: event.next_team_id()?,
-                        team_nickname: team_nickname.to_string(),
+            if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                // Then it's a tarot event and we can forget parsing. Thankfully
+                make_tarot_event(&mut event, true)?
+            } else {
+                match event.next_parse(parse_removed_mod)? {
+                    ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::TeamLeftPartyTimeForPostseason {
+                            team_id: event.next_team_id()?,
+                            team_nickname: team_nickname.to_string(),
+                        }
                     }
-                }
-                ParsedRemovedMod::TeamUsedFreeWill(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    FedEventData::TeamUsedFreeWill {
-                        team_id: event.next_team_id()?,
-                        team_nickname: team_nickname.to_string(),
+                    ParsedRemovedMod::TeamUsedFreeWill(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::TeamUsedFreeWill {
+                            team_id: event.next_team_id()?,
+                            team_nickname: team_nickname.to_string(),
+                        }
                     }
-                }
-                ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
-                    FedEventData::PlayerLostMod {
-                        team_id: event.next_team_id()?,
-                        player_id: event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        r#mod: event.metadata_str("mod")?.to_string(),
-                        mod_name: mod_name.to_string(),
+                    ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
+                        FedEventData::PlayerLostMod {
+                            team_id: event.next_team_id()?,
+                            player_id: event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                            r#mod: event.metadata_str("mod")?.to_string(),
+                            mod_name: mod_name.to_string(),
+                        }
                     }
-                }
-                ParsedRemovedMod::InvestigationConcluded(stadium_name) => {
-                    FedEventData::InvestigationConcluded {
-                        team_id: event.next_team_id()?,
-                        stadium_name: stadium_name.to_string(),
+                    ParsedRemovedMod::InvestigationConcluded(stadium_name) => {
+                        FedEventData::InvestigationConcluded {
+                            team_id: event.next_team_id()?,
+                            stadium_name: stadium_name.to_string(),
+                        }
                     }
                 }
             }
@@ -1998,8 +1999,85 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
             }
         }
-        EventType::RemovedModsFromAnotherMod => { todo!() }
         EventType::AddedModsFromAnotherMod => { todo!() }
+        EventType::RemovedModsFromAnotherMod => {
+            let (player_name, mod_name) = event.next_parse(parse_mods_from_other_mod_removed)?;
+
+            let mods_removed = event.get_metadata("removes")?
+                .as_array()
+                .ok_or_else(|| {
+                    FeedParseError::MetadataTypeError {
+                        event_type: event.event_type,
+                        field: "removes".to_string(),
+                        ty: "array",
+                    }
+                })?
+                .iter()
+                .enumerate()
+                .map(|(i, removes)| {
+                    let obj = removes.as_object()
+                        .ok_or_else(|| {
+                            FeedParseError::MetadataTypeError {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}]"),
+                                ty: "object",
+                            }
+                        })?;
+
+                    let mod_id = obj.get("mod")
+                        .ok_or_else(|| {
+                            FeedParseError::MissingMetadata {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}].mod"),
+                            }
+                        })?
+                        .as_str()
+                        .ok_or_else(|| {
+                            FeedParseError::MetadataTypeError {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}].mod"),
+                                ty: "str",
+                            }
+                        })?
+                        .to_string();
+
+                    let mod_duration = obj.get("type")
+                        .ok_or_else(|| {
+                            FeedParseError::MissingMetadata {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}].type"),
+                            }
+                        })?
+                        .as_i64()
+                        .ok_or_else(|| {
+                            FeedParseError::MetadataTypeError {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}].type"),
+                                ty: "i64",
+                            }
+                        })?
+                        .try_into()
+                        .map_err(|err: <i64 as TryInto<ModDuration>>::Error| {
+                            FeedParseError::MetadataIntToEnumError {
+                                event_type: event.event_type,
+                                field: format!("removes[{i}].type"),
+                                err: err.to_string(),
+                            }
+                        })?;
+
+                    ParseOk(ModDesc { mod_id, mod_duration })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            FedEventData::ModsFromAnotherModRemoved {
+                team_id: event.next_team_id()?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                mods_removed,
+                source_mod_name: mod_name.to_string(),
+                source_mod_id: event.metadata_str("source")?.to_string(),
+            }
+        }
         EventType::Psychoacoustics => {
             // For some reason the description on the main event is empty and the description is
             // only on the child event
@@ -2198,6 +2276,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     event.to_fed(data)
 }
 
+fn make_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
+    Ok(FedEventData::TarotReadingAddedOrRemovedMod {
+        team_id: event.next_team_id()?,
+        player_id: event.next_player_id_opt(),
+        description: event.description().into(),
+        r#mod: event.metadata_str("mod")?.to_string(),
+        mod_duration: event.metadata_enum("type")?,
+        mod_removed,
+    })
+}
+
 fn make_echo(echoer_name: &str, events: (Option<EventParseWrapper>, EventParseWrapper)) -> Result<Echo, FeedParseError> {
     let (removed, mut added) = events;
     // I could verify that the IDs all match, but the round-trip test should verify that
@@ -2225,7 +2314,7 @@ fn get_mods_removed(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemov
     let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
         .map_err(|_| FeedParseError::MissingMetadata {
             event_type: event.event_type,
-            field: "removes",
+            field: "removes".to_string(),
         })?;
 
     let mod_ids = des.removes.into_iter()
@@ -2243,7 +2332,7 @@ fn get_mods_added(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved
     let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
         .map_err(|_| FeedParseError::MissingMetadata {
             event_type: event.event_type,
-            field: "adds",
+            field: "adds".to_string(),
         })?;
 
     let mod_ids = des.adds.into_iter()

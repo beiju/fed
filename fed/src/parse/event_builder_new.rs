@@ -103,6 +103,11 @@ impl EventBuilder {
             .insert(key.into(), value.into());
     }
 
+    pub fn push_metadata_json_vec(&mut self, key: impl Into<String>, value: Vec<Value>) {
+        self.metadata_mut()
+            .insert(key.into(), value.into());
+    }
+
     pub fn push_metadata_uuid(&mut self, key: impl Into<String>, value: Uuid) {
         self.metadata_mut()
             .insert(key.into(), Value::String(value.to_string()));
