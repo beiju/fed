@@ -429,7 +429,7 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 
 pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<i32>)),
-    Charm((&'s str, &'s str)),
+    Charm((Option<(ActivePositionType, &'s str)>, &'s str, &'s str)),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -459,14 +459,37 @@ pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<i32
     Ok((input, (batter_name, base_instincts)))
 }
 
-pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePositionType, &str)>, &str, &str)> {
     // This will need to be updated if anyone charms in a run
-    let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
-    let (input, pitcher_name) = parse_terminated("!\n").parse(input)?;
+    // Resim data makes me think that maybe the pitcher's item could be damaged twice (once as the
+    // pitcher and once as the charmer) but I'm not going to worry about that right now
+    let (input, broken_item) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
+    let (input, item_name, batter_name, pitcher_name) = if let Some((item_name, player_name)) = broken_item {
+        let (input, _) = tag("\n").parse(input)?;
+        // We don't yet know which player broke the item
+        // Try batter first
+        let (input, batter_was_damaged) = opt(tag(player_name)).parse(input)?;
+        if batter_was_damaged.is_some() {
+            let (input, _) = tag(" charms ").parse(input)?;
+            let (input, pitcher_name) = parse_terminated("!\n").parse(input)?;
+            // Player is batter in this case
+            (input, Some((ActivePositionType::Lineup, item_name)), player_name, pitcher_name)
+        } else {
+            let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
+            let (input, _) = tag(player_name).parse(input)?;
+            let (input, _) = tag("!\n").parse(input)?;
+            // Player is pitcher in this case
+            (input, Some((ActivePositionType::Rotation, item_name)), batter_name, player_name)
+        }
+    } else {
+        let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
+        let (input, pitcher_name) = parse_terminated("!\n").parse(input)?;
+        (input, None, batter_name, pitcher_name)
+    };
     let (input, _) = tag(batter_name).parse(input)?;
     let (input, _) = tag(" walks to first base.").parse(input)?;
 
-    Ok((input, (batter_name, pitcher_name)))
+    Ok((input, (item_name, batter_name, pitcher_name)))
 }
 
 pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {

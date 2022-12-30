@@ -2188,6 +2188,12 @@ pub enum FedEventData {
         /// Name of the pitcher that was charmed
         pitcher_name: String,
 
+        /// Meta about the pitcher's item breaking, if it broke, otherwise null.
+        pitcher_item_damage: Option<ItemDamage>,
+
+        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        batter_item_damage: Option<ItemDamage>,
+
         #[serde(flatten)]
         scores: Scores,
     },
@@ -4661,7 +4667,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, scores } => {
+            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, batter_item_damage, pitcher_item_damage, scores } => {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Walk,
@@ -4671,6 +4677,8 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .scores(&scores, " scores!")
+                    .item_damage_before_event(&pitcher_item_damage, &pitcher_name)
+                    .item_damage_before_event(&batter_item_damage, &batter_name)
                     .build()
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {

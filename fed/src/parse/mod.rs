@@ -195,18 +195,29 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         is_special: event.category == EventCategory::Special,
                     }
                 }
-                ParsedWalk::Charm((batter_name, pitcher_name)) => {
+                ParsedWalk::Charm((broken_item, batter_name, pitcher_name)) => {
                     let batter_id = event.next_player_id()?;
                     let charmer_id = event.next_player_id()?;
                     assert_eq!(batter_id, charmer_id);
 
                     let scores = event.parse_scores(" scores!")?;
+                    let (batter_item_damage, pitcher_item_damage) = match broken_item {
+                        None => { (None, None) }
+                        Some((ActivePositionType::Lineup, _item_name)) => {
+                            (Some(event.next_item_damage()?), None)
+                        }
+                        Some((ActivePositionType::Rotation, _item_name)) => {
+                            (None, Some(event.next_item_damage()?))
+                        }
+                    };
 
                     FedEventData::CharmWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         pitcher_name: pitcher_name.to_string(),
+                        batter_item_damage,
+                        pitcher_item_damage,
                         scores,
                     }
                 }
