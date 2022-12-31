@@ -3448,6 +3448,9 @@ pub enum FedEventData {
 
         /// Item restored by the salmon, if any
         item_restored: Option<ItemRepaired>,
+
+        /// Player caught in the bind, if any
+        player_expelled: Option<ModChangeSubEventWithNamedPlayer>,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
@@ -4692,7 +4695,7 @@ impl FedEvent {
                         child.push_player_tag(carc.player_id);
                         child.push_team_tag(carc.new_team_id);
                         child.push_metadata_str("mod", "TEMP_STOLEN");
-                        child.push_metadata_i64("type", 3);
+                        child.push_metadata_i64("type", ModDuration::Game as i64);
                         child.build(EventType::AddedMod)
                     });
                 }
@@ -6456,7 +6459,7 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::SalmonSwim { game, inning_num, run_losses, item_restored } => {
+            FedEventData::SalmonSwim { game, inning_num, run_losses, item_restored, player_expelled } => {
                 eb.set_game(game);
                 eb.push_description("The Salmon swim upstream!");
                 eb.push_description(&format!("Inning {inning_num} begins again."));
@@ -6474,6 +6477,20 @@ impl FedEvent {
                         child.push_description("The Salmon swam upstream!");
                         child.push_description(&restored_description);
                         child.build_item_repaired(item_restored)
+                    });
+                }
+
+                if let Some(mod_change) = player_expelled {
+                    eb.set_category(EventCategory::Special);
+                    eb.push_description(&format!("{} is caught in the bind!", mod_change.player_name));
+                    eb.push_player_tag(mod_change.player_id);
+                    eb.push_child(mod_change.sub_event, |mut child| {
+                        child.push_description(&format!("Salmon Cannons expelled {} Elsewhere.", mod_change.player_name));
+                        child.push_player_tag(mod_change.player_id);
+                        child.push_team_tag(mod_change.team_id);
+                        child.push_metadata_str("mod", "ELSEWHERE");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::AddedMod)
                     });
                 }
 

@@ -1624,3 +1624,8 @@ pub(crate) fn parse_subseasonal_mod_removed(input: &str) -> ParserResult<(&str, 
 
     Ok((input, (team_name, mod_name)))
 }
+
+pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\n").parse(input)?;
+    parse_terminated(" is caught in the bind!").parse(input)
+}

@@ -1249,6 +1249,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 })
                 .transpose()?;
 
+            let player_expelled = event.next_parse_opt(parse_caught_in_the_bind)
+                .map(|player_name| {
+                    let mut child = event.next_child(EventType::AddedMod)?;
+                    Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
+                        sub_event: child.as_sub_event(),
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    })
+                })
+                .transpose()?;
+
             FedEventData::SalmonSwim {
                 game: event.game(unscatter, attractor_secret_base)?,
                 inning_num,
@@ -1265,6 +1277,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 },
                 item_restored,
+                player_expelled,
             }
         }
         EventType::PolarityShift => { todo!() }
