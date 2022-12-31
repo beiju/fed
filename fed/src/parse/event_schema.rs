@@ -1019,12 +1019,18 @@ pub struct ItemDamaged {
     pub sub_event: SubEvent,
 }
 
+// Super hacky and it's not going to stay for long
+const PLURAL_ITEMS: [&str; 3] = [
+    "Inflatable Sunglasses",
+    "Shoes of Blaserunning",
+    "Cryogenic Shoes",
+];
+
 impl Display for ItemDamaged {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.health == 0 {
             write!(f, "{} broke!", self.item_name)
-        } else if let Some(l) = self.item_name.chars().last() && l == 's' {
-            // This super simple plural detection is going to blow up on me, I know it
+        } else if PLURAL_ITEMS.iter().any(|&i| i == &self.item_name) {
             write!(f, "{} were damaged.", self.item_name)
         } else {
             write!(f, "{} was damaged.", self.item_name)
