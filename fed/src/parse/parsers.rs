@@ -1607,8 +1607,19 @@ pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(&s
 }
 
 pub(crate) fn parse_subseasonal_mod_change(input: &str) -> ParserResult<(&str, &str)> {
+    alt((parse_subseasonal_mod_added, parse_subseasonal_mod_removed)).parse(input)
+}
+
+pub(crate) fn parse_subseasonal_mod_added(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated(" are ").parse(input)?;
+    let (input, mod_name) = parse_terminated(".\n").parse(input)?;
+
+    Ok((input, (team_name, mod_name)))
+}
+
+pub(crate) fn parse_subseasonal_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, team_name) = parse_terminated(" are no longer ").parse(input)?;
     let (input, mod_name) = parse_terminated(".\n").parse(input)?;
 
     Ok((input, (team_name, mod_name)))

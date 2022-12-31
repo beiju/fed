@@ -3929,7 +3929,11 @@ impl FedEvent {
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, subseasonal_mod_effects } => {
                 eb.set_game(game);
                 for effect in subseasonal_mod_effects {
-                    let description = format!("The {} are {}.", effect.team_nickname, effect.source_mod_name);
+                    let description = if effect.was_added {
+                        format!("The {} are {}.", effect.team_nickname, effect.source_mod_name)
+                    } else {
+                        format!("{} are no longer {}.", effect.team_nickname, effect.source_mod_name)
+                    };
                     eb.push_description(&description);
                     eb.push_child(effect.sub_event, |mut child| {
                         child.push_description(&description);
