@@ -3,13 +3,13 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, FreeRefill, GameEvent, ItemDamage, ItemGained, ModDuration, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, FreeRefill, GameEvent, ItemDamage, ItemGained, ItemRepaired, ModDuration, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
 
 // Newtype with Display implementation that prints the string using grammatically correct possessive
-struct Possessive<'a>(&'a str);
+pub struct Possessive<'a>(pub &'a str);
 
 impl Display for Possessive<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -312,6 +312,25 @@ impl EventBuilder {
                 }
             }
         }
+    }
+
+    pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
+        self.push_player_tag(item_repaired.player_id);
+        self.push_team_tag(item_repaired.team_id);
+        self.push_metadata_i64("itemDurability", item_repaired.durability);
+        self.push_metadata_i64("itemHealthAfter", item_repaired.health);
+        self.push_metadata_i64("itemHealthBefore", item_repaired.health - 1);
+        self.push_metadata_uuid("itemId", item_repaired.item_id);
+        self.push_metadata_str("itemName", item_repaired.item_name);
+        self.push_metadata_str_vec("mods", item_repaired.item_mods);
+        self.push_metadata_f64("playerItemRatingAfter", item_repaired.player_item_rating_after);
+        self.push_metadata_f64("playerItemRatingBefore", item_repaired.player_item_rating_before);
+        self.push_metadata_f64("playerRating", item_repaired.player_rating);
+        self.build(if item_repaired.health == 1 {
+            EventType::BrokenItemRepaired
+        } else {
+            EventType::DamagedItemRepaired
+        })
     }
 
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {

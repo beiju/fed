@@ -1231,12 +1231,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
             let item_restored = event.next_parse_opt(parse_item_restored)
                 .map(|(player_name, _item_name)| {
-                    let mut child = event.next_child(EventType::BrokenItemRepaired)?;
-                    Ok::<_, FeedParseError>(ItemRestored {
+                    let mut child = event.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired])?;
+                    Ok::<_, FeedParseError>(ItemRepaired {
                         item_id: child.metadata_uuid("itemId")?,
                         item_name: child.metadata_str("itemName")?.to_string(),
                         item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
                         durability: child.metadata_i64("itemDurability")?,
+                        health: child.metadata_i64("itemHealthAfter")?,
                         player_item_rating_before: child.metadata_f64("playerItemRatingBefore")?,
                         player_item_rating_after: child.metadata_f64("playerItemRatingAfter")?,
                         player_rating: child.metadata_f64("playerRating")?,
@@ -2278,6 +2279,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ItemBreaks => { todo!() }
         EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }
+        EventType::DamagedItemRepaired => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

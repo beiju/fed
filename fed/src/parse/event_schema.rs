@@ -18,7 +18,7 @@ use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::parse::error::FeedParseError;
 use crate::parse::builder::*;
-use crate::parse::event_builder_new::EventBuilder;
+use crate::parse::event_builder_new::{EventBuilder, Possessive};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -619,7 +619,7 @@ pub enum ReverbType {
     Rotation(SubEvent),
     Lineup(SubEvent),
     Full(SubEvent),
-    SeveralPlayers(Vec<PlayerReverb>)
+    SeveralPlayers(Vec<PlayerReverb>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1045,21 +1045,24 @@ pub struct ItemGained {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct ItemRestored {
-    /// Uuid of item that was restored
+pub struct ItemRepaired {
+    /// Uuid of item that was repaired
     pub item_id: Uuid,
 
-    /// Name of item that was restored
+    /// Name of item that was repaired
     pub item_name: String,
 
-    /// Mods bestowed by item that was restored
+    /// Mods bestowed by item that was repaired
     pub item_mods: Vec<String>,
 
     /// Durability of item. This is its max health.
     pub durability: i64,
 
+    /// Current health of item
+    pub health: i64,
+
     /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before being restored (TODO Clarify damage vs. breaking)
+    /// before being repaired (TODO Clarify damage vs. breaking)
     pub player_item_rating_before: f64,
 
     /// The increase or decrease that all the wielding player's items now cause to their star
@@ -1076,7 +1079,7 @@ pub struct ItemRestored {
     pub player_id: Uuid,
 
     // TODO: Move this out if it turns out there are other restoring events with the name stored
-    //   outside the ItemRestored struct
+    //   outside the ItemRepaired struct
     /// Name of player whose item broke
     pub player_name: String,
 
@@ -1649,7 +1652,7 @@ pub enum FedEventData {
         /// Home Run events don't really give enough information to attribute these damages to
         /// anybody. We could compare the name to the batter name, but since batters can also be
         /// on base that doesn't really give us any certain information.
-        damaged_items: Vec<(String, ItemDamage)>
+        damaged_items: Vec<(String, ItemDamage)>,
     },
 
     /// Stolen base
@@ -3420,7 +3423,7 @@ pub enum FedEventData {
         run_losses: RunLossesFromSalmon,
 
         /// Item restored by the salmon, if any
-        item_restored: Option<ItemRestored>,
+        item_restored: Option<ItemRepaired>,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
@@ -6460,26 +6463,17 @@ impl FedEvent {
                 eb.push_description(&run_losses.to_string());
 
                 if let Some(item_restored) = item_restored {
-                    let restored_description = format!("{} {} was restored!",
-                                                       possessive(item_restored.player_name),
-                                                       item_restored.item_name);
+                    let restored_description = format!(
+                        "{} {} was {}",
+                        Possessive(&item_restored.player_name), item_restored.item_name,
+                        if item_restored.health == 1 { "restored!" } else { "repaired." },
+                    );
                     eb.push_description(&restored_description);
                     eb.push_child(item_restored.sub_event, |mut child| {
                         // Yes, the parent says swim and the child says swam
                         child.push_description("The Salmon swam upstream!");
                         child.push_description(&restored_description);
-                        child.push_player_tag(item_restored.player_id);
-                        child.push_team_tag(item_restored.team_id);
-                        child.push_metadata_i64("itemDurability", item_restored.durability);
-                        child.push_metadata_i64("itemHealthAfter", 1);
-                        child.push_metadata_i64("itemHealthBefore", 0);
-                        child.push_metadata_uuid("itemId", item_restored.item_id);
-                        child.push_metadata_str("itemName", item_restored.item_name);
-                        child.push_metadata_str_vec("mods", item_restored.item_mods);
-                        child.push_metadata_f64("playerItemRatingAfter", item_restored.player_item_rating_after);
-                        child.push_metadata_f64("playerItemRatingBefore", item_restored.player_item_rating_before);
-                        child.push_metadata_f64("playerRating", item_restored.player_rating);
-                        child.build(EventType::BrokenItemRepaired)
+                        child.build_item_repaired(item_restored)
                     });
                 }
 
@@ -6529,7 +6523,7 @@ impl FedEvent {
                         category: EventCategory::Special,
                         description: format!("Runs are Overflowing!\n{team_nickname} gain {}.",
                                              if num_runs == -1. {
-                                                  format!("1 Unrun")
+                                                 format!("1 Unrun")
                                              } else if num_runs == 1. {
                                                  format!("1 Run")
                                              } else if num_runs < 0. {

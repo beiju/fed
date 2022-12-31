@@ -1566,7 +1566,10 @@ pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<(&s
 pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
-    let (input, item_name) = parse_terminated(" was restored!").parse(input)?;
+    let (input, item_name) = alt((
+        parse_terminated(" was repaired."),
+        parse_terminated(" was restored!"),
+    )).parse(input)?;
 
     Ok((input, (player_name, item_name)))
 }
