@@ -488,10 +488,8 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
     fn build_item_damage(&self, v: &Vec<(&ItemDamaged, &str)>, description: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
         for (item_damage, player_name) in v {
             let player_name_possessive = possessive(player_name.to_string());
-            push_description!(description, "{}{player_name_possessive} {} {}",
-                              if (self.common.season, self.common.day) < (15, 3) { " " } else { "" },
-                              item_damage.item_name,
-                              if item_damage.health == 0 { "broke!" } else { "was damaged." });
+            push_description!(description, "{}{player_name_possessive} {item_damage}",
+                              if (self.common.season, self.common.day) < (15, 3) { " " } else { "" });
             children_builders.push(make_item_damage_child(player_name_possessive, item_damage,
                                                           (self.common.season, self.common.day) < (15, 3)));
         }
@@ -519,9 +517,8 @@ fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDama
         .update(EventBuilderUpdate {
             r#type: if item_damage.health == 0 { EventType::ItemBreaks } else { EventType::ItemDamaged },
             category: EventCategory::Changes,
-            description: format!("{}{player_name_possessive} {} {}",
-                                 if extra_space { " " } else { "" }, item_damage.item_name,
-                                 if item_damage.health == 0 { "broke!" } else { "was damaged." }),
+            description: format!("{}{player_name_possessive} {item_damage}",
+                                 if extra_space { " " } else { "" }),
             team_tags: vec![item_damage.team_id],
             player_tags: vec![item_damage.player_id],
             ..Default::default()

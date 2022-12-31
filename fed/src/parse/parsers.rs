@@ -1531,6 +1531,7 @@ pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline_befo
         let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
         let (input, item_name) = alt((
             parse_terminated(" was damaged."),
+            parse_terminated(" were damaged."),
             parse_terminated(" broke!"),
         )).parse(input)?;
         let (input, _) = if !newline_before { tag("\n").parse(input)? } else { (input, "") };

@@ -1019,6 +1019,19 @@ pub struct ItemDamaged {
     pub sub_event: SubEvent,
 }
 
+impl Display for ItemDamaged {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.health == 0 {
+            write!(f, "{} broke!", self.item_name)
+        } else if let Some(l) = self.item_name.chars().last() && l == 's' {
+            // This super simple plural detection is going to blow up on me, I know it
+            write!(f, "{} were damaged.", self.item_name)
+        } else {
+            write!(f, "{} was damaged.", self.item_name)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemGained {
     /// Uuid of item that was gained
