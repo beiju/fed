@@ -4960,7 +4960,7 @@ impl FedEvent {
                         .update(EventBuilderUpdate {
                             r#type: event_type,
                             category: EventCategory::Changes,
-                            description: format!("The {team_nickname} {shuffle_location} shuffled in the Reverb!"),
+                            description: format!("The {team_nickname} {shuffle_location}"),
                             team_tags: vec![team_id],
                             ..Default::default()
                         })
@@ -4981,11 +4981,11 @@ impl FedEvent {
                             .fill(EventBuilderUpdate {
                                 r#type: EventType::ReverbRosterShuffle,
                                 category: EventCategory::Special,
-                                description: format!("Reverberations hit unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!{gravity_suffix}"),
+                                description: format!("Reverberations are at unsafe levels!\nThe {team_nickname} had their lineup shuffled in the Reverb!{gravity_suffix}"),
                                 player_tags,
                                 ..Default::default()
                             })
-                            .child(get_child(sub_event, EventType::ReverbLineupShuffle, "had their lineup"))
+                            .child(get_child(sub_event, EventType::ReverbLineupShuffle, "had their lineup shuffled."))
                             .build()
                     }
                     ReverbType::Rotation(sub_event) => {
@@ -4997,7 +4997,7 @@ impl FedEvent {
                                 player_tags,
                                 ..Default::default()
                             })
-                            .child(get_child(sub_event, EventType::ReverbRotationShuffle, "had their rotation"))
+                            .child(get_child(sub_event, EventType::ReverbRotationShuffle, "had their rotation shuffled in the Reverb!"))
                             .build()
                     }
                     ReverbType::Full(sub_event) => {
@@ -5009,7 +5009,7 @@ impl FedEvent {
                                 player_tags,
                                 ..Default::default()
                             })
-                            .child(get_child(sub_event, EventType::ReverbFullShuffle, "were"))
+                            .child(get_child(sub_event, EventType::ReverbFullShuffle, "were shuffled in the Reverb!"))
                             .build()
                     }
                     ReverbType::SeveralPlayers(player_reverbs) => {
