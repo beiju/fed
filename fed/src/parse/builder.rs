@@ -3,7 +3,7 @@ use serde_json::json;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use std::fmt::Write;
-use crate::ItemDamage;
+use crate::ItemDamaged;
 
 use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, Scores, SpicyStatus, StoppedInhabiting, SubEvent};
 
@@ -141,9 +141,9 @@ pub struct EventBuilderFull<'s, 'i, 'c, 't> {
     pub scores: Option<(&'s Scores, &'static str)>,
     pub stopped_inhabiting: Option<&'i StoppedInhabiting>,
     pub spicy_change: SpicyChange<'c>,
-    pub item_damage_before_event: Vec<(&'t ItemDamage, &'t str)>,
-    pub item_damage_before_score: Vec<(&'t ItemDamage, &'t str)>,
-    pub item_damage_after_score: Vec<(&'t ItemDamage, &'t str)>,
+    pub item_damage_before_event: Vec<(&'t ItemDamaged, &'t str)>,
+    pub item_damage_before_score: Vec<(&'t ItemDamaged, &'t str)>,
+    pub item_damage_after_score: Vec<(&'t ItemDamaged, &'t str)>,
 }
 
 macro_rules! push_description {
@@ -225,27 +225,27 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         }
     }
 
-    pub fn item_damage_before_event(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+    pub fn item_damage_before_event(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamaged>, player_name: &'tt str) -> Self {
         self.item_damage_before_event.extend(item_damage.into_iter().map(|d| (d, player_name)));
         self
     }
 
-    pub fn item_damage_before_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+    pub fn item_damage_before_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamaged>, player_name: &'tt str) -> Self {
         self.item_damage_before_score.extend(item_damage.into_iter().map(|d| (d, player_name)));
         self
     }
 
-    pub fn named_item_damage_before_score(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+    pub fn named_item_damage_before_score(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamaged)>) -> Self {
         self.item_damage_before_score.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
         self
     }
 
-    pub fn named_item_damage_before_event(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamage)>) -> Self {
+    pub fn named_item_damage_before_event(mut self, ii: impl IntoIterator<Item=&'tt (String, ItemDamaged)>) -> Self {
         self.item_damage_before_event.extend(ii.into_iter().map(|(n, d)| (d, n.as_str())));
         self
     }
 
-    pub fn item_damage_after_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamage>, player_name: &'tt str) -> Self {
+    pub fn item_damage_after_score(mut self, item_damage: impl IntoIterator<Item=&'tt ItemDamaged>, player_name: &'tt str) -> Self {
         self.item_damage_after_score.extend(item_damage.into_iter().map(|d| (d, player_name)));
         self
     }
@@ -485,7 +485,7 @@ impl<'ts, 'ti, 'tc, 'tt> EventBuilderFull<'ts, 'ti, 'tc, 'tt> {
         build_final(self.common, self.game, self.update, metadata, description, player_tags, has_attractor)
     }
 
-    fn build_item_damage(&self, v: &Vec<(&ItemDamage, &str)>, description: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
+    fn build_item_damage(&self, v: &Vec<(&ItemDamaged, &str)>, description: &mut String, children_builders: &mut Vec<EventBuilderChildFull>) {
         for (item_damage, player_name) in v {
             let player_name_possessive = possessive(player_name.to_string());
             push_description!(description, "{}{player_name_possessive} {} {}",
@@ -514,7 +514,7 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
             }))
 }
 
-fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamage, extra_space: bool) -> EventBuilderChildFull {
+fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamaged, extra_space: bool) -> EventBuilderChildFull {
     EventBuilderChild::new(&item_damage.sub_event)
         .update(EventBuilderUpdate {
             r#type: if item_damage.health == 0 { EventType::ItemBreaks } else { EventType::ItemDamaged },

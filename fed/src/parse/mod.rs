@@ -1290,10 +1290,10 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (player_name, item_breaks, scattered) = event.next_parse(parse_consumer_attack)?;
 
             let (team_id, effect) = if item_breaks.is_some() {
-                let mut break_child = event.next_child(EventType::ItemBreaks)?;
+                let mut break_child = event.next_child_any(&[EventType::ItemBreaks, EventType::ItemDamaged])?;
                 let team_id = break_child.next_team_id()?;
 
-                let item_breaks = ItemDamage {
+                let item_breaks = ItemDamaged {
                     item_id: break_child.metadata_uuid("itemId")?,
                     item_name: break_child.metadata_str("itemName")?.to_string(),
                     item_mods: vec![],
@@ -1335,7 +1335,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id,
                 player_id: event.next_player_id()?,
-                player_name: player_name.to_string(),
+                player_name_all_caps: player_name.to_string(),
                 effect,
                 sensed_something_fishy,
                 scattered,

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, FreeRefill, GameEvent, ItemDamage, ItemGained, ItemRepaired, ModDuration, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, DetectiveActivity, FreeRefill, GameEvent, ItemDamaged, ItemGained, ItemRepaired, ModDuration, Scores, ScoringPlayer, SpicyStatus, StatChangeCategory, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -46,6 +46,14 @@ impl EventBuilder {
         builder.0.metadata.other = serde_json::json!({});
 
         builder
+    }
+
+    pub fn description(&self) -> &str {
+        &self.0.description
+    }
+
+    pub fn set_description(&mut self, description: String) {
+        self.0.description = description;
     }
 
     pub fn set_category(&mut self, category: EventCategory) {
@@ -185,19 +193,19 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_named_item_damage(&mut self, item_damage: Option<(String, ItemDamage)>) {
+    pub fn push_named_item_damage(&mut self, item_damage: Option<(String, ItemDamaged)>) {
         if let Some((player_name, dmg)) = item_damage {
             self.push_item_damage_impl(dmg, &player_name);
         }
     }
 
-    pub fn push_item_damage(&mut self, item_damage: Option<ItemDamage>, player_name: &str) {
+    pub fn push_item_damage(&mut self, item_damage: Option<ItemDamaged>, player_name: &str) {
         if let Some(dmg) = item_damage {
             self.push_item_damage_impl(dmg, player_name);
         }
     }
 
-    fn push_item_damage_impl(&mut self, dmg: ItemDamage, player_name: &str) {
+    fn push_item_damage_impl(&mut self, dmg: ItemDamaged, player_name: &str) {
         let description = format!("{} {} {}", Possessive(player_name), dmg.item_name,
                                   if dmg.health == 0 { "broke!" } else { "was damaged." });
         self.push_description(&description);
@@ -331,6 +339,42 @@ impl EventBuilder {
         } else {
             EventType::DamagedItemRepaired
         })
+    }
+
+    pub fn build_item_damaged(mut self, item_damaged: ItemDamaged) -> EventuallyEvent {
+        self.push_player_tag(item_damaged.player_id);
+        self.push_team_tag(item_damaged.team_id);
+        self.push_metadata_i64("itemDurability", item_damaged.durability);
+        self.push_metadata_i64("itemHealthAfter", item_damaged.health);
+        self.push_metadata_i64("itemHealthBefore", item_damaged.health + 1);
+        self.push_metadata_uuid("itemId", item_damaged.item_id);
+        self.push_metadata_str("itemName", item_damaged.item_name);
+        self.push_metadata_str_vec("mods", item_damaged.item_mods);
+        self.push_metadata_f64("playerItemRatingAfter", item_damaged.player_item_rating_after);
+        self.push_metadata_f64("playerItemRatingBefore", item_damaged.player_item_rating_before);
+        self.push_metadata_f64("playerRating", item_damaged.player_rating);
+        self.build(if item_damaged.health == 0 {
+            EventType::ItemBreaks
+        } else {
+            EventType::ItemDamaged
+        })
+    }
+
+    pub fn build_player_stat_changed(mut self, rating_before: f64, rating_after: f64) -> EventuallyEvent {
+        self.push_metadata_f64("before", rating_before);
+        self.push_metadata_f64("after", rating_after);
+        self.push_metadata_i64("type", StatChangeCategory::All as i64);
+        self.build(if rating_after > rating_before {
+            EventType::PlayerStatIncrease
+        } else {
+            EventType::PlayerStatDecrease
+        })
+    }
+
+    pub fn build_detective_activity(mut self, activity: DetectiveActivity) -> EventuallyEvent {
+        self.set_category(EventCategory::Special);
+        self.push_player_tag(activity.detective_id);
+        self.build(EventType::InvestigationMessage)
     }
 
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {

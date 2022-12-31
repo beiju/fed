@@ -155,7 +155,7 @@ pub struct ScoringPlayer {
     pub player_name: String,
 
     /// Item damaged by player scoring, if any
-    pub item_damage: Option<ItemDamage>,
+    pub item_damage: Option<ItemDamaged>,
 
     /// Info about the player attracted by this score, if any
     pub attraction: Option<Attraction>,
@@ -635,6 +635,16 @@ pub enum BatterSkippedReason {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[repr(i64)]
+pub enum StatChangeCategory {
+    Batting = 0,
+    Pitching = 1,
+    Baserunning = 2,
+    Defense = 3,
+    All = 4,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerInfo {
     /// Player uuid
@@ -968,11 +978,11 @@ pub enum ConsumerAttackEffect {
         sub_event: SubEvent,
     },
 
-    DefendedWithItem(ItemDamage),
+    DefendedWithItem(ItemDamaged),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct ItemDamage {
+pub struct ItemDamaged {
     /// Uuid of item that was damaged
     pub item_id: Uuid,
 
@@ -1343,7 +1353,7 @@ pub enum FedEventData {
         strikes: i32,
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
-        batter_item_damage: Option<(String, ItemDamage)>,
+        batter_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Foul Ball
@@ -1360,7 +1370,7 @@ pub enum FedEventData {
         strikes: i32,
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
-        batter_item_damage: Option<(String, ItemDamage)>,
+        batter_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Strike, swinging
@@ -1377,7 +1387,7 @@ pub enum FedEventData {
         strikes: i32,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Strike, looking
@@ -1394,7 +1404,7 @@ pub enum FedEventData {
         strikes: i32,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Strike, flinching
@@ -1412,7 +1422,7 @@ pub enum FedEventData {
         strikes: i32,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Flyout
@@ -1450,14 +1460,14 @@ pub enum FedEventData {
         batter_debt: Option<BatterDebt>,
 
         /// Damage that the batter's item took, if any
-        batter_item_damage: Option<ItemDamage>,
+        batter_item_damage: Option<ItemDamaged>,
 
         /// Damage that the fielder's item took, if any
-        fielder_item_damage: Option<ItemDamage>,
+        fielder_item_damage: Option<ItemDamaged>,
 
         /// Damage that any non-batter and non-fielder player's item took, if any. It's not possible
         /// to know the role of the other player (pitcher, runner?) from the event alone.
-        other_player_item_damage: Option<(String, ItemDamage)>,
+        other_player_item_damage: Option<(String, ItemDamaged)>,
 
     },
 
@@ -1497,13 +1507,13 @@ pub enum FedEventData {
         batter_debt: Option<BatterDebt>,
 
         /// Damage that the batter's item took, if any
-        batter_item_damage: Option<ItemDamage>,
+        batter_item_damage: Option<ItemDamaged>,
 
         /// Damage that the pitcher's item took, if any
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
 
         /// Damage that the fielder's item took, if any
-        fielder_item_damage: Option<ItemDamage>,
+        fielder_item_damage: Option<ItemDamaged>,
     },
 
     /// Fielders choice event
@@ -1595,14 +1605,14 @@ pub enum FedEventData {
         is_special: bool,
 
         /// Damage that the pitcher's item took, if any
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
 
         /// Damage that the batter's item took, if any
-        batter_item_damage: Option<ItemDamage>,
+        batter_item_damage: Option<ItemDamaged>,
 
         /// Damage that any non-batter player's item took, if any. It's not possible to know the
         /// role of the other player (pitcher, fielder, runner?) from the event alone.
-        other_player_item_damage: Option<(String, ItemDamage)>,
+        other_player_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Home run, including Grand Slam
@@ -1652,7 +1662,7 @@ pub enum FedEventData {
         /// Home Run events don't really give enough information to attribute these damages to
         /// anybody. We could compare the name to the batter name, but since batters can also be
         /// on base that doesn't really give us any certain information.
-        damaged_items: Vec<(String, ItemDamage)>,
+        damaged_items: Vec<(String, ItemDamaged)>,
     },
 
     /// Stolen base
@@ -1678,7 +1688,7 @@ pub enum FedEventData {
         free_refill: Option<FreeRefill>,
 
         /// Baserunner item damage if any, otherwise null
-        runner_item_damage: Option<ItemDamage>,
+        runner_item_damage: Option<ItemDamaged>,
 
         /// If the event was a Special type. Usually this can be inferred from other fields.
         /// However, the early Expansion Era, when players scored with Tired or Wired the event was
@@ -1716,7 +1726,7 @@ pub enum FedEventData {
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// Information about the pitcher's item being damaged, if any
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
 
         /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
         /// thanks to Triple Threat.
@@ -1744,7 +1754,7 @@ pub enum FedEventData {
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// Information about the pitcher's item being damaged, if any
-        pitcher_item_damage: Option<(String, ItemDamage)>,
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
 
         /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
         /// thanks to Triple Threat.
@@ -1778,7 +1788,7 @@ pub enum FedEventData {
         base_instincts: Option<i32>,
 
         /// Damage that the batter's item took, if any
-        batter_item_damage: Option<ItemDamage>,
+        batter_item_damage: Option<ItemDamaged>,
 
         /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
         /// Otherwise null.
@@ -2225,10 +2235,10 @@ pub enum FedEventData {
         pitcher_name: String,
 
         /// Meta about the pitcher's item breaking, if it broke, otherwise null.
-        pitcher_item_damage: Option<ItemDamage>,
+        pitcher_item_damage: Option<ItemDamaged>,
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
-        batter_item_damage: Option<ItemDamage>,
+        batter_item_damage: Option<ItemDamaged>,
 
         #[serde(flatten)]
         scores: Scores,
@@ -3359,8 +3369,9 @@ pub enum FedEventData {
         /// Uuid of player who was attacked by the Consumer
         player_id: Uuid,
 
-        /// Name of player who was attacked by the Consumer
-        player_name: String,
+        /// Name of player who was attacked by the Consumer. It's in all caps because it was parsed
+        /// from the event description, where it appears in all caps.
+        player_name_all_caps: String,
 
         /// Effect of the attack
         effect: ConsumerAttackEffect,
@@ -6280,76 +6291,48 @@ impl FedEvent {
                                           EventType::ModChange))
                     .build()
             }
-            FedEventData::ConsumerAttack { ref game, team_id, player_id, ref player_name, effect, sensed_something_fishy, scattered } => {
-                let mut description = if scattered {
-                    format!("CONSUMERS ATTACK\nSCATTERED\n{player_name}")
-                } else {
-                    format!("CONSUMERS ATTACK\n{player_name}")
-                };
-                let child = match effect {
+            FedEventData::ConsumerAttack { game, team_id, player_id, player_name_all_caps: player_name, effect, sensed_something_fishy, scattered } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_player_tag(player_id);
+                eb.push_description("CONSUMERS ATTACK");
+                if scattered {
+                    eb.push_description("SCATTERED");
+                }
+
+                match effect {
                     ConsumerAttackEffect::Chomp { rating_before, rating_after, sub_event } => {
-                        EventBuilderChild::new(&sub_event)
-                            .update(EventBuilderUpdate {
-                                category: EventCategory::Changes,
-                                r#type: EventType::PlayerStatDecrease,
-                                description: description.clone(),
-                                team_tags: vec![team_id],
-                                player_tags: vec![player_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "before": rating_before,
-                                "after": rating_after,
-                                "type": 4, // ?
-                            }))
+                        eb.push_description(&player_name);
+                        let description = eb.description().to_string();
+                        eb.push_child(sub_event, |mut child| {
+                            child.push_player_tag(player_id);
+                            child.push_team_tag(team_id);
+                            child.set_description(description);
+                            child.build_player_stat_changed(rating_before, rating_after)
+                        });
                     }
                     ConsumerAttackEffect::DefendedWithItem(damage) => {
-                        write!(description, "\n\n{} BREAKS", damage.item_name.to_ascii_uppercase()).unwrap();
-                        EventBuilderChild::new(&damage.sub_event)
-                            .update(EventBuilderUpdate {
-                                category: EventCategory::Changes,
-                                r#type: EventType::ItemBreaks,
-                                description: description.clone(),
-                                team_tags: vec![team_id],
-                                player_tags: vec![player_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "itemDurability": damage.durability,
-                                "itemHealthAfter": damage.health,
-                                "itemHealthBefore": damage.health + 1,
-                                "itemId": damage.item_id,
-                                "itemName": damage.item_name,
-                                "mods": damage.item_mods,
-                                "playerItemRatingAfter": zero_int(damage.player_item_rating_after),
-                                "playerItemRatingBefore": damage.player_item_rating_before,
-                                "playerRating": damage.player_rating,
-                            }))
+                        // Sticking the extra \n here arbitrarily. There are two in a row.
+                        eb.push_description(&format!("{player_name} DEFENDS\n"));
+                        eb.push_description(&format!("{} {}",
+                                                     damage.item_name.to_ascii_uppercase(),
+                                                     if damage.health == 0 { "BREAKS" } else { "DAMAGED" }));
+                        let description = eb.description().to_string();
+                        eb.push_child(damage.sub_event, |mut child| {
+                            child.set_description(description);
+                            child.build_item_damaged(damage)
+                        });
                     }
-                };
+                }
 
-                let something_fishy_child = sensed_something_fishy.map(|something_fishy| {
-                    EventBuilderChild::new(&something_fishy.sub_event)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Special,
-                            r#type: EventType::InvestigationMessage,
-                            description: format!("{} sensed something fishy.", something_fishy.detective_name),
-                            player_tags: vec![something_fishy.detective_id],
-                            ..Default::default()
-                        })
-                });
+                if let Some(fishy) = sensed_something_fishy {
+                    eb.push_child(fishy.sub_event, |mut child| {
+                        child.push_description(&format!("{} sensed something fishy.", fishy.detective_name));
+                        child.build_detective_activity(fishy)
+                    });
+                }
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::ConsumersAttack,
-                        category: EventCategory::Special,
-                        description,
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .children(something_fishy_child) // moderate abuse of IntoIter
-                    .build()
+                eb.build(EventType::ConsumersAttack)
             }
             FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
                 let description = format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} {} the {team_nickname}.",

@@ -1330,8 +1330,17 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
     let (input, _) = tag("CONSUMERS ATTACK\n").parse(input)?;
     let (input, scattered) = opt(tag("SCATTERED\n")).parse(input)?;
-    let (input, victim_name) = take_till1(|c| c == '\n').parse(input)?;
-    let (input, item_breaks) = opt(preceded(tag("\n\n"), parse_terminated(" BREAKS"))).parse(input)?;
+    let (input, (victim_name, defended)) = alt((
+        // Order is important because the take_till will also consume the DEFENDS
+        parse_terminated(" DEFENDS").map(|v| (v, true)),
+        take_till1(|c| c == '\n').map(|v| (v, false)),
+    )).parse(input)?;
+    let (input, item_breaks) = if defended {
+        // TODO unwrap this horrible expression
+        opt(preceded(tag("\n\n"), alt((parse_terminated(" BREAKS"), parse_terminated(" DAMAGED"))))).parse(input)?
+    } else {
+        (input, None)
+    };
 
     Ok((input, (victim_name, item_breaks, scattered.is_some())))
 }
