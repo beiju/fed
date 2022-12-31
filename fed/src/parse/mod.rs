@@ -405,12 +405,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Hit => {
-            let (batter_name, num_bases, broken_item_name) = event.next_parse(parse_hit)?;
-            let batter_item_damage = if let Some(_item_name) = broken_item_name {
-                Some(event.next_item_damage()?)
-            } else {
-                None
-            };
+            let (batter_name, hit_bases, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
+            // resim research says pitcher goes first
+            let pitcher_item_damage = pitcher_item_broke
+                .map(|(_item_name, player_name)| {
+                    event.next_item_damage().map(|d| (player_name.to_string(), d))
+                })
+                .transpose()?;
+            let batter_item_damage = batter_item_broke
+                .map(|_item_name| {
+                    event.next_item_damage()
+                })
+                .transpose()?;
 
             let batter_id = event.next_player_id()?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
@@ -422,11 +428,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
                 batter_id,
-                num_bases,
+                hit_bases,
                 scores,
                 spicy_status,
                 stopped_inhabiting,
                 is_special: event.category == EventCategory::Special,
+                pitcher_item_damage,
                 batter_item_damage,
                 other_player_item_damage,
             }

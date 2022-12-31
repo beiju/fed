@@ -1,10 +1,25 @@
+use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{FreeRefill, GameEvent, ItemDamage, ItemGained, ModDuration, StoppedInhabiting, SubEvent};
+use crate::{Attraction, FreeRefill, GameEvent, ItemDamage, ItemGained, ModDuration, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
+
+
+// Newtype with Display implementation that prints the string using grammatically correct possessive
+struct Possessive<'a>(&'a str);
+
+impl Display for Possessive<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(l) = self.0.chars().last() && l == 's' {
+            write!(f, "{}'", self.0)
+        } else {
+            write!(f, "{}'s", self.0)
+        }
+    }
+}
 
 
 impl EventBuilder {
@@ -60,7 +75,7 @@ impl EventBuilder {
             self.push_player_tag(attractor.player_id)
         }
     }
-    
+
     pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F) where F: FnOnce(Self) -> EventuallyEvent {
         let mut child_builder = Self::new(sub_event.id, sub_event.created, self.0.sim.clone(), self.0.day, self.0.season, self.0.tournament, self.0.phase, sub_event.nuts);
         // Childrens' categories are usually Changes
@@ -71,18 +86,18 @@ impl EventBuilder {
         child_builder.0.metadata.sub_play = Some(self.0.metadata.children.len() as i64);
         self.0.metadata.children.push(build_func(child_builder))
     }
-    
+
     pub fn push_description(&mut self, desc: &str) {
         if !self.0.description.is_empty() {
             self.0.description.push('\n');
         }
         self.0.description += desc.into();
     }
-    
+
     pub fn push_player_tag(&mut self, player_id: Uuid) {
         self.0.player_tags.push(player_id)
     }
-    
+
     pub fn push_team_tag(&mut self, team_id: Uuid) {
         self.0.team_tags.push(team_id)
     }
@@ -137,14 +152,14 @@ impl EventBuilder {
         if let Some(lost_item) = gained_item.dropped_item {
             let dropped_or_ditched = if lost_item.item_was_broken { "ditched" } else { "dropped" };
             self.push_description(&format!("{player_name} gained {} and {dropped_or_ditched} {}.",
-                                          gained_item.item_name, lost_item.item_name));
+                                           gained_item.item_name, lost_item.item_name));
             self.push_child(lost_item.sub_event, |mut child| {
                 child.set_category(EventCategory::Changes);
                 child.push_description(&format!("{player_name} dropped {}.", lost_item.item_name));
                 child.push_player_tag(gained_item.player_id);
                 child.push_team_tag(gained_item.team_id);
-                child.push_metadata_uuid("itemId",lost_item.item_id);
-                child.push_metadata_str("itemName",lost_item.item_name);
+                child.push_metadata_uuid("itemId", lost_item.item_id);
+                child.push_metadata_str("itemName", lost_item.item_name);
                 child.push_metadata_str_vec("mods", lost_item.item_mods);
                 child.push_metadata_f64("playerItemRatingAfter", lost_item.player_item_rating_after);
                 child.push_metadata_f64("playerItemRatingBefore", lost_item.player_item_rating_before);
@@ -160,8 +175,8 @@ impl EventBuilder {
             child.push_description(&format!("{player_name} gained {}.", gained_item.item_name));
             child.push_player_tag(gained_item.player_id);
             child.push_team_tag(gained_item.team_id);
-            child.push_metadata_uuid("itemId",gained_item.item_id);
-            child.push_metadata_str("itemName",gained_item.item_name);
+            child.push_metadata_uuid("itemId", gained_item.item_id);
+            child.push_metadata_str("itemName", gained_item.item_name);
             child.push_metadata_str_vec("mods", gained_item.item_mods);
             child.push_metadata_f64("playerItemRatingAfter", gained_item.player_item_rating_after);
             child.push_metadata_f64("playerItemRatingBefore", gained_item.player_item_rating_before);
@@ -171,9 +186,20 @@ impl EventBuilder {
     }
 
     pub fn push_named_item_damage(&mut self, item_damage: Option<(String, ItemDamage)>) {
-        let Some((player_name, dmg)) = item_damage else { return };
-        let description = format!("{player_name}'s {} {}", dmg.item_name,
-                                         if dmg.health == 0 { "broke!" } else { "was damaged." });
+        if let Some((player_name, dmg)) = item_damage {
+            self.push_item_damage_impl(dmg, &player_name);
+        }
+    }
+
+    pub fn push_item_damage(&mut self, item_damage: Option<ItemDamage>, player_name: &str) {
+        if let Some(dmg) = item_damage {
+            self.push_item_damage_impl(dmg, player_name);
+        }
+    }
+
+    fn push_item_damage_impl(&mut self, dmg: ItemDamage, player_name: &str) {
+        let description = format!("{} {} {}", Possessive(player_name), dmg.item_name,
+                                  if dmg.health == 0 { "broke!" } else { "was damaged." });
         self.push_description(&description);
         self.push_child(dmg.sub_event, |mut child| {
             child.push_description(&description);
@@ -193,7 +219,7 @@ impl EventBuilder {
     }
 
     pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<StoppedInhabiting>) {
-        let Some(si) = stopped_inhabiting else { return };
+        let Some(si) = stopped_inhabiting else { return; };
         self.push_child(si.sub_event, |mut child| {
             child.push_description(&format!("{} stopped Inhabiting.", si.inhabiting_player_name));
             child.push_player_tag(si.inhabiting_player_id);
@@ -206,19 +232,86 @@ impl EventBuilder {
         })
     }
 
-    pub fn push_free_refill(&mut self, free_refill: Option<FreeRefill>) {
-        let Some(fr) = free_refill else { return };
-        let common_description = format!("{} used their Free Refill.", fr.player_name);
-        self.push_description(&common_description);
-        self.push_description(&format!("{} Refills the In!", fr.player_name));
-        self.push_child(fr.sub_event, |mut child| {
-            child.push_description(&common_description);
-            child.push_player_tag(fr.player_id);
-            if let Some(t) = fr.team_id { child.push_team_tag(t) };
-            child.push_metadata_str("mod", "COFFEE_RALLY");
-            child.push_metadata_i64("type", ModDuration::Permanent as i64);
-            child.build(EventType::RemovedMod)
-        })
+    pub fn push_free_refills(&mut self, free_refills: impl IntoIterator<Item=FreeRefill>) {
+        for fr in free_refills.into_iter() {
+            let common_description = format!("{} used their Free Refill.", fr.player_name);
+            self.push_description(&common_description);
+            self.push_description(&format!("{} Refills the In!", fr.player_name));
+            self.push_child(fr.sub_event, |mut child| {
+                child.push_description(&common_description);
+                child.push_player_tag(fr.player_id);
+                if let Some(t) = fr.team_id { child.push_team_tag(t) };
+                child.push_metadata_str("mod", "COFFEE_RALLY");
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(EventType::RemovedMod)
+            });
+
+            // If there's any free refill, the event is Special
+            self.set_category(EventCategory::Special);
+        }
+    }
+
+    // This function only exists to make a more sensible name for the user. Option implements
+    // IntoIterator so you could just call the plural form with an option.
+    pub fn push_free_refill(&mut self, free_refills: Option<FreeRefill>) {
+        self.push_free_refills(free_refills)
+    }
+
+    pub fn push_scores(&mut self, scores: Scores, score_label: &str, stopped_inhabiting: Option<StoppedInhabiting>) {
+        self.push_scorers(scores.scores, score_label);
+        self.push_stopped_inhabiting(stopped_inhabiting);
+        self.push_free_refills(scores.free_refills);
+    }
+
+    pub fn push_attraction(&mut self, attraction: Option<Attraction>, player_name: &str, player_id: Uuid) {
+        let Some(at) = attraction else { return };
+        self.push_player_tag(player_id);
+        self.push_description(&format!("The {} Attract {player_name}!", at.team_nickname));
+        self.push_child(at.sub_event, |mut child| {
+            child.push_description(&format!("The {} Attracted {player_name}!", at.team_nickname));
+            child.push_player_tag(player_id);
+            child.push_team_tag(at.team_id);
+            child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
+            child.push_metadata_uuid("playerId", player_id);
+            child.push_metadata_str("playerName", player_name);
+            child.push_metadata_uuid("teamId", at.team_id);
+            child.push_metadata_str("teamName", at.team_nickname);
+            child.build(EventType::PlayerAddedToTeam)
+        });
+    }
+
+    pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, score_label: &str) {
+        for scorer in scorers {
+            self.push_player_tag(scorer.player_id);
+            self.push_description(&format!("{} {score_label}", scorer.player_name));
+            self.push_attraction(scorer.attraction, &scorer.player_name, scorer.player_id);
+        }
+    }
+
+    pub fn push_spicy(&mut self, spicy: SpicyStatus, player_name: &str, player_id: Uuid) {
+        match spicy {
+            SpicyStatus::None => {}
+            SpicyStatus::HeatingUp => {
+                self.push_description(&format!("{player_name} is Heating Up!"));
+                self.push_player_tag(player_id);
+            }
+            SpicyStatus::RedHot(mod_added) => {
+                let description = format!("{player_name} is Red Hot!");
+                self.push_description(&description);
+                self.push_player_tag(player_id);
+                self.set_category(EventCategory::Special);
+                if let Some(mod_added) = mod_added {
+                    self.push_child(mod_added.sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_player_tag(player_id);
+                        child.push_team_tag(mod_added.team_id);
+                        child.push_metadata_str("mod", "ON_FIRE");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::AddedMod)
+                    })
+                }
+            }
+        }
     }
 
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {

@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::{EchoChamberModAdded, TimeElsewhere};
+use crate::{EchoChamberModAdded, HitBases, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -215,26 +215,32 @@ pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, i32, Option<&str>)> {
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, HitBases, Option<&str>, Option<(&str, &str)>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
-    let (input, batter_name, broken_item_name) = if let Some((broken_item_name, batter_name)) = broke {
-        let (input, _) = tag(batter_name).parse(input)?;
-        let (input, _) = tag(" hits a ").parse(input)?;
+    let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, player_name)) = broke {
+        let (input, item_was_batters) = opt(tag(player_name)).parse(input)?;
+        let (input, batter_name, batter_item_broke, pitcher_item_broke) = if item_was_batters.is_some() {
+            let (input, _) = tag(" hits a ").parse(input)?;
+            (input, player_name, Some(broken_item_name), None)
+        } else {
+            let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
+            (input, batter_name, None, Some((broken_item_name, player_name)))
+        };
 
-        (input, batter_name, Some(broken_item_name))
+        (input, batter_name, batter_item_broke, pitcher_item_broke)
     } else {
         let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
 
-        (input, batter_name, None)
+        (input, batter_name, None, None)
     };
     let (input, num_bases) = alt((
-        tag("Single!").map(|_| 1),
-        tag("Double!").map(|_| 2),
-        tag("Triple!").map(|_| 3),
-        tag("Quadruple!").map(|_| 4),
+        tag("Single!").map(|_| HitBases::Single),
+        tag("Double!").map(|_| HitBases::Double),
+        tag("Triple!").map(|_| HitBases::Triple),
+        tag("Quadruple!").map(|_| HitBases::Quadruple),
     )).parse(input)?;
 
-    Ok((input, (batter_name, num_bases, broken_item_name)))
+    Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke)))
 }
 
 #[derive(PartialEq)]
