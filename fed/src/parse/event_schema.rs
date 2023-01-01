@@ -2850,7 +2850,7 @@ pub enum FedEventData {
 
     /// Earlbirds mod procs at the beginning of Earlseason
     #[serde(rename_all = "camelCase")]
-    EarlbirdsAdded {
+    EarlbirdsAddedToTeam {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -2922,7 +2922,7 @@ pub enum FedEventData {
 
     /// Earlbirds mod is removed at the end of Earlseason
     #[serde(rename_all = "camelCase")]
-    EarlbirdsRemoved {
+    EarlbirdsRemovedFromTeam {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -3606,6 +3606,25 @@ pub enum FedEventData {
 
         /// Uuid of player who was targeted by the Consumer
         player_id: Uuid,
+    },
+
+    /// Earlbirds mod procs at the beginning of Earlseason
+    #[serde(rename_all = "camelCase")]
+    EarlbirdsAddedToPlayer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Team uuid of Earlbird player
+        team_id: Uuid,
+
+        /// Uuid of Earlbird player
+        player_id: Uuid,
+
+        /// Name of Earlbird player
+        player_name: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        sub_event: SubEvent,
     },
 }
 
@@ -5668,7 +5687,7 @@ impl FedEvent {
                     .full_metadata(metadata)
                     .build()
             }
-            FedEventData::EarlbirdsAdded { ref game, team_id, ref team_nickname, ref sub_event } => {
+            FedEventData::EarlbirdsAddedToTeam { ref game, team_id, ref team_nickname, ref sub_event } => {
                 let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::AddedModFromOtherMod,
@@ -5749,7 +5768,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::EarlbirdsRemoved { ref game, team_id, ref sub_event } => {
+            FedEventData::EarlbirdsRemovedFromTeam { ref game, team_id, ref sub_event } => {
                 let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::RemovedModFromOtherMod,
@@ -6701,6 +6720,23 @@ impl FedEvent {
                 eb.push_description("CONSUMER EXPELLED");
                 eb.push_player_tag(player_id);
                 eb.build(EventType::ConsumersAttack)
+            }
+            FedEventData::EarlbirdsAddedToPlayer { game, team_id, player_id, player_name, sub_event } => {
+                let description = format!("{player_name} is an Earlbird.");
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&description);
+                eb.push_player_tag(player_id);
+                eb.push_child(sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(player_id);
+                    child.push_team_tag(team_id);
+                    child.push_metadata_str("mod", "OVERPERFORMING");
+                    child.push_metadata_str("source", "EARLBIRDS");
+                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child.build(EventType::AddedModFromOtherMod)
+                });
+                eb.build(EventType::Earlbird)
             }
         }
     }

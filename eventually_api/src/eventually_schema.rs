@@ -328,6 +328,7 @@ pub enum EventType {
     ItemDamaged = 186,
     BrokenItemRepaired = 187,
     DamagedItemRepaired = 188,
+    NoFreeItemSlot = 190,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,

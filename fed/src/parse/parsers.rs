@@ -327,6 +327,7 @@ pub(crate) fn parse_attraction(player_name: &str) -> impl Fn(&str) -> ParserResu
         Ok((input, team_nickname))
     }
 }
+
 pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }
@@ -1210,15 +1211,31 @@ pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
 }
 
 pub(crate) enum EarlbirdsChange<'a> {
-    Added(&'a str),
-    Removed, // This one says [object Object]. lol & lmao
+    AddedToTeam(&'a str),
+    RemovedFromTeam, // This one says [object Object]. lol & lmao
+    AddedToPlayer(&'a str),
+    RemovedFromPlayer(&'a str),
 }
 
 pub(crate) fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
+    alt((parse_team_earlbird, parse_player_earlbird)).parse(input)
+}
+
+pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
     let (input, _) = tag("Happy Earlseason!\n").parse(input)?;
     let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::Added(n)),
-        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::Removed),
+        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::AddedToTeam(n)),
+        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::RemovedFromTeam),
+    )).parse(input)?;
+
+    Ok((input, result))
+}
+
+pub(crate) fn parse_player_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
+    let (input, result) = alt((
+        parse_terminated(" is an Earlbird.").map(|n| EarlbirdsChange::AddedToPlayer(n)),
+        // Total guess at what the text should be here
+        parse_terminated(" is no longer an Earlbird.").map(|n| EarlbirdsChange::RemovedFromPlayer(n)),
     )).parse(input)?;
 
     Ok((input, result))
@@ -1322,14 +1339,14 @@ pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> 
 
 pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<(&str, &str, &str)> {
     move |input: &str| {
-        let (input, stadium_name) = parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input) ?;
+        let (input, stadium_name) = parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input)?;
         // They changed the text in s16
         let (input, mod_name) = if at {
             parse_terminated(" at the ").parse(input)?
         } else {
             parse_terminated(" to the ").parse(input)?
         };
-        let (input, team_nickname) = parse_terminated(".").parse(input) ?;
+        let (input, team_nickname) = parse_terminated(".").parse(input)?;
 
         Ok((input, (stadium_name, mod_name, team_nickname)))
     }
@@ -1346,7 +1363,7 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 
 pub(crate) enum ParsedConsumerAttack<'a> {
     Normal((&'a str, Option<&'a str>, bool)),
-    ConsumerExpelled
+    ConsumerExpelled,
 }
 
 pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerAttack> {

@@ -1669,25 +1669,37 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Earlbird => {
             match event.next_parse(parse_earlbird)? {
-                EarlbirdsChange::Added(team_nickname) => {
+                EarlbirdsChange::AddedToTeam(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                    FedEventData::EarlbirdsAdded {
+                    FedEventData::EarlbirdsAddedToTeam {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_id: sub_event.next_team_id()?,
                         team_nickname: team_nickname.to_string(),
                         sub_event: sub_event.as_sub_event(),
                     }
                 }
-                EarlbirdsChange::Removed => {
+                EarlbirdsChange::RemovedFromTeam => {
                     let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                    FedEventData::EarlbirdsRemoved {
+                    FedEventData::EarlbirdsRemovedFromTeam {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_id: sub_event.next_team_id()?,
                         sub_event: sub_event.as_sub_event(),
                     }
                 }
+                EarlbirdsChange::AddedToPlayer(player_name) => {
+                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                    FedEventData::EarlbirdsAddedToPlayer {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        player_id: sub_event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        sub_event: sub_event.as_sub_event(),
+                    }
+
+                }
+                EarlbirdsChange::RemovedFromPlayer(_) => { todo!() }
             }
         }
         EventType::LateToTheParty => {
@@ -2315,6 +2327,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }
         EventType::DamagedItemRepaired => { todo!() }
+        EventType::NoFreeItemSlot => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
