@@ -7,7 +7,7 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamaged, ModChangeSubEvent, ModChangeSubEventWithPlayer, GamePitch, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::{is_known_team_nickname, ParseOk};
-use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, parse_terminated, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_charge_blood, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, parse_terminated, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -581,6 +581,18 @@ impl<'e> EventParseWrapper<'e> {
         Ok(GamePitch {
             double_strike,
         })
+    }
+
+    pub fn parse_charge_blood(&mut self, batter_name: &str, a: &str) -> Result<Option<ModChangeSubEvent>, FeedParseError> {
+        self.next_parse_opt(parse_charge_blood(batter_name, a))
+            .map(|()| {
+                let mut child = self.next_child(EventType::AddedModFromOtherMod)?;
+                ParseOk(ModChangeSubEvent {
+                    sub_event: child.as_sub_event(),
+                    team_id: child.next_team_id()?,
+                })
+            })
+            .transpose()
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

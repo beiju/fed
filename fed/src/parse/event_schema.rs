@@ -1227,20 +1227,21 @@ pub struct ModDesc {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub enum HitBases {
+#[serde(tag = "hitType", content = "chargeBlood")]
+pub enum HitType {
     Single,
     Double,
-    Triple,
+    Triple(Option<ModChangeSubEvent>),
     Quadruple,
 }
 
-impl Display for HitBases {
+impl Display for HitType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HitBases::Single => { write!(f, "Single") }
-            HitBases::Double => { write!(f, "Double") }
-            HitBases::Triple => { write!(f, "Triple") }
-            HitBases::Quadruple => { write!(f, "Quadruple") }
+            HitType::Single => { write!(f, "Single") }
+            HitType::Double => { write!(f, "Double") }
+            HitType::Triple(_) => { write!(f, "Triple") }
+            HitType::Quadruple => { write!(f, "Quadruple") }
         }
     }
 }
@@ -1593,14 +1594,14 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Name of hte player who hit the ball
+        /// Name of the player who hit the ball
         batter_name: String,
 
         /// Uuid of the player who hit the ball
         batter_id: Uuid,
 
-        /// Number of bases the batter got. Single is `1`, double is `2`, etc.
-        hit_bases: HitBases,
+        /// Type of hit: Single, Double, etc.
+        hit_type: HitType,
 
         #[serde(flatten)]
         scores: Scores,
@@ -4061,40 +4062,24 @@ impl FedEvent {
                     .named_item_damage_before_score(&other_player_item_damage)
                     .build()
             }
-            FedEventData::Hit { game, batter_name, batter_id, hit_bases, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
+            FedEventData::Hit { game, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_item_damage(batter_item_damage, &batter_name);
-                eb.push_description(&format!("{batter_name} hits a {hit_bases}!"));
+                eb.push_description(&format!("{batter_name} hits a {hit_type}!"));
                 eb.push_player_tag(batter_id);
+                match hit_type {
+                    HitType::Triple(power_charge) => {
+                        eb.push_charge_blood(power_charge, &batter_name, batter_id, "aaa");
+                    }
+                    _ => {}
+                }
                 eb.push_scores(scores, "scores!", stopped_inhabiting);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_named_item_damage(other_player_item_damage);
 
                 eb.build(EventType::Hit)
-                // event_builder.for_game(&game)
-                //     .fill(EventBuilderUpdate {
-                //         r#type: EventType::Hit,
-                //         category: EventCategory::special_if(scores.used_refill() || spicy_status.is_special() || is_special),
-                //         description: format!("{batter_name} hits a {}!", match num_bases {
-                //             1 => "Single",
-                //             2 => "Double",
-                //             3 => "Triple",
-                //             4 => "Quadruple",
-                //             // TODO Turn this into a Result error
-                //             _ => panic!("Unknown hit type")
-                //         }),
-                //         player_tags: vec![batter_id],
-                //         ..Default::default()
-                //     })
-                //     .scores(&scores, " scores!")
-                //     .spicy(&spicy_status, batter_id, &batter_name)
-                //     .stopped_inhabiting(&stopped_inhabiting)
-                //     .named_item_damage_before_event(&pitcher_item_damage)
-                //     .item_damage_before_event(&batter_item_damage, &batter_name)
-                //     .named_item_damage_before_score(&other_player_item_damage)
-                //     .build()
             }
             FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction, damaged_items } => {
                 let mut suffix = String::new();

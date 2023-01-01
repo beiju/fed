@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::{EchoChamberModAdded, HitBases, TimeElsewhere};
+use crate::{EchoChamberModAdded, HitType, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -215,7 +215,14 @@ pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, HitBases, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
+pub(crate) enum ParsedHitType {
+    Single,
+    Double,
+    Triple,
+    Quadruple
+}
+
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, broken_item_name_plural, player_name)) = broke {
         let (input, item_was_batters) = opt(tag(player_name)).parse(input)?;
@@ -234,10 +241,10 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, HitBases, Option<(&s
         (input, batter_name, None, None)
     };
     let (input, num_bases) = alt((
-        tag("Single!").map(|_| HitBases::Single),
-        tag("Double!").map(|_| HitBases::Double),
-        tag("Triple!").map(|_| HitBases::Triple),
-        tag("Quadruple!").map(|_| HitBases::Quadruple),
+        tag("Single!").map(|_| ParsedHitType::Single),
+        tag("Double!").map(|_| ParsedHitType::Double),
+        tag("Triple!").map(|_| ParsedHitType::Triple),
+        tag("Quadruple!").map(|_| ParsedHitType::Quadruple),
     )).parse(input)?;
 
     Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke)))
@@ -1692,4 +1699,16 @@ pub(crate) fn parse_subseasonal_mod_removed(input: &str) -> ParserResult<(&str, 
 pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("\n").parse(input)?;
     parse_terminated(" is caught in the bind!").parse(input)
+}
+
+pub(crate) fn parse_charge_blood<'a>(batter_name: &'a str, a: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" Power Ch").parse(input)?;
+        let (input, _) = tag(a).parse(input)?;
+        let (input, _) = tag("rged!").parse(input)?;
+
+        Ok((input, ()))
+    }
 }
