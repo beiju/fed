@@ -2621,6 +2621,10 @@ pub enum FedEventData {
         /// Location of incinerated and replacement player
         location: ActivePositionType,
 
+        /// If the player was unstable, the player that the instability chained to. Otherwise null.
+        /// Use the null-ness of this property to tell whether this was an Unstable incineration.
+        unstable_chain: Option<ModChangeSubEventWithNamedPlayer>,
+
         /// Metadata for the incineration sub-event, the enters-hall sub-event, the hatch sub-event,
         /// and the replacement sub-event, in that order
         sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
@@ -5345,10 +5349,12 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref sub_events } => {
+            FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref unstable_chain, ref sub_events } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
                 let location_int: i64 = location.into();
-                let children = vec![
+                let mut prefix = String::new();
+                let mut suffix = String::new();
+                let mut children = vec![
                     EventBuilderChild::new(incin_child)
                         .update(EventBuilderUpdate {
                             category: EventCategory::Changes,
@@ -5395,11 +5401,31 @@ impl FedEvent {
                         })),
                 ];
 
+                if let Some(chain) = unstable_chain {
+                    prefix = format!("{victim_name} is Unstable!\nA Debt was collected.\n");
+                    suffix = format!("\nThe Instability chains to {}!", chain.player_name);
+                    children.push(
+                        EventBuilderChild::new(&chain.sub_event)
+                            .update(EventBuilderUpdate {
+                                category: EventCategory::Changes,
+                                r#type: EventType::AddedMod,
+                                description: format!("The Instability chains to {}!", chain.player_name),
+                                team_tags: vec![chain.team_id],
+                                player_tags: vec![chain.player_id],
+                                ..Default::default()
+                            })
+                            .metadata(json!({
+                                "mod": "MARKED",
+                                "type": ModDuration::Weekly as i64,
+                            }))
+                    )
+                }
+
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::Incineration,
                         category: EventCategory::Special,
-                        description: format!("Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}."),
+                        description: format!("{prefix}Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}.{suffix}"),
                         player_tags: vec![victim_id, replacement_id],
                         ..Default::default()
                     })

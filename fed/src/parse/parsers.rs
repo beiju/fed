@@ -1001,12 +1001,30 @@ pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&
     Ok((input, (player_name, after_days)))
 }
 
-pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
+    alt((
+        parse_incineration_normal.map(|(v, r)| (v, r, None)),
+        parse_incineration_unstable.map(|(v, r, u)| (v, r, Some(u))),
+    )).parse(input)
+}
+
+pub(crate) fn parse_incineration_normal(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("Rogue Umpire incinerated ").parse(input)?;
     let (input, victim_name) = parse_terminated("!\nThey're replaced by ").parse(input)?;
     let (input, replacement_name) = parse_until_period_eof(input)?;
 
     Ok((input, (victim_name, replacement_name)))
+}
+
+pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, victim_name) = parse_terminated(" is Unstable!\nA Debt was collected.\nRogue Umpire incinerated ").parse(input)?;
+    let (input, _) = tag(victim_name).parse(input)?;
+    let (input, _) = tag("!\nThey're replaced by ").parse(input)?;
+    let (input, replacement_name) = parse_terminated(".\nThe Instability chains to ").parse(input)?;
+    // Oh god I hope they never add a player with ! in the name
+    let (input, chained_to_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (victim_name, replacement_name, chained_to_name)))
 }
 
 pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {

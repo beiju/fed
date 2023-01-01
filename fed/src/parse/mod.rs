@@ -1074,11 +1074,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::BlooddrainBlocked => { todo!() }
         EventType::Incineration => {
-            let (victim_name, replacement_name) = event.next_parse(parse_incineration)?;
+            let (victim_name, replacement_name, unstable_chain_name) = event.next_parse(parse_incineration)?;
             let mut incin_child = event.next_child(EventType::Incineration)?;
             let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
             let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
             let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
+
+            let unstable_chain = unstable_chain_name
+                .map(|player_name| {
+                    let mut child = event.next_child(EventType::AddedMod)?;
+                    ParseOk(ModChangeSubEventWithNamedPlayer {
+                        sub_event: child.as_sub_event(),
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                    })
+                })
+                .transpose()?;
 
             let team_nickname = replace_child.metadata_str("teamName")?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1091,6 +1103,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 replacement_id: hatch_child.next_player_id()?,
                 replacement_name: replacement_name.to_string(),
                 location: replace_child.metadata_enum("location")?,
+                unstable_chain,
                 sub_events: (
                     incin_child.as_sub_event(),
                     enter_hall_child.as_sub_event(),
