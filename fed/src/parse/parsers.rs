@@ -1384,8 +1384,8 @@ pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
     let (input, n_times) = parse_whole_number(input)?;
     let (input, _) = match n_times {
         // Why...
-        3 => { tag("-Time MVP!").parse(input)? }
-        _ => { tag("-Time MVP.").parse(input)? }
+        2 => { tag("-Time MVP.").parse(input)? }
+        _ => { tag("-Time MVP!").parse(input)? }
     };
 
     Ok((input, (player_name, n_times)))

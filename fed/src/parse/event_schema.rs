@@ -5905,7 +5905,7 @@ impl FedEvent {
                             category: EventCategory::Changes,
                             description: format!("{player_name} is named a {level}-Time MVP{}",
                                                  // i dont like this
-                                                 if level == 3 { "!" } else { "." }),
+                                                 if level == 2 { "." } else { "!" }),
                             team_tags: vec![team_id],
                             player_tags: vec![player_id],
                             ..Default::default()
