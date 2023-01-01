@@ -1344,8 +1344,19 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (echoer_name, echoee_name)))
 }
 
+pub(crate) enum ParsedConsumerAttack<'a> {
+    Normal((&'a str, Option<&'a str>, bool)),
+    ConsumerExpelled
+}
 
-pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
+pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerAttack> {
+    alt((
+        parse_consumer_attack_normal.map(|out| ParsedConsumerAttack::Normal(out)),
+        parse_consumer_expelled.map(|()| ParsedConsumerAttack::ConsumerExpelled),
+    )).parse(input)
+}
+
+pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
     let (input, _) = tag("CONSUMERS ATTACK\n").parse(input)?;
     let (input, scattered) = opt(tag("SCATTERED\n")).parse(input)?;
     let (input, (victim_name, defended)) = alt((
@@ -1361,6 +1372,11 @@ pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<(&str, Option<&
     };
 
     Ok((input, (victim_name, item_breaks, scattered.is_some())))
+}
+
+pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<()> {
+    let (input, _) = tag("SALMON CANNONS FIRE\nCONSUMER EXPELLED").parse(input)?;
+    Ok((input, ()))
 }
 
 pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {

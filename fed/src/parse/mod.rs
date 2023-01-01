@@ -1313,58 +1313,67 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::ConsumersAttack => {
-            let (player_name, item_breaks, scattered) = event.next_parse(parse_consumer_attack)?;
+            match event.next_parse(parse_consumer_attack)? {
+                ParsedConsumerAttack::Normal((player_name, item_breaks, scattered)) => {
 
-            let (team_id, effect) = if item_breaks.is_some() {
-                let mut break_child = event.next_child_any(&[EventType::ItemBreaks, EventType::ItemDamaged])?;
-                let team_id = break_child.next_team_id()?;
+                    let (team_id, effect) = if item_breaks.is_some() {
+                        let mut break_child = event.next_child_any(&[EventType::ItemBreaks, EventType::ItemDamaged])?;
+                        let team_id = break_child.next_team_id()?;
 
-                let item_breaks = ItemDamaged {
-                    item_id: break_child.metadata_uuid("itemId")?,
-                    item_name: break_child.metadata_str("itemName")?.to_string(),
-                    item_mods: vec![],
-                    durability: break_child.metadata_i64("itemDurability")?,
-                    health: break_child.metadata_i64("itemHealthAfter")?,
-                    player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
-                    player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
-                    player_rating: break_child.metadata_f64("playerRating")?,
-                    team_id,
-                    player_id: break_child.next_player_id()?,
-                    sub_event: break_child.as_sub_event(),
-                };
+                        let item_breaks = ItemDamaged {
+                            item_id: break_child.metadata_uuid("itemId")?,
+                            item_name: break_child.metadata_str("itemName")?.to_string(),
+                            item_mods: vec![],
+                            durability: break_child.metadata_i64("itemDurability")?,
+                            health: break_child.metadata_i64("itemHealthAfter")?,
+                            player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
+                            player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
+                            player_rating: break_child.metadata_f64("playerRating")?,
+                            team_id,
+                            player_id: break_child.next_player_id()?,
+                            sub_event: break_child.as_sub_event(),
+                        };
 
-                (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks))
-            } else {
-                // I'm hoping that detectives only sense something fishy if the attack hit
-                // TODO: If this is true, move the something fishy inside the effect
-                let mut chomp_child = event.next_child(EventType::PlayerStatDecrease)?;
-                let team_id = chomp_child.next_team_id()?;
-                (team_id, ConsumerAttackEffect::Chomp {
-                    rating_before: chomp_child.metadata_f64("before")?,
-                    rating_after: chomp_child.metadata_f64("after")?,
-                    sub_event: chomp_child.as_sub_event(),
-                })
-            };
-            let sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
-                .map(|mut fishy_event| {
-                    let detective_name = fishy_event.next_parse(parse_terminated(" sensed something fishy."))?;
-                    ParseOk(DetectiveActivity {
-                        detective_id: fishy_event.next_player_id()?,
-                        detective_name: detective_name.to_string(),
-                        sub_event: fishy_event.as_sub_event(),
-                    })
-                })
-                .transpose()?;
+                        (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks))
+                    } else {
+                        // I'm hoping that detectives only sense something fishy if the attack hit
+                        // TODO: If this is true, move the something fishy inside the effect
+                        let mut chomp_child = event.next_child(EventType::PlayerStatDecrease)?;
+                        let team_id = chomp_child.next_team_id()?;
+                        (team_id, ConsumerAttackEffect::Chomp {
+                            rating_before: chomp_child.metadata_f64("before")?,
+                            rating_after: chomp_child.metadata_f64("after")?,
+                            sub_event: chomp_child.as_sub_event(),
+                        })
+                    };
+                    let sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
+                        .map(|mut fishy_event| {
+                            let detective_name = fishy_event.next_parse(parse_terminated(" sensed something fishy."))?;
+                            ParseOk(DetectiveActivity {
+                                detective_id: fishy_event.next_player_id()?,
+                                detective_name: detective_name.to_string(),
+                                sub_event: fishy_event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
 
 
-            FedEventData::ConsumerAttack {
-                game: event.game(unscatter, attractor_secret_base)?,
-                team_id,
-                player_id: event.next_player_id()?,
-                player_name_all_caps: player_name.to_string(),
-                effect,
-                sensed_something_fishy,
-                scattered,
+                    FedEventData::ConsumerAttack {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id,
+                        player_id: event.next_player_id()?,
+                        player_name_all_caps: player_name.to_string(),
+                        effect,
+                        sensed_something_fishy,
+                        scattered,
+                    }
+                }
+                ParsedConsumerAttack::ConsumerExpelled => {
+                    FedEventData::ConsumerExpelled {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        player_id: event.next_player_id()?,
+                    }
+                }
             }
         }
         EventType::EchoChamber => {

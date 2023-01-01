@@ -3597,6 +3597,16 @@ pub enum FedEventData {
         /// Internal name of the mod that had originally added the removed mods
         source_mod_id: String,
     },
+
+    /// A Consumer was expelled by Salmon Cannons
+    #[serde(rename_all = "camelCase")]
+    ConsumerExpelled {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of player who was targeted by the Consumer
+        player_id: Uuid,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6683,6 +6693,14 @@ impl FedEvent {
                     .collect());
 
                 eb.build(EventType::RemovedModsFromAnotherMod)
+            }
+            FedEventData::ConsumerExpelled { game, player_id } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("SALMON CANNONS FIRE");
+                eb.push_description("CONSUMER EXPELLED");
+                eb.push_player_tag(player_id);
+                eb.build(EventType::ConsumersAttack)
             }
         }
     }
