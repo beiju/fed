@@ -96,6 +96,10 @@ struct StructField {
 
 impl StructField {
     pub fn to_field_with_attrs(&self, allowed_attrs: &[&str]) -> Field {
+        self.to_field_with_attrs_vis(allowed_attrs, None)
+    }
+
+    pub fn to_field_with_attrs_vis(&self, allowed_attrs: &[&str], force_visible: Option<&Visibility>) -> Field {
         Field {
             attrs: self.attrs.iter()
                 .filter_map(|attr| {
@@ -112,7 +116,9 @@ impl StructField {
                     }
                 })
                 .collect(),
-            vis: parse_str(&self.vis).expect("Error parsing field vis"),
+            vis: force_visible.cloned().unwrap_or_else(|| {
+                parse_str(&self.vis).expect("Error parsing field vis")
+            }),
             ident: parse_str(&self.name).expect("Error parsing field ident"),
             colon_token: Some(Default::default()),
             ty: parse_str(&self.ty).expect("Error parsing field type"),
@@ -153,6 +159,7 @@ struct FlattenableEnumMeta {
 struct FlattenEnumMeta {
     item_vis: String,
     name: String,
+    flatten_item_vis: String,
     flatten_item_name: String,
     flatten_item_type: String,
     fields: Vec<StructField>,
@@ -189,14 +196,14 @@ fn store_struct(ty: &Type, st: FlattenEnumMeta) {
 }
 
 fn impl_enum_flatten_for_struct(item_vis: Visibility, name: Ident, s: DataStruct, flatten_field_name: Ident) -> Result<TokenStream2> {
-    let flatten_field_type = match &s.fields {
+    let (flatten_field_vis, flatten_field_type) = match &s.fields {
         Fields::Named(fields) => {
             fields.named.iter()
                 .filter_map(|field| {
                     let field_name = field.ident.as_ref()
                         .expect("I think this should always exist within a struct with named fields");
                     if field_name == &flatten_field_name {
-                        Some(&field.ty)
+                        Some((&field.vis, &field.ty))
                     } else {
                         None
                     }
@@ -224,6 +231,7 @@ fn impl_enum_flatten_for_struct(item_vis: Visibility, name: Ident, s: DataStruct
     let st = FlattenEnumMeta {
         item_vis: item_vis.to_token_stream().to_string(),
         name: name.to_string(),
+        flatten_item_vis: flatten_field_vis.to_token_stream().to_string(),
         flatten_item_name: flatten_field_name.to_string(),
         flatten_item_type: flatten_field_type.to_token_stream().to_string(),
         fields,
@@ -297,6 +305,7 @@ fn impl_enum_flattenable_for_enum(name: Ident, e: DataEnum) -> Result<TokenStrea
 fn generate_enum_flatten_impl(st: FlattenEnumMeta, en: FlattenableEnumMeta) -> Result<TokenStream2> {
     let struct_vis: Visibility = parse_str(&st.item_vis).expect("Error parsing struct_vis");
     let struct_name: Ident = parse_str(&st.name).expect("Error parsing struct_name");
+    let flattened_field_vis: Visibility = parse_str(&st.flatten_item_vis).expect("Error parsing flatten item vis");
     let flattened_field_name: Ident = parse_str(&st.flatten_item_name).expect("Error parsing flatten item name");
     let flattened_field_type: Type = parse_str(&st.flatten_item_type).expect("Error parsing flatten item type");
     let flat_enum_name = Ident::new(&format!("{}Flat", st.name), Span::call_site());
@@ -311,7 +320,7 @@ fn generate_enum_flatten_impl(st: FlattenEnumMeta, en: FlattenableEnumMeta) -> R
             let variant_name: Ident = parse_str(&variant.name).expect("Error parsing variant name");
             let child_struct_name = Ident::new(&format!("{}{}", st.name, variant.name), Span::call_site());
             let child_fields: Vec<_> = variant.fields.iter()
-                .map(|field| field.to_field_with_attrs(&PROPAGATED_ATTRS))
+                .map(|field| field.to_field_with_attrs_vis(&PROPAGATED_ATTRS, Some(&flattened_field_vis)))
                 .collect();
 
             quote! {
