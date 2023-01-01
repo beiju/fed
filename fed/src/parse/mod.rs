@@ -221,6 +221,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                     }
                 }
+                ParsedWalk::MindTrick(batter_name) => {
+                    FedEventData::MindTrickWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        batter_id: event.next_player_id()?,
+                        batter_name: batter_name.to_string(),
+                    }
+                }
             }
         }
         EventType::Strikeout => {

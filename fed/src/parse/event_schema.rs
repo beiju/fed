@@ -3645,6 +3645,28 @@ pub enum FedEventData {
         /// Metadata for the sub-event that adds the Overperforming mod
         sub_event: SubEvent,
     },
+
+    /// Walk as a result of a Mind Trick
+    #[serde(rename_all = "camelCase")]
+    MindTrickWalk {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the batter that did the mind trick
+        batter_id: Uuid,
+
+        /// Name of the batter that did the mind trick
+        batter_name: String,
+
+        // /// Meta about the pitcher's item breaking, if it broke, otherwise null.
+        // pitcher_item_damage: Option<ItemDamaged>,
+        //
+        // /// Meta about the batter's item breaking, if it broke, otherwise null.
+        // batter_item_damage: Option<ItemDamaged>,
+        //
+        // #[serde(flatten)]
+        // scores: Scores,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6773,6 +6795,15 @@ impl FedEvent {
                     child.build(EventType::AddedModFromOtherMod)
                 });
                 eb.build(EventType::Earlbird)
+            }
+            FedEventData::MindTrickWalk { game, batter_id, batter_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{batter_name} strikes out looking."));
+                eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
+                eb.push_description("The umpire sends them to first base.");
+                eb.push_player_tag(batter_id);
+                eb.build(EventType::Walk)
             }
         }
     }

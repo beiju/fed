@@ -436,12 +436,14 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<i32>)),
     Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
+    MindTrick(&'s str),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     alt((
         parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
         parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
+        parse_mind_trick_walk.map(|res| ParsedWalk::MindTrick(res)),
     )).parse(input)
 }
 
@@ -495,6 +497,16 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
     let (input, _) = tag(" walks to first base.").parse(input)?;
 
     Ok((input, (broken_item, batter_name, pitcher_name)))
+}
+
+pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<&str> {
+    // I'm gonna need to incorporate items in this at some point
+    let (input, batter_name) = parse_terminated(" strikes out looking.\n").parse(input)?;
+    let (input, _) = tag(batter_name).parse(input)?;
+    // TODO mind trick base instincts?
+    let (input, _) = tag(" uses a Mind Trick!\nThe umpire sends them to first base.").parse(input)?;
+
+    Ok((input, batter_name))
 }
 
 pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
