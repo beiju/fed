@@ -5,9 +5,9 @@ use nom::combinator::opt;
 use nom::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamaged, ModChangeSubEvent, ModChangeSubEventWithPlayer, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
+use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamaged, ModChangeSubEvent, ModChangeSubEventWithPlayer, GamePitch, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
 use crate::parse::{is_known_team_nickname, ParseOk};
-use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, parse_terminated, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -483,11 +483,11 @@ impl<'e> EventParseWrapper<'e> {
         self.parse_scores_with_scoring_players(scoring_players)
     }
 
-    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<String>, String, Option<String>)>) -> Result<Scores, FeedParseError> {
+    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>)>) -> Result<Scores, FeedParseError> {
         let scores = scoring_players.into_iter()
             .map(|(player_id, item_name, player_name, attraction)| {
                 let item_damage = item_name
-                    .map(|_name| self.next_item_damage())
+                    .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
                 let attraction = attraction
                     .map(|team_nickname| {
@@ -517,12 +517,12 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<String>, String, Option<String>)>, FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>)>, FeedParseError> {
         let scorers = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
             .map(|score| {
                 ParseOk((self.next_player_id()?,
-                         score.damaged_item_name.map(str::to_string),
+                         score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                          score.player_name.to_string(),
                          score.attraction.map(str::to_string),
                 ))
@@ -531,12 +531,13 @@ impl<'e> EventParseWrapper<'e> {
         Ok(scoring_players)
     }
 
-    pub fn next_item_damage(&mut self) -> Result<ItemDamaged, FeedParseError> {
+    pub fn next_item_damage(&mut self, item_name_plural: Option<bool>) -> Result<ItemDamaged, FeedParseError> {
         let mut damage_child = self.next_child_any(&[EventType::ItemDamaged, EventType::ItemBreaks])?;
 
         Ok(ItemDamaged {
             item_id: damage_child.metadata_uuid("itemId")?,
             item_name: damage_child.metadata_str("itemName")?.to_string(),
+            item_name_plural,
             item_mods: vec![],
             durability: damage_child.metadata_i64("itemDurability")?,
             health: damage_child.metadata_i64("itemHealthAfter")?,
@@ -551,16 +552,16 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_item_damage(&mut self, batter_name: &str) -> Result<Option<ItemDamaged>, FeedParseError> {
         self.next_parse(opt(parse_item_damage(batter_name, (self.season, self.day) < (15, 3))))?
-            .map(|_item_name| {
-                self.next_item_damage()
+            .map(|(_item_name, item_name_pural)| {
+                self.next_item_damage(item_name_pural)
             })
             .transpose()
     }
 
     pub fn parse_item_damage_and_name(&mut self, newline_before: bool) -> Result<Option<(String, ItemDamaged)>, FeedParseError> {
         self.next_parse(opt(parse_item_damage_unknown_name((self.season, self.day) < (15, 3), newline_before)))?
-            .map(|(_item_name, player_name)| {
-                Ok((player_name.to_string(), self.next_item_damage()?))
+            .map(|(_item_name, item_name_plural, player_name)| {
+                Ok((player_name.to_string(), self.next_item_damage(item_name_plural)?))
             })
             .transpose()
     }
@@ -571,6 +572,15 @@ impl<'e> EventParseWrapper<'e> {
             broken_items.push(d);
         }
         Ok(broken_items)
+    }
+    
+    pub fn parse_pitch(&mut self) -> Result<GamePitch, FeedParseError> {
+        let double_strike = self.next_parse_opt(parse_terminated(" fires a Double Strike!\n"))
+            .map(|player_name| player_name.to_string());
+        
+        Ok(GamePitch {
+            double_strike,
+        })
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

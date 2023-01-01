@@ -215,16 +215,16 @@ pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, HitBases, Option<&str>, Option<(&str, &str)>)> {
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, HitBases, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
-    let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, player_name)) = broke {
+    let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, broken_item_name_plural, player_name)) = broke {
         let (input, item_was_batters) = opt(tag(player_name)).parse(input)?;
         let (input, batter_name, batter_item_broke, pitcher_item_broke) = if item_was_batters.is_some() {
             let (input, _) = tag(" hits a ").parse(input)?;
-            (input, player_name, Some(broken_item_name), None)
+            (input, player_name, Some((broken_item_name, broken_item_name_plural)), None)
         } else {
             let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
-            (input, batter_name, None, Some((broken_item_name, player_name)))
+            (input, batter_name, None, Some((broken_item_name, broken_item_name_plural, player_name)))
         };
 
         (input, batter_name, batter_item_broke, pitcher_item_broke)
@@ -279,7 +279,7 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
 }
 
 pub(crate) struct ParsedScore<'a> {
-    pub(crate) damaged_item_name: Option<&'a str>,
+    pub(crate) damaged_item_name: Option<(&'a str, Option<bool>)>,
     pub(crate) player_name: &'a str,
     pub(crate) attraction: Option<&'a str>,
 }
@@ -296,11 +296,11 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl 
     move |input| {
         let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
-        let (input, (damaged_item_name, player_name)) = if let Some((item_name, player_name)) = item {
+        let (input, (damaged_item_name, player_name)) = if let Some((item_name, item_name_plural, player_name)) = item {
             let (input, _) = tag(player_name).parse(input)?;
             let (input, _) = tag(score_label).parse(input)?;
 
-            (input, (Some(item_name), player_name))
+            (input, (Some((item_name, item_name_plural)), player_name))
         } else {
             let (input, name) = parse_terminated(score_label).parse(input)?;
             (input, (None, name))
@@ -435,7 +435,7 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 
 pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<i32>)),
-    Charm((Option<(ActivePositionType, &'s str)>, &'s str, &'s str)),
+    Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -465,12 +465,12 @@ pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<i32
     Ok((input, (batter_name, base_instincts)))
 }
 
-pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePositionType, &str)>, &str, &str)> {
+pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePositionType, &str, Option<bool>)>, &str, &str)> {
     // This will need to be updated if anyone charms in a run
     // Resim data makes me think that maybe the pitcher's item could be damaged twice (once as the
     // pitcher and once as the charmer) but I'm not going to worry about that right now
     let (input, broken_item) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
-    let (input, item_name, batter_name, pitcher_name) = if let Some((item_name, player_name)) = broken_item {
+    let (input, broken_item, batter_name, pitcher_name) = if let Some((item_name, item_name_plural, player_name)) = broken_item {
         // We don't yet know which player broke the item
         // Try batter first
         let (input, batter_was_damaged) = opt(tag(player_name)).parse(input)?;
@@ -478,13 +478,13 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
             let (input, _) = tag(" charms ").parse(input)?;
             let (input, pitcher_name) = parse_terminated("!\n").parse(input)?;
             // Player is batter in this case
-            (input, Some((ActivePositionType::Lineup, item_name)), player_name, pitcher_name)
+            (input, Some((ActivePositionType::Lineup, item_name, item_name_plural)), player_name, pitcher_name)
         } else {
             let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
             let (input, _) = tag(player_name).parse(input)?;
             let (input, _) = tag("!\n").parse(input)?;
             // Player is pitcher in this case
-            (input, Some((ActivePositionType::Rotation, item_name)), batter_name, player_name)
+            (input, Some((ActivePositionType::Rotation, item_name, item_name_plural)), batter_name, player_name)
         }
     } else {
         let (input, batter_name) = parse_terminated(" charms ").parse(input)?;
@@ -494,7 +494,7 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
     let (input, _) = tag(batter_name).parse(input)?;
     let (input, _) = tag(" walks to first base.").parse(input)?;
 
-    Ok((input, (item_name, batter_name, pitcher_name)))
+    Ok((input, (broken_item, batter_name, pitcher_name)))
 }
 
 pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
@@ -1575,33 +1575,34 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
     Ok((input, (player_name, mod_)))
 }
 
-pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline_before: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, &'a str)> {
+pub(crate) fn parse_item_damage_unknown_name<'a>(extra_space: bool, newline_before: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, Option<bool>, &'a str)> {
     move |input| {
         let (input, _) = if newline_before { tag("\n").parse(input)? } else { (input, "") };
         let (input, _) = if extra_space { tag(" ").parse(input)? } else { (input, "") };
         let (input, player_name) = alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)?;
-        let (input, item_name) = alt((
-            parse_terminated(" was damaged."),
-            parse_terminated(" were damaged."),
-            parse_terminated(" broke!"),
+        let (input, (item_name, item_name_plural)) = alt((
+            parse_terminated(" was damaged.").map(|n| (n, Some(false))),
+            parse_terminated(" were damaged.").map(|n| (n, Some(true))),
+            parse_terminated(" broke!").map(|n| (n, None)),
         )).parse(input)?;
         let (input, _) = if !newline_before { tag("\n").parse(input)? } else { (input, "") };
 
-        Ok((input, (item_name, player_name)))
+        Ok((input, (item_name, item_name_plural, player_name)))
     }
 }
 
-pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<&'a str> + '_ {
+pub(crate) fn parse_item_damage<'a>(player_name: &str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(&'a str, Option<bool>)> + '_ {
     move |input| {
         let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = alt((tag("'s "), tag("' "))).parse(input)?;
-        let (input, item_name) = alt((
-            parse_terminated(" was damaged."),
-            parse_terminated(" broke!"),
+        let (input, (item_name, item_name_plural)) = alt((
+            parse_terminated(" was damaged.").map(|n| (n, Some(false))),
+            parse_terminated(" were damaged.").map(|n| (n, Some(true))),
+            parse_terminated(" broke!").map(|n| (n, None)),
         )).parse(input)?;
 
-        Ok((input, item_name))
+        Ok((input, (item_name, item_name_plural)))
     }
 }
 

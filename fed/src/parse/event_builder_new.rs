@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, DetectiveActivity, FreeRefill, GameEvent, ItemDamaged, ItemGained, ItemRepaired, ModDuration, Scores, ScoringPlayer, SpicyStatus, StatChangeCategory, StoppedInhabiting, SubEvent};
+use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEventWithPlayer, ModDuration, Scores, ScoringPlayer, SpicyStatus, StatChangeCategory, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -206,8 +206,10 @@ impl EventBuilder {
     }
 
     fn push_item_damage_impl(&mut self, dmg: ItemDamaged, player_name: &str) {
-        let description = format!("{} {} {}", Possessive(player_name), dmg.item_name,
-                                  if dmg.health == 0 { "broke!" } else { "was damaged." });
+        let description = format!("{}{} {dmg}",
+                                  // bug-for-bug compatibility :)
+                                  if (self.0.season, self.0.day) < (15, 3) { " " } else { "" },
+                                  Possessive(player_name));
         self.push_description(&description);
         self.push_child(dmg.sub_event, |mut child| {
             child.push_description(&description);
@@ -291,6 +293,7 @@ impl EventBuilder {
     pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, score_label: &str) {
         for scorer in scorers {
             self.push_player_tag(scorer.player_id);
+            self.push_item_damage(scorer.item_damage, &scorer.player_name);
             self.push_description(&format!("{} {score_label}", scorer.player_name));
             self.push_attraction(scorer.attraction, &scorer.player_name, scorer.player_id);
         }
@@ -319,6 +322,52 @@ impl EventBuilder {
                     })
                 }
             }
+        }
+    }
+
+    pub fn push_cooled_off(&mut self, cooled_off: Option<ModChangeSubEventWithPlayer>, player_name: &str) {
+        if let Some(co) = cooled_off {
+            let description = format!("{player_name} cooled off.");
+            self.push_description(&description);
+            self.push_player_tag(co.player_id);
+            self.set_category(EventCategory::Special);
+            self.push_child(co.sub_event, |mut child| {
+                child.push_description(&description);
+                child.push_player_tag(co.player_id);
+                child.push_team_tag(co.team_id);
+                child.push_metadata_str("mod", "ON_FIRE");
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(EventType::RemovedMod)
+            })
+        }
+    }
+
+    pub fn push_batter_debt(&mut self, batter_debt: Option<BatterDebt>, batter_name: &str, fielder_name: &str) {
+        if let Some(bd) = batter_debt {
+            self.push_description(&format!("{batter_name} hit a ball at {fielder_name}..."));
+            let common_description = format!("{fielder_name} is now being Observed.");
+            self.push_description(&common_description);
+            self.push_player_tag(bd.batter_id);
+            self.push_player_tag(bd.fielder_id);
+            self.set_category(EventCategory::Special);
+            if let Some(mod_change) = bd.sub_event {
+                // I tried extracting this as a method but I was passing all but one value in as a
+                // separate parameter so it didn't make sense
+                self.push_child(mod_change.sub_event, |mut child| {
+                    child.push_description(&common_description);
+                    child.push_player_tag(bd.fielder_id);
+                    child.push_team_tag(mod_change.team_id);
+                    child.push_metadata_str("mod", "COFFEE_PERIL");
+                    child.push_metadata_i64("type", ModDuration::Weekly as i64);
+                    child.build(EventType::AddedMod)
+                })
+            }
+        }
+    }
+
+    pub fn push_pitch(&mut self, pitch: GamePitch) {
+        if let Some(pitcher_name) = pitch.double_strike {
+            self.push_description(&format!("{pitcher_name} fires a Double Strike!"));
         }
     }
 

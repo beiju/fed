@@ -66,6 +66,13 @@ pub struct GameEvent {
     pub attractor_secret_base: Option<PlayerInfo>,
 }
 
+/// Pitch data. The normal-baseball game events all have one of these.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GamePitch {
+    /// If a Double Strike was fired, the name of the pitcher who fired it. Otherwise null.
+    pub double_strike: Option<String>,
+}
 
 // impl GameEvent {
 //     pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
@@ -989,6 +996,10 @@ pub struct ItemDamaged {
     /// Name of item that was damaged
     pub item_name: String,
 
+    /// Whether the item name is plural, if known. This is extracted from the message text and not
+    /// all messages are phrased in a way that indicate the item's plurality.
+    pub item_name_plural: Option<bool>,
+
     /// Mods bestowed by item that was damaged
     pub item_mods: Vec<String>,
 
@@ -1019,18 +1030,11 @@ pub struct ItemDamaged {
     pub sub_event: SubEvent,
 }
 
-// Super hacky and it's not going to stay for long
-const PLURAL_ITEMS: [&str; 3] = [
-    "Inflatable Sunglasses",
-    "Shoes of Blaserunning",
-    "Cryogenic Shoes",
-];
-
 impl Display for ItemDamaged {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.health == 0 {
             write!(f, "{} broke!", self.item_name)
-        } else if PLURAL_ITEMS.iter().any(|&i| i == &self.item_name) {
+        } else if self.item_name_plural.unwrap() {
             write!(f, "{} were damaged.", self.item_name)
         } else {
             write!(f, "{} was damaged.", self.item_name)
@@ -1483,6 +1487,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of player who hit the ground out
         batter_name: String,
 
@@ -1526,6 +1533,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of batter who hit into the fielder's choice
         batter_name: String,
 
@@ -1558,6 +1568,9 @@ pub enum FedEventData {
     DoublePlay {
         #[serde(flatten)]
         game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
 
         /// Name of batter who hit into the double play
         batter_name: String,
@@ -4134,25 +4147,40 @@ impl FedEvent {
                     .named_item_damage_before_event(&damaged_items)
                     .build()
             }
-            FedEventData::GroundOut { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
-                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
+                // "stopped inhabiting" is not in the middle of the scores for this event
+                eb.push_scores(scores, "advances on the sacrifice.", None);
+                // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
+                // definitely somewhere after scores. Rest of the order is not yet known
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_item_damage(fielder_item_damage, &fielder_name);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_cooled_off(cooled_off, &batter_name);
+                eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
+                eb.build(EventType::GroundOut)
 
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                        description: format!("{batter_name} hit a ground out to {fielder_name}.{suffix}"),
-                        player_tags,
-                        ..Default::default()
-                    })
-                    .scores(&scores, " advances on the sacrifice.")
-                    .stopped_inhabiting(&stopped_inhabiting)
-                    .cooled_off(&cooled_off, &batter_name)
-                    .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                    .named_item_damage_before_score(&pitcher_item_damage)
-                    .item_damage_after_score(&batter_item_damage, &batter_name)
-                    .children(observed_child)
-                    .build()
+                // let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
+                //
+                // event_builder.for_game(&game)
+                //     .fill(EventBuilderUpdate {
+                //         r#type: ,
+                //         category: ,
+                //         player_tags,
+                //         ..Default::default()
+                //     })
+                //     .scores(&scores, )
+                //     .stopped_inhabiting(&stopped_inhabiting)
+                //     .cooled_off(&cooled_off, &batter_name)
+                //     .item_damage_before_score(&fielder_item_damage, &fielder_name)
+                //     .named_item_damage_before_score(&pitcher_item_damage)
+                //     .item_damage_after_score(&batter_item_damage, &batter_name)
+                //     .children(observed_child)
+                //     .build()
             }
             FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, ref runner_item_damage, is_special } => {
                 let blaserunning_str = if blaserunning {
@@ -4257,7 +4285,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::FieldersChoice { ref game, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
+            FedEventData::FieldersChoice { ref game, ref pitch, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,
@@ -4292,7 +4320,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::DoublePlay { ref game, ref batter_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
+            FedEventData::DoublePlay { ref game, ref pitch, ref batter_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
                 event_builder.for_game(game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::GroundOut,

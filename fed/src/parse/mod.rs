@@ -203,11 +203,11 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let scores = event.parse_scores(" scores!")?;
                     let (batter_item_damage, pitcher_item_damage) = match broken_item {
                         None => { (None, None) }
-                        Some((ActivePositionType::Lineup, _item_name)) => {
-                            (Some(event.next_item_damage()?), None)
+                        Some((ActivePositionType::Lineup, _item_name, item_name_damage)) => {
+                            (Some(event.next_item_damage(item_name_damage)?), None)
                         }
-                        Some((ActivePositionType::Rotation, _item_name)) => {
-                            (None, Some(event.next_item_damage()?))
+                        Some((ActivePositionType::Rotation, _item_name, item_name_damage)) => {
+                            (None, Some(event.next_item_damage(item_name_damage)?))
                         }
                     };
 
@@ -292,18 +292,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::GroundOut => {
+            let pitch = event.parse_pitch()?;
             match event.next_parse(parse_ground_out)? {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
-                    let fielder_item_damage = event.parse_item_damage(fielder_name)?;
-                    // just guessing about where this belongs
-                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
+                    // Damages definitely belong after scores and in this order but not sure if any
+                    // other events come in between
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
+                    let fielder_item_damage = event.parse_item_damage(fielder_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         fielder_name: fielder_name.to_string(),
                         scores,
@@ -325,6 +328,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::FieldersChoice {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         runner_out_name: runner_out_name.to_string(),
                         batter_name: batter_name.to_string(),
                         out_at_base: base,
@@ -340,6 +344,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::DoublePlay {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         scores,
                         stopped_inhabiting,
@@ -408,13 +413,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (batter_name, hit_bases, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
             // resim research says pitcher goes first
             let pitcher_item_damage = pitcher_item_broke
-                .map(|(_item_name, player_name)| {
-                    event.next_item_damage().map(|d| (player_name.to_string(), d))
+                .map(|(_item_name, item_name_plural, player_name)| {
+                    event.next_item_damage(item_name_plural).map(|d| (player_name.to_string(), d))
                 })
                 .transpose()?;
             let batter_item_damage = batter_item_broke
-                .map(|_item_name| {
-                    event.next_item_damage()
+                .map(|(_item_name, item_name_plural)| {
+                    event.next_item_damage(item_name_plural)
                 })
                 .transpose()?;
 
@@ -1315,7 +1320,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ConsumersAttack => {
             match event.next_parse(parse_consumer_attack)? {
                 ParsedConsumerAttack::Normal((player_name, item_breaks, scattered)) => {
-
                     let (team_id, effect) = if item_breaks.is_some() {
                         let mut break_child = event.next_child_any(&[EventType::ItemBreaks, EventType::ItemDamaged])?;
                         let team_id = break_child.next_team_id()?;
@@ -1323,6 +1327,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         let item_breaks = ItemDamaged {
                             item_id: break_child.metadata_uuid("itemId")?,
                             item_name: break_child.metadata_str("itemName")?.to_string(),
+                            item_name_plural: None,
                             item_mods: vec![],
                             durability: break_child.metadata_i64("itemDurability")?,
                             health: break_child.metadata_i64("itemHealthAfter")?,
