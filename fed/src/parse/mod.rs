@@ -794,8 +794,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::CoffeeBean => {
-            let (player_name, roast, notes, wired, gained) = event.next_parse(parse_coffee_bean)?;
-            let mut sub_event = event.next_child_any(&[EventType::AddedMod, EventType::ModChange])?;
+            let (player_name, roast, notes, wired, gained_mod) = event.next_parse(parse_coffee_bean)?;
+            let mut sub_event = event.next_child_any(&[EventType::AddedMod, EventType::ModChange, EventType::RemovedMod])?;
             let player_id = event.next_player_id()?;
             let prev_mod = if sub_event.event_type == EventType::ModChange {
                 let mod_str = sub_event.metadata_str("to")?;
@@ -817,7 +817,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 roast: roast.to_string(),
                 notes: notes.to_string(),
                 which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
-                has_mod: gained,
+                gained_mod,
                 sub_event: sub_event.as_sub_event(),
                 team_id: sub_event.next_team_id_opt(),
                 previous: prev_mod.map(|s| s.try_into()

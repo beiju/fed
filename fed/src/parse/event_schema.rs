@@ -1975,8 +1975,8 @@ pub enum FedEventData {
         /// Which mod the player was Beaned by
         which_mod: CoffeeBeanMod,
 
-        /// Whether the player already has the mod (if it is, the mod will be removed)
-        has_mod: bool,
+        /// True if the player gained the mod, false if they lost it
+        gained_mod: bool,
 
         /// Metadata of the sub-event associated with adding or removing the Tired/Wired mod
         sub_event: SubEvent,
@@ -4455,18 +4455,25 @@ impl FedEvent {
                     .scores(scores, " scores!")
                     .build()
             }
-            FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, has_mod, ref sub_event, team_id, ref previous } => {
-                let change_str = if has_mod { "is" } else { "is no longer" };
-                let mod_str = match which_mod {
-                    CoffeeBeanMod::Wired => { "Wired!" }
-                    CoffeeBeanMod::Tired => { "Tired." }
+            FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, gained_mod, ref sub_event, team_id, ref previous } => {
+                let change_str = match (gained_mod, which_mod) {
+                    (true, CoffeeBeanMod::Wired) => { "is Wired!" }
+                    (true, CoffeeBeanMod::Tired) => { "is Tired." }
+                    (false, CoffeeBeanMod::Wired) => { "is no longer Wired." }
+                    (false, CoffeeBeanMod::Tired) => { "is no longer Tired!" }
                 };
                 let mod_id = which_mod.to_str();
                 let child = EventBuilderChild::new(sub_event)
                     .update(EventBuilderUpdate {
-                        r#type: if previous.is_some() { EventType::ModChange } else { EventType::AddedMod },
+                        r#type: if previous.is_some() {
+                            EventType::ModChange
+                        } else if gained_mod {
+                            EventType::AddedMod
+                        } else {
+                            EventType::RemovedMod
+                        },
                         category: EventCategory::Changes,
-                        description: format!("{player_name} {change_str} {mod_str}"),
+                        description: format!("{player_name} {change_str}"),
                         team_tags: team_id.into_iter().collect(),
                         player_tags: vec![player_id],
                         ..Default::default()
@@ -4491,7 +4498,7 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::CoffeeBean,
                         category: EventCategory::Special,
-                        description: format!("{player_name} is Beaned by a {roast} roast with {notes}.\n{player_name} {change_str} {mod_str}"),
+                        description: format!("{player_name} is Beaned by a {roast} roast with {notes}.\n{player_name} {change_str}"),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })
