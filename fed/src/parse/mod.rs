@@ -224,6 +224,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Strikeout => {
+            let pitch = event.parse_pitch()?;
             match event.next_parse(parse_strikeout)? {
                 ParsedStrikeout::Swinging(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -231,6 +232,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
                         pitcher_item_damage,
@@ -244,6 +246,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let free_refill = event.parse_free_refill()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         stopped_inhabiting,
                         pitcher_item_damage,

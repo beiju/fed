@@ -1728,6 +1728,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of batter who struck out swinging
         batter_name: String,
 
@@ -1754,6 +1757,9 @@ pub enum FedEventData {
     StrikeoutLooking {
         #[serde(flatten)]
         game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
 
         /// Name of batter who struck out looking
         batter_name: String,
@@ -4211,18 +4217,20 @@ impl FedEvent {
                     .item_damage_after_score(runner_item_damage, runner_name)
                     .build()
             }
-            FedEventData::StrikeoutSwinging { game, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+            FedEventData::StrikeoutSwinging { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
+                eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out swinging.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::StrikeoutLooking { game, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
+                eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out looking.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
