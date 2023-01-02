@@ -1414,6 +1414,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Number of balls in the count
         balls: i32,
 
@@ -1430,6 +1433,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Number of balls in the count
         balls: i32,
 
@@ -1445,6 +1451,9 @@ pub enum FedEventData {
     StrikeFlinching {
         #[serde(flatten)]
         game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
 
         /// Number of balls in the count
         balls: i32,
@@ -4064,35 +4073,29 @@ impl FedEvent {
                     .named_item_damage_before_score(batter_item_damage.as_ref())
                     .build()
             }
-            FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strike,
-                        description: format!("Strike, swinging. {balls}-{strikes}"),
-                        ..Default::default()
-                    })
-                    .named_item_damage_before_score(&pitcher_item_damage)
-                    .build()
+            FedEventData::StrikeSwinging { game, pitch, balls, strikes, pitcher_item_damage } => {
+                eb.set_game(game);
+                if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("Strike, swinging. {balls}-{strikes}"));
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.build(EventType::Strike)
             }
-            FedEventData::StrikeLooking { game, balls, strikes, pitcher_item_damage } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strike,
-                        description: format!("Strike, looking. {balls}-{strikes}"),
-                        ..Default::default()
-                    })
-                    .named_item_damage_before_score(&pitcher_item_damage)
-                    .build()
+            FedEventData::StrikeLooking { game, pitch, balls, strikes, pitcher_item_damage } => {
+                eb.set_game(game);
+                if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("Strike, looking. {balls}-{strikes}"));
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.build(EventType::Strike)
             }
-            FedEventData::StrikeFlinching { game, balls, strikes, pitcher_item_damage } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strike,
-                        description: format!("Strike, flinching. {balls}-{strikes}"),
-                        ..Default::default()
-                    })
-                    .named_item_damage_before_score(&pitcher_item_damage)
-                    .build()
+            FedEventData::StrikeFlinching { game, pitch, balls, strikes, pitcher_item_damage } => {
+                eb.set_game(game);
+                if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("Strike, flinching. {balls}-{strikes}"));
+                eb.push_named_item_damage(pitcher_item_damage);
+                eb.build(EventType::Strike)
             }
             FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds } => {
                 eb.set_game(game);

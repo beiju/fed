@@ -534,13 +534,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Strike => {
+            let pitch = event.parse_pitch()?;
             let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
             let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
             let game = event.game(unscatter, attractor_secret_base)?;
             match strike_type {
-                StrikeType::Swinging => FedEventData::StrikeSwinging { game, balls, strikes, pitcher_item_damage },
-                StrikeType::Looking => FedEventData::StrikeLooking { game, balls, strikes, pitcher_item_damage },
-                StrikeType::Flinching => FedEventData::StrikeFlinching { game, balls, strikes, pitcher_item_damage },
+                StrikeType::Swinging => FedEventData::StrikeSwinging { game, pitch, balls, strikes, pitcher_item_damage },
+                StrikeType::Looking => FedEventData::StrikeLooking { game, pitch, balls, strikes, pitcher_item_damage },
+                StrikeType::Flinching => FedEventData::StrikeFlinching { game, pitch, balls, strikes, pitcher_item_damage },
             }
         }
         EventType::Ball => {
