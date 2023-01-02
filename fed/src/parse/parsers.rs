@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::{EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
+use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -176,7 +176,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     },
     FieldersChoice {
         runner_out_name: &'a str,
-        base: i32,
+        base: Base,
     },
     DoublePlay {
         batter_name: &'a str,
@@ -376,7 +376,7 @@ pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
     many0(parse_free_refill).parse(input)
 }
 
-pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, bool, Option<&str>)> {
+pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, bool, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -393,13 +393,13 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, i32, bool, b
     Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill)))
 }
 
-pub(crate) fn parse_named_base(input: &str) -> ParserResult<i32> {
+pub(crate) fn parse_named_base(input: &str) -> ParserResult<Base> {
     alt((
-        tag("first").map(|_| 1),
-        tag("second").map(|_| 2),
-        tag("third").map(|_| 3),
-        tag("fourth").map(|_| 4),
-        tag("fifth").map(|_| 5),
+        tag("first").map(|_| Base::First),
+        tag("second").map(|_| Base::Second),
+        tag("third").map(|_| Base::Third),
+        tag("fourth").map(|_| Base::Fourth),
+        tag("fifth").map(|_| Base::Fifth),
     )).parse(input)
 }
 

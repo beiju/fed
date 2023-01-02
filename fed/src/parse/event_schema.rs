@@ -236,6 +236,7 @@ pub struct Inhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
+// TODO: Have a variant of this where the player name and id are inferred from the batter's
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedInhabiting {
@@ -1207,6 +1208,27 @@ impl Display for HitType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub enum Base {
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+}
+
+impl Display for Base {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Base::First => { write!(f, "first") }
+            Base::Second => { write!(f, "second") }
+            Base::Third => { write!(f, "third") }
+            Base::Fourth => { write!(f, "fourth") }
+            Base::Fifth => { write!(f, "fifth") }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HomeRunType {
     Solo,
@@ -1606,8 +1628,8 @@ pub enum FedEventData {
         /// Name of the runner who got out as a result of the fielder's choice
         runner_out_name: String,
 
-        /// Which base the runner was tagged out on. First base is `1`, second is `2`, etc.
-        out_at_base: i32,
+        /// Which base the runner was tagged out on
+        out_at_base: Base,
 
         #[serde(flatten)]
         scores: Scores,
@@ -1625,6 +1647,10 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// Items that were damaged, if any. Like home runs there isn't enough information to 
+        /// properly attribute the damage to pitchers, batters, fielders, and runners.
+        damaged_items: Vec<(String, ItemDamaged)>,
     },
 
     /// Double play event
@@ -1761,7 +1787,7 @@ pub enum FedEventData {
         runner_id: Uuid,
 
         /// Which base they stole
-        base_stolen: i32,
+        base_stolen: Base,
 
         /// Whether this player scored with Blaserunning
         blaserunning: bool,
@@ -1789,7 +1815,7 @@ pub enum FedEventData {
         runner_name: String,
 
         /// Which base they tried to steal
-        base_stolen: i32,
+        base_stolen: Base,
     },
 
     /// Strikeout swinging
@@ -4403,7 +4429,7 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::StolenBase,
                         category: EventCategory::special_if(blaserunning || free_refill.is_some() || is_special),
-                        description: format!("{} steals {} base!{}{}", runner_name, base_name(base_stolen), blaserunning_str, free_refill_str),
+                        description: format!("{runner_name} steals {base_stolen} base!{blaserunning_str}{free_refill_str}"),
                         player_tags: if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] },
                         ..Default::default()
                     })
@@ -4461,7 +4487,7 @@ impl FedEvent {
                 event_builder.for_game(&game)
                     .fill(EventBuilderUpdate {
                         r#type: EventType::StolenBase,
-                        description: format!("{} gets caught stealing {} base.", runner_name, base_name(base_stolen)),
+                        description: format!("{runner_name} gets caught stealing {base_stolen} base."),
                         player_tags: vec![],
                         team_tags: vec![],
                         ..Default::default()
@@ -4493,20 +4519,18 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::FieldersChoice { ref game, ref pitch, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                        description: format!("{runner_out_name} out at {} base.",
-                                             base_name(out_at_base)),
-                        description_after_score: format!("\n{batter_name} reaches on fielder's choice."),
-                        ..Default::default()
-                    })
-                    .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .cooled_off(cooled_off, batter_name)
-                    .build()
+            FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items } => {
+                eb.set_game(game);
+                if is_special { eb.set_category(EventCategory::Special); }
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_scorers(scores.scores, "scores!");
+                eb.push_named_item_damages(damaged_items);
+                eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
+                eb.push_free_refills(scores.free_refills);
+                eb.push_cooled_off(cooled_off, &batter_name);
+                eb.build(EventType::GroundOut)
             }
             FedEventData::StrikeZapped { game } => {
                 event_builder.for_game(&game)
@@ -7113,6 +7137,7 @@ impl FedEvent {
     }
 }
 
+#[deprecated = "Use a base enum instead"]
 fn base_name(base_stolen: i32) -> &'static str {
     match base_stolen {
         2 => "second",

@@ -352,6 +352,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
+                    let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let scoring_players = event.parse_scoring_players(" scores!")?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
@@ -368,6 +369,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         stopped_inhabiting,
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
+                        damaged_items
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
