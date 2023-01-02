@@ -1246,6 +1246,21 @@ impl Display for HitType {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub enum StrikeoutType {
+    Looking,
+    Swinging,
+}
+
+impl Display for StrikeoutType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StrikeoutType::Looking => { write!(f, "looking") }
+            StrikeoutType::Swinging => { write!(f, "swinging") }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -1376,6 +1391,9 @@ pub enum FedEventData {
     FoulBall {
         #[serde(flatten)]
         game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
 
         /// Number of balls in the count
         balls: i32,
@@ -3653,6 +3671,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        /// The type of strikeout this originally was (swinging or looking)
+        strikeout_type: StrikeoutType,
+
         /// Uuid of the batter that did the mind trick
         batter_id: Uuid,
 
@@ -3667,6 +3688,22 @@ pub enum FedEventData {
         //
         // #[serde(flatten)]
         // scores: Scores,
+    },
+
+    /// Strikeout as a result of a Mind Trick ("strikes out thinking")
+    #[serde(rename_all = "camelCase")]
+    MindTrickStrikeout {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the batter that was mind tricked
+        batter_id: Uuid,
+
+        /// Name of the batter that was mind tricked
+        batter_name: String,
+
+        /// Name of the pitcher that did the mind trick
+        pitcher_name: String,
     },
 }
 
@@ -4032,15 +4069,18 @@ impl FedEvent {
                     .named_item_damage_before_score(&pitcher_item_damage)
                     .build()
             }
-            FedEventData::FoulBall { game, balls, strikes, batter_item_damage } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::FoulBall,
-                        description: format!("Foul Ball. {balls}-{strikes}"),
-                        ..Default::default()
-                    })
-                    .named_item_damage_before_score(batter_item_damage.as_ref())
-                    .build()
+            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage } => {
+                eb.set_game(game);
+                let foul_ball_text = if pitch.double_strike.is_some() {
+                    eb.set_category(EventCategory::Special);
+                    "Foul Balls"
+                } else {
+                    "Foul Ball"
+                };
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{foul_ball_text}. {balls}-{strikes}"));
+                eb.push_named_item_damage(batter_item_damage);
+                eb.build(EventType::FoulBall)
             }
             FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage } => {
                 let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
@@ -6781,14 +6821,24 @@ impl FedEvent {
                 });
                 eb.build(EventType::Earlbird)
             }
-            FedEventData::MindTrickWalk { game, batter_id, batter_name } => {
+            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{batter_name} strikes out looking."));
+                eb.push_description(&format!("{batter_name} strikes out {strikeout_type}."));
                 eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
                 eb.push_player_tag(batter_id);
                 eb.build(EventType::Walk)
+            }
+            FedEventData::MindTrickStrikeout { game, batter_id, batter_name, pitcher_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{batter_name} draws a walk."));
+                eb.push_description(&format!("{pitcher_name} uses a Mind Trick!"));
+                eb.push_description(&format!("{batter_name} strikes out thinking."));
+                eb.push_player_tag(batter_id);
+                eb.push_player_tag(batter_id); // batter twice, apparently
+                eb.build(EventType::Walk) // ugh
             }
         }
     }

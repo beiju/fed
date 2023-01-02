@@ -176,8 +176,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Walk => {
-            let parsed_walk = event.next_parse(parse_walk)?;
-            match parsed_walk {
+            match event.next_parse(parse_walk)? {
                 ParsedWalk::Ordinary((batter_name, base_instincts)) => {
                     let batter_id = event.next_player_id()?;
                     let scores = event.parse_scores(" scores!")?;
@@ -221,11 +220,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         scores,
                     }
                 }
-                ParsedWalk::MindTrick(batter_name) => {
+                ParsedWalk::MindTrickStrikeoutIntoWalk((batter_name, strikeout_type)) => {
                     FedEventData::MindTrickWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        strikeout_type,
+                        batter_id: event.next_player_id()?,
+                        batter_name: batter_name.to_string(),
+                    }
+                }
+                ParsedWalk::MindTrickWalkIntoStrikeout((batter_name, pitcher_name)) => {
+                    FedEventData::MindTrickStrikeout {
                         game: event.game(unscatter, attractor_secret_base)?,
                         batter_id: event.next_player_id()?,
                         batter_name: batter_name.to_string(),
+                        pitcher_name: pitcher_name.to_string(),
                     }
                 }
             }
@@ -544,11 +552,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::FoulBall => {
+            let pitch = event.parse_pitch()?;
             // Eventually this will need very foul support, but I'll get to that when it comes up
-            let (balls, strikes) = event.next_parse(parse_foul_ball)?;
+            let (balls, strikes) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
             let batter_item_damage = event.parse_item_damage_and_name(true)?;
             FedEventData::FoulBall {
                 game: event.game(unscatter, attractor_secret_base)?,
+                pitch,
                 balls,
                 strikes,
                 batter_item_damage,

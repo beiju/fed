@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::{EchoChamberModAdded, HitType, TimeElsewhere};
+use crate::{EchoChamberModAdded, StrikeoutType, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -110,11 +110,14 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, count))
 }
 
-pub(crate) fn parse_foul_ball(input: &str) -> ParserResult<(i32, i32)> {
-    let (input, _) = tag("Foul Ball. ").parse(input)?;
-    let (input, count) = parse_count(input)?;
+pub(crate) fn parse_foul_ball(plural: bool) -> impl Fn(&str) -> ParserResult<(i32, i32)> {
+    move |input| {
+        // Plural is for a double strike
+        let (input, _) = tag(if plural { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
+        let (input, count) = parse_count(input)?;
 
-    Ok((input, count))
+        Ok((input, count))
+    }
 }
 
 pub enum StrikeType {
@@ -219,7 +222,7 @@ pub(crate) enum ParsedHitType {
     Single,
     Double,
     Triple,
-    Quadruple
+    Quadruple,
 }
 
 pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
@@ -443,14 +446,17 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<i32>)),
     Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
-    MindTrick(&'s str),
+    MindTrickStrikeoutIntoWalk((&'s str, StrikeoutType)),
+    MindTrickWalkIntoStrikeout((&'s str, &'s str)),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     alt((
-        parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
+        // mind trick strikeout must be before walk, because walk is a prefix of it
+        parse_mind_trick_strikeout.map(|res| ParsedWalk::MindTrickWalkIntoStrikeout(res)),
+        parse_mind_trick_walk.map(|res| ParsedWalk::MindTrickStrikeoutIntoWalk(res)),
         parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
-        parse_mind_trick_walk.map(|res| ParsedWalk::MindTrick(res)),
+        parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
     )).parse(input)
 }
 
@@ -506,14 +512,29 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
     Ok((input, (broken_item, batter_name, pitcher_name)))
 }
 
-pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<(&str, StrikeoutType)> {
     // I'm gonna need to incorporate items in this at some point
-    let (input, batter_name) = parse_terminated(" strikes out looking.\n").parse(input)?;
+    let (input, batter_name) = parse_terminated(" strikes out ").parse(input)?;
+    let (input, strikeout_type) = alt((
+        tag("looking").map(|_| StrikeoutType::Looking),
+        tag("swinging").map(|_| StrikeoutType::Swinging),
+    )).parse(input)?;
+    let (input, _) = tag(".\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
     // TODO mind trick base instincts?
     let (input, _) = tag(" uses a Mind Trick!\nThe umpire sends them to first base.").parse(input)?;
 
-    Ok((input, batter_name))
+    Ok((input, (batter_name, strikeout_type)))
+}
+
+pub(crate) fn parse_mind_trick_strikeout(input: &str) -> ParserResult<(&str, &str)> {
+    // I'm gonna need to incorporate items in this at some point
+    let (input, batter_name) = parse_terminated(" draws a walk.\n").parse(input)?;
+    let (input, pitcher_name) = parse_terminated(" uses a Mind Trick!\n").parse(input)?;
+    let (input, _) = tag(batter_name).parse(input)?;
+    let (input, _) = tag(" strikes out thinking.").parse(input)?;
+
+    Ok((input, (batter_name, pitcher_name)))
 }
 
 pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i32, Vec<&str>)> {
@@ -1231,7 +1252,8 @@ pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
 
 pub(crate) enum EarlbirdsChange<'a> {
     AddedToTeam(&'a str),
-    RemovedFromTeam, // This one says [object Object]. lol & lmao
+    RemovedFromTeam,
+    // This one says [object Object]. lol & lmao
     AddedToPlayer(&'a str),
     RemovedFromPlayer(&'a str),
 }
