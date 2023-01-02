@@ -230,6 +230,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         strikeout_type,
                         batter_id: event.next_player_id()?,
                         batter_name: batter_name.to_string(),
+                        scores: event.parse_scores(" scores!")?,
                     }
                 }
                 ParsedWalk::MindTrickWalkIntoStrikeout((batter_name, pitcher_name)) => {

@@ -3788,9 +3788,9 @@ pub enum FedEventData {
         //
         // /// Meta about the batter's item breaking, if it broke, otherwise null.
         // batter_item_damage: Option<ItemDamaged>,
-        //
-        // #[serde(flatten)]
-        // scores: Scores,
+
+        #[serde(flatten)]
+        scores: Scores,
     },
 
     /// Strikeout as a result of a Mind Trick ("strikes out thinking")
@@ -7028,13 +7028,14 @@ impl FedEvent {
                 });
                 eb.build(EventType::Earlbird)
             }
-            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name } => {
+            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name, scores } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{batter_name} strikes out {strikeout_type}."));
                 eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
                 eb.push_player_tag(batter_id);
+                eb.push_scores(scores, "scores!");
                 eb.build(EventType::Walk)
             }
             FedEventData::MindTrickStrikeout { game, batter_id, batter_name, pitcher_name } => {
