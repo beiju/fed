@@ -642,14 +642,15 @@ pub(crate) enum IncinerationBlockedReason {
     Fireproof,
 }
 
-pub(crate) fn parse_incineration_blocked(input: &str) -> ParserResult<(&str, IncinerationBlockedReason)> {
+pub(crate) fn parse_incineration_blocked(input: &str) -> ParserResult<(bool, &str, IncinerationBlockedReason)> {
+    let (input, is_magmatic) = opt(tag("Nagomi Mcdaniel is Unstable!\n")).parse(input)?;
     let (input, _) = tag("Rogue Umpire tried to incinerate ").parse(input)?;
     let (input, player_name) = parse_terminated(", but ").parse(input)?;
     let (input, blocked_reason) = alt((
         pair(tag(player_name), tag(" ate the flame! They became Magmatic!")).map(|_| IncinerationBlockedReason::Magmatic),
         tag("they're Fireproof! The Umpire was incinerated instead!").map(|_| IncinerationBlockedReason::Fireproof),
     )).parse(input)?;
-    Ok((input, (player_name, blocked_reason)))
+    Ok((input, (is_magmatic.is_some(), player_name, blocked_reason)))
 }
 
 pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {

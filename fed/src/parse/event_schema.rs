@@ -2106,6 +2106,9 @@ pub enum FedEventData {
         /// Name of player who became magmatic
         player_name: String,
 
+        /// True if the player is Unstable, false otherwise
+        is_unstable: bool,
+
         /// Information about the player getting the Magmatic mod, if applicable. If the player was
         /// already Magmatic, this will be null
         magmatic_mod_added: Option<ModChangeSubEvent>,
@@ -4677,9 +4680,12 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::BecameMagmatic { game, player_id, player_name, magmatic_mod_added } => {
+            FedEventData::BecameMagmatic { game, player_id, player_name, is_unstable, magmatic_mod_added } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
+                if is_unstable {
+                    eb.push_description(&format!("{player_name} is Unstable!"));
+                }
                 eb.push_description(&format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"));
                 eb.push_player_tag(player_id);
                 if let Some(mod_added) = magmatic_mod_added {

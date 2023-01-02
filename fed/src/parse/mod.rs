@@ -1189,7 +1189,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::IncinerationBlocked => {
             // For now I only support magmatic, that may have to change
-            let (player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
+            let (is_unstable, player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
             match blocked_reason {
                 IncinerationBlockedReason::Magmatic => {
                     // If you were already magmatic, you don't get a sub-event about it
@@ -1205,6 +1205,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         game: event.game(unscatter, attractor_secret_base)?,
                         player_id: event.next_player_id()?,
                         player_name: player_name.to_string(),
+                        is_unstable,
                         magmatic_mod_added: mod_add_event,
                     }
                 }
