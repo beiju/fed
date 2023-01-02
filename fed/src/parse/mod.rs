@@ -2010,7 +2010,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // Then it's a tarot event and we can forget parsing. Thankfully
                 make_item_tarot_event(&mut event, true)?
             } else {
-                todo!()
+                // So far the only non-tarot root-level PlayerGainedItem event is community chest
+                let (player_name, _item_name) = event.next_parse(parse_community_chest)?;
+
+                FedEventData::CommunityChestOpens {
+                    item_id: event.metadata_uuid("itemId")?,
+                    item_name: event.metadata_str("itemName")?.to_string(),
+                    item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                    player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: event.metadata_f64("playerRating")?,
+                    team_id: event.next_team_id()?,
+                    player_name: player_name.to_string(),
+                    player_id: event.next_player_id()?,
+                }
             }
         }
         EventType::PlayerLostItem => {
@@ -2018,7 +2031,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // Then it's a tarot event and we can forget parsing. Thankfully
                 make_item_tarot_event(&mut event, false)?
             } else {
-                todo!()
+                let (player_name, _item_name) = event.next_parse(parse_player_dropped_item)?;
+
+                FedEventData::PlayerDropsItem {
+                    item_id: event.metadata_uuid("itemId")?,
+                    item_name: event.metadata_str("itemName")?.to_string(),
+                    item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                    player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: event.metadata_f64("playerRating")?,
+                    team_id: event.next_team_id()?,
+                    player_name: player_name.to_string(),
+                    player_id: event.next_player_id()?,
+                }
             }
         }
         EventType::ReverbFullShuffle => { todo!() }
@@ -2440,6 +2465,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }
         EventType::DamagedItemRepaired => { todo!() }
+        EventType::CommunityChestOpens => {
+            let [first, second] = event.next_parse(parse_community_chest_ingame)?;
+
+            FedEventData::CommunityChestGameMessage {
+                game: event.game(unscatter, attractor_secret_base)?,
+                first_player_name: first.0.to_string(),
+                first_player_item_name: first.1.to_string(),
+                first_player_dropped_item: first.2.map(str::to_string),
+                second_player_name: second.0.to_string(),
+                second_player_item_name: second.1.to_string(),
+                second_player_dropped_item: second.2.map(str::to_string),
+            }
+        }
         EventType::NoFreeItemSlot => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }

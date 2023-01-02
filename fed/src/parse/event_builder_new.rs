@@ -366,6 +366,7 @@ impl EventBuilder {
 
     pub fn push_pitch(&mut self, pitch: GamePitch) {
         if let Some(pitcher_name) = pitch.double_strike {
+            self.set_category(EventCategory::Special);
             self.push_description(&format!("{pitcher_name} fires a Double Strike!"));
         }
     }

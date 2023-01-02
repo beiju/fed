@@ -1778,3 +1778,38 @@ pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {
     let (input, _) = tag("!").parse(input)?;
     Ok((input, (sipper_name, sippee_name, sipped_attribute_name)))
 }
+
+pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The Community Chest Opens! ").parse(input)?;
+    let (input, player_name) = parse_terminated(" gained ").parse(input)?;
+    let (input, item_name) = parse_terminated(".").parse(input)?;
+
+    Ok((input, (player_name, item_name)))
+}
+
+pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" dropped ").parse(input)?;
+    let (input, item_name) = parse_terminated(".").parse(input)?;
+
+    Ok((input, (player_name, item_name)))
+}
+
+pub(crate) fn parse_community_chest_ingame(input: &str) -> ParserResult<[(&str, &str, Option<&str>); 2]> {
+    let (input, _) = tag("The Community Chest Opens!").parse(input)?;
+
+    let (input, first) = parse_community_chest_ingame_for_player.parse(input)?;
+    let (input, second) = parse_community_chest_ingame_for_player.parse(input)?;
+
+    Ok((input, [first, second]))
+}
+
+pub(crate) fn parse_community_chest_ingame_for_player(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, player_name) = parse_terminated(" gained ").parse(input)?;
+    let (input, (item_name, dropped_item_name)) = alt((
+        pair(parse_terminated(" and dropped "), parse_terminated(".")).map(|(g, d)| (g, Some(d))),
+        parse_terminated(".").map(|g| (g, None)),
+    )).parse(input)?;
+    
+    Ok((input, (player_name, item_name, dropped_item_name)))
+}

@@ -3836,6 +3836,102 @@ pub enum FedEventData {
         change_event: ModChangeSubEventWithNamedPlayer,
     },
 
+    /// Player gets an item from the Community Chest
+    #[serde(rename_all = "camelCase")]
+    CommunityChestOpens {
+        /// Uuid of item that was gained
+        item_id: Uuid,
+
+        /// Name of item that was gained
+        item_name: String,
+
+        /// Mods bestowed by item that was gained
+        item_mods: Vec<String>,
+
+        /// The increase or decrease that all the wielding player's items caused to their star rating
+        /// before gaining this item
+        player_item_rating_before: f64,
+
+        /// The increase or decrease that all the wielding player's items now cause to their star rating
+        player_item_rating_after: f64,
+
+        /// The player's star rating. TODO: Is this with or without items?
+        player_rating: f64,
+
+        /// Team Uuid of team who gained the item
+        team_id: Uuid,
+
+        /// Name of player who gained the item
+        player_name: String,
+
+        /// Uuid of player who gained the item
+        player_id: Uuid,
+    },
+
+    /// Top-level "player lost item" event. I'm only aware of this happening as a result of the
+    /// player getting a new item from the Community Chest, but it may happen from other sources.
+    #[serde(rename_all = "camelCase")]
+    PlayerDropsItem {
+        /// Uuid of item that was gained
+        item_id: Uuid,
+
+        /// Name of item that was gained
+        item_name: String,
+
+        /// Mods bestowed by item that was gained
+        item_mods: Vec<String>,
+
+        /// The increase or decrease that all the wielding player's items caused to their star rating
+        /// before gaining this item
+        player_item_rating_before: f64,
+
+        /// The increase or decrease that all the wielding player's items now cause to their star rating
+        player_item_rating_after: f64,
+
+        /// The player's star rating. TODO: Is this with or without items?
+        player_rating: f64,
+
+        /// Team Uuid of team who gained the item
+        team_id: Uuid,
+
+        /// Name of player who gained the item
+        player_name: String,
+
+        /// Uuid of player who gained the item
+        player_id: Uuid,
+    },
+
+    /// The community chest announcement that appears during the game. Because community chests can 
+    /// open when some teams aren't playing a game, and the players must still receive their items, 
+    /// the events for receiving an item are separate from the event that appears in game.
+    /// 
+    /// This event has very minimal data. If you want to process community chests you probably want
+    /// to look for CommunityChestOpens events.
+    #[serde(rename_all = "camelCase")]
+    CommunityChestGameMessage {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who's listed first in the event. TODO: Is this in consistent order
+        /// w/r/t home and away team?
+        first_player_name: String,
+        
+        /// Name of the item that the first player received
+        first_player_item_name: String,
+        
+        /// Name of the item that the first player dropped, if any. Otherwise null.
+        first_player_dropped_item: Option<String>,
+
+        /// Name of the player who's listed second in the event
+        second_player_name: String,
+        
+        /// Name of the item that the second player received
+        second_player_item_name: String,
+        
+        /// Name of the item that the second player dropped, if any. Otherwise null.
+        second_player_dropped_item: Option<String>,
+    },
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4466,18 +4562,14 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::DoublePlay { ref game, ref pitch, ref batter_name, ref scores, ref stopped_inhabiting, ref cooled_off } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::GroundOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some()),
-                        description: format!("{batter_name} hit into a double play!"),
-                        ..Default::default()
-                    })
-                    .scores(scores, " scores!")
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .cooled_off(cooled_off, batter_name)
-                    .build()
+            FedEventData::DoublePlay { game, pitch, batter_name, scores, stopped_inhabiting, cooled_off } => {
+                eb.set_game(game);
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{batter_name} hit into a double play!"));
+                eb.push_scores(scores, "scores!");
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_cooled_off(cooled_off, &batter_name);
+                eb.build(EventType::GroundOut)
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score, temp_stolen_player_returned } => {
                 let child = temp_stolen_player_returned
@@ -6982,6 +7074,48 @@ impl FedEvent {
                     child.build(if is_middling { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
                 });
                 eb.build(EventType::Middling)
+            }
+            FedEventData::CommunityChestOpens { item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_name, player_id } => {
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("The Community Chest Opens! {player_name} gained {item_name}."));
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_uuid("itemId", item_id);
+                eb.push_metadata_str("itemName", item_name);
+                eb.push_metadata_str_vec("mods", item_mods);
+                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                eb.push_metadata_f64("playerRating", player_rating);
+                eb.build(EventType::PlayerGainedItem)
+            }
+            FedEventData::PlayerDropsItem { item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_name, player_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name} dropped {item_name}."));
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_uuid("itemId", item_id);
+                eb.push_metadata_str("itemName", item_name);
+                eb.push_metadata_str_vec("mods", item_mods);
+                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                eb.push_metadata_f64("playerRating", player_rating);
+                eb.build(EventType::PlayerLostItem)
+            }
+            FedEventData::CommunityChestGameMessage { game, first_player_name, first_player_item_name, first_player_dropped_item, second_player_name, second_player_item_name, second_player_dropped_item } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Community Chest Opens!");
+                if let Some(dropped_item) = first_player_dropped_item {
+                    eb.push_description(&format!("{first_player_name} gained {first_player_item_name} and dropped {dropped_item}."));
+                } else {
+                    eb.push_description(&format!("{first_player_name} gained {first_player_item_name}."));
+                }
+                if let Some(dropped_item) = second_player_dropped_item {
+                    eb.push_description(&format!("{second_player_name} gained {second_player_item_name} and dropped {dropped_item}."));
+                } else {
+                    eb.push_description(&format!("{second_player_name} gained {second_player_item_name}."));
+                }
+                eb.build(EventType::CommunityChestOpens)
             }
         }
     }
