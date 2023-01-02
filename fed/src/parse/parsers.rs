@@ -110,10 +110,10 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, count))
 }
 
-pub(crate) fn parse_foul_ball(plural: bool) -> impl Fn(&str) -> ParserResult<(i32, i32)> {
+pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32)> {
     move |input| {
         // Plural is for a double strike
-        let (input, _) = tag(if plural { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
+        let (input, _) = tag(if double_strike { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
         let (input, count) = parse_count(input)?;
 
         Ok((input, count))
@@ -126,16 +126,17 @@ pub enum StrikeType {
     Flinching,
 }
 
-pub(crate) fn parse_strike(input: &str) -> ParserResult<(StrikeType, i32, i32)> {
-    let (input, _) = tag("Strike, ").parse(input)?;
-    let (input, strike_type) = alt((
-        tag("swinging. ").map(|_| StrikeType::Swinging),
-        tag("looking. ").map(|_| StrikeType::Looking),
-        tag("flinching. ").map(|_| StrikeType::Flinching),
-    )).parse(input)?;
-    let (input, (balls, strikes)) = parse_count(input)?;
+pub(crate) fn parse_strike(double_strike: bool) -> impl Fn(&str) -> ParserResult<(StrikeType, i32, i32)> {
+    move |input| {
+        let (input, strike_type) = alt((
+            tag(if double_strike { "Strikes, swinging. "} else { "Strike, swinging. " }).map(|_| StrikeType::Swinging),
+            tag("Strike, looking. ").map(|_| StrikeType::Looking),
+            tag("Strike, flinching. ").map(|_| StrikeType::Flinching),
+        )).parse(input)?;
+        let (input, (balls, strikes)) = parse_count(input)?;
 
-    Ok((input, (strike_type, balls, strikes)))
+        Ok((input, (strike_type, balls, strikes)))
+    }
 }
 
 pub(crate) fn parse_count(input: &str) -> ParserResult<(i32, i32)> {

@@ -545,7 +545,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::Strike => {
             let pitch = event.parse_pitch()?;
-            let (strike_type, balls, strikes) = event.next_parse(parse_strike)?;
+            let (strike_type, balls, strikes) = event.next_parse(parse_strike(pitch.double_strike.is_some()))?;
             let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
             let game = event.game(unscatter, attractor_secret_base)?;
             match strike_type {
@@ -1004,21 +1004,28 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedReverbType::SeveralPlayers => {
                     let mut reverbs = Vec::new();
                     let mut team_id = None;
-                    while let Some(mut child) = event.next_child_opt(EventType::PlayerSwap)? {
-                        reverbs.push(PlayerReverb {
-                            first_player_id: child.metadata_uuid("aPlayerId")?,
-                            first_player_name: child.metadata_str("aPlayerName")?.to_string(),
-                            first_player_new_location: child.metadata_enum("aLocation")?,
-                            second_player_id: child.metadata_uuid("bPlayerId")?,
-                            second_player_name: child.metadata_str("bPlayerName")?.to_string(),
-                            second_player_new_location: child.metadata_enum("bLocation")?,
-                            sub_event: child.as_sub_event(),
-                        });
-                        if let Some(team_id) = team_id {
-                            // TODO: Make this a Result
-                            assert_eq!(team_id, child.next_team_id()?);
+                    while let Some(first_player_id) = event.next_player_id_opt() {
+                        // Player IDs must come in pairs
+                        let second_player_id = event.next_player_id()?;
+                        if first_player_id == second_player_id {
+                            reverbs.push(PlayerReverb::RepeatId(first_player_id));
                         } else {
-                            team_id = Some(child.next_team_id()?);
+                            let mut child = event.next_child(EventType::PlayerSwap)?;
+                            reverbs.push(PlayerReverb::Reverb {
+                                first_player_id: child.metadata_uuid("aPlayerId")?,
+                                first_player_name: child.metadata_str("aPlayerName")?.to_string(),
+                                first_player_new_location: child.metadata_enum("aLocation")?,
+                                second_player_id: child.metadata_uuid("bPlayerId")?,
+                                second_player_name: child.metadata_str("bPlayerName")?.to_string(),
+                                second_player_new_location: child.metadata_enum("bLocation")?,
+                                sub_event: child.as_sub_event(),
+                            });
+                            if let Some(team_id) = team_id {
+                                // TODO: Make this a Result
+                                assert_eq!(team_id, child.next_team_id()?);
+                            } else {
+                                team_id = Some(child.next_team_id()?);
+                            }
                         }
                     }
                     FedEventData::Reverb {

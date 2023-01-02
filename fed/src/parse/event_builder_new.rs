@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerInfo, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -273,7 +273,7 @@ impl EventBuilder {
     }
 
     pub fn push_attraction(&mut self, attraction: Option<Attraction>, player_name: &str, player_id: Uuid) {
-        let Some(at) = attraction else { return };
+        let Some(at) = attraction else { return; };
         self.push_player_tag(player_id);
         self.push_description(&format!("The {} Attract {player_name}!", at.team_nickname));
         self.push_child(at.sub_event, |mut child| {
@@ -400,7 +400,7 @@ impl EventBuilder {
                                            parasite.pitcher_name, parasite.attribute_name));
             self.push_child(parasite.batter_sub_event, |mut child| {
                 child.push_description(&format!("{} had blood drained by Parasite {}.",
-                                               parasite.batter_name, parasite.pitcher_name));
+                                                parasite.batter_name, parasite.pitcher_name));
                 child.push_player_tag(parasite.batter_id);
                 child.push_team_tag(parasite.batter_team_id);
                 child.build_player_attribute_changed(parasite.batter_rating_before, parasite.batter_rating_after, parasite.attribute_id)
@@ -412,6 +412,13 @@ impl EventBuilder {
                 child.push_team_tag(parasite.pitcher_team_id);
                 child.build_player_attribute_changed(parasite.pitcher_rating_before, parasite.pitcher_rating_after, parasite.attribute_id)
             });
+        }
+    }
+
+    pub fn push_gravity(&mut self, gravity_players: Vec<PlayerInfo>) {
+        for player in gravity_players {
+            self.push_description(&format!("{}'s Gravity kept them in place!", player.player_name));
+            self.push_player_tag(player.player_id);
         }
     }
 
