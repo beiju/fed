@@ -556,12 +556,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             // Eventually this will need very foul support, but I'll get to that when it comes up
             let (balls, strikes) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
             let batter_item_damage = event.parse_item_damage_and_name(true)?;
+            let birds = event.parse_birds();
+
             FedEventData::FoulBall {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
                 balls,
                 strikes,
                 batter_item_damage,
+                birds,
             }
         }
         EventType::RunsOverflowing => {

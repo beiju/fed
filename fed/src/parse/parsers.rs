@@ -1734,3 +1734,8 @@ pub(crate) fn parse_charge_blood<'a>(batter_name: &'a str, a: &'a str) -> impl F
         Ok((input, ()))
     }
 }
+
+pub(crate) fn parse_birds(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("\nA new Bird finds a Birdhouse. ").parse(input)?;
+    parse_whole_number.parse(input)
+}

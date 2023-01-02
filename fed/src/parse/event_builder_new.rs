@@ -387,6 +387,12 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_birds(&mut self, num_birds: Option<i32>) {
+        if let Some(n) = num_birds {
+            self.push_description(&format!("A new Bird finds a Birdhouse. {n}"));
+        }
+    }
+
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);
         self.push_team_tag(item_repaired.team_id);

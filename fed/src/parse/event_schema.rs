@@ -1403,6 +1403,9 @@ pub enum FedEventData {
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
         batter_item_damage: Option<(String, ItemDamaged)>,
+
+        /// If a new bird found a birdhouse, the total number of birds. Otherwise null.
+        birds: Option<i32>,
     },
 
     /// Strike, swinging
@@ -4069,7 +4072,7 @@ impl FedEvent {
                     .named_item_damage_before_score(&pitcher_item_damage)
                     .build()
             }
-            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage } => {
+            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds } => {
                 eb.set_game(game);
                 let foul_ball_text = if pitch.double_strike.is_some() {
                     eb.set_category(EventCategory::Special);
@@ -4080,6 +4083,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{foul_ball_text}. {balls}-{strikes}"));
                 eb.push_named_item_damage(batter_item_damage);
+                eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
             }
             FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage } => {
