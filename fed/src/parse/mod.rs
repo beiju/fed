@@ -1464,7 +1464,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let mut child = event.next_child(EventType::AddedMod)?;
             FedEventData::EchoChamber {
                 game: event.game(unscatter, attractor_secret_base)?,
-                team_id: child.next_team_id()?,
+                team_id: child.next_team_id_opt(),
                 player_id: child.next_player_id()?,
                 player_name: player_name.to_string(),
                 which_mod,

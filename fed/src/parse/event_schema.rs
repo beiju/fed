@@ -3657,8 +3657,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Team uuid of the player who was made Repeating
-        team_id: Uuid,
+        /// Team uuid of the player who was made Repeating. If the player was a ghost who died
+        /// before team ids were stored in the player object, this will be null.
+        team_id: Option<Uuid>,
 
         /// Uuid of the player who was made Repeating
         player_id: Uuid,
@@ -6934,7 +6935,7 @@ impl FedEvent {
                         category: EventCategory::Changes,
                         r#type: EventType::AddedMod,
                         description: "The Echo Chamber traps a wave.".to_string(),
-                        team_tags: vec![team_id],
+                        team_tags: team_id.into_iter().collect(),
                         player_tags: vec![player_id],
                         ..Default::default()
                     })
