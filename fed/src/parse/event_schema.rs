@@ -1615,6 +1615,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of the player who hit the ball
         batter_name: String,
 
@@ -4125,8 +4128,9 @@ impl FedEvent {
                     .named_item_damage_before_score(&other_player_item_damage)
                     .build()
             }
-            FedEventData::Hit { game, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
+            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 eb.set_game(game);
+                eb.push_pitch(pitch);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_item_damage(batter_item_damage, &batter_name);

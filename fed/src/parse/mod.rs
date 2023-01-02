@@ -428,6 +428,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Hit => {
+            let pitch = event.parse_pitch()?;
             let (batter_name, hit_type, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
             // resim research says pitcher goes first
             let pitcher_item_damage = pitcher_item_broke
@@ -458,6 +459,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
+                pitch,
                 batter_name: batter_name.to_string(),
                 batter_id,
                 hit_type,
