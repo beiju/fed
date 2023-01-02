@@ -7088,7 +7088,11 @@ impl FedEvent {
                 eb.build(if item_gained { EventType::PlayerGainedItem } else { EventType::PlayerLostItem })
             }
             FedEventData::PlayerMiddling { game, is_middling, change_event } => {
-                let description = format!("{} is Middling.", change_event.player_name);
+                let description = if is_middling {
+                    format!("{} is Middling.", change_event.player_name)
+                } else {
+                    format!("{} is no longer Middling.", change_event.player_name)
+                };
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&description);
