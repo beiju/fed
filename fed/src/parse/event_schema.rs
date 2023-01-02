@@ -1519,6 +1519,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of the batter that hit the flyout
         batter_name: String,
 
@@ -1556,6 +1559,9 @@ pub enum FedEventData {
         /// to know the role of the other player (pitcher, runner?) from the event alone.
         other_player_item_damage: Option<(String, ItemDamaged)>,
 
+        /// If there was a parasite blooddrain on this strikeout, contains information about it.
+        /// Otherwise null.
+        parasite: Option<Parasite>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -4166,25 +4172,38 @@ impl FedEvent {
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
             }
-            FedEventData::Flyout { game, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage } => {
-                let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::FlyOut,
-                        category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                        description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
-                        player_tags,
-                        ..Default::default()
-                    })
-                    .scores(&scores, " tags up and scores!")
-                    .stopped_inhabiting(&stopped_inhabiting)
-                    .cooled_off(&cooled_off, &batter_name)
-                    .children(observed_child) // slight abuse of IntoIter
-                    .item_damage_before_score(&batter_item_damage, &batter_name)
-                    .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                    .named_item_damage_before_score(&other_player_item_damage)
-                    .build()
+            FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{batter_name} hit a flyout to {fielder_name}."));
+                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_item_damage(fielder_item_damage, &fielder_name);
+                eb.push_named_item_damage(other_player_item_damage);
+                eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
+                eb.push_scores(scores, "tags up and scores!");
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_cooled_off(cooled_off, &batter_name);
+                eb.push_parasite(parasite);
+                eb.build(EventType::FlyOut)
+                // let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
+                //
+                // event_builder.for_game(&game)
+                //     .fill(EventBuilderUpdate {
+                //         r#type: ,
+                //         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
+                //         description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
+                //         player_tags,
+                //         ..Default::default()
+                //     })
+                //     .scores(&scores, " tags up and scores!")
+                //     .stopped_inhabiting(&stopped_inhabiting)
+                //     .cooled_off(&cooled_off, &batter_name)
+                //     .children(observed_child) // slight abuse of IntoIter
+                //     .item_damage_before_score(&batter_item_damage, &batter_name)
+                //     .item_damage_before_score(&fielder_item_damage, &fielder_name)
+                //     .named_item_damage_before_score(&other_player_item_damage)
+                //     .build()
             }
             FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 eb.set_game(game);
@@ -4301,24 +4320,6 @@ impl FedEvent {
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.build(EventType::GroundOut)
-
-                // let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
-                //
-                // event_builder.for_game(&game)
-                //     .fill(EventBuilderUpdate {
-                //         r#type: ,
-                //         category: ,
-                //         player_tags,
-                //         ..Default::default()
-                //     })
-                //     .scores(&scores, )
-                //     .stopped_inhabiting(&stopped_inhabiting)
-                //     .cooled_off(&cooled_off, &batter_name)
-                //     .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                //     .named_item_damage_before_score(&pitcher_item_damage)
-                //     .item_damage_after_score(&batter_item_damage, &batter_name)
-                //     .children(observed_child)
-                //     .build()
             }
             FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, ref runner_item_damage, is_special } => {
                 let blaserunning_str = if blaserunning {
