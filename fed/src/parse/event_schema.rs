@@ -2106,11 +2106,9 @@ pub enum FedEventData {
         /// Name of player who became magmatic
         player_name: String,
 
-        /// Team uuid of player who became magmatic
-        team_id: Uuid,
-
-        /// Metadata of sub-event associated with player gaining the Magmatic mod
-        mod_add_event: SubEvent,
+        /// Information about the player getting the Magmatic mod, if applicable. If the player was
+        /// already Magmatic, this will be null
+        magmatic_mod_added: Option<ModChangeSubEvent>,
     },
 
     /// Blooddrain event that results in player gaining the stolen blood (as opposed to using it to
@@ -4678,30 +4676,45 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::BecameMagmatic { ref game, player_id, ref player_name, team_id, ref mod_add_event } => {
-                let child = EventBuilderChild::new(mod_add_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} ate some flame.", ),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
+            FedEventData::BecameMagmatic { game, player_id, player_name, magmatic_mod_added } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"));
+                eb.push_player_tag(player_id);
+                if let Some(mod_added) = magmatic_mod_added {
+                    eb.push_child(mod_added.sub_event, |mut child| {
+                        child.set_description(format!("{player_name} ate some flame."));
+                        child.push_player_tag(player_id);
+                        child.push_team_tag(mod_added.team_id);
+                        child.push_metadata_str("mod", "MAGMATIC");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::AddedMod)
                     })
-                    .metadata(json!({
-                        "mod": "MAGMATIC",
-                        "type": 0, // ?
-                    }));
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::IncinerationBlocked,
-                        category: EventCategory::Special,
-                        description: format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                }
+                eb.build(EventType::IncinerationBlocked)
+                // let child = EventBuilderChild::new(mod_add_event)
+                //     .update(EventBuilderUpdate {
+                //         r#type: EventType::AddedMod,
+                //         category: EventCategory::Changes,
+                //         description: format!("{player_name} ate some flame.", ),
+                //         team_tags: vec![team_id],
+                //         player_tags: vec![player_id],
+                //         ..Default::default()
+                //     })
+                //     .metadata(json!({
+                //         "mod": "MAGMATIC",
+                //         "type": 0, // ?
+                //     }));
+                // event_builder.for_game(game)
+                //     .fill(EventBuilderUpdate {
+                //         r#type: EventType::IncinerationBlocked,
+                //         category: EventCategory::Special,
+                //         description: format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"),
+                //         player_tags: vec![player_id],
+                //         ..Default::default()
+                //     })
+                //     .child(child)
+                //     .build()
             }
             FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, ref sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
                 let child = EventBuilderChild::new(sipped_event)

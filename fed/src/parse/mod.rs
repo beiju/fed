@@ -1192,13 +1192,20 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
             match blocked_reason {
                 IncinerationBlockedReason::Magmatic => {
-                    let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    // If you were already magmatic, you don't get a sub-event about it
+                    let mod_add_event = event.next_child_opt(EventType::AddedMod)?
+                        .map(|mut child| {
+                            ParseOk(ModChangeSubEvent {
+                                team_id: child.next_team_id()?,
+                                sub_event: child.as_sub_event()
+                            })
+                        })
+                        .transpose()?;
                     FedEventData::BecameMagmatic {
                         game: event.game(unscatter, attractor_secret_base)?,
                         player_id: event.next_player_id()?,
                         player_name: player_name.to_string(),
-                        team_id: sub_event.next_team_id()?,
-                        mod_add_event: sub_event.as_sub_event(),
+                        magmatic_mod_added: mod_add_event,
                     }
                 }
                 IncinerationBlockedReason::Fireproof => {
