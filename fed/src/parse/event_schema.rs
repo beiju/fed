@@ -3708,6 +3708,25 @@ pub enum FedEventData {
         /// Name of the pitcher that did the mind trick
         pitcher_name: String,
     },
+
+    /// Blooddrain blocked due to Sealant
+    #[serde(rename_all = "camelCase")]
+    BlooddrainBlocked {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player that attempted to blooddrain the Sealed player
+        sipper_id: Uuid,
+
+        /// Name of the player that attempted to blooddrain the Sealed player
+        sipper_name: String,
+
+        /// Uuid of the Sealed player
+        sippee_id: Uuid,
+
+        /// Name of the Sealed player
+        sippee_name: String,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6843,6 +6862,15 @@ impl FedEvent {
                 eb.push_player_tag(batter_id);
                 eb.push_player_tag(batter_id); // batter twice, apparently
                 eb.build(EventType::Walk) // ugh
+            }
+            FedEventData::BlooddrainBlocked { game, sipper_id, sipper_name, sippee_id, sippee_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Blooddrain gurgled!");
+                eb.push_description(&format!("{sipper_name} tried to siphon blood from {sippee_name}, but they were Sealed!"));
+                eb.push_player_tag(sipper_id);
+                eb.push_player_tag(sippee_id); // batter twice, apparently
+                eb.build(EventType::BlooddrainBlocked)
             }
         }
     }

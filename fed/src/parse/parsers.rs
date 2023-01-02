@@ -1739,3 +1739,10 @@ pub(crate) fn parse_birds(input: &str) -> ParserResult<i32> {
     let (input, _) = tag("\nA new Bird finds a Birdhouse. ").parse(input)?;
     parse_whole_number.parse(input)
 }
+
+pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The Blooddrain gurgled!\n").parse(input)?;
+    let (input, sipper_name) = parse_terminated(" tried to siphon blood from ").parse(input)?;
+    let (input, sippee_name) = parse_terminated(", but they were Sealed!").parse(input)?;
+    Ok((input, (sipper_name, sippee_name)))
+}

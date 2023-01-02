@@ -1109,7 +1109,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 }
             }
         }
-        EventType::BlooddrainBlocked => { todo!() }
+        EventType::BlooddrainBlocked => {
+            let (sipper_name, sippee_name) = event.next_parse(parse_blooddrain_blocked)?;
+
+            FedEventData::BlooddrainBlocked {
+                game: event.game(unscatter, attractor_secret_base)?,
+                sipper_id: event.next_player_id()?,
+                sipper_name: sipper_name.to_string(),
+                sippee_id: event.next_player_id()?,
+                sippee_name: sippee_name.to_string(),
+            }
+        }
         EventType::Incineration => {
             let (victim_name, replacement_name, unstable_chain_name) = event.next_parse(parse_incineration)?;
             let mut incin_child = event.next_child(EventType::Incineration)?;
