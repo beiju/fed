@@ -1941,6 +1941,10 @@ pub enum FedEventData {
         /// Name of the player who was charmed
         charmed_name: String,
 
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
+
         /// Number of swings the player was charmed into making. Should be 3 ordinarily and 4 for
         /// players with The Fourth Strike.
         num_swings: i32,
@@ -3799,7 +3803,7 @@ pub enum FedEventData {
 
         /// Name of the Sealed player
         sippee_name: String,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -3915,41 +3919,6 @@ fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mo
             }))
     }
 }
-
-fn apply_batter_debt(batter_debt: &Option<BatterDebt>, batter_name: &str, fielder_name: &str) -> (String, Option<EventBuilderChildFull>, Vec<Uuid>) {
-    let suffix = if batter_debt.is_some() {
-        format!("\n{batter_name} hit a ball at {fielder_name}...\n{fielder_name} is now being Observed.")
-    } else {
-        String::new()
-    };
-
-    let observed_child = batter_debt.as_ref().and_then(|debt| {
-        debt.sub_event.as_ref().map(|sub_event| {
-            EventBuilderChild::new(&sub_event.sub_event)
-                .update(EventBuilderUpdate {
-                    r#type: EventType::AddedMod,
-                    category: EventCategory::Changes,
-                    description: format!("{fielder_name} is now being Observed."),
-                    player_tags: vec![debt.fielder_id],
-                    team_tags: vec![sub_event.team_id],
-                    ..Default::default()
-                })
-                .metadata(json!({
-                                "mod": "COFFEE_PERIL",
-                                "type": 2, // ?
-                            }))
-        })
-    });
-
-    let player_tags = if let Some(debt) = batter_debt {
-        vec![debt.batter_id, debt.fielder_id]
-    } else {
-        vec![]
-    };
-
-    (suffix, observed_child, player_tags)
-}
-
 
 impl FedEvent {
     pub fn into_feed_event(self) -> EventuallyEvent {
@@ -4416,17 +4385,17 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, num_swings } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Strikeout,
-                        category: EventCategory::Special,
-                        description: format!("{charmer_name} charmed {charmed_name}!\n{charmed_name} swings {num_swings} times to strike out willingly!"),
-                        // I do not know why the charmer appears twice, but that seems to be accurate
-                        player_tags: vec![charmer_id, charmer_id, charmed_id],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, stopped_inhabiting, num_swings } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{charmer_name} charmed {charmed_name}!"));
+                eb.push_description(&format!("{charmed_name} swings {num_swings} times to strike out willingly!"));
+                // I do not know why the charmer appears twice, but that seems to be accurate
+                eb.push_player_tag(charmer_id);
+                eb.push_player_tag(charmer_id);
+                eb.push_player_tag(charmed_id);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.build(EventType::Strikeout)
             }
             FedEventData::FieldersChoice { ref game, ref pitch, ref batter_name, ref runner_out_name, out_at_base, ref scores, ref stopped_inhabiting, ref cooled_off, is_special } => {
                 event_builder.for_game(game)

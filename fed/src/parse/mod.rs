@@ -274,6 +274,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
+                    let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let charmer_id = event.next_player_id()?;
                     let charmer_id_2 = event.next_player_id()?;
                     let charmed_id = event.next_player_id()?;
@@ -284,6 +285,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         charmer_name: charmer_name.to_string(),
                         charmed_id,
                         charmed_name: charmed_name.to_string(),
+                        stopped_inhabiting,
                         num_swings,
                     }
                 }
