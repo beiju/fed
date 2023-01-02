@@ -1020,19 +1020,22 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
 }
 
 pub(crate) enum ParsedReturnFromElsewhere<'a> {
-    Short(&'a str),
-    Normal((&'a str, TimeElsewhere)),
+    Short((&'a str, bool)),
+    Normal((&'a str, TimeElsewhere, bool)),
 }
 
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
     alt((
-        parse_terminated(" has returned from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short(n)),
+        parse_terminated(" has returned from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, false))),
+        parse_terminated(" has rolled back from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, true))),
         parse_normal_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Normal(v)),
     )).parse(input)
 }
 
-pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, TimeElsewhere)> {
-    let (input, player_name) = parse_terminated(" has returned from Elsewhere after ").parse(input)?;
+pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, TimeElsewhere, bool)> {
+    let (input, player_name) = parse_terminated(" has ").parse(input)?;
+    let (input, is_peanut) = alt((tag("rolled back").map(|_| true),tag("returned").map(|_| false))).parse(input)?;
+    let (input, _) = tag(" from Elsewhere after ").parse(input)?;
     let (input, after_days) = alt((
         tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
         terminated(parse_whole_number, tag(" seasons!")).map(|n| TimeElsewhere::Seasons(n)),
@@ -1040,7 +1043,7 @@ pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&
         terminated(parse_whole_number, tag(" days!")).map(|n| TimeElsewhere::Days(n)),
     )).parse(input)?;
 
-    Ok((input, (player_name, after_days)))
+    Ok((input, (player_name, after_days, is_peanut)))
 }
 
 pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {

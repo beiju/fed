@@ -728,6 +728,10 @@ pub enum ReturnFromElsewhereFlavor {
         /// Uuid of player who returned from Elsewhere
         player_id: Uuid,
 
+        /// True if the player is trapped in a giant peanut shell, false otherwise
+        // TODO: Move this outside the enum?
+        is_peanut: bool,
+
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 
@@ -751,13 +755,19 @@ pub enum ReturnFromElsewhereFlavor {
         /// Uuid of player who returned from Elsewhere
         player_id: Uuid,
 
+        /// True if the player is trapped in a giant peanut shell, false otherwise
+        is_peanut: bool,
+
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
     },
     /// Fake returns from elsewhere. As far as I know this only happens when a Receiver returns from
     /// Elsewhere after being sent there by Receiving Elsewhere from an Echo. There's no extra data
     /// on a false return from elsewhere.
-    False,
+    False {
+        /// True if the player is trapped in a giant peanut shell, false otherwise
+        is_peanut: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -5525,17 +5535,22 @@ impl FedEvent {
             }
             FedEventData::ReturnFromElsewhere { ref game, ref player_name, ref flavor } => {
                 let (description, children) = match flavor {
-                    ReturnFromElsewhereFlavor::Full { team_id, player_id, sub_event, time_elsewhere, scattered, recongealed_differently } => {
+                    ReturnFromElsewhereFlavor::Full { team_id, player_id, is_peanut, sub_event, time_elsewhere, scattered, recongealed_differently } => {
+                        let returned_text = if *is_peanut {
+                            "rolled back"
+                        } else {
+                            "returned"
+                        };
                         let description = match time_elsewhere {
                             TimeElsewhere::Days(days) => {
                                 let s = if *days == 1 { "" } else { "s" };
-                                format!("{player_name} has returned from Elsewhere after {days} day{s}!")
+                                format!("{player_name} has {returned_text} from Elsewhere after {days} day{s}!")
                             }
                             TimeElsewhere::Seasons(1) => {
-                                format!("{player_name} has returned from Elsewhere after one season!")
+                                format!("{player_name} has {returned_text} from Elsewhere after one season!")
                             }
                             TimeElsewhere::Seasons(seasons) => {
-                                format!("{player_name} has returned from Elsewhere after {seasons} seasons!")
+                                format!("{player_name} has {returned_text} from Elsewhere after {seasons} seasons!")
                             }
                         };
                         let elsewhere_child = EventBuilderChild::new(sub_event)
@@ -5597,8 +5612,9 @@ impl FedEvent {
 
                         (description, children)
                     }
-                    ReturnFromElsewhereFlavor::Short { team_id, player_id, sub_event } => {
-                        let description = format!("{player_name} has returned from Elsewhere!");
+                    ReturnFromElsewhereFlavor::Short { team_id, player_id, is_peanut, sub_event } => {
+                        let description = format!("{player_name} has {} from Elsewhere!",
+                                                  if *is_peanut { "rolled back" } else { "returned" });
                         let elsewhere_child = EventBuilderChild::new(sub_event)
                             .update(EventBuilderUpdate {
                                 category: EventCategory::Changes,
@@ -5615,8 +5631,9 @@ impl FedEvent {
 
                         (description, vec![elsewhere_child])
                     }
-                    ReturnFromElsewhereFlavor::False => {
-                        let description = format!("{player_name} has returned from Elsewhere!");
+                    ReturnFromElsewhereFlavor::False { is_peanut} => {
+                        let description = format!("{player_name} has {} from Elsewhere!",
+                                                  if *is_peanut { "rolled back" } else { "returned" });
                         (description, vec![])
                     }
                 };

@@ -1569,7 +1569,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::ReturnFromElsewhere => {
             let (player_name, flavor) = match event.next_parse(parse_return_from_elsewhere)? {
-                ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere)) => {
+                ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere, is_peanut)) => {
                     let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
                         .map(|mut scattered_sub_event| {
                             let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
@@ -1600,21 +1600,23 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     (player_name, ReturnFromElsewhereFlavor::Full {
                         team_id: return_sub_event.next_team_id()?,
                         player_id: return_sub_event.next_player_id()?,
+                        is_peanut,
                         sub_event: return_sub_event.as_sub_event(),
                         time_elsewhere,
                         scattered,
                         recongealed_differently,
                     })
                 }
-                ParsedReturnFromElsewhere::Short(player_name) => {
+                ParsedReturnFromElsewhere::Short((player_name, is_peanut)) => {
                     if let Some(mut return_sub_event) = event.next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")? {
                         (player_name, ReturnFromElsewhereFlavor::Short {
                             team_id: return_sub_event.next_team_id()?,
                             player_id: return_sub_event.next_player_id()?,
                             sub_event: return_sub_event.as_sub_event(),
+                            is_peanut,
                         })
                     } else {
-                        (player_name, ReturnFromElsewhereFlavor::False)
+                        (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
                     }
                 }
             };
