@@ -245,6 +245,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
+                    let parasite = event.parse_parasite()?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -253,12 +254,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         pitcher_item_damage,
                         free_refill,
                         is_special: event.category == EventCategory::Special,
+                        parasite,
                     }
                 }
                 ParsedStrikeout::Looking(batter_name) => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
+                    let parasite = event.parse_parasite()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -267,6 +270,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         pitcher_item_damage,
                         free_refill,
                         is_special: event.category == EventCategory::Special,
+                        parasite,
                     }
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {

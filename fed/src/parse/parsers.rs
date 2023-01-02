@@ -1746,3 +1746,15 @@ pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(&str, &str)
     let (input, sippee_name) = parse_terminated(", but they were Sealed!").parse(input)?;
     Ok((input, (sipper_name, sippee_name)))
 }
+
+pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, sipper_name) = parse_terminated(" parasitically drained some of ").parse(input)?;
+    let (input, sippee_name) = parse_terminated("'s ").parse(input)?;
+    let (input, sipped_attribute_name) = parse_terminated(".\n").parse(input)?;
+    let (input, _) = tag(sipper_name).parse(input)?;
+    let (input, _) = tag(" boosted their ").parse(input)?;
+    let (input, _) = tag(sipped_attribute_name).parse(input)?;
+    let (input, _) = tag("!").parse(input)?;
+    Ok((input, (sipper_name, sippee_name, sipped_attribute_name)))
+}

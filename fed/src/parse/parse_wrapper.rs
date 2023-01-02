@@ -5,9 +5,9 @@ use nom::combinator::opt;
 use nom::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamaged, ModChangeSubEvent, ModChangeSubEventWithPlayer, GamePitch, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter};
+use crate::{Attraction, BatterDebt, FedEvent, FedEventData, FeedParseError, FreeRefill, GameEvent, ItemDamaged, ModChangeSubEvent, ModChangeSubEventWithPlayer, GamePitch, PlayerInfo, Scores, ScoringPlayer, SimPhase, SpicyStatus, StoppedInhabiting, SubEvent, Unscatter, Parasite};
 use crate::parse::{is_known_team_nickname, ParseOk};
-use crate::parse::parsers::{parse_batter_debt, parse_birds, parse_charge_blood, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_scores, parse_spicy_status, parse_stopped_inhabiting, parse_terminated, ParsedSpicyStatus, ParserError, ParserResult};
+use crate::parse::parsers::{parse_batter_debt, parse_birds, parse_charge_blood, parse_cooled_off, parse_free_refill, parse_free_refills, parse_item_damage, parse_item_damage_unknown_name, parse_parasite, parse_scores, parse_spicy_status, parse_stopped_inhabiting, parse_terminated, ParsedSpicyStatus, ParserError, ParserResult};
 
 #[derive(Debug, Copy, Clone)]
 pub struct EventParseWrapper<'e> {
@@ -597,6 +597,31 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_birds(&mut self) -> Option<i32> {
         self.next_parse_opt(parse_birds)
+    }
+
+    pub fn parse_parasite(&mut self) -> Result<Option<Parasite>, FeedParseError> {
+        self.next_parse_opt(parse_parasite)
+            .map(|(sipper_name, sippee_name, sipped_attribute_name)| {
+                let mut batter_event = self.next_child(EventType::PlayerAttributeDecrease)?;
+                let mut pitcher_event = self.next_child(EventType::PlayerAttributeIncrease)?;
+                ParseOk(Parasite {
+                    batter_team_id: batter_event.next_team_id()?,
+                    batter_id: batter_event.next_player_id()?,
+                    batter_name: sippee_name.to_string(),
+                    pitcher_team_id: pitcher_event.next_team_id()?,
+                    pitcher_id: pitcher_event.next_player_id()?,
+                    pitcher_name: sipper_name.to_string(),
+                    attribute_name: sipped_attribute_name.to_string(),
+                    attribute_id: batter_event.metadata_i64("type")?,
+                    batter_rating_before: batter_event.metadata_f64("before")?,
+                    batter_rating_after: batter_event.metadata_f64("after")?,
+                    batter_sub_event: batter_event.as_sub_event(),
+                    pitcher_rating_before: pitcher_event.metadata_f64("before")?,
+                    pitcher_rating_after: pitcher_event.metadata_f64("after")?,
+                    pitcher_sub_event: pitcher_event.as_sub_event(),
+                })
+            })
+            .transpose()
     }
 
     pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {

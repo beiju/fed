@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Scores, ScoringPlayer, SpicyStatus, StatChangeCategory, StoppedInhabiting, SubEvent};
+use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, Scores, ScoringPlayer, SpicyStatus, StatChangeCategory, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -392,6 +392,29 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_parasite(&mut self, parasite: Option<Parasite>) {
+        if let Some(parasite) = parasite {
+            self.push_description(&format!("{} parasitically drained some of {}'s {}.",
+                                           parasite.pitcher_name, parasite.batter_name, parasite.attribute_name));
+            self.push_description(&format!("{} boosted their {}!",
+                                           parasite.pitcher_name, parasite.attribute_name));
+            self.push_child(parasite.batter_sub_event, |mut child| {
+                child.push_description(&format!("{} had blood drained by Parasite {}.",
+                                               parasite.batter_name, parasite.pitcher_name));
+                child.push_player_tag(parasite.batter_id);
+                child.push_team_tag(parasite.batter_team_id);
+                child.build_player_attribute_changed(parasite.batter_rating_before, parasite.batter_rating_after, parasite.attribute_id)
+            });
+            self.push_child(parasite.pitcher_sub_event, |mut child| {
+                child.push_description(&format!("Parasite {} drained blood from {}.",
+                                                parasite.pitcher_name, parasite.batter_name));
+                child.push_player_tag(parasite.pitcher_id);
+                child.push_team_tag(parasite.pitcher_team_id);
+                child.build_player_attribute_changed(parasite.pitcher_rating_before, parasite.pitcher_rating_after, parasite.attribute_id)
+            });
+        }
+    }
+
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);
         self.push_team_tag(item_repaired.team_id);
@@ -430,14 +453,26 @@ impl EventBuilder {
         })
     }
 
-    pub fn build_player_stat_changed(mut self, rating_before: f64, rating_after: f64) -> EventuallyEvent {
+    pub fn build_player_stat_changed(mut self, rating_before: f64, rating_after: f64, attribute_type: i64) -> EventuallyEvent {
         self.push_metadata_f64("before", rating_before);
         self.push_metadata_f64("after", rating_after);
-        self.push_metadata_i64("type", StatChangeCategory::All as i64);
+        self.push_metadata_i64("type", attribute_type);
         self.build(if rating_after > rating_before {
             EventType::PlayerStatIncrease
         } else {
             EventType::PlayerStatDecrease
+        })
+    }
+
+    // TODO What the fheck is the difference from StatIncrease
+    pub fn build_player_attribute_changed(mut self, rating_before: f64, rating_after: f64, attribute_type: i64) -> EventuallyEvent {
+        self.push_metadata_f64("before", rating_before);
+        self.push_metadata_f64("after", rating_after);
+        self.push_metadata_i64("type", attribute_type);
+        self.build(if rating_after > rating_before {
+            EventType::PlayerAttributeIncrease
+        } else {
+            EventType::PlayerAttributeDecrease
         })
     }
 

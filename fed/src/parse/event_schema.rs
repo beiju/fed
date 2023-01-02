@@ -1261,6 +1261,53 @@ impl Display for StrikeoutType {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Parasite {
+    /// Team uuid of the batter who was parasitically drained
+    pub batter_team_id: Uuid,
+
+    /// Uuid of the batter who was parasitically drained
+    pub batter_id: Uuid,
+
+    /// Name of the batter who was parasitically drained
+    pub batter_name: String,
+
+    /// Team uuid of the batter who was parasitically drained
+    pub pitcher_team_id: Uuid,
+
+    /// Uuid of the Parasite pitcher
+    pub pitcher_id: Uuid,
+
+    /// Name of the Parasite pitcher
+    pub pitcher_name: String,
+
+    /// Drained attribute name. Should agree with attribute_ids.
+    ///
+    /// TODO: Should this be an enum? Then I wouldn't need both name and id
+    pub attribute_name: String,
+
+    /// Drained attribute numeric ID. Should agree with attribute_name.
+    pub attribute_id: i64,
+
+    /// Sipped player's rating before the stats changed
+    pub batter_rating_before: f64,
+
+    /// Sipped player's rating after the stats changed
+    pub batter_rating_after: f64,
+
+    /// Metadata for the sub-event about the sipper gaining stars
+    pub batter_sub_event: SubEvent,
+
+    /// Sipper player's rating before the stats changed
+    pub pitcher_rating_before: f64,
+
+    /// Sipper player's rating after the stats changed
+    pub pitcher_rating_after: f64,
+
+    /// Metadata for the sub-event about the sipper gaining stars
+    pub pitcher_sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -1784,6 +1831,10 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// If there was a parasite blooddrain on this strikeout, contains information about it.
+        /// Otherwise null.
+        parasite: Option<Parasite>,
     },
 
     /// Strikeout looking
@@ -1814,6 +1865,10 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// If there was a parasite blooddrain on this strikeout, contains information about it.
+        /// Otherwise null.
+        parasite: Option<Parasite>,
     },
 
     /// Player drew a walk
@@ -4294,7 +4349,7 @@ impl FedEvent {
                     .item_damage_after_score(runner_item_damage, runner_name)
                     .build()
             }
-            FedEventData::StrikeoutSwinging { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+            FedEventData::StrikeoutSwinging { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
@@ -4302,9 +4357,10 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
+                eb.push_parasite(parasite);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special } => {
+            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
@@ -4312,6 +4368,7 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
+                eb.push_parasite(parasite);
                 eb.build(EventType::Strikeout)
             }
             FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
@@ -6383,7 +6440,7 @@ impl FedEvent {
                             child.push_player_tag(player_id);
                             child.push_team_tag(team_id);
                             child.set_description(description);
-                            child.build_player_stat_changed(rating_before, rating_after)
+                            child.build_player_stat_changed(rating_before, rating_after, StatChangeCategory::All as i64)
                         });
                     }
                     ConsumerAttackEffect::DefendedWithItem(damage) => {
