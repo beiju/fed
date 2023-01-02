@@ -1530,7 +1530,19 @@ pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f32, bo
     Ok((input, (team_nickname, num_runs, unruns)))
 }
 
-pub(crate) fn parse_middling(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) enum ParsedMiddling<'a> {
+    Team((&'a str, bool)),
+    Player((&'a str, bool)),
+}
+
+pub(crate) fn parse_middling(input: &str) -> ParserResult<ParsedMiddling> {
+    alt((
+        parse_team_middling.map(|res| ParsedMiddling::Team(res)),
+        parse_player_middling.map(|res| ParsedMiddling::Player(res)),
+    )).parse(input)
+}
+
+pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
     let (input, _) = tag("Happy Midseason!\n").parse(input)?;
     let (input, result) = alt((
         preceded(tag("The "), parse_terminated(" are Middling!")).map(|m| (m, true)),
@@ -1538,6 +1550,13 @@ pub(crate) fn parse_middling(input: &str) -> ParserResult<(&str, bool)> {
     )).parse(input)?;
 
     Ok((input, result))
+}
+
+pub(crate) fn parse_player_middling(input: &str) -> ParserResult<(&str, bool)> {
+    alt((
+        parse_terminated(" is Middling.").map(|m| (m, true)),
+        parse_terminated(" is no longer Middling.").map(|m| (m, false)),
+    )).parse(input)
 }
 
 pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)> {

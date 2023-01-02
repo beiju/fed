@@ -26,7 +26,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 10] = [
+const TAROT_EVENTS: [Uuid; 14] = [
     uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
     uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
     uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
@@ -37,6 +37,10 @@ const TAROT_EVENTS: [Uuid; 10] = [
     uuid!("9cd56488-5ee2-436e-9196-37a76593cdaf"), // Flowers get After Party
     uuid!("1bb3708a-a43f-472b-a7df-a4b2f52c313f"), // Melon loses Alternate
     uuid!("00bb210e-d0c6-41bf-a6f7-01de9070582a"), // Jimmy loses Superyummy
+    uuid!("4872996e-f641-455b-bf45-cb0f0c4de8cf"), // Baby Doyle's Bat removed before...
+    uuid!("91079f04-4257-479f-8884-1752831ea7b8"), // ...getting the Uncertain Necklace of Entanglement
+    uuid!("ec493d47-8c48-46ef-9f00-94394630deb9"), // Orville Manco's Bat removed before...
+    uuid!("015262ca-5903-4960-82af-d9c682255796"), // ...getting the Force Field of Observation
 ];
 
 #[allow(non_snake_case)]
@@ -1764,9 +1768,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         player_name: player_name.to_string(),
                         sub_event: sub_event.as_sub_event(),
                     }
-
                 }
-                EarlbirdsChange::RemovedFromPlayer(_) => { todo!() }
+                EarlbirdsChange::RemovedFromPlayer(player_name) => {
+                    let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                    FedEventData::EarlbirdsRemovedFromPlayer {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: sub_event.next_team_id()?,
+                        player_id: sub_event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        sub_event: sub_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::LateToTheParty => {
@@ -1796,7 +1808,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::AddedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully
-                make_tarot_event(&mut event, false)?
+                make_mod_tarot_event(&mut event, false)?
             } else {
                 match event.next_parse(parse_added_mod)? {
                     ParsedAddedMod::EnteredPartyTime(team_nickname) => {
@@ -1827,7 +1839,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::RemovedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully
-                make_tarot_event(&mut event, true)?
+                make_mod_tarot_event(&mut event, true)?
             } else {
                 match event.next_parse(parse_removed_mod)? {
                     ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
@@ -1993,8 +2005,22 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::ExitHallOfFlame => { todo!() }
-        EventType::PlayerGainedItem => { todo!() }
-        EventType::PlayerLostItem => { todo!() }
+        EventType::PlayerGainedItem => {
+            if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                // Then it's a tarot event and we can forget parsing. Thankfully
+                make_item_tarot_event(&mut event, true)?
+            } else {
+                todo!()
+            }
+        }
+        EventType::PlayerLostItem => {
+            if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                // Then it's a tarot event and we can forget parsing. Thankfully
+                make_item_tarot_event(&mut event, false)?
+            } else {
+                todo!()
+            }
+        }
         EventType::ReverbFullShuffle => { todo!() }
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
@@ -2348,22 +2374,42 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Middling => {
-            let (team_nickname, is_middling) = event.next_parse(parse_middling)?;
-            assert!(is_known_team_nickname(team_nickname));
+            match event.next_parse(parse_middling)? {
+                ParsedMiddling::Team((team_nickname, is_middling)) => {
+                    assert!(is_known_team_nickname(team_nickname));
 
-            let mut child = event.next_child(if is_middling {
-                EventType::AddedModFromOtherMod
-            } else {
-                EventType::RemovedModFromOtherMod
-            })?;
-            FedEventData::Middling {
-                game: event.game(unscatter, attractor_secret_base)?,
-                team_nickname: team_nickname.to_string(),
-                is_middling,
-                change_event: ModChangeSubEvent {
-                    sub_event: child.as_sub_event(),
-                    team_id: child.next_team_id()?,
-                },
+                    let mut child = event.next_child(if is_middling {
+                        EventType::AddedModFromOtherMod
+                    } else {
+                        EventType::RemovedModFromOtherMod
+                    })?;
+                    FedEventData::TeamMiddling {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_nickname: team_nickname.to_string(),
+                        is_middling,
+                        change_event: ModChangeSubEvent {
+                            sub_event: child.as_sub_event(),
+                            team_id: child.next_team_id()?,
+                        },
+                    }
+                }
+                ParsedMiddling::Player((player_name, is_middling)) => {
+                    let mut child = event.next_child(if is_middling {
+                        EventType::AddedModFromOtherMod
+                    } else {
+                        EventType::RemovedModFromOtherMod
+                    })?;
+                    FedEventData::PlayerMiddling {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        is_middling,
+                        change_event: ModChangeSubEventWithNamedPlayer {
+                            sub_event: child.as_sub_event(),
+                            team_id: child.next_team_id()?,
+                            player_id: child.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        },
+                    }
+                }
             }
         }
         EventType::PlayerAttributeIncrease => { todo!() }
@@ -2466,7 +2512,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     event.to_fed(data)
 }
 
-fn make_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
+fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedMod {
         team_id: event.next_team_id()?,
         player_id: event.next_player_id_opt(),
@@ -2474,6 +2520,21 @@ fn make_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<
         r#mod: event.metadata_str("mod")?.to_string(),
         mod_duration: event.metadata_enum("type")?,
         mod_removed,
+    })
+}
+
+fn make_item_tarot_event(event: &mut EventParseWrapper, item_gained: bool) -> Result<FedEventData, FeedParseError> {
+    Ok(FedEventData::TarotReadingAddedOrRemovedItem {
+        description: event.description().into(),
+        item_id: event.metadata_uuid("itemId")?,
+        item_name: event.metadata_str("itemName")?.to_string(),
+        item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+        player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
+        player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+        player_rating: event.metadata_f64("playerRating")?,
+        team_id: event.next_team_id()?,
+        player_id: event.next_player_id()?,
+        item_gained,
     })
 }
 

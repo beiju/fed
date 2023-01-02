@@ -74,50 +74,6 @@ pub struct GamePitch {
     pub double_strike: Option<String>,
 }
 
-// impl GameEvent {
-//     pub fn try_from_event(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
-//         let (&game_id, ) = event.game_tags.iter().collect_tuple()
-//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
-//
-//         // Order is very important here
-//         let (&away_team, &home_team) = event.team_tags.iter().collect_tuple()
-//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
-//
-//         Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
-//     }
-//
-//     pub fn try_from_event_extra_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<Self, FeedParseError> {
-//         let (&game_id, ) = event.game_tags.iter().collect_tuple()
-//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "game" })?;
-//
-//         // Order is very important here. Apparently game end events have extra teams?
-//         let (&away_team, &home_team, &home_team2, &away_team2) = event.team_tags.iter().collect_tuple()
-//             .ok_or_else(|| FeedParseError::MissingTags { event_type: event.r#type, tag_type: "team" })?;
-//
-//         assert_eq!(away_team, away_team2);
-//         assert_eq!(home_team, home_team2);
-//
-//         Self::try_from_event_with_teams(event, unscatter, attractor_secret_base, game_id, away_team, home_team)
-//     }
-//
-//     fn try_from_event_with_teams(event: &EventuallyEvent, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>, game_id: Uuid, away_team: Uuid, home_team: Uuid) -> Result<Self, FeedParseError> {
-//         Ok(Self {
-//             game_id,
-//             home_team,
-//             away_team,
-//             play: event.metadata.play
-//                 .ok_or_else(|| {
-//                     FeedParseError::MissingMetadata {
-//                         event_type: event.r#type,
-//                         field: "play",
-//                     }
-//                 })?,
-//             unscatter,
-//             attractor_secret_base,
-//         })
-//     }
-// }
-
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -3528,9 +3484,11 @@ pub enum FedEventData {
         num_runs: f32,
     },
 
+    // TODO: Earlseason is separate Fed events for add and remove, but Middling is the same event.
+    //   Choose one and stick with it.
     /// Team gains or loses Middling
     #[serde(rename_all = "camelCase")]
-    Middling {
+    TeamMiddling {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -3808,6 +3766,76 @@ pub enum FedEventData {
         /// Name of the Sealed player
         sippee_name: String,
     },
+
+    /// Earlbirds is removed at the beginning of Midseason
+    #[serde(rename_all = "camelCase")]
+    EarlbirdsRemovedFromPlayer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Team uuid of Earlbird player
+        team_id: Uuid,
+
+        /// Uuid of Earlbird player
+        player_id: Uuid,
+
+        /// Name of Earlbird player
+        player_name: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        sub_event: SubEvent,
+    },
+
+    /// Added or removed an item as a result of a Tarot reading
+    #[serde(rename_all = "camelCase")]
+    TarotReadingAddedOrRemovedItem {
+        /// Description of event
+        description: String,
+
+        /// Uuid of item that was gained/lost
+        item_id: Uuid,
+
+        /// Name of item that was gained/lost
+        item_name: String,
+
+        /// Mods bestowed by item that was gained/lost
+        item_mods: Vec<String>,
+
+        /// The increase/decrease that all the wielding player's items caused to their star rating
+        /// before gaining/losing this item
+        player_item_rating_before: f64,
+
+        /// The increase/decrease that all the wielding player's items now cause to their star rating
+        player_item_rating_after: f64,
+
+        /// The player's star rating. TODO: Is this with or without items?
+        player_rating: f64,
+
+        /// Team Uuid of team who gained/lost the item
+        team_id: Uuid,
+
+        /// Uuid of player who gained/lost the item
+        player_id: Uuid,
+
+        /// True if the player gained the item, false otherwise
+        item_gained: bool,
+    },
+
+    // TODO: Earlseason is separate Fed events for add and remove, but Middling is the same event.
+    //   Choose one and stick with it.
+    /// Player gains or loses Middling
+    #[serde(rename_all = "camelCase")]
+    PlayerMiddling {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Whether this team just became Middling (true) or un-became Middling (false)
+        is_middling: bool,
+
+        #[serde(flatten)]
+        change_event: ModChangeSubEventWithNamedPlayer,
+    },
+
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6636,7 +6664,7 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Middling { game, team_nickname, change_event, is_middling } => {
+            FedEventData::TeamMiddling { game, team_nickname, change_event, is_middling } => {
                 let child_description = if is_middling {
                     format!("The {team_nickname} are Middling!")
                 } else {
@@ -6907,6 +6935,53 @@ impl FedEvent {
                 eb.push_player_tag(sipper_id);
                 eb.push_player_tag(sippee_id); // batter twice, apparently
                 eb.build(EventType::BlooddrainBlocked)
+            }
+            FedEventData::EarlbirdsRemovedFromPlayer { game, team_id, player_id, player_name, sub_event } => {
+                let description = format!("{player_name} is no longer an Earlbird.");
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&description);
+                eb.push_player_tag(player_id);
+                eb.push_child(sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(player_id);
+                    child.push_team_tag(team_id);
+                    child.push_metadata_str("mod", "OVERPERFORMING");
+                    child.push_metadata_str("source", "EARLBIRDS");
+                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child.build(EventType::RemovedModFromOtherMod)
+                });
+                eb.build(EventType::Earlbird)
+            }
+            FedEventData::TarotReadingAddedOrRemovedItem { description, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_id, item_gained } => {
+                eb.set_category(EventCategory::Changes);
+                eb.set_description(description);
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_uuid("itemId", item_id);
+                eb.push_metadata_str("itemName", item_name);
+                eb.push_metadata_str_vec("mods", item_mods);
+                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                eb.push_metadata_f64("playerRating", player_rating);
+                eb.build(if item_gained { EventType::PlayerGainedItem } else { EventType::PlayerLostItem })
+            }
+            FedEventData::PlayerMiddling { game, is_middling, change_event } => {
+                let description = format!("{} is Middling.", change_event.player_name);
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&description);
+                eb.push_player_tag(change_event.player_id);
+                eb.push_child(change_event.sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(change_event.player_id);
+                    child.push_team_tag(change_event.team_id);
+                    child.push_metadata_str("mod", "OVERPERFORMING");
+                    child.push_metadata_str("source", "MIDDLING");
+                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child.build(if is_middling { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
+                });
+                eb.build(EventType::Middling)
             }
         }
     }
