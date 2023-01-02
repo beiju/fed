@@ -4142,7 +4142,8 @@ impl FedEvent {
                     }
                     _ => {}
                 }
-                eb.push_scores(scores, "scores!", stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_scores(scores, "scores!");
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_named_item_damage(other_player_item_damage);
 
@@ -4232,8 +4233,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
-                // "stopped inhabiting" is not in the middle of the scores for this event
-                eb.push_scores(scores, "advances on the sacrifice.", None);
+                eb.push_scores(scores, "advances on the sacrifice.");
                 // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
                 // definitely somewhere after scores. Rest of the order is not yet known
                 eb.push_named_item_damage(pitcher_item_damage);

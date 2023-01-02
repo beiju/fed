@@ -267,9 +267,8 @@ impl EventBuilder {
         self.push_free_refills(free_refills)
     }
 
-    pub fn push_scores(&mut self, scores: Scores, score_label: &str, stopped_inhabiting: Option<StoppedInhabiting>) {
+    pub fn push_scores(&mut self, scores: Scores, score_label: &str) {
         self.push_scorers(scores.scores, score_label);
-        self.push_stopped_inhabiting(stopped_inhabiting);
         self.push_free_refills(scores.free_refills);
     }
 
