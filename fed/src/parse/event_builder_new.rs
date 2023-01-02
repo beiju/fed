@@ -394,8 +394,8 @@ impl EventBuilder {
 
     pub fn push_parasite(&mut self, parasite: Option<Parasite>) {
         if let Some(parasite) = parasite {
-            self.push_description(&format!("{} parasitically drained some of {}'s {}.",
-                                           parasite.pitcher_name, parasite.batter_name, parasite.attribute_name));
+            self.push_description(&format!("{} parasitically drained some of {} {}.",
+                                           parasite.pitcher_name, Possessive(&parasite.batter_name), parasite.attribute_name));
             self.push_description(&format!("{} boosted their {}!",
                                            parasite.pitcher_name, parasite.attribute_name));
             self.push_child(parasite.batter_sub_event, |mut child| {

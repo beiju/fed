@@ -602,8 +602,10 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_parasite(&mut self) -> Result<Option<Parasite>, FeedParseError> {
         self.next_parse_opt(parse_parasite)
             .map(|(sipper_name, sippee_name, sipped_attribute_name)| {
-                let mut batter_event = self.next_child(EventType::PlayerAttributeDecrease)?;
-                let mut pitcher_event = self.next_child(EventType::PlayerAttributeIncrease)?;
+                // Both events have to be both increase and decrease because of negative attributes
+                // (unless I want to check against sipped_attribute_name, which I don't)
+                let mut batter_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
+                let mut pitcher_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
                 ParseOk(Parasite {
                     batter_team_id: batter_event.next_team_id()?,
                     batter_id: batter_event.next_player_id()?,
