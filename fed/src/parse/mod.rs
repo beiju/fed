@@ -386,6 +386,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::HomeRun => {
+            let pitch = event.parse_pitch()?;
             let damaged_items = event.parse_item_damages_and_names(false)?;
             // In addition to getting a magmatic event, get a player name and id to check against
             // the batter name and id
@@ -401,7 +402,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 })
                 .transpose()?;
 
-            let (batter_name, num_runs) = event.next_parse(parse_hr)?;
+            let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 
             let attraction = event.next_parse(parse_attract_player)?
                 .map(|(team_nickname, player_name)| {
@@ -427,11 +428,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
+                pitch,
                 // TODO Verify batter name and id against magmatic
                 magmatic: magmatic_expanded.map(|(m, _, _)| m),
                 batter_name: batter_name.to_string(),
                 batter_id,
-                num_runs,
+                home_run_type,
                 stopped_inhabiting,
                 free_refills,
                 spicy_status,

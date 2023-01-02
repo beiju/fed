@@ -7,7 +7,7 @@ use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
-use crate::{EchoChamberModAdded, StrikeoutType, TimeElsewhere};
+use crate::{EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
 use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -343,16 +343,16 @@ pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, i32)> {
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
-    let (input, num_runs) = alt((
-        tag("solo home run!").map(|_| 1),
-        tag("2-run home run!").map(|_| 2),
-        tag("3-run home run!").map(|_| 3),
-        tag("grand slam!").map(|_| 4), // dunno what happens with a pentaslam...
+    let (input, home_run_type) = alt((
+        tag("solo home run!").map(|_| HomeRunType::Solo),
+        tag("2-run home run!").map(|_| HomeRunType::TwoRun),
+        tag("3-run home run!").map(|_| HomeRunType::ThreeRun),
+        tag("grand slam!").map(|_| HomeRunType::GrandSlam), // dunno what happens with a pentaslam...
     )).parse(input)?;
 
-    Ok((input, (batter_name, num_runs)))
+    Ok((input, (batter_name, home_run_type)))
 }
 
 pub(crate) fn parse_attract_player(input: &str) -> ParserResult<Option<(&str, &str)>> {

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerInfo, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerInfo, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -199,6 +199,12 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_named_item_damages(&mut self, item_damages: impl IntoIterator<Item=(String, ItemDamaged)>) {
+        for (player_name, dmg) in item_damages {
+            self.push_item_damage_impl(dmg, &player_name);
+        }
+    }
+
     pub fn push_item_damage(&mut self, item_damage: Option<ItemDamaged>, player_name: &str) {
         if let Some(dmg) = item_damage {
             self.push_item_damage_impl(dmg, player_name);
@@ -283,6 +289,23 @@ impl EventBuilder {
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
             child.push_metadata_uuid("playerId", player_id);
             child.push_metadata_str("playerName", player_name);
+            child.push_metadata_uuid("teamId", at.team_id);
+            child.push_metadata_str("teamName", at.team_nickname);
+            child.build(EventType::PlayerAddedToTeam)
+        });
+    }
+
+    pub fn push_attraction_with_player(&mut self, attraction: Option<AttractionWithPlayer>) {
+        let Some(at) = attraction else { return; };
+        self.push_player_tag(at.player_id);
+        self.push_description(&format!("The {} Attract {}!", at.team_nickname, at.player_name));
+        self.push_child(at.sub_event, |mut child| {
+            child.push_description(&format!("The {} Attracted {}!", at.team_nickname, at.player_name));
+            child.push_player_tag(at.player_id);
+            child.push_team_tag(at.team_id);
+            child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
+            child.push_metadata_uuid("playerId", at.player_id);
+            child.push_metadata_str("playerName", at.player_name);
             child.push_metadata_uuid("teamId", at.team_id);
             child.push_metadata_str("teamName", at.team_nickname);
             child.build(EventType::PlayerAddedToTeam)
@@ -412,6 +435,20 @@ impl EventBuilder {
                 child.push_player_tag(parasite.pitcher_id);
                 child.push_team_tag(parasite.pitcher_team_id);
                 child.build_player_attribute_changed(parasite.pitcher_rating_before, parasite.pitcher_rating_after, parasite.attribute_id)
+            });
+        }
+    }
+
+    pub fn push_magmatic(&mut self, magmatic: Option<ModChangeSubEvent>, batter_name: &str, batter_id: Uuid) {
+        if let Some(mod_change) = magmatic {
+            self.push_description(&format!("{batter_name} is Magmatic!"));
+            self.push_child(mod_change.sub_event, |mut child| {
+                child.push_description(&format!("{batter_name} hit a Magmatic home run!"));
+                child.push_player_tag(batter_id);
+                child.push_team_tag(mod_change.team_id);
+                child.push_metadata_str("mod", "MAGMATIC");
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(EventType::RemovedMod)
             });
         }
     }

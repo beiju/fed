@@ -552,7 +552,7 @@ pub struct FeedbackPlayerData {
 #[serde(rename_all = "camelCase")]
 pub enum PlayerReverb {
     RepeatId(Uuid),
-    
+
     Reverb {
         /// Uuid of the first player involved in this reverb
         first_player_id: Uuid,
@@ -576,7 +576,7 @@ pub enum PlayerReverb {
 
         /// Metadata associated with the player swap sub-event
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -1207,6 +1207,26 @@ impl Display for HitType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(tag = "hitType", content = "chargeBlood")]
+pub enum HomeRunType {
+    Solo,
+    TwoRun,
+    ThreeRun,
+    GrandSlam,
+}
+
+impl Display for HomeRunType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HomeRunType::Solo => { write!(f, "solo home run") }
+            HomeRunType::TwoRun => { write!(f, "2-run home run") }
+            HomeRunType::ThreeRun => { write!(f, "3-run home run") }
+            HomeRunType::GrandSlam => { write!(f, "grand slam") }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum StrikeoutType {
     Looking,
     Swinging,
@@ -1682,6 +1702,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// If this is a Magmatic home run, the metadata for the event where the batter loses the
         /// Magmatic mod, otherwise null
         magmatic: Option<ModChangeSubEvent>,
@@ -1692,8 +1715,8 @@ pub enum FedEventData {
         /// Uuid of the batter who hit the home run
         batter_id: Uuid,
 
-        /// Number of players who made it home during this home run (minimum 1)
-        num_runs: i32,
+        /// Type of home run
+        home_run_type: HomeRunType,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -3904,7 +3927,7 @@ pub enum FedEventData {
     /// The community chest announcement that appears during the game. Because community chests can 
     /// open when some teams aren't playing a game, and the players must still receive their items, 
     /// the events for receiving an item are separate from the event that appears in game.
-    /// 
+    ///
     /// This event has very minimal data. If you want to process community chests you probably want
     /// to look for CommunityChestOpens events.
     #[serde(rename_all = "camelCase")]
@@ -3915,19 +3938,19 @@ pub enum FedEventData {
         /// Name of the player who's listed first in the event. TODO: Is this in consistent order
         /// w/r/t home and away team?
         first_player_name: String,
-        
+
         /// Name of the item that the first player received
         first_player_item_name: String,
-        
+
         /// Name of the item that the first player dropped, if any. Otherwise null.
         first_player_dropped_item: Option<String>,
 
         /// Name of the player who's listed second in the event
         second_player_name: String,
-        
+
         /// Name of the item that the second player received
         second_player_item_name: String,
-        
+
         /// Name of the item that the second player dropped, if any. Otherwise null.
         second_player_dropped_item: Option<String>,
     },
@@ -4325,84 +4348,27 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { ref game, ref magmatic, ref batter_name, batter_id, num_runs, ref free_refills, ref spicy_status, ref stopped_inhabiting, is_special, big_bucket, attraction, damaged_items } => {
-                let mut suffix = String::new();
-                let mut player_tags = vec![batter_id];
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items } => {
+                eb.set_game(game);
+                if is_special { eb.set_category(EventCategory::Special) }
+                eb.push_pitch(pitch);
+                eb.push_named_item_damages(damaged_items);
+                eb.push_magmatic(magmatic, &batter_name, batter_id);
+
+                // HR itself
+                eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
+                eb.push_player_tag(batter_id);
+
                 if big_bucket {
-                    write!(suffix, "\nThe ball lands in a Big Bucket. An extra Run scores!").unwrap();
-                }
-                for free_refill in free_refills {
-                    write!(suffix, "\n{} used their Free Refill.\n{} Refills the In!",
-                           free_refill.player_name, free_refill.player_name).unwrap();
+                    eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
                 }
 
-                let attraction_child = attraction.map(|attraction| {
-                    write!(suffix, "\nThe {} Attract {}!", attraction.team_nickname, attraction.player_name).unwrap();
-                    player_tags.push(attraction.player_id);
-                    EventBuilderChild::new(&attraction.sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::PlayerAddedToTeam,
-                            category: EventCategory::Changes,
-                            description: format!("The {} Attracted {}!", attraction.team_nickname, attraction.player_name),
-                            player_tags: vec![attraction.player_id],
-                            team_tags: vec![attraction.team_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "location": 2,
-                            "playerId": attraction.player_id,
-                            "playerName": attraction.player_name,
-                            "teamId": attraction.team_id,
-                            "teamName": attraction.team_nickname,
-                        }))
-                });
+                eb.push_free_refills(free_refills);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_spicy(spicy_status, &batter_name, batter_id);
+                eb.push_attraction_with_player(attraction);
 
-                let free_refill_children: Vec<_> = free_refills.iter()
-                    .map(make_free_refill_child)
-                    .collect();
-
-                let magmagic_child = if let Some(ModChangeSubEvent { sub_event, team_id }) = magmatic {
-                    Some(EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::RemovedMod,
-                            category: EventCategory::Changes,
-                            description: format!("{batter_name} hit a Magmatic home run!"),
-                            player_tags: vec![batter_id],
-                            team_tags: vec![*team_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "mod": "MAGMATIC",
-                            "type": 0, // ?
-                        })))
-                } else {
-                    None
-                };
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::HomeRun,
-                        category: EventCategory::special_if(magmatic.is_some() || !free_refills.is_empty() || spicy_status.is_special() || is_special),
-                        description: format!("{}{batter_name} hits a {}!{suffix}",
-                                             if magmatic.is_some() { format!("{batter_name} is Magmatic!\n") } else { String::new() },
-                                             match num_runs {
-                                                 1 => "solo home run",
-                                                 2 => "2-run home run",
-                                                 3 => "3-run home run",
-                                                 4 => "grand slam",
-                                                 // TODO Turn this into a Result error
-                                                 _ => panic!("Unknown num runs in home run")
-                                             }),
-                        player_tags,
-                        ..Default::default()
-                    })
-                    .stopped_inhabiting(stopped_inhabiting)
-                    .spicy(spicy_status, batter_id, batter_name)
-                    .children(attraction_child)
-                    .children(free_refill_children)
-                    .children(magmagic_child)
-                    .named_item_damage_before_event(&damaged_items)
-                    .build()
+                eb.build(EventType::HomeRun)
             }
             FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
                 eb.set_game(game);
