@@ -310,6 +310,23 @@ impl<'e> EventParseWrapper<'e> {
             })
     }
 
+    pub fn metadata_f64_opt(&self, key: &'static str) -> Result<Option<f64>, FeedParseError> {
+        let value = self.get_metadata(key)?;
+        if value.is_null() {
+            Ok(None)
+        } else {
+            value.as_f64()
+                .ok_or_else(|| {
+                    FeedParseError::MetadataTypeError {
+                        event_type: self.event_type,
+                        field: key.to_string(),
+                        ty: "f64",
+                    }
+                })
+                .map(|n| Some(n))
+        }
+    }
+
     pub fn metadata_str(&self, key: &'static str) -> Result<&'e str, FeedParseError> {
         self.get_metadata(key)?
             .as_str()

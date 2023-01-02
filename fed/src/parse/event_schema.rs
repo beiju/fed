@@ -3910,11 +3910,12 @@ pub enum FedEventData {
         item_mods: Vec<String>,
 
         /// The increase or decrease that all the wielding player's items caused to their star rating
-        /// before gaining this item
-        player_item_rating_before: f64,
+        /// before gaining this item. Sometimes this is null for no reason I can discern.
+        player_item_rating_before: Option<f64>,
 
-        /// The increase or decrease that all the wielding player's items now cause to their star rating
-        player_item_rating_after: f64,
+        /// The increase or decrease that all the wielding player's items now cause to their star
+        /// rating. Sometimes this is null for no reason I can discern.
+        player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
         player_rating: f64,
@@ -7110,8 +7111,8 @@ impl FedEvent {
                 eb.push_metadata_uuid("itemId", item_id);
                 eb.push_metadata_str("itemName", item_name);
                 eb.push_metadata_str_vec("mods", item_mods);
-                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
-                eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                eb.push_metadata_f64_opt("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64_opt("playerItemRatingBefore", player_item_rating_before);
                 eb.push_metadata_f64("playerRating", player_rating);
                 eb.build(EventType::PlayerGainedItem)
             }

@@ -116,6 +116,11 @@ impl EventBuilder {
             .expect("Internal error: This metadata should always be an object")
     }
 
+    pub fn push_metadata_null(&mut self, key: impl Into<String>) {
+        self.metadata_mut()
+            .insert(key.into(), Value::Null);
+    }
+
     pub fn push_metadata_str(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.metadata_mut()
             .insert(key.into(), Value::String(value.into()));
@@ -153,6 +158,14 @@ impl EventBuilder {
             self.push_metadata_i64(key, 0)
         } else {
             self.push_metadata_f64_forced(key, value)
+        }
+    }
+
+    pub fn push_metadata_f64_opt(&mut self, key: impl Into<String>, value: Option<f64>) {
+        if let Some(n) = value {
+            self.push_metadata_f64(key, n)
+        } else {
+            self.push_metadata_null(key)
         }
     }
 
