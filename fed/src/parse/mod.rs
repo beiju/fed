@@ -1,6 +1,4 @@
 pub mod error;
-pub mod event_schema;
-mod feed_event_util;
 pub mod builder;
 pub mod event_builder_new;
 mod parsers;
@@ -8,14 +6,14 @@ pub mod stream;
 mod parse_wrapper;
 
 use serde::Deserialize;
-use uuid::{Uuid, uuid};
 // the second one is a macro
+use uuid::{Uuid, uuid};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 
 use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::*;
 use crate::parse::parsers::*;
 use crate::parse::parse_wrapper::EventParseWrapper;
+use crate::fed_event::*;
 
 pub use stream::expansion_era_events;
 

@@ -5,7 +5,7 @@ use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use std::fmt::Write;
 use crate::ItemDamaged;
 
-use crate::parse::event_schema::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, Scores, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::fed_event::{FreeRefill, GameEvent, ModChangeSubEvent, ModChangeSubEventWithPlayer, Scores, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilderCommon {
     pub id: Uuid,

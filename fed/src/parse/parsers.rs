@@ -8,7 +8,7 @@ use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 
 use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
-use crate::parse::event_schema::{ActivePositionType, AttrCategory, ModDuration};
+use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;

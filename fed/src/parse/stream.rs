@@ -3,8 +3,7 @@ use std::io::{BufRead, BufReader};
 use flate2::read::GzDecoder;
 
 use crate::parse;
-use crate::parse::error::FeedParseError;
-use crate::parse::event_schema::FedEvent;
+use crate::{FedEvent, FeedParseError};
 
 // const FILE_GZIP: &[u8] = include_bytes!("../../../feed_dump.filtered.ndjson.gz");
 pub const EXPANSION_ERA_START: &'static str = "2021-03-01T05:00:00.000Z";
