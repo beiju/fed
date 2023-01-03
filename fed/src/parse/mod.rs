@@ -63,7 +63,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     // This can happen on the majority of events, so I handle it outside
     let unscatter = event.next_child_if_mod_effect(EventType::RemovedMod, "SCATTERED")?.map(|mut child| {
         let player_name = child.next_parse(parse_terminated(" was Unscattered."))?;
-        ParseOk(Unscatter {
+        ParseOk(ModChangeSubEventWithNamedPlayer {
             sub_event: child.as_sub_event(),
             team_id: child.next_team_id()?,
             player_id: child.next_player_id()?,
