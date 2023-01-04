@@ -74,7 +74,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
     // Ditto
     let attractor_secret_base = event.next_parse_opt(parse_terminated(" enters the Secret Base...\n"))
         .map(|name| {
-            ParseOk(PlayerInfo {
+            ParseOk(PlayerNameId {
                 player_id: event.next_player_id()?,
                 player_name: name.to_string(),
             })
@@ -782,7 +782,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (pitcher, batter_id) = if let Some(name) = pitcher_name {
                 let pitcher_id = event.next_player_id()?;
                 let batter_id = event.next_player_id()?;
-                (Some(PitcherInfo { pitcher_id, pitcher_name: name.to_string() }), batter_id)
+                (Some(PitcherNameId { pitcher_id, pitcher_name: name.to_string() }), batter_id)
             } else {
                 (None, event.next_player_id()?)
             };
@@ -970,7 +970,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let gravity_players = gravity_player_names.into_iter()
                 .map(|player_name| {
-                    ParseOk(PlayerInfo {
+                    ParseOk(PlayerNameId {
                         player_id: event.next_player_id()?,
                         player_name: player_name.to_string(),
                     })
@@ -1018,7 +1018,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             reverbs.push(PlayerReverb::RepeatId(first_player_id));
                         } else {
                             let mut child = event.next_child(EventType::PlayerSwap)?;
-                            reverbs.push(PlayerReverb::Reverb {
+                            reverbs.push(PlayerReverb::Swap {
                                 first_player_id: child.metadata_uuid("aPlayerId")?,
                                 first_player_name: child.metadata_str("aPlayerName")?.to_string(),
                                 first_player_new_location: child.metadata_enum("aLocation")?,
@@ -1299,13 +1299,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         })
                     }
                     ParsedFloodingEffect::Flippers(player_name) => {
-                        FloodingSweptEffect::Flippers(PlayerInfo {
+                        FloodingSweptEffect::Flippers(PlayerNameId {
                             player_id: event.next_player_id()?,
                             player_name: player_name.to_string(),
                         })
                     }
                     ParsedFloodingEffect::Ego(player_name) => {
-                        FloodingSweptEffect::Ego(PlayerInfo {
+                        FloodingSweptEffect::Ego(PlayerNameId {
                             player_id: event.next_player_id()?,
                             player_name: player_name.to_string(),
                         })

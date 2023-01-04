@@ -18,7 +18,7 @@ use crate::{
     ModChangeSubEventWithPlayer,
     ModDuration,
     Parasite,
-    PlayerInfo,
+    PlayerNameId,
     Scores,
     ScoringPlayer,
     SpicyStatus,
@@ -487,7 +487,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_gravity(&mut self, gravity_players: Vec<PlayerInfo>) {
+    pub fn push_gravity(&mut self, gravity_players: Vec<PlayerNameId>) {
         for player in gravity_players {
             self.push_description(&format!("{}'s Gravity kept them in place!", player.player_name));
             self.push_player_tag(player.player_id);

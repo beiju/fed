@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherInfo, PlayerInfo, PlayerReverb, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -675,7 +675,7 @@ impl FedEvent {
                 //     .child(child)
                 //     .build()
             }
-            FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, ref sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
+            FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
                 let child = EventBuilderChild::new(sipped_event)
                     .update(EventBuilderUpdate {
                         r#type: EventType::PlayerStatDecrease,
@@ -686,7 +686,7 @@ impl FedEvent {
                         ..Default::default()
                     })
                     .metadata(json!({
-                        "type": sipped_category.metadata_type(), // ?
+                        "type": sipped_category as i64, // ?
                         "before": rating_before,
                         "after": rating_after,
                     }));
@@ -743,7 +743,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::AmbushedByCrows { ref game, batter_id, ref batter_name, friend_of_crows: ref pitcher } => {
-                let prefix = if let Some(PitcherInfo { pitcher_name, .. }) = pitcher {
+                let prefix = if let Some(PitcherNameId { pitcher_name, .. }) = pitcher {
                     format!("{pitcher_name} calls upon their Friends!\n")
                 } else {
                     String::new()
@@ -753,7 +753,7 @@ impl FedEvent {
                         r#type: EventType::AmbushedByCrows,
                         category: EventCategory::Special,
                         description: format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."),
-                        player_tags: if let Some(PitcherInfo { pitcher_id, .. }) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] },
+                        player_tags: if let Some(PitcherNameId { pitcher_id, .. }) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] },
                         ..Default::default()
                     })
                     .build()
@@ -1030,7 +1030,7 @@ impl FedEvent {
                             ..Default::default()
                         })
                         .metadata(json!({
-                            "type": sipped_category.metadata_type(),
+                            "type": sipped_category as i64,
                             "before": change.rating_before,
                             "after": change.rating_after,
                         }))
@@ -1182,7 +1182,7 @@ impl FedEvent {
                                     eb.push_player_tag(repeated_id);
                                     eb.push_player_tag(repeated_id);
                                 }
-                                PlayerReverb::Reverb { first_player_id, first_player_name, first_player_new_location, second_player_id, second_player_name, second_player_new_location, sub_event } => {
+                                PlayerReverb::Swap { first_player_id, first_player_name, first_player_new_location, second_player_id, second_player_name, second_player_new_location, sub_event } => {
                                     eb.push_player_tag(first_player_id);
                                     eb.push_player_tag(second_player_id);
                                     eb.push_child(sub_event, |mut child| {
@@ -1473,11 +1473,11 @@ impl FedEvent {
                             );
                             write!(description, "\n{player_name} is swept Elsewhere!").unwrap();
                         }
-                        FloodingSweptEffect::Flippers(PlayerInfo { player_name, player_id }) => {
+                        FloodingSweptEffect::Flippers(PlayerNameId { player_name, player_id }) => {
                             player_tags.push(*player_id);
                             write!(description, "\n{player_name} uses their Flippers to slingshot home!").unwrap();
                         }
-                        FloodingSweptEffect::Ego(PlayerInfo { player_name, player_id }) => {
+                        FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
                             player_tags.push(*player_id);
                             write!(description, "\n{player_name}'s Ego keeps them on base!").unwrap();
                         }

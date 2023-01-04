@@ -33,16 +33,6 @@ pub enum Being {
     Lootcrates = 5,
     Namerifeht = 6,
 }
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Unscatter {
-    pub sub_event: SubEvent,
-    pub team_id: Uuid,
-    pub player_id: Uuid,
-    pub player_name: String,
-}
-
 /// Game data. Every game event has one of these.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -61,10 +51,10 @@ pub struct GameEvent {
     pub play: i64,
 
     /// If a player got unscattered this tick, contains information about their unscattering.
-    pub unscatter: Option<Unscatter>,
+    pub unscatter: Option<ModChangeSubEventWithNamedPlayer>,
 
     /// If an Attractor entered the Secret Base on this tick, contains information about this player
-    pub attractor_secret_base: Option<PlayerInfo>,
+    pub attractor_secret_base: Option<PlayerNameId>,
 }
 
 /// Pitch data. The normal-baseball game events all have one of these.
@@ -110,6 +100,7 @@ impl PartialEq for SubEvent {
     }
 }
 
+// TODO Consolidate with ModChangeSubEventWithNamedPlayer
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FreeRefill {
@@ -304,13 +295,14 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[serde(rename_all = "camelCase")]
+#[repr(i64)]
 pub enum AttrCategory {
-    Batting,
-    Pitching,
-    Defense,
-    Baserunning,
+    Batting = 0,
+    Pitching = 1,
+    Defense = 2,
+    Baserunning = 3,
 }
 
 impl Display for AttrCategory {
@@ -320,18 +312,6 @@ impl Display for AttrCategory {
             AttrCategory::Pitching => { write!(f, "pitching") }
             AttrCategory::Defense => { write!(f, "defensive") }
             AttrCategory::Baserunning => { write!(f, "baserunning") }
-        }
-    }
-}
-
-impl AttrCategory {
-    // TODO This should be a repr on the enum
-    pub fn metadata_type(&self) -> i32 {
-        match self {
-            AttrCategory::Batting => { 0 }
-            AttrCategory::Pitching => { 1 }
-            AttrCategory::Defense => { 2 }
-            AttrCategory::Baserunning => { 3 }
         }
     }
 }
@@ -561,7 +541,7 @@ impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
     }
 }
 
-
+// TODO doc comments
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedbackPlayerData {
@@ -575,9 +555,12 @@ pub struct FeedbackPlayerData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum PlayerReverb {
+    /// There is a repeated Uuid in playerTags at this position. This is the only indication that,
+    /// presumably, the sim rolled to swap a player with themselves.
     RepeatId(Uuid),
 
-    Reverb {
+    /// Normal reverb effect, two players are swapped
+    Swap {
         /// Uuid of the first player involved in this reverb
         first_player_id: Uuid,
 
@@ -637,7 +620,7 @@ pub enum StatChangeCategory {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerInfo {
+pub struct PlayerNameId {
     /// Player uuid
     pub player_id: Uuid,
 
@@ -648,7 +631,7 @@ pub struct PlayerInfo {
 // This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PitcherInfo {
+pub struct PitcherNameId {
     /// Pitcher uuid
     pub pitcher_id: Uuid,
 
@@ -670,8 +653,8 @@ pub struct Scattered {
 #[serde(rename_all = "camelCase")]
 pub enum FloodingSweptEffect {
     Elsewhere(ModChangeSubEventWithNamedPlayer),
-    Flippers(PlayerInfo),
-    Ego(PlayerInfo),
+    Flippers(PlayerNameId),
+    Ego(PlayerNameId),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -785,7 +768,7 @@ pub enum ReturnFromElsewhereFlavor {
         sub_event: SubEvent,
     },
     /// Fake returns from elsewhere. As far as I know this only happens when a Receiver returns from
-    /// Elsewhere after being sent there by Receiving Elsewhere from an Echo. There's no extra data
+    /// Elsewhere after being sent there by Receiving Elsewhere from an Echo. There's no metadata
     /// on a false return from elsewhere.
     False {
         /// True if the player is trapped in a giant peanut shell, false otherwise
@@ -1115,8 +1098,6 @@ pub struct ItemRepaired {
     pub sub_event: SubEvent,
 }
 
-// This event is intended for situations where the player's id and team are already encoded in a
-// ItemGained struct. If a player
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemDroppedForNewItem {
     /// Uuid of item that was dropped
@@ -2255,7 +2236,7 @@ pub enum FedEventData {
 
         /// If this is a Friends of Crows proc, the uuid and name of the pitcher who called upon
         /// their friends
-        friend_of_crows: Option<PitcherInfo>,
+        friend_of_crows: Option<PitcherNameId>,
     },
 
     /// Sun2 set a Win. This version of the event shows up in the Outcomes section and is separate
@@ -2499,7 +2480,7 @@ pub enum FedEventData {
         reverb_type: ReverbType,
 
         /// Players who were kept in place with Gravity
-        gravity_players: Vec<PlayerInfo>,
+        gravity_players: Vec<PlayerNameId>,
     },
 
     /// Tarot readings

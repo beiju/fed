@@ -644,7 +644,7 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
-    pub fn game(&mut self, unscatter: Option<Unscatter>, attractor_secret_base: Option<PlayerInfo>) -> Result<GameEvent, FeedParseError> {
+    pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 
         // Order is very important here
