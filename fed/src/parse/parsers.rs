@@ -1288,15 +1288,17 @@ pub(crate) fn parse_player_earlbird(input: &str) -> ParserResult<EarlbirdsChange
 }
 
 pub(crate) enum LateToThePartyChange<'a> {
-    Added(&'a str),
-    Removed(&'a str), // This one does not say [object Object]
+    AddedToTeam(&'a str),
+    RemovedFromTeam(&'a str), // This one does not say [object Object]
+    AddedToPlayer(&'a str),
+    RemovedFromPlayer(&'a str),
 }
 
 pub(crate) fn parse_late_to_the_party(input: &str) -> ParserResult<LateToThePartyChange> {
-    let (input, _) = tag("Late to the Party!\n").parse(input)?;
     let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Late to the Party!")).map(|n| LateToThePartyChange::Added(n)),
-        preceded(tag("Late to the Party wears off for the "), parse_terminated(".")).map(|n| LateToThePartyChange::Removed(n)),
+        preceded(tag("Late to the Party!\nThe "), parse_terminated(" are Late to the Party!")).map(|n| LateToThePartyChange::AddedToTeam(n)),
+        preceded(tag("Late to the Party!\nLate to the Party wears off for the "), parse_terminated(".")).map(|n| LateToThePartyChange::RemovedFromTeam(n)),
+        parse_terminated(" is Late to the Party.").map(|n| LateToThePartyChange::AddedToPlayer(n))
     )).parse(input)?;
 
     Ok((input, result))

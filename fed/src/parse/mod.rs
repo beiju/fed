@@ -1796,7 +1796,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::LateToTheParty => {
             match event.next_parse(parse_late_to_the_party)? {
-                LateToThePartyChange::Added(team_nickname) => {
+                LateToThePartyChange::AddedToTeam(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let mut sub_event = event.next_child_if_mod_effect(EventType::AddedModFromOtherMod, "OVERPERFORMING")?;
@@ -1807,7 +1807,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: sub_event.map(|e| e.as_sub_event()),
                     }
                 }
-                LateToThePartyChange::Removed(team_nickname) => {
+                LateToThePartyChange::RemovedFromTeam(team_nickname) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     FedEventData::LateToThePartyRemoved {
@@ -1815,6 +1815,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         team_nickname: team_nickname.to_string(),
                     }
                 }
+                LateToThePartyChange::AddedToPlayer(player_name) => {
+                    let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+                    FedEventData::LateToThePartyAddedToPlayer {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        sub_event: child.as_sub_event(),
+                    }
+                }
+                LateToThePartyChange::RemovedFromPlayer(_) => { todo!() }
             }
         }
         EventType::ShameDonor => { todo!() }
@@ -2492,6 +2503,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::NoFreeItemSlot => { todo!() }
+        EventType::FaxMachine => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

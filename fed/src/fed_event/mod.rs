@@ -3999,6 +3999,25 @@ pub enum FedEventData {
         second_player_dropped_item: Option<String>,
     },
 
+
+    /// Late to the Party mod procs at the beginning of Lateseason
+    #[serde(rename_all = "camelCase")]
+    LateToThePartyAddedToPlayer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Team Uuid of Late to to the Party player
+        team_id: Uuid,
+
+        /// Uuid of Late to to the Party player
+        player_id: Uuid,
+
+        /// Name of Late to the Party player
+        player_name: String,
+
+        /// Metadata for the sub-event that adds the Overperforming mod
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
