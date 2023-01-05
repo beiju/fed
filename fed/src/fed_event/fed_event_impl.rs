@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -3117,6 +3117,40 @@ impl FedEvent {
                     child.build(EventType::AddedModFromOtherMod)
                 });
                 eb.build(EventType::LateToTheParty)
+            }
+            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("10 Runs collected.");
+                eb.push_description("Incoming Shadow Fax...");
+                eb.push_description(&format!("{exiting_pitcher_name} is replaced by {entering_pitcher_name}."));
+                eb.push_player_tag(exiting_pitcher_id);
+                eb.push_player_tag(entering_pitcher_id);
+                eb.push_child(player_swap_sub_event, |mut child| {
+                    child.push_description(&format!("The {team_nickname} made a roster move."));
+                    child.push_player_tag(exiting_pitcher_id);
+                    child.push_player_tag(entering_pitcher_id);
+                    child.push_team_tag(team_id);
+                    child.push_metadata_i64("aLocation", PositionType::Rotation as i64);
+                    child.push_metadata_uuid("aPlayerId", exiting_pitcher_id);
+                    child.push_metadata_str("aPlayerName", &exiting_pitcher_name);
+                    child.push_metadata_i64("bLocation", PositionType::Bullpen as i64);
+                    child.push_metadata_uuid("bPlayerId", entering_pitcher_id);
+                    child.push_metadata_str("bPlayerName", &entering_pitcher_name);
+                    child.push_metadata_uuid("teamId", team_id);
+                    child.push_metadata_str("teamName", team_nickname);
+                    child.build(EventType::PlayerSwap)
+                });
+                eb.push_child(enter_shadows_sub_event, |mut child| {
+                    child.push_description(&format!("{exiting_pitcher_name} entered the Shadows."));
+                    child.push_player_tag(exiting_pitcher_id);
+                    child.push_team_tag(team_id);
+                    child.push_metadata_f64("after", rating_after);
+                    child.push_metadata_f64("before", rating_before);
+                    child.push_metadata_i64("type", 4 /* "all" attribute category */);
+                    child.build(EventType::PlayerStatIncrease)
+                });
+                eb.build(EventType::FaxMachine)
             }
         }
     }

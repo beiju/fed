@@ -1819,3 +1819,11 @@ pub(crate) fn parse_community_chest_ingame_for_player(input: &str) -> ParserResu
     
     Ok((input, (player_name, item_name, dropped_item_name)))
 }
+
+pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("10 Runs collected.\nIncoming Shadow Fax...\n").parse(input)?;
+    let (input, exiting_pitcher_name) = parse_terminated(" is replaced by ").parse(input)?;
+    let (input, entering_pitcher_name) = parse_terminated(".").parse(input)?;
+
+    Ok((input, (exiting_pitcher_name, entering_pitcher_name)))
+}

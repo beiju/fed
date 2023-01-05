@@ -2503,7 +2503,24 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::NoFreeItemSlot => { todo!() }
-        EventType::FaxMachine => { todo!() }
+        EventType::FaxMachine => {
+            let (_exiting_pitcher_name, _entering_pitcher_name) = event.next_parse(parse_fax_machine)?;
+            let move_child = event.next_child(EventType::PlayerSwap)?;
+            let boost_child = event.next_child(EventType::PlayerStatIncrease)?;
+            FedEventData::Fax {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: move_child.metadata_uuid("teamId")?,
+                team_nickname: move_child.metadata_str("teamName")?.to_string(),
+                exiting_pitcher_id: move_child.metadata_uuid("aPlayerId")?,
+                exiting_pitcher_name: move_child.metadata_str("aPlayerName")?.to_string(),
+                entering_pitcher_id: move_child.metadata_uuid("bPlayerId")?,
+                entering_pitcher_name: move_child.metadata_str("bPlayerName")?.to_string(),
+                rating_before: boost_child.metadata_f64("before")?,
+                rating_after: boost_child.metadata_f64("after")?,
+                player_swap_sub_event: move_child.as_sub_event(),
+                enter_shadows_sub_event: boost_child.as_sub_event(),
+            }
+        }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

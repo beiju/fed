@@ -3999,7 +3999,6 @@ pub enum FedEventData {
         second_player_dropped_item: Option<String>,
     },
 
-
     /// Late to the Party mod procs at the beginning of Lateseason
     #[serde(rename_all = "camelCase")]
     LateToThePartyAddedToPlayer {
@@ -4017,6 +4016,43 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event that adds the Overperforming mod
         sub_event: SubEvent,
+    },
+
+    /// Fax Machine activates
+    #[serde(rename_all = "camelCase")]
+    Fax {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of team whose pitchers faxed
+        team_id: Uuid,
+
+        /// Nickname of team whose pitchers faxed
+        team_nickname: String,
+
+        /// Uuid of pitcher who faxed out
+        exiting_pitcher_id: Uuid,
+
+        /// Name of pitcher who faxed out
+        exiting_pitcher_name: String,
+
+        /// Uuid of pitcher who faxed in
+        entering_pitcher_id: Uuid,
+
+        /// Name of pitcher who faxed in
+        entering_pitcher_name: String,
+
+        /// Exiting pitcher's rating before the shadow boost
+        rating_before: f64,
+
+        /// Exiting pitcher's rating after the shadow boost
+        rating_after: f64,
+
+        /// Metadata for the sub-event associated with swapping the players
+        player_swap_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with the shadow boost
+        enter_shadows_sub_event: SubEvent,
     },
 }
 
