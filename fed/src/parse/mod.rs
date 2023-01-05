@@ -163,7 +163,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             sub_event: sub_event.as_sub_event(),
                             player_name: refiller_name.to_string(),
                             player_id: sub_event.next_player_id()?,
-                            team_id: sub_event.next_team_id_opt(),
+                            team_id: sub_event.next_team_id_opt()?,
                         })
                     }).transpose()?,
                     runner_item_damage,
@@ -223,12 +223,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     }
                 }
                 ParsedWalk::MindTrickStrikeoutIntoWalk((batter_name, strikeout_type)) => {
+                    let base_instincts = event.next_parse_opt(parse_base_instincts);
+                    let scores = event.parse_scores(" scores!")?;
                     FedEventData::MindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         strikeout_type,
                         batter_id: event.next_player_id()?,
                         batter_name: batter_name.to_string(),
-                        scores: event.parse_scores(" scores!")?,
+                        base_instincts,
+                        scores,
                     }
                 }
                 ParsedWalk::MindTrickWalkIntoStrikeout((batter_name, pitcher_name)) => {
@@ -544,7 +547,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
                         inhabited_player_id,
-                        inhabiting_player_team_id: child.and_then(|mut c| c.next_team_id_opt()),
+                        inhabiting_player_team_id: child
+                            .and_then(|mut c| c.next_team_id_opt().transpose())
+                            .transpose()?,
                     })
                 }).transpose()?,
                 is_repeating,
@@ -847,7 +852,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ingredient1: ingredient1.to_string(),
                 ingredient2: ingredient2.to_string(),
                 sub_event: sub_event.as_sub_event(),
-                team_id: sub_event.next_team_id_opt(),
+                team_id: sub_event.next_team_id_opt()?,
             }
         }
         EventType::CoffeeBean => {
@@ -876,7 +881,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
                 gained_mod,
                 sub_event: sub_event.as_sub_event(),
-                team_id: sub_event.next_team_id_opt(),
+                team_id: sub_event.next_team_id_opt()?,
                 previous: prev_mod.map(|s| s.try_into()
                     .map_err(|_| FeedParseError::UnexpectedMetadataValue {
                         event_type: sub_event.event_type,
@@ -1011,7 +1016,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 ParsedReverbType::SeveralPlayers => {
                     let mut reverbs = Vec::new();
                     let mut team_id = None;
-                    while let Some(first_player_id) = event.next_player_id_opt() {
+                    while let Some(first_player_id) = event.next_player_id_opt()? {
                         // Player IDs must come in pairs
                         let second_player_id = event.next_player_id()?;
                         if first_player_id == second_player_id {
@@ -1269,7 +1274,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let blessing_title = event.next_parse(parse_blessing_won)?;
 
             FedEventData::BlessingWon {
-                team_tags: event.team_tags().into(),
+                team_tags: event.team_tags()?.into(),
                 blessing_title: blessing_title.into(),
                 metadata: event.full_metadata().clone(),
             }
@@ -1464,7 +1469,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let mut child = event.next_child(EventType::AddedMod)?;
             FedEventData::EchoChamber {
                 game: event.game(unscatter, attractor_secret_base)?,
-                team_id: child.next_team_id_opt(),
+                team_id: child.next_team_id_opt()?,
                 player_id: child.next_player_id()?,
                 player_name: player_name.to_string(),
                 which_mod,
@@ -1564,14 +1569,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             FedEventData::TarotReading {
                 description: event.description().into(),
                 metadata: event.metadata().clone(),
-                player_tags: event.player_tags().into(),
-                team_tags: event.team_tags().into(),
+                player_tags: event.player_tags()?.into(),
+                team_tags: event.team_tags()?.into(),
             }
         }
         EventType::EmergencyAlert => {
             FedEventData::EmergencyAlert {
                 message: event.description().into(),
-                team_tags: event.team_tags().into(),
+                team_tags: event.team_tags()?.into(),
             }
         }
         EventType::ReturnFromElsewhere => {
@@ -1901,7 +1906,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         EventType::ModExpires => {
             let mods = event.metadata_str_vec("mods")?
                 .into_iter().map(String::from).collect();
-            if let Some(player_id) = event.next_player_id_opt() {
+            if let Some(player_id) = event.next_player_id_opt()? {
                 let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
                 FedEventData::PlayerModExpires {
                     team_id: event.next_team_id()?,
@@ -2380,7 +2385,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             FedEventData::Tidings {
                 message: event.description().into(),
                 metadata: event.full_metadata().clone(),
-                player_tags: event.player_tags().into(),
+                player_tags: event.player_tags()?.into(),
             }
         }
         EventType::GlitterCrateDrop => {
@@ -2596,7 +2601,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedMod {
         team_id: event.next_team_id()?,
-        player_id: event.next_player_id_opt(),
+        player_id: event.next_player_id_opt()?,
         description: event.description().into(),
         r#mod: event.metadata_str("mod")?.to_string(),
         mod_duration: event.metadata_enum("type")?,

@@ -67,6 +67,7 @@ pub struct EventMetadata {
 #[derive(Copy, Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
 #[repr(i32)]
 pub enum EventCategory {
+    Redacted = -1,
     #[default]
     Game = 0,
     Changes = 1,
@@ -94,9 +95,10 @@ pub struct EventuallyEvent {
     #[builder(default)] pub metadata: EventMetadata,
     pub blurb: String,
     pub description: String,
-    #[builder(default)] pub player_tags: Vec<Uuid>,
-    #[builder(default)] pub game_tags: Vec<Uuid>,
-    #[builder(default)] pub team_tags: Vec<Uuid>,
+    // These three are null for redacted events
+    #[builder(default)] pub player_tags: Option<Vec<Uuid>>,
+    #[builder(default)] pub game_tags: Option<Vec<Uuid>>,
+    #[builder(default)] pub team_tags: Option<Vec<Uuid>>,
     pub sim: String,
     pub day: i32,
     pub season: i32,

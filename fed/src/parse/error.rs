@@ -19,6 +19,12 @@ pub enum FeedParseError {
         err: String,
     },
 
+    #[error("Expected {tag_type} tag(s) to be non-null for {event_type:?} event")]
+    MissingTags {
+        event_type: EventType,
+        tag_type: &'static str,
+    },
+
     #[error("Expected at least {expected_at_least} {tag_type} tag(s) for {event_type:?} event")]
     NotEnoughTags {
         event_type: EventType,

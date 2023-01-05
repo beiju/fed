@@ -445,7 +445,7 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 }
 
 pub(crate) enum ParsedWalk<'s> {
-    Ordinary((&'s str, Option<i32>)),
+    Ordinary((&'s str, Option<Base>)),
     Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
     MindTrickStrikeoutIntoWalk((&'s str, StrikeoutType)),
     MindTrickWalkIntoStrikeout((&'s str, &'s str)),
@@ -461,19 +461,19 @@ pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     )).parse(input)
 }
 
-pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<i32> {
+pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<Base> {
     let (input, _) = tag("\nBase Instincts take them directly to ").parse(input)?;
     let (input, which) = alt((
-        tag("second").map(|_| 2),
-        tag("third").map(|_| 3),
-        tag("fourth").map(|_| 4), // when fifth base is present
+        tag("second").map(|_| Base::Second),
+        tag("third").map(|_| Base::Third),
+        tag("fourth").map(|_| Base::Fourth), // when fifth base is present
     )).parse(input)?;
     let (input, _) = tag(" base!").parse(input)?;
 
     Ok((input, which))
 }
 
-pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<i32>)> {
+pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<Base>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.").parse(input)?;
 
     let (input, base_instincts) = opt(parse_base_instincts).parse(input)?;

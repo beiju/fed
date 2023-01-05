@@ -429,7 +429,7 @@ impl FedEvent {
             }
             FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
                 let base_instincts_str = if let Some(base) = base_instincts {
-                    format!("\nBase Instincts take them directly to {} base!", base_name(base))
+                    format!("\nBase Instincts take them directly to {base} base!")
                 } else {
                     String::new()
                 };
@@ -2979,14 +2979,17 @@ impl FedEvent {
                 });
                 eb.build(EventType::Earlbird)
             }
-            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name, scores } => {
+            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{batter_name} strikes out {strikeout_type}."));
                 eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
-                eb.push_player_tag(batter_id);
+                if let Some(base) = base_instincts {
+                    eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
+                }
                 eb.push_scores(scores, "scores!");
+                eb.push_player_tag(batter_id);
                 eb.build(EventType::Walk)
             }
             FedEventData::MindTrickStrikeout { game, batter_id, batter_name, pitcher_name } => {

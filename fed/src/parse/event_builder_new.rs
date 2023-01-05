@@ -53,9 +53,9 @@ impl EventBuilder {
             metadata: Default::default(),
             blurb: "".to_string(),
             description: "".to_string(),
-            player_tags: vec![],
-            game_tags: vec![],
-            team_tags: vec![],
+            player_tags: Some(vec![]),
+            game_tags: Some(vec![]),
+            team_tags: Some(vec![]),
             sim,
             day,
             season,
@@ -82,8 +82,8 @@ impl EventBuilder {
     }
 
     pub fn set_game(&mut self, game: GameEvent) {
-        self.0.game_tags = vec![game.game_id];
-        self.0.team_tags = vec![game.away_team, game.home_team];
+        self.0.game_tags = Some(vec![game.game_id]);
+        self.0.team_tags = Some(vec![game.away_team, game.home_team]);
         self.0.metadata.play = Some(game.play);
         // Root events of games are always -1, non-games are null
         self.0.metadata.sub_play = Some(-1);
@@ -124,11 +124,15 @@ impl EventBuilder {
     }
 
     pub fn push_player_tag(&mut self, player_id: Uuid) {
-        self.0.player_tags.push(player_id)
+        self.0.player_tags.as_mut()
+            .expect("Builder should not be used for events with no player tags")
+            .push(player_id)
     }
 
     pub fn push_team_tag(&mut self, team_id: Uuid) {
-        self.0.team_tags.push(team_id)
+        self.0.team_tags.as_mut()
+            .expect("Builder should not be used for events with no team tags")
+            .push(team_id)
     }
 
     fn metadata_mut(&mut self) -> &mut Map<String, Value> {

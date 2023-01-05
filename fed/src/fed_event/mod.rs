@@ -1222,7 +1222,7 @@ impl Display for HitType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum Base {
     First,
     Second,
@@ -1916,9 +1916,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores,
 
-        /// If the batter went to a later base with Base Instincts, this is the base number.
+        /// If the batter went to a later base with Base Instincts, this is the base they went to.
         /// Otherwise null.
-        base_instincts: Option<i32>,
+        base_instincts: Option<Base>,
 
         /// Damage that the batter's item took, if any
         batter_item_damage: Option<ItemDamaged>,
@@ -3787,6 +3787,10 @@ pub enum FedEventData {
 
         /// Name of the batter that did the mind trick
         batter_name: String,
+
+        /// If the batter went to a later base with Base Instincts, this is the base they went to.
+        /// Otherwise null.
+        base_instincts: Option<Base>,
 
         // /// Meta about the pitcher's item breaking, if it broke, otherwise null.
         // pitcher_item_damage: Option<ItemDamaged>,
