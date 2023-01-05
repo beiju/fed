@@ -1405,7 +1405,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             item_id: break_child.metadata_uuid("itemId")?,
                             item_name: break_child.metadata_str("itemName")?.to_string(),
                             item_name_plural: None,
-                            item_mods: vec![],
+                            item_mods: break_child.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
                             durability: break_child.metadata_i64("itemDurability")?,
                             health: break_child.metadata_i64("itemHealthAfter")?,
                             player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,

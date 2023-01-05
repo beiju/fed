@@ -556,7 +556,7 @@ impl<'e> EventParseWrapper<'e> {
             item_id: damage_child.metadata_uuid("itemId")?,
             item_name: damage_child.metadata_str("itemName")?.to_string(),
             item_name_plural,
-            item_mods: vec![],
+            item_mods: damage_child.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
             durability: damage_child.metadata_i64("itemDurability")?,
             health: damage_child.metadata_i64("itemHealthAfter")?,
             player_item_rating_before: damage_child.metadata_f64("playerItemRatingBefore")?,
