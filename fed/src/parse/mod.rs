@@ -82,7 +82,12 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         .transpose()?;
 
     let data = match event.event_type {
-        EventType::Undefined => { todo!() }
+        EventType::Undefined => {
+            FedEventData::Redacted {
+                description: event.description().to_string(),
+                scales: event.metadata_i64("scales")?,
+            }
+        }
         EventType::LetsGo => {
             event.next_parse_tag("Let's Go!")?;
             FedEventData::LetsGo {

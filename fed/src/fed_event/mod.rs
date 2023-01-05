@@ -4063,6 +4063,16 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with the shadow boost
         enter_shadows_sub_event: SubEvent,
     },
+
+    /// A Redacted event
+    #[serde(rename_all = "camelCase")]
+    Redacted {
+        /// Event description, which seems to contain only "|" characters and spaces
+        description: String,
+
+        /// Number of upscales. This is like nuts but for Redacted events
+        scales: i64,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]

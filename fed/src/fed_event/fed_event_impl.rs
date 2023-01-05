@@ -3155,6 +3155,34 @@ impl FedEvent {
                 });
                 eb.build(EventType::FaxMachine)
             }
+            FedEventData::Redacted { description, scales } => {
+                // EventBuilder intentionally doesn't support Redacted events because they violate
+                // too many invariants (like "tags arrays exist")
+                EventuallyEvent {
+                    id: self.id,
+                    created: self.created,
+                    r#type: EventType::Undefined,
+                    category: EventCategory::Redacted,
+                    metadata: eventually_api::EventMetadata {
+                        other: json!({
+                            "redacted": true,
+                            "scales": scales,
+                        }),
+                        ..Default::default()
+                    },
+                    blurb: "".to_string(),
+                    description,
+                    player_tags: None,
+                    game_tags: None,
+                    team_tags: None,
+                    sim: self.sim,
+                    day: self.day,
+                    season: self.season,
+                    tournament: self.tournament,
+                    phase: self.phase.into(),
+                    nuts: self.nuts,
+                }
+            }
         }
     }
 
