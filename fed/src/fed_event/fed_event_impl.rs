@@ -365,6 +365,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
+                eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_scores(scores, "advances on the sacrifice.");
                 // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
                 // definitely somewhere after scores. Rest of the order is not yet known
@@ -373,7 +374,6 @@ impl FedEvent {
                 eb.push_item_damage(fielder_item_damage, &fielder_name);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
-                eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.build(EventType::GroundOut)
             }
             FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, ref runner_item_damage, is_special } => {
@@ -3118,7 +3118,7 @@ impl FedEvent {
                 });
                 eb.build(EventType::LateToTheParty)
             }
-            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event } => {
+            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("10 Runs collected.");
@@ -3134,7 +3134,7 @@ impl FedEvent {
                     child.push_metadata_i64("aLocation", PositionType::Rotation as i64);
                     child.push_metadata_uuid("aPlayerId", exiting_pitcher_id);
                     child.push_metadata_str("aPlayerName", &exiting_pitcher_name);
-                    child.push_metadata_i64("bLocation", PositionType::Bullpen as i64);
+                    child.push_metadata_i64("bLocation", shadows_location as i64);
                     child.push_metadata_uuid("bPlayerId", entering_pitcher_id);
                     child.push_metadata_str("bPlayerName", &entering_pitcher_name);
                     child.push_metadata_uuid("teamId", team_id);

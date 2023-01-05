@@ -4042,6 +4042,11 @@ pub enum FedEventData {
         /// Name of pitcher who faxed in
         entering_pitcher_name: String,
 
+        /// Before [todo: whichever season merged the shadows], which section of the shadows the
+        /// player exited/entered.
+        // TODO: Make None after shadows were merged?
+        shadows_location: ShadowPositionType,
+
         /// Exiting pitcher's rating before the shadow boost
         rating_before: f64,
 

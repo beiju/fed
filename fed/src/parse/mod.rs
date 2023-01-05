@@ -2515,6 +2515,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 exiting_pitcher_name: move_child.metadata_str("aPlayerName")?.to_string(),
                 entering_pitcher_id: move_child.metadata_uuid("bPlayerId")?,
                 entering_pitcher_name: move_child.metadata_str("bPlayerName")?.to_string(),
+                shadows_location: move_child.metadata_enum("bLocation")?,
                 rating_before: boost_child.metadata_f64("before")?,
                 rating_after: boost_child.metadata_f64("after")?,
                 player_swap_sub_event: move_child.as_sub_event(),
