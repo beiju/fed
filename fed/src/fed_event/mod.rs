@@ -4086,6 +4086,25 @@ pub enum FedEventData {
         #[serde(flatten)]
         mod_change: ModChangeSubEventWithNamedPlayer,
     },
+
+    /// Late to the Party mod removed at the beginning of Postseason
+    #[serde(rename_all = "camelCase")]
+    LateToThePartyRemovedFromPlayer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Team Uuid of Late to to the Party player
+        team_id: Uuid,
+
+        /// Uuid of Late to to the Party player
+        player_id: Uuid,
+
+        /// Name of Late to the Party player
+        player_name: String,
+
+        /// Metadata for the sub-event that removes the Overperforming mod
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]

@@ -1836,7 +1836,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         sub_event: child.as_sub_event(),
                     }
                 }
-                LateToThePartyChange::RemovedFromPlayer(_) => { todo!() }
+                LateToThePartyChange::RemovedFromPlayer(player_name) => {
+                    let mut child = event.next_child(EventType::RemovedModFromOtherMod)?;
+                    FedEventData::LateToThePartyRemovedFromPlayer {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: child.next_team_id()?,
+                        player_id: child.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        sub_event: child.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::ShameDonor => { todo!() }

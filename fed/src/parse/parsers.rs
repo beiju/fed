@@ -1298,7 +1298,8 @@ pub(crate) fn parse_late_to_the_party(input: &str) -> ParserResult<LateToThePart
     let (input, result) = alt((
         preceded(tag("Late to the Party!\nThe "), parse_terminated(" are Late to the Party!")).map(|n| LateToThePartyChange::AddedToTeam(n)),
         preceded(tag("Late to the Party!\nLate to the Party wears off for the "), parse_terminated(".")).map(|n| LateToThePartyChange::RemovedFromTeam(n)),
-        parse_terminated(" is Late to the Party.").map(|n| LateToThePartyChange::AddedToPlayer(n))
+        parse_terminated(" is Late to the Party.").map(|n| LateToThePartyChange::AddedToPlayer(n)),
+        parse_terminated(" is no longer Late to the Party.").map(|n| LateToThePartyChange::RemovedFromPlayer(n)),
     )).parse(input)?;
 
     Ok((input, result))

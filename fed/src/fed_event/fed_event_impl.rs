@@ -3202,6 +3202,23 @@ impl FedEvent {
                 }
                 eb.build(EventType::Ambitious)
             }
+            FedEventData::LateToThePartyRemovedFromPlayer { game, team_id, player_id, player_name, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                let description = format!("{player_name} is no longer Late to the Party.");
+                eb.push_description(&description);
+                eb.push_player_tag(player_id);
+                eb.push_child(sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(player_id);
+                    child.push_team_tag(team_id);
+                    child.push_metadata_str("mod", "OVERPERFORMING");
+                    child.push_metadata_str("source", "LATE_TO_PARTY");
+                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child.build(EventType::RemovedModFromOtherMod)
+                });
+                eb.build(EventType::LateToTheParty)
+            }
         }
     }
 
