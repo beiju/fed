@@ -2506,12 +2506,16 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::Ambitious => {
-            let player_name = event.next_parse(parse_terminated(" is feeling Ambitious..."))?;
+            let (player_name, was_added) = event.next_parse(parse_ambitious)?;
 
-            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            let mut child = event.next_child(if was_added {
+                EventType::AddedModFromOtherMod
+            } else {
+                EventType::RemovedModFromOtherMod
+            })?;
             FedEventData::Ambitious {
                 game: event.game(unscatter, attractor_secret_base)?,
-                was_added: true,
+                was_added,
                 mod_change: ModChangeSubEventWithNamedPlayer {
                     sub_event: child.as_sub_event(),
                     team_id: child.next_team_id()?,

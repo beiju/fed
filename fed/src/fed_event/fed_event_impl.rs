@@ -3199,6 +3199,19 @@ impl FedEvent {
                         child.push_metadata_i64("type", ModDuration::Permanent as i64);
                         child.build(EventType::AddedModFromOtherMod)
                     });
+                } else {
+                    let description = format!("{} loses their Ambition.", mod_change.player_name);
+                    eb.push_description(&description);
+                    eb.push_player_tag(mod_change.player_id);
+                    eb.push_child(mod_change.sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_player_tag(mod_change.player_id);
+                        child.push_team_tag(mod_change.team_id);
+                        child.push_metadata_str("mod", "OVERPERFORMING");
+                        child.push_metadata_str("source", "AMBITIOUS");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::RemovedModFromOtherMod)
+                    });
                 }
                 eb.build(EventType::Ambitious)
             }

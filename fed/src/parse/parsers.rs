@@ -129,7 +129,7 @@ pub enum StrikeType {
 pub(crate) fn parse_strike(double_strike: bool) -> impl Fn(&str) -> ParserResult<(StrikeType, i32, i32)> {
     move |input| {
         let (input, strike_type) = alt((
-            tag(if double_strike { "Strikes, swinging. "} else { "Strike, swinging. " }).map(|_| StrikeType::Swinging),
+            tag(if double_strike { "Strikes, swinging. " } else { "Strike, swinging. " }).map(|_| StrikeType::Swinging),
             tag("Strike, looking. ").map(|_| StrikeType::Looking),
             tag("Strike, flinching. ").map(|_| StrikeType::Flinching),
         )).parse(input)?;
@@ -1035,7 +1035,7 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
 
 pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, TimeElsewhere, bool)> {
     let (input, player_name) = parse_terminated(" has ").parse(input)?;
-    let (input, is_peanut) = alt((tag("rolled back").map(|_| true),tag("returned").map(|_| false))).parse(input)?;
+    let (input, is_peanut) = alt((tag("rolled back").map(|_| true), tag("returned").map(|_| false))).parse(input)?;
     let (input, _) = tag(" from Elsewhere after ").parse(input)?;
     let (input, after_days) = alt((
         tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
@@ -1289,7 +1289,8 @@ pub(crate) fn parse_player_earlbird(input: &str) -> ParserResult<EarlbirdsChange
 
 pub(crate) enum LateToThePartyChange<'a> {
     AddedToTeam(&'a str),
-    RemovedFromTeam(&'a str), // This one does not say [object Object]
+    RemovedFromTeam(&'a str),
+    // This one does not say [object Object]
     AddedToPlayer(&'a str),
     RemovedFromPlayer(&'a str),
 }
@@ -1817,7 +1818,7 @@ pub(crate) fn parse_community_chest_ingame_for_player(input: &str) -> ParserResu
         pair(parse_terminated(" and dropped "), parse_terminated(".")).map(|(g, d)| (g, Some(d))),
         parse_terminated(".").map(|g| (g, None)),
     )).parse(input)?;
-    
+
     Ok((input, (player_name, item_name, dropped_item_name)))
 }
 
@@ -1827,4 +1828,11 @@ pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<(&str, &str)> {
     let (input, entering_pitcher_name) = parse_terminated(".").parse(input)?;
 
     Ok((input, (exiting_pitcher_name, entering_pitcher_name)))
+}
+
+pub(crate) fn parse_ambitious(input: &str) -> ParserResult<(&str, bool)> {
+    alt((
+        parse_terminated(" is feeling Ambitious...").map(|n| (n, true)),
+        parse_terminated(" loses their Ambition.").map(|n| (n, false)),
+    )).parse(input)
 }
