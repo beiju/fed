@@ -430,6 +430,9 @@ impl EventBuilder {
             self.set_category(EventCategory::Special);
             self.push_description(&format!("{pitcher_name} fires a Double Strike!"));
         }
+        if let Some(pitcher_name) = pitch.acidic_pitch {
+            self.push_description(&format!("{pitcher_name} throws an Acidic pitch!"));
+        }
     }
 
     pub fn push_charge_blood(&mut self, power_charge: Option<ModChangeSubEvent>, batter_name: &str, batter_id: Uuid, a: &str) {

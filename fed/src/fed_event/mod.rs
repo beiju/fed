@@ -63,6 +63,9 @@ pub struct GameEvent {
 pub struct GamePitch {
     /// If a Double Strike was fired, the name of the pitcher who fired it. Otherwise null.
     pub double_strike: Option<String>,
+
+    /// If an Acidic pitch was thrown, the name of the pitcher who threw it. Otherwise null.
+    pub acidic_pitch: Option<String>,
 }
 
 // This contains only the event properties that will differ from the parent, including id, created,

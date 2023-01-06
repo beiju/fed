@@ -659,8 +659,12 @@ impl<'e> EventParseWrapper<'e> {
         let double_strike = self.next_parse_opt(parse_terminated(" fires a Double Strike!\n"))
             .map(|player_name| player_name.to_string());
         
+        let acidic_pitch = self.next_parse_opt(parse_terminated(" throws an Acidic pitch!\n"))
+            .map(|player_name| player_name.to_string());
+
         Ok(GamePitch {
             double_strike,
+            acidic_pitch,
         })
     }
 
