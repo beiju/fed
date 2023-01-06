@@ -15,8 +15,11 @@ use clap::Parser;
 
 const NUM_EVENTS: u64 = 8299172;
 
-fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, FedEvent)> {
+fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result<(usize, Option<FedEvent>)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
+    if str.contains("\"_eventually_ingest_source\":\"blaseball.com_library\"") {
+        return Ok((i, None));
+    }
     let feed_event = fed::feed_event_from_json(&str)
         .context(str)
         .context("Failed to parse ndjson entry into EventuallyEvent")?;
@@ -48,7 +51,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>)) -> anyhow::Result
                          })
             .with_context(|| format!("Event not reconstructed exactly: {}", original_event_json.get("description").unwrap().as_str().unwrap()))?;
     }
-    Ok((i, parsed_event))
+    Ok((i, Some(parsed_event)))
 }
 
 #[derive(Parser)]
@@ -88,9 +91,13 @@ fn run_test(args: Args) -> anyhow::Result<()> {
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     for item in iter {
-        let (i, value): (usize, FedEvent) = item?;
-        progress.set_message(format!("s{}d{}", value.season + 1, value.day + 1));
+        let (i, maybe_value): (usize, Option<FedEvent>) = item?;
         progress.set_position(i as u64);
+        let Some(value) = maybe_value else {
+            continue
+        };
+
+        progress.set_message(format!("s{}d{}", value.season + 1, value.day + 1));
 
         let Some(ref sample_path) = args.sample_outputs else {
             continue;
