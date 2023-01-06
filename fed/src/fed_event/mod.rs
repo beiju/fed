@@ -1209,7 +1209,7 @@ pub struct ModDesc {
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HitType {
     Single,
-    Double,
+    Double(Option<ModChangeSubEvent>),
     Triple(Option<ModChangeSubEvent>),
     Quadruple,
 }
@@ -1218,7 +1218,7 @@ impl Display for HitType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             HitType::Single => { write!(f, "Single") }
-            HitType::Double => { write!(f, "Double") }
+            HitType::Double(_) => { write!(f, "Double") }
             HitType::Triple(_) => { write!(f, "Triple") }
             HitType::Quadruple => { write!(f, "Quadruple") }
         }

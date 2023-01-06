@@ -473,7 +473,9 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let hit_type = match hit_type {
                 ParsedHitType::Single => { HitType::Single }
-                ParsedHitType::Double => { HitType::Double }
+                ParsedHitType::Double => {
+                    HitType::Double(event.parse_charge_blood(batter_name, "aa")?)
+                }
                 ParsedHitType::Triple => {
                     HitType::Triple(event.parse_charge_blood(batter_name, "aaa")?)
                 }

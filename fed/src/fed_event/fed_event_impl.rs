@@ -329,6 +329,9 @@ impl FedEvent {
                     HitType::Triple(power_charge) => {
                         eb.push_charge_blood(power_charge, &batter_name, batter_id, "aaa");
                     }
+                    HitType::Double(power_charge) => {
+                        eb.push_charge_blood(power_charge, &batter_name, batter_id, "aa");
+                    }
                     _ => {}
                 }
                 eb.push_stopped_inhabiting(stopped_inhabiting);
