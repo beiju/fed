@@ -116,6 +116,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // the description from the parent anyway, so it's better to parse it from there
                 let (team_nickname, source_mod_name) = event.next_parse(parse_subseasonal_mod_change)?;
                 assert!(is_known_team_nickname(team_nickname));
+                println!("Event {}, performing changed in HalfInning: {source_mod_name}", _id_string);
                 subseasonal_mod_effects.push(TeamPerformingChanged {
                     team_id: child.next_team_id()?,
                     team_nickname: team_nickname.to_string(),
@@ -2493,6 +2494,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 rating_after: shadows_event.metadata_f64("after")?,
                 enter_crime_scene_sub_event: crime_scene_event.as_sub_event(),
                 enter_shadows_sub_event: shadows_event.as_sub_event(),
+            }
+        }
+        EventType::Ambitious => {
+            let player_name = event.next_parse(parse_terminated(" is feeling Ambitious..."))?;
+
+            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            FedEventData::Ambitious {
+                game: event.game(unscatter, attractor_secret_base)?,
+                was_added: true,
+                mod_change: ModChangeSubEventWithNamedPlayer {
+                    sub_event: child.as_sub_event(),
+                    team_id: child.next_team_id()?,
+                    player_id: child.next_player_id()?,
+                    player_name: player_name.to_string(),
+                },
             }
         }
         EventType::ItemBreaks => { todo!() }

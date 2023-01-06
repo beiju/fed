@@ -4072,7 +4072,20 @@ pub enum FedEventData {
 
         /// Number of upscales. This is like nuts but for Redacted events
         scales: i64,
-    }
+    },
+
+    /// A Redacted event
+    #[serde(rename_all = "camelCase")]
+    Ambitious {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// True if the mod was added, false otherwise
+        was_added: bool,
+
+        #[serde(flatten)]
+        mod_change: ModChangeSubEventWithNamedPlayer,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]

@@ -3183,6 +3183,25 @@ impl FedEvent {
                     nuts: self.nuts,
                 }
             }
+            FedEventData::Ambitious { game, was_added, mod_change } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                if was_added {
+                    let description = format!("{} is feeling Ambitious...", mod_change.player_name);
+                    eb.push_description(&description);
+                    eb.push_player_tag(mod_change.player_id);
+                    eb.push_child(mod_change.sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_player_tag(mod_change.player_id);
+                        child.push_team_tag(mod_change.team_id);
+                        child.push_metadata_str("mod", "OVERPERFORMING");
+                        child.push_metadata_str("source", "AMBITIOUS");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::AddedModFromOtherMod)
+                    });
+                }
+                eb.build(EventType::Ambitious)
+            }
         }
     }
 
