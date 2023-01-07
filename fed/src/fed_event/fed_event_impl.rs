@@ -3127,7 +3127,12 @@ impl FedEvent {
                 eb.push_player_tag(exiting_pitcher_id);
                 eb.push_player_tag(entering_pitcher_id);
                 eb.push_child(player_swap_sub_event, |mut child| {
-                    child.push_description(&format!("The {team_nickname} made a roster move."));
+                    // They changed the text in season 18
+                    child.push_description(&if self.season < 17 {
+                        format!("The {team_nickname} made a roster move.")
+                    } else {
+                        format!("{exiting_pitcher_name} was replaced by an incoming Fax.")
+                    });
                     child.push_player_tag(exiting_pitcher_id);
                     child.push_player_tag(entering_pitcher_id);
                     child.push_team_tag(team_id);
