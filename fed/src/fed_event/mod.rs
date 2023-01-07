@@ -136,6 +136,9 @@ pub struct ScoringPlayer {
 
     /// Info about the player attracted by this score, if any
     pub attraction: Option<Attraction>,
+
+    /// Info about the Hotel Motel party on this score, if any
+    pub hotel_motel_party: Option<PlayerBoostSubEventWithTeam>
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1356,6 +1359,21 @@ pub struct Parasite {
 // TODO A bunch of places this is inlined should be replaced with PlayerBoostSubEvent and  #[serde(flatten)]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerBoostSubEvent {
+    /// Player's rating before the boost
+    pub rating_before: f64,
+
+    /// Player's rating after the boost
+    pub rating_after: f64,
+
+    /// Metadata for the boost sub-event
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerBoostSubEventWithTeam {
+    /// Team uuid of the player who was boosted
+    pub team_id: Uuid,
+
     /// Player's rating before the boost
     pub rating_before: f64,
 

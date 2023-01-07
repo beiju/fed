@@ -564,9 +564,9 @@ impl<'e> EventParseWrapper<'e> {
         self.parse_scores_with_scoring_players(scoring_players)
     }
 
-    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>)>) -> Result<Scores, FeedParseError> {
+    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>, bool)>) -> Result<Scores, FeedParseError> {
         let scores = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name, attraction)| {
+            .map(|(player_id, item_name, player_name, attraction, hotel_motel_party)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
@@ -591,11 +591,18 @@ impl<'e> EventParseWrapper<'e> {
                         })
                     })
                     .transpose()?;
+
+                let hotel_motel_party = if hotel_motel_party {
+                    Some(self.next_boost_child_with_team()?)
+                } else {
+                    None
+                };
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
                     item_damage,
                     attraction,
+                    hotel_motel_party,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -608,14 +615,16 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>)>, FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>, bool)>, FeedParseError> {
         let scorers = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
             .map(|score| {
-                ParseOk((self.next_player_id()?,
-                         score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
-                         score.player_name.to_string(),
-                         score.attraction.map(str::to_string),
+                ParseOk((
+                    self.next_player_id()?,
+                    score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
+                    score.player_name.to_string(),
+                    score.attraction.map(str::to_string),
+                    score.hotel_motel_party,
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -742,6 +751,16 @@ impl<'e> EventParseWrapper<'e> {
     pub fn next_boost_child(&mut self) -> Result<PlayerBoostSubEvent, FeedParseError> {
         let child = self.next_child(EventType::PlayerStatIncrease)?;
         Ok(PlayerBoostSubEvent {
+            rating_before: child.metadata_f64("before")?,
+            rating_after: child.metadata_f64("after")?,
+            sub_event: child.as_sub_event(),
+        })
+    }
+
+    pub fn next_boost_child_with_team(&mut self) -> Result<PlayerBoostSubEventWithTeam, FeedParseError> {
+        let mut child = self.next_child(EventType::PlayerStatIncrease)?;
+        Ok(PlayerBoostSubEventWithTeam {
+            team_id: child.next_team_id()?,
             rating_before: child.metadata_f64("before")?,
             rating_after: child.metadata_f64("after")?,
             sub_event: child.as_sub_event(),

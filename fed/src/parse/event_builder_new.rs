@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -321,6 +321,18 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: Option<PlayerBoostSubEventWithTeam>, player_name: &str, player_id: Uuid) {
+        let Some(party) = hotel_motel_party else { return; };
+        self.push_player_tag(player_id);
+        let description = format!("{player_name} is Partying!");
+        self.push_description(&description);
+        self.push_child(party.sub_event, |mut child| {
+            child.push_description(&description);
+            child.push_player_tag(player_id);
+            child.build_boost_with_team(party)
+        })
+    }
+
     pub fn push_attraction_with_player(&mut self, attraction: Option<AttractionWithPlayer>) {
         let Some(at) = attraction else { return; };
         self.push_player_tag(at.player_id);
@@ -344,6 +356,7 @@ impl EventBuilder {
             self.push_item_damage(scorer.item_damage, &scorer.player_name);
             self.push_description(&format!("{} {score_label}", scorer.player_name));
             self.push_attraction(scorer.attraction, &scorer.player_name, scorer.player_id);
+            self.push_hotel_motel_party(scorer.hotel_motel_party, &scorer.player_name, scorer.player_id);
         }
     }
 
@@ -565,6 +578,11 @@ impl EventBuilder {
     }
 
     pub fn build_boost(mut self, boost: PlayerBoostSubEvent) -> EventuallyEvent {
+        self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
+    }
+
+    pub fn build_boost_with_team(mut self, boost: PlayerBoostSubEventWithTeam) -> EventuallyEvent {
+        self.push_team_tag(boost.team_id);
         self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }
 
