@@ -335,6 +335,7 @@ pub enum EventType {
     NoFreeItemSlot = 190,
     FaxMachine = 191,
     HolidayInning = 192,
+    PrizeMatch = 193,
     Smithy = 195,
     Announcement = 201,
     RunsScored = 209,

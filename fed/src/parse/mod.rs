@@ -616,13 +616,21 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
         }
         EventType::RunsOverflowing => {
             let (team_nickname, num_runs, unruns) = event.next_parse(parse_runs_overflowing)?;
+            assert!(is_known_team_nickname(team_nickname));
             FedEventData::RunsOverflowing {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
                 num_runs: if unruns { -num_runs } else { num_runs },
             }
         }
-        EventType::HomeFieldAdvantage => { todo!() }
+        EventType::HomeFieldAdvantage => {
+            let team_nickname = event.next_parse(parse_home_field_advantage)?;
+            assert!(is_known_team_nickname(team_nickname));
+            FedEventData::HomeFieldAdvantage {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+            }
+        }
         EventType::HitByPitch => {
             let (pitcher_name, batter_name) = event.next_parse(parse_hit_by_pitch)?;
             let pitcher_id = event.next_player_id()?;
@@ -2581,6 +2589,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 inning_number,
             }
         }
+        EventType::PrizeMatch => { todo!() }
         EventType::Smithy => {
             let (player_name, _item_name) = event.next_parse(parse_smithy)?;
             let repair = event.next_item_repaired(player_name.to_string())?;

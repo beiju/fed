@@ -3267,6 +3267,12 @@ impl FedEvent {
                 eb.push_description(&format!("Inning {inning_number} is a Holiday Inning!"));
                 eb.build(EventType::HolidayInning)
             }
+            FedEventData::HomeFieldAdvantage { game, team_nickname } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("The {team_nickname} apply Home Field advantage!"));
+                eb.build(EventType::HomeFieldAdvantage)
+            }
         }
     }
 

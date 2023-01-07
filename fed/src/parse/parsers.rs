@@ -1854,3 +1854,10 @@ pub(crate) fn parse_holiday_inning(input: &str) -> ParserResult<i32> {
 
     Ok((input, inning))
 }
+
+pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" apply Home Field advantage!").parse(input)?;
+
+    Ok((input, team_nickname))
+}

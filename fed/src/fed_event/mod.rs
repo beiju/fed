@@ -4156,6 +4156,16 @@ pub enum FedEventData {
         /// One-indexed inning number
         inning_number: i32,
     },
+
+    /// Tean applies Home Field Advantage
+    #[serde(rename_all = "camelCase")]
+    HomeFieldAdvantage {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of team who applied Home Field advantage (this will always be the home team)
+        team_nickname: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
