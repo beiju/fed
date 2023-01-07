@@ -1789,12 +1789,31 @@ pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {
     Ok((input, (sipper_name, sippee_name, sipped_attribute_name)))
 }
 
+pub(crate) enum ParsedPlayerGainedItem<'a> {
+    CommunityChest((&'a str, &'a str)),
+    WonPrizeMatch(&'a str),
+}
+
+pub(crate) fn parse_player_gained_item(input: &str) -> ParserResult<ParsedPlayerGainedItem> {
+    alt((
+        parse_community_chest.map(|v| ParsedPlayerGainedItem::CommunityChest(v)),
+        parse_won_prize_match.map(|v| ParsedPlayerGainedItem::WonPrizeMatch(v)),
+    )).parse(input)
+}
+
 pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The Community Chest Opens! ").parse(input)?;
     let (input, player_name) = parse_terminated(" gained ").parse(input)?;
     let (input, item_name) = parse_terminated(".").parse(input)?;
 
     Ok((input, (player_name, item_name)))
+}
+
+pub(crate) fn parse_won_prize_match(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" won the Prize Match!").parse(input)?;
+
+    Ok((input, team_nickname))
 }
 
 pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<(&str, &str)> {

@@ -2078,19 +2078,34 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // Then it's a tarot event and we can forget parsing. Thankfully
                 make_item_tarot_event(&mut event, true)?
             } else {
-                // So far the only non-tarot root-level PlayerGainedItem event is community chest
-                let (player_name, _item_name) = event.next_parse(parse_community_chest)?;
-
-                FedEventData::CommunityChestOpens {
-                    item_id: event.metadata_uuid("itemId")?,
-                    item_name: event.metadata_str("itemName")?.to_string(),
-                    item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                    player_item_rating_before: event.metadata_f64_opt("playerItemRatingBefore")?,
-                    player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
-                    player_rating: event.metadata_f64("playerRating")?,
-                    team_id: event.next_team_id()?,
-                    player_name: player_name.to_string(),
-                    player_id: event.next_player_id()?,
+                match event.next_parse(parse_player_gained_item)? {
+                    ParsedPlayerGainedItem::CommunityChest((player_name, _item_name)) => {
+                        FedEventData::CommunityChestOpens {
+                            item_id: event.metadata_uuid("itemId")?,
+                            item_name: event.metadata_str("itemName")?.to_string(),
+                            item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                            player_item_rating_before: event.metadata_f64_opt("playerItemRatingBefore")?,
+                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
+                            player_rating: event.metadata_f64("playerRating")?,
+                            team_id: event.next_team_id()?,
+                            player_name: player_name.to_string(),
+                            player_id: event.next_player_id()?,
+                        }
+                    }
+                    ParsedPlayerGainedItem::WonPrizeMatch(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::WonPrizeMatch {
+                            team_nickname: team_nickname.to_string(),
+                            team_id: event.next_team_id()?,
+                            player_id: event.next_player_id()?,
+                            item_id: event.metadata_uuid("itemId")?,
+                            item_name: event.metadata_str("itemName")?.to_string(),
+                            item_mods: event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                            player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
+                            player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+                            player_rating: event.metadata_f64("playerRating")?,
+                        }
+                    }
                 }
             }
         }

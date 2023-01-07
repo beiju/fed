@@ -3281,6 +3281,20 @@ impl FedEvent {
                 eb.push_description(&format!("Prize Match!\nThe Winner gets {item_name}"));
                 eb.build(EventType::PrizeMatch)
             }
+            FedEventData::WonPrizeMatch { team_nickname, team_id, player_id, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("The {team_nickname} won the Prize Match!"));
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_uuid("itemId", item_id);
+                eb.push_metadata_str("itemName", item_name);
+                eb.push_metadata_str_vec("mods", item_mods);
+                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                eb.push_metadata_f64("playerRating", player_rating);
+
+                eb.build(EventType::PlayerGainedItem)
+            }
         }
     }
 
@@ -3309,16 +3323,5 @@ impl FedEvent {
             .collect();
 
         (children, suffix)
-    }
-}
-
-#[deprecated = "Use a base enum instead"]
-fn base_name(base_stolen: i32) -> &'static str {
-    match base_stolen {
-        2 => "second",
-        3 => "third",
-        4 => "fourth",
-        5 => "fifth",
-        _ => panic!("What base is this")
     }
 }

@@ -4208,6 +4208,38 @@ pub enum FedEventData {
         /// Name of the Item that the Winner will get
         item_name: String,
     },
+
+    /// Team won a Prize Match
+    #[serde(rename_all = "camelCase")]
+    WonPrizeMatch {
+        /// Nickname of team who won the Prize Match
+        team_nickname: String,
+
+        /// Uuid of team who won the Prize Match
+        team_id: Uuid,
+
+        /// Uuid of player who got the Prize. Oddly, the player's name is not mentioned.
+        player_id: Uuid,
+
+        /// Uuid of the Item that the winner got
+        item_id: Uuid,
+
+        /// Name of the Item that the winner got
+        item_name: String,
+
+        /// Mods that the Item bestows, as a list of internal IDs
+        item_mods: Vec<String>,
+
+        /// The increase/decrease that all the wielding player's items caused to their star rating
+        /// before gaining the item
+        player_item_rating_before: f64,
+
+        /// The increase/decrease that all the wielding player's items now cause to their star rating
+        player_item_rating_after: f64,
+
+        /// The player's star rating. TODO: Is this with or without items?
+        player_rating: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
