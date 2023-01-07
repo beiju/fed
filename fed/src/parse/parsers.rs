@@ -1844,3 +1844,11 @@ pub(crate) fn parse_smithy(input: &str) -> ParserResult<(&str, &str)> {
 
     Ok((input, (player_name, item_name)))
 }
+
+pub(crate) fn parse_holiday_inning(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("Hotel Motel\nInning ").parse(input)?;
+    let (input, inning) = parse_whole_number.parse(input)?;
+    let (input, _) = tag(" is a Holiday Inning!").parse(input)?;
+
+    Ok((input, inning))
+}

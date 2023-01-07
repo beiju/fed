@@ -2062,7 +2062,6 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-
             FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes } => {
                 event_builder
                     .fill(EventBuilderUpdate {
@@ -2108,7 +2107,6 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-
             FedEventData::PeanutMister { game, player_id, player_name, superallergy } => {
                 let effect_str = if superallergy.is_some() {
                     "is no longer Superallergic"
@@ -2349,7 +2347,6 @@ impl FedEvent {
                     .metadata(json!({ "id": player_id }))
                     .build()
             }
-
             FedEventData::PlayerLocalized { team_id, team_nickname, player_id, player_name, location } => {
                 let location_int: i64 = location.into();
                 event_builder
@@ -3247,6 +3244,12 @@ impl FedEvent {
                     child.build_item_repaired(repair)
                 });
                 eb.build(EventType::Smithy)
+            }
+            FedEventData::HolidayInning { game, inning_number } => {
+                eb.set_game(game);
+                eb.push_description("Hotel Motel");
+                eb.push_description(&format!("Inning {inning_number} is a Holiday Inning!"));
+                eb.build(EventType::HolidayInning)
             }
         }
     }

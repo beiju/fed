@@ -2561,8 +2561,15 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 enter_shadows_sub_event: boost_child.as_sub_event(),
             }
         }
+        EventType::HolidayInning => {
+            let inning_number = event.next_parse(parse_holiday_inning)?;
+            FedEventData::HolidayInning {
+                game: event.game(unscatter, attractor_secret_base)?,
+                inning_number,
+            }
+        }
         EventType::Smithy => {
-            let (player_name, item_name) = event.next_parse(parse_smithy)?;
+            let (player_name, _item_name) = event.next_parse(parse_smithy)?;
             let repair = event.next_item_repaired(player_name.to_string())?;
             FedEventData::Smithy {
                 game: event.game(unscatter, attractor_secret_base)?,

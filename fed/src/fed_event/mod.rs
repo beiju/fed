@@ -4139,6 +4139,16 @@ pub enum FedEventData {
         #[serde(flatten)]
         repair: ItemRepaired,
     },
+
+    /// Holiday Inning is announced
+    #[serde(rename_all = "camelCase")]
+    HolidayInning {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// One-indexed inning number
+        inning_number: i32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
