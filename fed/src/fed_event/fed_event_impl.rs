@@ -3273,6 +3273,12 @@ impl FedEvent {
                 eb.push_description(&format!("The {team_nickname} apply Home Field advantage!"));
                 eb.build(EventType::HomeFieldAdvantage)
             }
+            FedEventData::PrizeMatch { game, item_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("Prize Match!\nThe Winner gets {item_name}"));
+                eb.build(EventType::PrizeMatch)
+            }
         }
     }
 

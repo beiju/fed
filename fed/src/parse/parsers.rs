@@ -1861,3 +1861,14 @@ pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<&str> {
 
     Ok((input, team_nickname))
 }
+
+pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Prize Match!\nThe Winner gets ").parse(input)?;
+    let (input, item_name) = if input.contains('\n') {
+        fail(input)
+    } else {
+        Ok(("", input))
+    }?;
+
+    Ok((input, item_name))
+}

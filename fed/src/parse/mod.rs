@@ -2589,7 +2589,13 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 inning_number,
             }
         }
-        EventType::PrizeMatch => { todo!() }
+        EventType::PrizeMatch => {
+            let item_name = event.next_parse(parse_prize_match)?;
+            FedEventData::PrizeMatch {
+                game: event.game(unscatter, attractor_secret_base)?,
+                item_name: item_name.to_string(),
+            }
+        }
         EventType::Smithy => {
             let (player_name, _item_name) = event.next_parse(parse_smithy)?;
             let repair = event.next_item_repaired(player_name.to_string())?;
