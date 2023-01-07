@@ -1181,6 +1181,10 @@ pub struct AttractionWithPlayer {
 
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
+
+    /// After season 17, players started getting (visible) shadow boosts when being Attracted. This
+    /// contains that information.
+    pub boost: Option<PlayerBoostSubEvent>,
 }
 
 // Use this in contexts where the player name and ID are stored outside
@@ -1194,6 +1198,10 @@ pub struct Attraction {
 
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
+
+    /// After season 17, players started getting (visible) shadow boosts when being Attracted. This
+    /// contains that information.
+    pub boost: Option<PlayerBoostSubEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1326,6 +1334,19 @@ pub struct Parasite {
 
     /// Metadata for the sub-event about the sipper gaining stars
     pub pitcher_sub_event: SubEvent,
+}
+
+// TODO A bunch of places this is inlined should be replaced with PlayerBoostSubEvent and  #[serde(flatten)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerBoostSubEvent {
+    /// Player's rating before the boost
+    pub rating_before: f64,
+
+    /// Player's rating after the boost
+    pub rating_after: f64,
+
+    /// Metadata for the boost sub-event
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -4107,6 +4128,16 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event that removes the Overperforming mod
         sub_event: SubEvent,
+    },
+
+    /// Smithy procs and repairs a player's item
+    #[serde(rename_all = "camelCase")]
+    Smithy {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        #[serde(flatten)]
+        repair: ItemRepaired,
     },
 }
 

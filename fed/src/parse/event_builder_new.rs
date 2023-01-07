@@ -331,6 +331,17 @@ impl EventBuilder {
             child.push_metadata_str("teamName", at.team_nickname);
             child.build(EventType::PlayerAddedToTeam)
         });
+        if let Some(boost) = at.boost {
+            self.push_child(boost.sub_event, |mut child| {
+                child.push_description(&format!("{player_name} entered the Shadows."));
+                child.push_player_tag(player_id);
+                child.push_team_tag(at.team_id);
+                child.push_metadata_f64("before", boost.rating_before);
+                child.push_metadata_f64("after", boost.rating_after);
+                child.push_metadata_i64("type", 4); // TODO enum for this?
+                child.build(EventType::PlayerStatIncrease)
+            })
+        }
     }
 
     pub fn push_attraction_with_player(&mut self, attraction: Option<AttractionWithPlayer>) {

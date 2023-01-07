@@ -1836,3 +1836,11 @@ pub(crate) fn parse_ambitious(input: &str) -> ParserResult<(&str, bool)> {
         parse_terminated(" loses their Ambition.").map(|n| (n, false)),
     )).parse(input)
 }
+
+pub(crate) fn parse_smithy(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("Smithy beckons to ").parse(input)?;
+    let (input, player_name) = parse_terminated(".\n").parse(input)?;
+    let (input, item_name) = parse_terminated(" is repaired!").parse(input)?;
+
+    Ok((input, (player_name, item_name)))
+}

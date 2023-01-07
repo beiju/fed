@@ -3235,6 +3235,19 @@ impl FedEvent {
                 });
                 eb.build(EventType::LateToTheParty)
             }
+            FedEventData::Smithy { game, repair } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("Smithy beckons to {}.", repair.player_name));
+                eb.push_player_tag(repair.player_id);
+                // This one doesn't seem to do plurals
+                eb.push_description(&format!("{} is repaired!", repair.item_name));
+                eb.push_child(repair.sub_event, |mut child| {
+                    child.push_description(&format!("{}'s {} was repaired by Smithy.", repair.player_name, repair.item_name));
+                    child.build_item_repaired(repair)
+                });
+                eb.build(EventType::Smithy)
+            }
         }
     }
 

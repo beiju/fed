@@ -414,17 +414,29 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
 
             let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 
+            // Parsed specially because AFAIK this is the only place an attraction happens and you
+            // don't already know the player name
             let attraction = event.next_parse(parse_attract_player)?
                 .map(|(team_nickname, player_name)| {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let mut child = event.next_child(EventType::PlayerAddedToTeam)?;
+                    let boost = event.next_child_opt(EventType::PlayerStatIncrease)?
+                        .map(|child| {
+                            ParseOk(PlayerBoostSubEvent {
+                                rating_before: child.metadata_f64("before")?,
+                                rating_after: child.metadata_f64("after")?,
+                                sub_event: child.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
                     ParseOk(AttractionWithPlayer {
                         team_nickname: team_nickname.to_string(),
                         team_id: child.next_team_id()?,
                         player_name: player_name.to_string(),
                         player_id: child.next_player_id()?,
                         sub_event: child.as_sub_event(),
+                        boost,
                     })
                 })
                 .transpose()?;
@@ -1339,21 +1351,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
             let item_restored = event.next_parse_opt(parse_item_restored)
                 .map(|(player_name, _item_name)| {
-                    let mut child = event.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired])?;
-                    Ok::<_, FeedParseError>(ItemRepaired {
-                        item_id: child.metadata_uuid("itemId")?,
-                        item_name: child.metadata_str("itemName")?.to_string(),
-                        item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
-                        durability: child.metadata_i64("itemDurability")?,
-                        health: child.metadata_i64("itemHealthAfter")?,
-                        player_item_rating_before: child.metadata_f64("playerItemRatingBefore")?,
-                        player_item_rating_after: child.metadata_f64("playerItemRatingAfter")?,
-                        player_rating: child.metadata_f64("playerRating")?,
-                        team_id: child.next_team_id()?,
-                        player_id: child.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        sub_event: child.as_sub_event(),
-                    })
+                    event.next_item_repaired(player_name.to_string())
                 })
                 .transpose()?;
 
@@ -2561,6 +2559,14 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 rating_after: boost_child.metadata_f64("after")?,
                 player_swap_sub_event: move_child.as_sub_event(),
                 enter_shadows_sub_event: boost_child.as_sub_event(),
+            }
+        }
+        EventType::Smithy => {
+            let (player_name, item_name) = event.next_parse(parse_smithy)?;
+            let repair = event.next_item_repaired(player_name.to_string())?;
+            FedEventData::Smithy {
+                game: event.game(unscatter, attractor_secret_base)?,
+                repair,
             }
         }
         EventType::Announcement => { todo!() }

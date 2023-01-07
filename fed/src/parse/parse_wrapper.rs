@@ -574,10 +574,20 @@ impl<'e> EventParseWrapper<'e> {
                     .map(|team_nickname| {
                         assert!(is_known_team_nickname(&team_nickname));
                         let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
+                        let boost = self.next_child_opt(EventType::PlayerStatIncrease)?
+                            .map(|child| {
+                                ParseOk(PlayerBoostSubEvent {
+                                    rating_before: child.metadata_f64("before")?,
+                                    rating_after: child.metadata_f64("after")?,
+                                    sub_event: child.as_sub_event(),
+                                })
+                            })
+                            .transpose()?;
                         ParseOk(Attraction {
                             team_nickname,
                             team_id: child.next_team_id()?,
                             sub_event: child.as_sub_event(),
+                            boost,
                         })
                     })
                     .transpose()?;
@@ -628,6 +638,24 @@ impl<'e> EventParseWrapper<'e> {
             team_id: damage_child.next_team_id()?,
             player_id: damage_child.next_player_id()?,
             sub_event: damage_child.as_sub_event(),
+        })
+    }
+
+    pub fn next_item_repaired(&mut self, player_name: String) -> Result<ItemRepaired, FeedParseError> {
+        let mut child = self.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired])?;
+        Ok(ItemRepaired {
+            item_id: child.metadata_uuid("itemId")?,
+            item_name: child.metadata_str("itemName")?.to_string(),
+            item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+            durability: child.metadata_i64("itemDurability")?,
+            health: child.metadata_i64("itemHealthAfter")?,
+            player_item_rating_before: child.metadata_f64("playerItemRatingBefore")?,
+            player_item_rating_after: child.metadata_f64("playerItemRatingAfter")?,
+            player_rating: child.metadata_f64("playerRating")?,
+            team_id: child.next_team_id()?,
+            player_id: child.next_player_id()?,
+            player_name,
+            sub_event: child.as_sub_event(),
         })
     }
 

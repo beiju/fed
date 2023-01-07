@@ -334,6 +334,7 @@ pub enum EventType {
     CommunityChestOpens = 189,
     NoFreeItemSlot = 190,
     FaxMachine = 191,
+    Smithy = 195,
     Announcement = 201,
     RunsScored = 209,
     WinCollectedRegular = 214,
