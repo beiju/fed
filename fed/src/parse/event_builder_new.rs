@@ -3,28 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{
-    Attraction,
-    AttractionWithPlayer,
-    BatterDebt,
-    DetectiveActivity,
-    FreeRefill,
-    GameEvent,
-    GamePitch,
-    ItemDamaged,
-    ItemGained,
-    ItemRepaired,
-    ModChangeSubEvent,
-    ModChangeSubEventWithPlayer,
-    ModDuration,
-    Parasite,
-    PlayerNameId,
-    Scores,
-    ScoringPlayer,
-    SpicyStatus,
-    StoppedInhabiting,
-    SubEvent,
-};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -337,10 +316,7 @@ impl EventBuilder {
                 child.push_description(&format!("{player_name} entered the Shadows."));
                 child.push_player_tag(player_id);
                 child.push_team_tag(at.team_id);
-                child.push_metadata_f64("before", boost.rating_before);
-                child.push_metadata_f64("after", boost.rating_after);
-                child.push_metadata_i64("type", 4); // TODO enum for this?
-                child.build(EventType::PlayerStatIncrease)
+                child.build_boost(boost)
             })
         }
     }
@@ -572,6 +548,10 @@ impl EventBuilder {
         } else {
             EventType::PlayerAttributeDecrease
         })
+    }
+
+    pub fn build_boost(mut self, boost: PlayerBoostSubEvent) -> EventuallyEvent {
+        self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }
 
     pub fn build_detective_activity(mut self, activity: DetectiveActivity) -> EventuallyEvent {

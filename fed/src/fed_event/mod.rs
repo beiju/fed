@@ -2463,6 +2463,10 @@ pub enum FedEventData {
         /// as indicated by Flickering, but I'm not sure.
         players: (FeedbackPlayerData, FeedbackPlayerData),
 
+        /// If LCD soundsystem was in effect, the boost events for the players. This is in the same
+        /// order as `players`.
+        lcd_soundsystem: Option<(PlayerBoostSubEvent, PlayerBoostSubEvent)>,
+
         /// The position of the players that were swapped
         position_type: ActivePositionType,
 

@@ -1054,40 +1054,54 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::Feedback { ref game, players: (ref player_a, ref player_b), position_type, ref sub_event } => {
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::PlayerTraded,
-                        category: EventCategory::Changes,
-                        description: "Reality flickered in the Feedback.".to_string(),
-                        team_tags: vec![player_a.team_id, player_b.team_id],
-                        player_tags: vec![player_a.player_id, player_b.player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "aLocation": player_a.location as i64,
-                        "aPlayerId": player_a.player_id,
-                        "aPlayerName": player_a.player_name,
-                        "aTeamId": player_a.team_id,
-                        "aTeamName": player_a.team_nickname,
-                        "bLocation": player_b.location as i64,
-                        "bPlayerId": player_b.player_id,
-                        "bPlayerName": player_b.player_name,
-                        "bTeamId": player_b.team_id,
-                        "bTeamName": player_b.team_nickname,
-                    }));
+            FedEventData::Feedback { game, players: (player_a, player_b), lcd_soundsystem, position_type, sub_event } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("Reality flickers. Things look different ...");
+                eb.push_description(&format!("{} and {} switch teams in the feedback!", player_a.player_name, player_b.player_name));
+                eb.push_player_tag(player_a.player_id);
+                eb.push_player_tag(player_b.player_id);
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::FeedbackSwap,
-                        category: EventCategory::Special,
-                        description: format!("Reality flickers. Things look different ...\n{} and {} switch teams in the feedback!\n{} is now {}.",
-                                             player_a.player_name, player_b.player_name, player_b.player_name, position_type.role()),
-                        player_tags: vec![player_a.player_id, player_b.player_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                if let Some((lcd_a, lcd_b)) = lcd_soundsystem {
+                    let team_nickname = if player_a.team_id == home_team_id {
+                        &player_a.team_nickname
+                    } else {
+                        &player_b.team_nickname
+                    };
+
+                    eb.push_description(&format!("The LCD Soundsystem is playing at the {team_nickname}' house!"));
+                    for (lcd, player) in [(lcd_a, &player_a), (lcd_b, &player_b)] {
+                        eb.push_child(lcd.sub_event, |mut child| {
+                            child.push_description(&format!("The LCD Soundsystem boosted {}!", player.player_name));
+                            child.push_player_tag(player.player_id);
+                            child.push_team_tag(player.team_id);
+                            child.build_boost(lcd)
+                        });
+                    }
+                }
+
+                eb.push_description(&format!("{} is now {}.", player_b.player_name, position_type.role()));
+                eb.push_child(sub_event, |mut child| {
+                    child.push_description("Reality flickered in the Feedback.");
+                    child.push_player_tag(player_a.player_id);
+                    child.push_player_tag(player_b.player_id);
+                    child.push_team_tag(player_a.team_id);
+                    child.push_team_tag(player_b.team_id);
+                    child.push_metadata_i64("aLocation", player_a.location as i64);
+                    child.push_metadata_uuid("aPlayerId", player_a.player_id);
+                    child.push_metadata_str("aPlayerName", player_a.player_name);
+                    child.push_metadata_uuid("aTeamId", player_a.team_id);
+                    child.push_metadata_str("aTeamName", player_a.team_nickname);
+                    child.push_metadata_i64("bLocation", player_b.location as i64);
+                    child.push_metadata_uuid("bPlayerId", player_b.player_id);
+                    child.push_metadata_str("bPlayerName", player_b.player_name);
+                    child.push_metadata_uuid("bTeamId", player_b.team_id);
+                    child.push_metadata_str("bTeamName", player_b.team_nickname);
+                    child.build(EventType::PlayerTraded)
+                });
+
+                eb.build(EventType::FeedbackSwap)
             }
             FedEventData::BestowReverberating { ref game, team_id, player_id, ref player_name, ref sub_event } => {
                 let child = EventBuilderChild::new(sub_event)

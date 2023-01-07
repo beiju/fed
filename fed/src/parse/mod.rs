@@ -377,7 +377,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         stopped_inhabiting,
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
-                        damaged_items
+                        damaged_items,
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
@@ -932,7 +932,17 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::FeedbackSwap => {
-            let (player1_name, player2_name, position) = event.next_parse(parse_feedback)?;
+            let (player1_name, player2_name, lcd_soundsystem, position) = event.next_parse(parse_feedback)?;
+            let lcd_soundsystem = lcd_soundsystem
+                .map(|team_nickname| {
+                    assert!(is_known_team_nickname(team_nickname));
+                    ParseOk((
+                        event.next_boost_child()?,
+                        event.next_boost_child()?,
+                    ))
+                })
+                .transpose()?;
+
             let sub_event = event.next_child(EventType::PlayerTraded)?;
 
             macro_rules! get_player_data {
@@ -959,6 +969,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                     get_player_data!(sub_event, "a", player1_name),
                     get_player_data!(sub_event, "b", player2_name),
                 ),
+                lcd_soundsystem,
                 position_type: position,
                 sub_event: sub_event.as_sub_event(),
             }
@@ -1223,7 +1234,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                         .map(|mut child| {
                             ParseOk(ModChangeSubEvent {
                                 team_id: child.next_team_id()?,
-                                sub_event: child.as_sub_event()
+                                sub_event: child.as_sub_event(),
                             })
                         })
                         .transpose()?;

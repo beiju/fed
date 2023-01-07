@@ -682,11 +682,11 @@ impl<'e> EventParseWrapper<'e> {
         }
         Ok(broken_items)
     }
-    
+
     pub fn parse_pitch(&mut self) -> Result<GamePitch, FeedParseError> {
         let double_strike = self.next_parse_opt(parse_terminated(" fires a Double Strike!\n"))
             .map(|player_name| player_name.to_string());
-        
+
         let acidic_pitch = self.next_parse_opt(parse_terminated(" throws an Acidic pitch!\n"))
             .map(|player_name| player_name.to_string());
 
@@ -737,6 +737,15 @@ impl<'e> EventParseWrapper<'e> {
                 })
             })
             .transpose()
+    }
+
+    pub fn next_boost_child(&mut self) -> Result<PlayerBoostSubEvent, FeedParseError> {
+        let child = self.next_child(EventType::PlayerStatIncrease)?;
+        Ok(PlayerBoostSubEvent {
+            rating_before: child.metadata_f64("before")?,
+            rating_after: child.metadata_f64("after")?,
+            sub_event: child.as_sub_event(),
+        })
     }
 
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {

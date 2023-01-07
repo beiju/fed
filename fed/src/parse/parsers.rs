@@ -814,10 +814,12 @@ pub(crate) fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_feedback(input: &str) -> ParserResult<(&str, &str, ActivePositionType)> {
+pub(crate) fn parse_feedback(input: &str) -> ParserResult<(&str, &str, Option<&str>, ActivePositionType)> {
     let (input, _) = tag("Reality flickers. Things look different ...\n").parse(input)?;
     let (input, player1_name) = parse_terminated(" and ").parse(input)?;
     let (input, player2_name) = parse_terminated(" switch teams in the feedback!\n").parse(input)?;
+    let (input, lcd_soundsystem) = opt(preceded(tag("The LCD Soundsystem is playing at the "), parse_terminated("' house!\n"))).parse(input)?;
+
     let (input, _) = tag(player2_name).parse(input)?;
     let (input, _) = tag(" is now ").parse(input)?;
     let (input, position) = alt((
@@ -826,7 +828,7 @@ pub(crate) fn parse_feedback(input: &str) -> ParserResult<(&str, &str, ActivePos
     )).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
 
-    Ok((input, (player1_name, player2_name, position)))
+    Ok((input, (player1_name, player2_name,lcd_soundsystem, position)))
 }
 
 pub(crate) fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {
