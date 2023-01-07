@@ -1872,3 +1872,10 @@ pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
 
     Ok((input, item_name))
 }
+
+pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, player_name) = parse_terminated(" is Partying!").parse(input)?;
+
+    Ok((input, player_name))
+}

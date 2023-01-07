@@ -748,6 +748,25 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
+
+    pub fn parse_hotel_motel_parties(&mut self) -> Result<Vec<HotelMotelScoringPlayer>, FeedParseError> {
+        let mut parties = Vec::new();
+        while let Some(player_name) = self.next_parse_opt(parse_hotel_motel_party) {
+            let mut child = self.next_child(EventType::PlayerStatIncrease)?;
+            parties.push(HotelMotelScoringPlayer {
+                team_id: child.next_team_id()?,
+                player_id: child.next_player_id()?,
+                player_name: player_name.to_string(),
+                boost: PlayerBoostSubEvent {
+                    rating_before: child.metadata_f64("before")?,
+                    rating_after: child.metadata_f64("after")?,
+                    sub_event: child.as_sub_event(),
+                },
+            });
+        }
+        Ok(parties)
+    }
+
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 

@@ -140,6 +140,23 @@ pub struct ScoringPlayer {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct HotelMotelScoringPlayer {
+    // TODO This is always the same. Store it separately.
+    /// Team uuid
+    pub team_id: Uuid,
+
+    /// Player uuid
+    pub player_id: Uuid,
+
+    /// Player name
+    pub player_name: String,
+
+    #[serde(flatten)]
+    pub boost: PlayerBoostSubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct Scores {
     /// Info for all the scores that happened on this event
     pub scores: Vec<ScoringPlayer>,
@@ -1349,6 +1366,18 @@ pub struct PlayerBoostSubEvent {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct NamedPlayerBoostSubEvent {
+    /// Player's rating before the boost
+    pub rating_before: f64,
+
+    /// Player's rating after the boost
+    pub rating_after: f64,
+
+    /// Metadata for the boost sub-event
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -1814,6 +1843,9 @@ pub enum FedEventData {
         /// anybody. We could compare the name to the batter name, but since batters can also be
         /// on base that doesn't really give us any certain information.
         damaged_items: Vec<(String, ItemDamaged)>,
+
+        /// If this was a Holiday Inning, contains the Hotel Motel parties
+        hotel_motel_parties: Vec<HotelMotelScoringPlayer>
     },
 
     /// Stolen base

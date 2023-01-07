@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -478,6 +478,20 @@ impl EventBuilder {
                 child.push_metadata_str("mod", "MAGMATIC");
                 child.push_metadata_i64("type", ModDuration::Permanent as i64);
                 child.build(EventType::RemovedMod)
+            });
+        }
+    }
+
+    pub fn push_hotel_motel(&mut self, parties: Vec<HotelMotelScoringPlayer>) {
+        for party in parties {
+            let description = format!("{} is Partying!", party.player_name);
+            self.push_description(&description);
+            self.push_player_tag(party.player_id);
+            self.push_child(party.boost.sub_event, |mut child| {
+                child.push_description(&description);
+                child.push_player_tag(party.player_id);
+                child.push_team_tag(party.team_id);
+                child.build_boost(party.boost)
             });
         }
     }

@@ -338,7 +338,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties } => {
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
                 eb.push_pitch(pitch);
@@ -348,6 +348,8 @@ impl FedEvent {
                 // HR itself
                 eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
                 eb.push_player_tag(batter_id);
+
+                eb.push_hotel_motel(hotel_motel_parties);
 
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");

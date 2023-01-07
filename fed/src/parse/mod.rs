@@ -441,6 +441,8 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 })
                 .transpose()?;
 
+            let hotel_motel_parties = event.parse_hotel_motel_parties()?;
+
             let big_bucket = event.next_parse(parse_big_bucket)?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
@@ -463,6 +465,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 big_bucket,
                 attraction,
                 damaged_items,
+                hotel_motel_parties,
             }
         }
         EventType::Hit => {
