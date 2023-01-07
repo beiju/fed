@@ -100,6 +100,7 @@ impl EventBuilder {
         }
 
         if let Some(attractor) = game.attractor_secret_base {
+            self.set_category(EventCategory::Special);
             self.push_description(&format!("{} enters the Secret Base...", attractor.player_name));
             self.push_player_tag(attractor.player_id)
         }

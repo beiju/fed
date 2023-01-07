@@ -1464,6 +1464,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Number of balls in the count
         balls: i32,
 

@@ -234,15 +234,12 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Ball { game, balls, strikes, batter_item_damage } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Ball,
-                        description: format!("Ball. {}-{}", balls, strikes),
-                        ..Default::default()
-                    })
-                    .named_item_damage_before_score(batter_item_damage.as_ref())
-                    .build()
+            FedEventData::Ball { game, pitch, balls, strikes, batter_item_damage } => {
+                eb.set_game(game);
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("Ball. {}-{}", balls, strikes));
+                eb.push_named_item_damage(batter_item_damage);
+                eb.build(EventType::Ball)
             }
             FedEventData::StrikeSwinging { game, pitch, balls, strikes, pitcher_item_damage } => {
                 eb.set_game(game);
