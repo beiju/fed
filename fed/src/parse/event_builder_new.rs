@@ -235,6 +235,9 @@ impl EventBuilder {
                                   if (self.0.season, self.0.day) < (15, 3) { " " } else { "" },
                                   Possessive(player_name));
         self.push_description(&description);
+        // In season 17 days 7-10 inclusive, the Ambitious event type was accidentally used instead
+        // of ItemBreaks
+        let use_ambitious = self.0.season == 17 && self.0.day >= 7 && self.0.day <= 10;
         self.push_child(dmg.sub_event, |mut child| {
             child.push_description(&description);
             child.push_player_tag(dmg.player_id);
@@ -248,7 +251,15 @@ impl EventBuilder {
             child.push_metadata_f64("playerItemRatingAfter", dmg.player_item_rating_after);
             child.push_metadata_f64("playerItemRatingBefore", dmg.player_item_rating_before);
             child.push_metadata_f64("playerRating", dmg.player_rating);
-            child.build(if dmg.health == 0 { EventType::ItemBreaks } else { EventType::ItemDamaged })
+            child.build(if dmg.health == 0 {
+                if use_ambitious {
+                    EventType::Ambitious
+                } else {
+                    EventType::ItemBreaks
+                }
+            } else {
+                EventType::ItemDamaged
+            })
         })
     }
 
@@ -516,7 +527,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
+    pub fn build_item_repaired(mut self, item_repaired: ItemRepaired, use_coasting_in_s17: bool) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);
         self.push_team_tag(item_repaired.team_id);
         self.push_metadata_i64("itemDurability", item_repaired.durability);
@@ -528,8 +539,15 @@ impl EventBuilder {
         self.push_metadata_f64("playerItemRatingAfter", item_repaired.player_item_rating_after);
         self.push_metadata_f64("playerItemRatingBefore", item_repaired.player_item_rating_before);
         self.push_metadata_f64("playerRating", item_repaired.player_rating);
+        // In season 17 days 7-10 inclusive, the Coasting event type was accidentally used instead
+        // of BrokenItemRepaired
+        let use_coasting = self.0.season == 17 && self.0.day >= 7 && self.0.day <= 10;
         self.build(if item_repaired.health == 1 {
-            EventType::BrokenItemRepaired
+            if use_coasting {
+                EventType::Coasting
+            } else {
+                EventType::BrokenItemRepaired
+            }
         } else {
             EventType::DamagedItemRepaired
         })

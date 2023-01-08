@@ -2672,7 +2672,7 @@ impl FedEvent {
                         // Yes, the parent says swim and the child says swam
                         child.push_description("The Salmon swam upstream!");
                         child.push_description(&restored_description);
-                        child.build_item_repaired(item_restored)
+                        child.build_item_repaired(item_restored, true)
                     });
                 }
 
@@ -3259,7 +3259,7 @@ impl FedEvent {
                 eb.push_description(&format!("{} is repaired!", repair.item_name));
                 eb.push_child(repair.sub_event, |mut child| {
                     child.push_description(&format!("{}'s {} was repaired by Smithy.", repair.player_name, repair.item_name));
-                    child.build_item_repaired(repair)
+                    child.build_item_repaired(repair, false)
                 });
                 eb.build(EventType::Smithy)
             }

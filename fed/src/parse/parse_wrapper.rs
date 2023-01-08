@@ -632,7 +632,9 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_item_damage(&mut self, item_name_plural: Option<bool>) -> Result<ItemDamaged, FeedParseError> {
-        let mut damage_child = self.next_child_any(&[EventType::ItemDamaged, EventType::ItemBreaks])?;
+        // Ambitious seems to have been accidentally used for some item damages in s17
+        // TODO: Only accept Ambitious on the days it was incorrectly used
+        let mut damage_child = self.next_child_any(&[EventType::ItemDamaged, EventType::ItemBreaks, EventType::Ambitious])?;
 
         Ok(ItemDamaged {
             item_id: damage_child.metadata_uuid("itemId")?,
@@ -651,7 +653,8 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_item_repaired(&mut self, player_name: String) -> Result<ItemRepaired, FeedParseError> {
-        let mut child = self.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired])?;
+        // Coasting was used for a time, possibly by mistake
+        let mut child = self.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired, EventType::Coasting])?;
         Ok(ItemRepaired {
             item_id: child.metadata_uuid("itemId")?,
             item_name: child.metadata_str("itemName")?.to_string(),

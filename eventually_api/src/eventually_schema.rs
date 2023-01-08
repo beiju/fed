@@ -327,6 +327,7 @@ pub enum EventType {
     PlayerAttributeDecrease = 180,
     EnterCrimeScene = 181,
     Ambitious = 182,
+    Coasting = 184,
     ItemBreaks = 185,
     ItemDamaged = 186,
     BrokenItemRepaired = 187,

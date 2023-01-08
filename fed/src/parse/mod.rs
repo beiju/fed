@@ -2563,6 +2563,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 },
             }
         }
+        EventType::Coasting => { todo!() }
         EventType::ItemBreaks => { todo!() }
         EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }
