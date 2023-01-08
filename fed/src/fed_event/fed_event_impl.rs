@@ -3258,7 +3258,7 @@ impl FedEvent {
                 // This one doesn't seem to do plurals
                 eb.push_description(&format!("{} is repaired!", repair.item_name));
                 eb.push_child(repair.sub_event, |mut child| {
-                    child.push_description(&format!("{}'s {} was repaired by Smithy.", repair.player_name, repair.item_name));
+                    child.push_description(&format!("{} {} was repaired by Smithy.", Possessive(&repair.player_name), repair.item_name));
                     child.build_item_repaired(repair, false)
                 });
                 eb.build(EventType::Smithy)
