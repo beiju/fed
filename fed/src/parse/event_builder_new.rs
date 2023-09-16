@@ -307,26 +307,25 @@ impl EventBuilder {
         self.push_free_refills(scores.free_refills);
     }
 
-    pub fn push_attraction(&mut self, attraction: Option<Attraction>, player_name: &str, player_id: Uuid) {
-        let Some(at) = attraction else { return; };
+    pub fn push_attraction(&mut self, attraction: Attraction, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
-        self.push_description(&format!("The {} Attract {player_name}!", at.team_nickname));
-        self.push_child(at.sub_event, |mut child| {
-            child.push_description(&format!("The {} Attracted {player_name}!", at.team_nickname));
+        self.push_description(&format!("The {} Attract {player_name}!", attraction.team_nickname));
+        self.push_child(attraction.sub_event, |mut child| {
+            child.push_description(&format!("The {} Attracted {player_name}!", attraction.team_nickname));
             child.push_player_tag(player_id);
-            child.push_team_tag(at.team_id);
+            child.push_team_tag(attraction.team_id);
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
             child.push_metadata_uuid("playerId", player_id);
             child.push_metadata_str("playerName", player_name);
-            child.push_metadata_uuid("teamId", at.team_id);
-            child.push_metadata_str("teamName", at.team_nickname);
+            child.push_metadata_uuid("teamId", attraction.team_id);
+            child.push_metadata_str("teamName", attraction.team_nickname);
             child.build(EventType::PlayerAddedToTeam)
         });
-        if let Some(boost) = at.boost {
+        if let Some(boost) = attraction.boost {
             self.push_child(boost.sub_event, |mut child| {
                 child.push_description(&format!("{player_name} entered the Shadows."));
                 child.push_player_tag(player_id);
-                child.push_team_tag(at.team_id);
+                child.push_team_tag(attraction.team_id);
                 child.build_boost(boost)
             })
         }
@@ -362,12 +361,20 @@ impl EventBuilder {
     }
 
     pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, score_label: &str) {
+        // This is my lazy way of dealing with the move into the for loop
+        let mut attractions = Vec::new();
         for scorer in scorers {
             self.push_player_tag(scorer.player_id);
             self.push_item_damage(scorer.item_damage, &scorer.player_name);
             self.push_description(&format!("{} {score_label}", scorer.player_name));
-            self.push_attraction(scorer.attraction, &scorer.player_name, scorer.player_id);
             self.push_hotel_motel_party(scorer.hotel_motel_party, &scorer.player_name, scorer.player_id);
+            if let Some(attraction) = scorer.attraction {
+                attractions.push((attraction, scorer.player_name, scorer.player_id));
+            }
+        }
+        // Attractions happen in a block after the scores block
+        for (attraction, player_name, player_id) in attractions {
+            self.push_attraction(attraction, &player_name, player_id);
         }
     }
 

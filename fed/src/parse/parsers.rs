@@ -292,15 +292,21 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
 pub(crate) struct ParsedScore<'a> {
     pub(crate) damaged_item_name: Option<(&'a str, Option<bool>)>,
     pub(crate) player_name: &'a str,
-    pub(crate) attraction: Option<&'a str>,
     pub(crate) hotel_motel_party: bool,
 }
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
+pub(crate) struct ParsedAttraction<'a> {
+    pub(crate) team_nickname: &'a str,
+    pub(crate) player_name: &'a str,
+}
+
+pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
         let (input, scorers) = many0(parse_score(score_label, extra_space)).parse(input)?;
 
-        Ok((input, scorers))
+        let (input, attractions) = many0(parse_attraction).parse(input)?;
+
+        Ok((input, (scorers, attractions)))
     }
 }
 
@@ -318,28 +324,23 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl 
             (input, (None, name))
         };
 
-        let (input, attraction) = opt(parse_attraction(player_name)).parse(input)?;
         let (input, party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
 
         Ok((input, ParsedScore {
             damaged_item_name,
             player_name,
-            attraction,
-            hotel_motel_party: party.is_some()
+            hotel_motel_party: party.is_some(),
         }))
     }
 }
 
-pub(crate) fn parse_attraction(player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
-    move |input: &str| {
-        let (input, _) = tag("\nThe ").parse(input)?;
-        let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
-        let (input, _) = tag(player_name).parse(input)?;
-        let (input, _) = tag("!").parse(input)?;
+pub(crate) fn parse_attraction(input: &str) -> ParserResult<ParsedAttraction> {
+    let (input, _) = tag("\nThe ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
+    let (input, player_name) = parse_terminated("!").parse(input)?;
 
 
-        Ok((input, team_nickname))
-    }
+    Ok((input, ParsedAttraction { team_nickname, player_name }))
 }
 
 pub(crate) fn parse_hotel_motel_party_with_name(player_name: &str) -> impl Fn(&str) -> ParserResult<()> + '_ {
@@ -842,7 +843,7 @@ pub(crate) fn parse_feedback(input: &str) -> ParserResult<(&str, &str, Option<&s
     )).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
 
-    Ok((input, (player1_name, player2_name,lcd_soundsystem, position)))
+    Ok((input, (player1_name, player2_name, lcd_soundsystem, position)))
 }
 
 pub(crate) fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {

@@ -560,37 +560,46 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_scores(&mut self, label: &'static str) -> Result<Scores, FeedParseError> {
-        let scoring_players = self.parse_scoring_players(label)?;
-        self.parse_scores_with_scoring_players(scoring_players)
+        let (scoring_players, attractions) = self.parse_scoring_players(label)?;
+        self.parse_scores_with_scoring_players(scoring_players, attractions)
     }
 
-    pub fn parse_scores_with_scoring_players(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>, bool)>) -> Result<Scores, FeedParseError> {
+    pub fn parse_scores_with_scoring_players(
+        &mut self,
+        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool)>,
+        attractions: Vec<(Uuid, String, String)>
+    ) -> Result<Scores, FeedParseError> {
+        let mut attractions = attractions.into_iter().peekable();
         let scores = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name, attraction, hotel_motel_party)| {
+            .map(|(player_id, item_name, player_name, hotel_motel_party)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
-                let attraction = attraction
-                    .map(|team_nickname| {
-                        assert!(is_known_team_nickname(&team_nickname));
-                        let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
-                        let boost = self.next_child_opt(EventType::PlayerStatIncrease)?
-                            .map(|child| {
-                                ParseOk(PlayerBoostSubEvent {
-                                    rating_before: child.metadata_f64("before")?,
-                                    rating_after: child.metadata_f64("after")?,
-                                    sub_event: child.as_sub_event(),
-                                })
+                let attraction = if let Some((attracted_player_id, _, _)) = attractions.peek() && attracted_player_id == &player_id {
+                    let (attracted_player_id, attracted_team_nickname, attracted_player_name) = attractions.next()
+                        .expect("This code should only run when there is a next item in the iterator");
+                    assert!(is_known_team_nickname(&attracted_team_nickname));
+                    // If these ever don't match that will be fun
+                    assert_eq!(player_name, attracted_player_name);
+                    let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
+                    let boost = self.next_child_opt(EventType::PlayerStatIncrease)?
+                        .map(|child| {
+                            ParseOk(PlayerBoostSubEvent {
+                                rating_before: child.metadata_f64("before")?,
+                                rating_after: child.metadata_f64("after")?,
+                                sub_event: child.as_sub_event(),
                             })
-                            .transpose()?;
-                        ParseOk(Attraction {
-                            team_nickname,
-                            team_id: child.next_team_id()?,
-                            sub_event: child.as_sub_event(),
-                            boost,
                         })
+                        .transpose()?;
+                    Some(Attraction {
+                        team_nickname: attracted_team_nickname,
+                        team_id: child.next_team_id()?,
+                        sub_event: child.as_sub_event(),
+                        boost,
                     })
-                    .transpose()?;
+                } else {
+                    None
+                };
 
                 let hotel_motel_party = if hotel_motel_party {
                     Some(self.next_boost_child_with_team()?)
@@ -607,6 +616,9 @@ impl<'e> EventParseWrapper<'e> {
             })
             .collect::<Result<_, _>>()?;
 
+        // The above code should always drain the attractions iterator
+        assert_eq!(attractions.peek(), None);
+
         let free_refills = self.parse_free_refills()?;
 
         Ok(Scores {
@@ -615,20 +627,28 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<String>, bool)>, FeedParseError> {
-        let scorers = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool)>, Vec<(Uuid, String, String)>), FeedParseError> {
+        let (scorers, attractions) = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
             .map(|score| {
                 ParseOk((
                     self.next_player_id()?,
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
-                    score.attraction.map(str::to_string),
                     score.hotel_motel_party,
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(scoring_players)
+        let attracted_players = attractions.into_iter()
+            .map(|attraction| {
+                ParseOk((
+                    self.next_player_id()?,
+                    attraction.team_nickname.to_string(),
+                    attraction.player_name.to_string(),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((scoring_players, attracted_players))
     }
 
     pub fn next_item_damage(&mut self, item_name_plural: Option<bool>) -> Result<ItemDamaged, FeedParseError> {
