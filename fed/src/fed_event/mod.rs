@@ -1402,6 +1402,12 @@ pub enum WonPrizeMatchEventVariants {
     WithPlayerName(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct MaintenanceMode {
+    pub sub_event: SubEvent,
+    pub team_id: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2217,6 +2223,10 @@ pub enum FedEventData {
 
         /// Player who did the sippy
         sipper: PlayerStatChange,
+
+        /// Metadata for the sub-event associated with activating Maintenance Mode, if applicable
+        // TODO: Should this be on PlayerStatChange?
+        maintenance_mode: Option<MaintenanceMode>,
 
         /// Player who was sipped
         sipped: PlayerStatChange,

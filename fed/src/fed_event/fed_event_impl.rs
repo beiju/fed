@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -1017,44 +1017,45 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::Blooddrain { ref game, is_siphon, ref sipper, ref sipped, sipped_category } => {
-                let children: Vec<_> = [
-                    (sipped, EventType::PlayerStatDecrease, format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name)),
-                    (sipper, EventType::PlayerStatIncrease, format!("{} drained blood from {}.", sipper.player_name, sipped.player_name)),
-                ].into_iter().map(|(change, event_type, description)| {
-                    EventBuilderChild::new(&change.sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: event_type,
-                            category: EventCategory::Changes,
-                            description,
-                            team_tags: vec![change.team_id],
-                            player_tags: vec![change.player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "type": sipped_category as i64,
-                            "before": change.rating_before,
-                            "after": change.rating_after,
-                        }))
-                })
-                    .collect();
+            FedEventData::Blooddrain { game, is_siphon, sipper, maintenance_mode, sipped, sipped_category } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Blooddrain gurgled!");
+                if is_siphon { eb.push_description(&format!("{}'s Siphon activates!", sipper.player_name)); }
+                eb.push_description(&format!("{} siphoned some of {}'s {sipped_category} ability!", sipper.player_name, sipped.player_name));
+                eb.push_description(&format!("{} increased their {sipped_category} ability!", sipper.player_name));
 
-                let siphon_text = if is_siphon {
-                    format!("\n{}'s Siphon activates!", sipper.player_name)
-                } else {
-                    String::new()
+                // Can't put this in build_child because the player tags are in the opposite order
+                // from the child events, for some reason
+                eb.push_player_tag(sipper.player_id);
+                eb.push_player_tag(sipped.player_id);
+
+                let build_child = |eb: &mut EventBuilder, change: &PlayerStatChange, description: String| {
+                    eb.push_child(change.sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_player_tag(change.player_id);
+                        child.push_team_tag(change.team_id);
+                        child.build_player_stat_changed(change.rating_before, change.rating_after, sipped_category as i64)
+                    });
                 };
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain },
-                        category: EventCategory::Special,
-                        description: format!("The Blooddrain gurgled!{siphon_text}\n{} siphoned some of {}'s {sipped_category} ability!\n{} increased their {sipped_category} ability!", sipper.player_name, sipped.player_name, sipper.player_name),
-                        player_tags: vec![sipper.player_id, sipped.player_id],
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                build_child(&mut eb, &sipped,
+                            format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name));
+
+                if let Some(maintenance_mode) = maintenance_mode {
+                    eb.push_child(maintenance_mode.sub_event, |mut child| {
+                        child.push_description("Impairment Detected. Entering Maintenance Mode.");
+                        child.push_team_tag(maintenance_mode.team_id);
+                        child.push_metadata_str("mod", "EXTRA_OUT");
+                        child.push_metadata_i64("type", 3); // why 3? idk
+                        child.build(EventType::AddedMod)
+                    });
+                }
+
+                build_child(&mut eb, &sipper,
+                            format!("{} drained blood from {}.", sipper.player_name, sipped.player_name));
+
+                eb.build(if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain })
             }
             FedEventData::Feedback { game, players: (player_a, player_b), lcd_soundsystem, position_type, sub_event } => {
                 let home_team_id = game.home_team;

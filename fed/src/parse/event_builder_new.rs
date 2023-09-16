@@ -602,7 +602,7 @@ impl EventBuilder {
         })
     }
 
-    pub fn build_boost(mut self, boost: PlayerBoostSubEvent) -> EventuallyEvent {
+    pub fn build_boost(self, boost: PlayerBoostSubEvent) -> EventuallyEvent {
         self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }
 

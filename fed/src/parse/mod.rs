@@ -5,6 +5,7 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
+use std::sync::{Arc, Mutex};
 use itertools::Itertools;
 use serde::Deserialize;
 // the second one is a macro
@@ -53,7 +54,7 @@ pub struct PendingPrizeMatch {
 
 #[derive(Default)]
 pub struct InterEventState {
-    pending_prize_matches: Vec<PendingPrizeMatch>,
+    pending_prize_matches: Mutex<Vec<PendingPrizeMatch>>,
 }
 
 impl InterEventState {
@@ -62,12 +63,25 @@ impl InterEventState {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct InterEventStateSync(Arc<InterEventState>);
+
+impl InterEventStateSync {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn inner(&self) -> &InterEventState {
+        self.0.as_ref()
+    }
+}
+
 #[allow(non_snake_case)]
 fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
     Ok(v)
 }
 
-pub fn parse_feed_event(feed_event: &EventuallyEvent, state: &mut InterEventState) -> Result<FedEvent, FeedParseError> {
+pub fn parse_feed_event(feed_event: &EventuallyEvent, state: &InterEventState) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
         parse_single_feed_event(feed_event, state)
     } else {
@@ -75,7 +89,7 @@ pub fn parse_feed_event(feed_event: &EventuallyEvent, state: &mut InterEventStat
     }
 }
 
-fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState) -> Result<FedEvent, FeedParseError> {
+fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> Result<FedEvent, FeedParseError> {
     let mut event = EventParseWrapper::new(event)?;
     // This variable exists just for me to look at in the debugger, because the debugger
     // representation of the Uuid type is to low-level to copy-paste
@@ -1121,6 +1135,17 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
             let sipped_id = event.next_player_id()?;
 
             let mut sipped_event = event.next_child(EventType::PlayerStatDecrease)?;
+            let maintenance_mode = event.next_child_opt(EventType::AddedMod)?
+                .map(|mut mm_event| {
+                    // Make sure this is a maintenance mode event by verifying the description
+                    mm_event.next_parse_tag("Impairment Detected. Entering Maintenance Mode.")?;
+
+                    ParseOk(MaintenanceMode {
+                        sub_event: mm_event.as_sub_event(),
+                        team_id: mm_event.next_team_id()?,
+                    })
+                })
+                .transpose()?;
             let mut sipper_event = event.next_child(EventType::PlayerStatIncrease)?;
 
             FedEventData::Blooddrain {
@@ -1134,6 +1159,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
                     rating_after: sipper_event.metadata_f64("after")?,
                     sub_event: sipper_event.as_sub_event(),
                 },
+                maintenance_mode,
                 sipped: PlayerStatChange {
                     team_id: sipped_event.next_team_id()?,
                     player_id: sipped_id,
@@ -1166,6 +1192,9 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
                             rating_after: sipper_event.metadata_f64("after")?,
                             sub_event: sipper_event.as_sub_event(),
                         },
+                        // Maintenance mode is possible in this situation, but I need to see an
+                        // actual instance of it to know how to parse it.
+                        maintenance_mode: None,
                         sipped: PlayerStatChange {
                             team_id: sipped_event.next_team_id()?,
                             player_id: sipped_id,
@@ -2098,7 +2127,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
                 // Then it's a tarot event and we can forget parsing. Thankfully
                 make_item_tarot_event(&mut event, true)?
             } else {
-                let potential_prize_matches: Vec<_> = state.pending_prize_matches.iter()
+                let mut pending_prize_matches = state.pending_prize_matches.lock().unwrap();
+                let potential_prize_matches: Vec<_> = pending_prize_matches.iter()
                     .filter(|&pm| {
                         let Some(team_ids) = event.team_tags().ok() else {
                             return false;
@@ -2140,11 +2170,11 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
                     }
                     ParsedPlayerGainedItem::WonPrizeMatchImplicit(player_name, game_id) => {
                         // This ends the prize match, so it's no longer pending
-                        let remove_index = state.pending_prize_matches.iter()
+                        let remove_index = pending_prize_matches.iter()
                             .find_position(|item| item.game_id != game_id)
                             .expect("The item we're finding came from this vec in the first place, so it should always be there")
                             .0;
-                        state.pending_prize_matches.swap_remove(remove_index);
+                        pending_prize_matches.swap_remove(remove_index);
                         FedEventData::WonPrizeMatch {
                             team_nickname_or_player_name: WonPrizeMatchEventVariants::WithPlayerName(player_name.to_string()),
                             team_id: event.next_team_id()?,
@@ -2662,7 +2692,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState)
         EventType::PrizeMatch => {
             let game = event.game(unscatter, attractor_secret_base)?;
             let item_name = event.next_parse(parse_prize_match)?;
-            state.pending_prize_matches.push(PendingPrizeMatch {
+            let mut pending_prize_matches = state.pending_prize_matches.lock().unwrap();
+            pending_prize_matches.push(PendingPrizeMatch {
                 prize_item_name: item_name.to_string(),
                 game_id: game.game_id,
                 season: event.season,

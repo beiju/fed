@@ -7,7 +7,7 @@ use par_iter_sync::IntoParallelIteratorSync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
 use indicatif::{ProgressDrawTarget, ProgressStyle};
-use fed::{FedEvent, InterEventState};
+use fed::{FedEvent, InterEventStateSync};
 use flate2::read::GzDecoder;
 use with_structure::WithStructure;
 use enum_flatten::{EnumFlatten, EnumFlattened};
@@ -15,7 +15,7 @@ use clap::Parser;
 
 const NUM_EVENTS: u64 = 8299172;
 
-fn check_json_line((i, json_str): (usize, io::Result<String>), state: &mut InterEventState) -> anyhow::Result<(usize, Option<FedEvent>)> {
+fn check_json_line((i, json_str): (usize, io::Result<String>), state: &InterEventStateSync) -> anyhow::Result<(usize, Option<FedEvent>)> {
     let str = json_str.context("Failed to read line from ndjson file")?;
     if str.contains("\"_eventually_ingest_source\":\"blaseball.com_library\"") {
         return Ok((i, None));
@@ -25,7 +25,7 @@ fn check_json_line((i, json_str): (usize, io::Result<String>), state: &mut Inter
         .context("Failed to parse ndjson entry into EventuallyEvent")?;
 
 
-    let parsed_event = fed::parse_feed_event(&feed_event, state)
+    let parsed_event = fed::parse_feed_event(&feed_event, state.inner())
         .with_context(|| format!("Parsing {}: {:?}", feed_event.id, feed_event.description))
         .context("Failed to parse EventuallyEvent into FedEvent")?;
 
@@ -81,13 +81,13 @@ fn run_test(args: Args) -> anyhow::Result<()> {
     let file = File::open("feed_dump.filtered.ndjson.gz")?;
     let reader = BufReader::new(GzDecoder::new(file));
 
-    let mut state = InterEventState::new();
+    let state = InterEventStateSync::new();
 
     let iter = reader.lines()
         .enumerate()
         // .map(|args| check_json_line(args));
-        // .into_par_iter_sync(|args| Ok::<_, ()>(check_json_line(args)));
-        .flat_map(|args| Ok::<_, ()>(check_json_line(args, &mut state)));
+        .into_par_iter_sync(move |args| Ok::<_, ()>(check_json_line(args, &state)));
+        // .flat_map(|args| Ok::<_, ()>(check_json_line(args, &mut state)));
 
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 
