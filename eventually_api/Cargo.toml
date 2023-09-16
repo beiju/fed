@@ -9,10 +9,10 @@ edition = "2021"
 chrono = { version = "0.4.19", features = ["serde"] }
 derive_builder = "0.12.0"
 futures = "0.3.21"
-itertools = "0.10.3"
+itertools = "0.11.0"
 log = "0.4.17"
-num_enum = "0.5.7"
-pot = "1.0.2"
+num_enum = "0.7.0"
+pot = "3.0.0"
 reqwest = "0.11.11"
 schemars = { version = "0.8.11", features = ["chrono", "uuid1", "preserve_order"] }
 serde = "1.0.138"

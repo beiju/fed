@@ -10,8 +10,8 @@ assert-json-diff = "2.0.2"
 chrono = { version = "0.4.19", features = ["serde"] }
 eventually_api = { path = "../eventually_api" }
 fed = { path = "../fed" }
-itertools = "0.10.3"
-num_enum = "0.5.7"
+itertools = "0.11.0"
+num_enum = "0.7.0"
 reqwest = { version = "0.11.13", features = ["json", "gzip"] }
 rocket = { version = "0.5.0-rc.2", features = ["json"] }
 serde = "1.0.147"
