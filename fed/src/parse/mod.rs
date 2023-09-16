@@ -5,6 +5,7 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
+use itertools::Itertools;
 use serde::Deserialize;
 // the second one is a macro
 use uuid::{Uuid, uuid};
@@ -41,20 +42,40 @@ const TAROT_EVENTS: [Uuid; 14] = [
     uuid!("015262ca-5903-4960-82af-d9c682255796"), // ...getting the Force Field of Observation
 ];
 
+pub struct PendingPrizeMatch {
+    pub prize_item_name: String,
+    pub game_id: Uuid,
+    pub season: i32,
+    pub day: i32,
+    pub home_team_id: Uuid,
+    pub away_team_id: Uuid,
+}
+
+#[derive(Default)]
+pub struct InterEventState {
+    pending_prize_matches: Vec<PendingPrizeMatch>,
+}
+
+impl InterEventState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[allow(non_snake_case)]
 fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
     Ok(v)
 }
 
-pub fn parse_feed_event(feed_event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
+pub fn parse_feed_event(feed_event: &EventuallyEvent, state: &mut InterEventState) -> Result<FedEvent, FeedParseError> {
     if feed_event.metadata.siblings.is_empty() {
-        parse_single_feed_event(feed_event)
+        parse_single_feed_event(feed_event, state)
     } else {
         todo!()
     }
 }
 
-fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedParseError> {
+fn parse_single_feed_event(event: &EventuallyEvent, state: &mut InterEventState) -> Result<FedEvent, FeedParseError> {
     let mut event = EventParseWrapper::new(event)?;
     // This variable exists just for me to look at in the debugger, because the debugger
     // representation of the Uuid type is to low-level to copy-paste
@@ -116,7 +137,6 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // the description from the parent anyway, so it's better to parse it from there
                 let (team_nickname, source_mod_name) = event.next_parse(parse_subseasonal_mod_change)?;
                 assert!(is_known_team_nickname(team_nickname));
-                println!("Event {}, performing changed in HalfInning: {source_mod_name}", _id_string);
                 subseasonal_mod_effects.push(TeamPerformingChanged {
                     team_id: child.next_team_id()?,
                     team_nickname: team_nickname.to_string(),
@@ -2078,7 +2098,19 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                 // Then it's a tarot event and we can forget parsing. Thankfully
                 make_item_tarot_event(&mut event, true)?
             } else {
-                match event.next_parse(parse_player_gained_item)? {
+                let potential_prize_matches: Vec<_> = state.pending_prize_matches.iter()
+                    .filter(|&pm| {
+                        let Some(team_ids) = event.team_tags().ok() else {
+                            return false;
+                        };
+                        let Ok(&team_id) = team_ids.into_iter().exactly_one() else {
+                            return false;
+                        };
+                        pm.season == event.season && pm.day == event.day &&
+                            (pm.home_team_id == team_id || pm.away_team_id == team_id)
+                    })
+                    .collect();
+                match event.next_parse(parse_player_gained_item(&potential_prize_matches))? {
                     ParsedPlayerGainedItem::CommunityChest((player_name, _item_name)) => {
                         FedEventData::CommunityChestOpens {
                             item_id: event.metadata_uuid("itemId")?,
@@ -2092,17 +2124,36 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
                             player_id: event.next_player_id()?,
                         }
                     }
-                    ParsedPlayerGainedItem::WonPrizeMatch(team_nickname) => {
+                    ParsedPlayerGainedItem::WonPrizeMatchExplicit(team_nickname) => {
                         assert!(is_known_team_nickname(team_nickname));
                         FedEventData::WonPrizeMatch {
-                            team_nickname: team_nickname.to_string(),
+                            team_nickname_or_player_name: WonPrizeMatchEventVariants::WithTeamNickname(team_nickname.to_string()),
                             team_id: event.next_team_id()?,
                             player_id: event.next_player_id()?,
                             item_id: event.metadata_uuid("itemId")?,
                             item_name: event.metadata_str("itemName")?.to_string(),
                             item_mods: event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
                             player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
-                            player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
+                            player_rating: event.metadata_f64("playerRating")?,
+                        }
+                    }
+                    ParsedPlayerGainedItem::WonPrizeMatchImplicit(player_name, game_id) => {
+                        // This ends the prize match, so it's no longer pending
+                        let remove_index = state.pending_prize_matches.iter()
+                            .find_position(|item| item.game_id != game_id)
+                            .expect("The item we're finding came from this vec in the first place, so it should always be there")
+                            .0;
+                        state.pending_prize_matches.swap_remove(remove_index);
+                        FedEventData::WonPrizeMatch {
+                            team_nickname_or_player_name: WonPrizeMatchEventVariants::WithPlayerName(player_name.to_string()),
+                            team_id: event.next_team_id()?,
+                            player_id: event.next_player_id()?,
+                            item_id: event.metadata_uuid("itemId")?,
+                            item_name: event.metadata_str("itemName")?.to_string(),
+                            item_mods: event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                            player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
+                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
                             player_rating: event.metadata_f64("playerRating")?,
                         }
                     }
@@ -2609,9 +2660,18 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             }
         }
         EventType::PrizeMatch => {
+            let game = event.game(unscatter, attractor_secret_base)?;
             let item_name = event.next_parse(parse_prize_match)?;
+            state.pending_prize_matches.push(PendingPrizeMatch {
+                prize_item_name: item_name.to_string(),
+                game_id: game.game_id,
+                season: event.season,
+                day: event.day,
+                home_team_id: game.home_team,
+                away_team_id: game.away_team,
+            });
             FedEventData::PrizeMatch {
-                game: event.game(unscatter, attractor_secret_base)?,
+                game,
                 item_name: item_name.to_string(),
             }
         }

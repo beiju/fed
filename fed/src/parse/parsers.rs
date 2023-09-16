@@ -6,9 +6,11 @@ use nom::combinator::{fail, map_res, opt, recognize, verify};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
+use uuid::Uuid;
 
 use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
+use crate::parse::PendingPrizeMatch;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
@@ -1806,14 +1808,18 @@ pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {
 
 pub(crate) enum ParsedPlayerGainedItem<'a> {
     CommunityChest((&'a str, &'a str)),
-    WonPrizeMatch(&'a str),
+    WonPrizeMatchExplicit(&'a str),
+    WonPrizeMatchImplicit(&'a str, Uuid),
 }
 
-pub(crate) fn parse_player_gained_item(input: &str) -> ParserResult<ParsedPlayerGainedItem> {
-    alt((
-        parse_community_chest.map(|v| ParsedPlayerGainedItem::CommunityChest(v)),
-        parse_won_prize_match.map(|v| ParsedPlayerGainedItem::WonPrizeMatch(v)),
-    )).parse(input)
+pub(crate) fn parse_player_gained_item<'p, 'i>(pending_prize_matches: &'p [&'p PendingPrizeMatch]) -> impl Fn(&'i str) -> ParserResult<ParsedPlayerGainedItem<'i>> + 'p {
+    move |input: &str| {
+        alt((
+            parse_community_chest.map(|v| ParsedPlayerGainedItem::CommunityChest(v)),
+            parse_won_prize_match_explicit.map(|v| ParsedPlayerGainedItem::WonPrizeMatchExplicit(v)),
+            parse_won_prize_match_implicit(pending_prize_matches).map(|(name, id)| ParsedPlayerGainedItem::WonPrizeMatchImplicit(name, id)),
+        )).parse(input)
+    }
 }
 
 pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
@@ -1824,11 +1830,37 @@ pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (player_name, item_name)))
 }
 
-pub(crate) fn parse_won_prize_match(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_won_prize_match_explicit(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" won the Prize Match!").parse(input)?;
 
     Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_won_prize_match_implicit<'p, 'i>(pending_prize_matches: &'p [&'p PendingPrizeMatch]) -> impl Fn(&'i str) -> ParserResult<(&'i str, Uuid)> + 'p {
+    move |input: &str| {
+        // When this "error message" is displayed, all I see is "attempt to subtract with overflow".
+        // Why the hell is that?
+        let mut parser = fail("There are no possible prize matches for this event");
+        for ppm in pending_prize_matches {
+            parser = parser.or(
+                parse_won_prize_match_implicit_with_prize(&ppm.prize_item_name)
+                    .map(|player_name| (player_name, ppm.game_id))
+                    .parse(input)
+            );
+        }
+        return parser;
+    }
+}
+
+pub(crate) fn parse_won_prize_match_implicit_with_prize<'p, 'i>(prize_item_name: &'p str) -> impl Fn(&'i str) -> ParserResult<&'i str> + 'p {
+    move |input: &str| {
+        let (input, player_name) = parse_terminated(" gained the Prized ").parse(input)?;
+        let (input, _) = tag(prize_item_name).parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+
+        Ok((input, player_name))
+    }
 }
 
 pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<(&str, &str)> {

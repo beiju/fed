@@ -4,6 +4,7 @@ use flate2::read::GzDecoder;
 
 use crate::parse;
 use crate::{FedEvent, FeedParseError};
+pub use crate::parse::InterEventState;
 
 // const FILE_GZIP: &[u8] = include_bytes!("../../../feed_dump.filtered.ndjson.gz");
 pub const EXPANSION_ERA_START: &'static str = "2021-03-01T05:00:00.000Z";
@@ -15,11 +16,13 @@ pub fn expansion_era_events() -> impl Iterator<Item=Result<FedEvent, FeedParseEr
     let f = File::open("../fed/feed_dump.filtered.ndjson.gz")
         .expect("Couldn't open file");
 
+    let mut state = InterEventState::new();
+
     BufReader::new(GzDecoder::new(f))
         .lines()
-        .map(|line| {
+        .map(move |line| {
             let line = line.expect("Failed reading from gzip file");
             let feed_event = parse::feed_event_from_json(&line)?;
-            parse::parse_feed_event(&feed_event)
+            parse::parse_feed_event(&feed_event, &mut state)
         })
 }

@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -3281,15 +3281,22 @@ impl FedEvent {
                 eb.push_description(&format!("Prize Match!\nThe Winner gets {item_name}"));
                 eb.build(EventType::PrizeMatch)
             }
-            FedEventData::WonPrizeMatch { team_nickname, team_id, player_id, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating } => {
+            FedEventData::WonPrizeMatch { team_nickname_or_player_name, team_id, player_id, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("The {team_nickname} won the Prize Match!"));
+                match team_nickname_or_player_name {
+                    WonPrizeMatchEventVariants::WithTeamNickname(team_nickname) => {
+                        eb.push_description(&format!("The {team_nickname} won the Prize Match!"));
+                    }
+                    WonPrizeMatchEventVariants::WithPlayerName(player_name) => {
+                        eb.push_description(&format!("{player_name} gained the Prized {item_name}."));
+                    }
+                }
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_uuid("itemId", item_id);
                 eb.push_metadata_str("itemName", item_name);
                 eb.push_metadata_str_vec("mods", item_mods);
-                eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                eb.push_metadata_f64_opt("playerItemRatingAfter", player_item_rating_after);
                 eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
                 eb.push_metadata_f64("playerRating", player_rating);
 

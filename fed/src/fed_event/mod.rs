@@ -1397,6 +1397,12 @@ pub struct NamedPlayerBoostSubEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+pub enum WonPrizeMatchEventVariants {
+    WithTeamNickname(String),
+    WithPlayerName(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -4230,8 +4236,10 @@ pub enum FedEventData {
     /// Team won a Prize Match
     #[serde(rename_all = "camelCase")]
     WonPrizeMatch {
-        /// Nickname of team who won the Prize Match
-        team_nickname: String,
+        /// There are two formats for this event. In the first format, the nickname of team who won
+        /// the Prize Match is mentioned, but not the player name. In the second, it's the reverse.
+        // TODO: Serialize this as either team_nickname or player_name
+        team_nickname_or_player_name: WonPrizeMatchEventVariants,
 
         /// Uuid of team who won the Prize Match
         team_id: Uuid,
@@ -4252,8 +4260,9 @@ pub enum FedEventData {
         /// before gaining the item
         player_item_rating_before: f64,
 
-        /// The increase/decrease that all the wielding player's items now cause to their star rating
-        player_item_rating_after: f64,
+        /// The increase/decrease that all the wielding player's items now cause to their star
+        /// rating. This is sometimes null for reasons which are unknown to me.
+        player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
         player_rating: f64,
