@@ -220,6 +220,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::Walk => {
+            let pitch = event.parse_pitch()?;
             match event.next_parse(parse_walk)? {
                 ParsedWalk::Ordinary((batter_name, base_instincts)) => {
                     let batter_id = event.next_player_id()?;
@@ -229,6 +230,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
                     FedEventData::Walk {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         scores,

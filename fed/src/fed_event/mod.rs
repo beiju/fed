@@ -1996,6 +1996,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Name of the batter who drew the walk
         batter_name: String,
 

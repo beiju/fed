@@ -429,25 +429,19 @@ impl FedEvent {
                 eb.push_parasite(parasite);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::Walk { game, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
-                let base_instincts_str = if let Some(base) = base_instincts {
-                    format!("\nBase Instincts take them directly to {base} base!")
-                } else {
-                    String::new()
-                };
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Walk,
-                        category: EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special),
-                        description: format!("{batter_name} draws a walk.{base_instincts_str}"),
-                        player_tags: vec![batter_id],
-                        ..Default::default()
-                    })
-                    .scores(&scores, " scores!")
-                    .stopped_inhabiting(&stopped_inhabiting)
-                    .item_damage_before_score(&batter_item_damage, &batter_name)
-                    .build()
+            FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special));
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{batter_name} draws a walk."));
+                if let Some(base) = base_instincts {
+                    eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
+                }
+                eb.push_player_tag(batter_id);
+                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_scores(scores, "scores!");
+                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.build(EventType::Walk)
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
                 event_builder.for_game(&game)
