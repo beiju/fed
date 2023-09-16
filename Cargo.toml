@@ -10,3 +10,5 @@ members = [
     "with_structure",
     "with_structure_derive",
 ]
+
+resolver = "2"
