@@ -1047,7 +1047,7 @@ impl FedEvent {
                         child.push_description("Impairment Detected. Entering Maintenance Mode.");
                         child.push_team_tag(maintenance_mode.team_id);
                         child.push_metadata_str("mod", "EXTRA_OUT");
-                        child.push_metadata_i64("type", 3); // why 3? idk
+                        child.push_metadata_i64("type", ModDuration::Game as i64);
                         child.build(EventType::AddedMod)
                     });
                 }
@@ -3302,6 +3302,27 @@ impl FedEvent {
                 eb.push_metadata_f64("playerRating", player_rating);
 
                 eb.build(EventType::PlayerGainedItem)
+            }
+            FedEventData::PlayerCoasting { game, is_coasting, change_event } => {
+                let description = if is_coasting {
+                    format!("{} is Coasting.", change_event.player_name)
+                } else {
+                    format!("{} stops Coasting.", change_event.player_name)
+                };
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&description);
+                eb.push_player_tag(change_event.player_id);
+                eb.push_child(change_event.sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(change_event.player_id);
+                    child.push_team_tag(change_event.team_id);
+                    child.push_metadata_str("mod", "UNDERPERFORMING");
+                    child.push_metadata_str("source", "COASTING");
+                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child.build(if is_coasting { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
+                });
+                eb.build(EventType::Coasting)
             }
         }
     }

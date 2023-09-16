@@ -26,7 +26,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 14] = [
+const TAROT_EVENTS: [Uuid; 16] = [
     uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
     uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
     uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
@@ -41,6 +41,8 @@ const TAROT_EVENTS: [Uuid; 14] = [
     uuid!("91079f04-4257-479f-8884-1752831ea7b8"), // ...getting the Uncertain Necklace of Entanglement
     uuid!("ec493d47-8c48-46ef-9f00-94394630deb9"), // Orville Manco's Bat removed before...
     uuid!("015262ca-5903-4960-82af-d9c682255796"), // ...getting the Force Field of Observation
+    uuid!("64021788-163a-47a5-9bb7-a2b7d4b3830d"), // Justice Spoon gets Negative
+    uuid!("ed20a77c-8149-48ee-90cf-f172117c3ca4"), // Lotus Mango gets Negative
 ];
 
 pub struct PendingPrizeMatch {
@@ -2644,7 +2646,20 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                 },
             }
         }
-        EventType::Coasting => { todo!() }
+        EventType::Coasting => {
+            let player_name = event.next_parse(parse_coasting)?;
+            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+            FedEventData::PlayerCoasting {
+                game: event.game(unscatter, attractor_secret_base)?,
+                is_coasting: true, // Will populate when I hit the un-coasting event
+                change_event: ModChangeSubEventWithNamedPlayer {
+                    sub_event: child.as_sub_event(),
+                    team_id: child.next_team_id()?,
+                    player_id: child.next_player_id()?,
+                    player_name: player_name.to_string(),
+                },
+            }
+        }
         EventType::ItemBreaks => { todo!() }
         EventType::ItemDamaged => { todo!() }
         EventType::BrokenItemRepaired => { todo!() }

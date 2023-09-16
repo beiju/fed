@@ -3988,15 +3988,15 @@ pub enum FedEventData {
         item_gained: bool,
     },
 
-    // TODO: Earlseason is separate Fed events for add and remove, but Middling is the same event.
-    //   Choose one and stick with it.
+    // TODO: Earlseason is separate Fed events for add and remove, but Middling and Coasting use 
+    //   the same event. Choose one and stick with it.
     /// Player gains or loses Middling
     #[serde(rename_all = "camelCase")]
     PlayerMiddling {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Whether this team just became Middling (true) or un-became Middling (false)
+        /// Whether this player just became Middling (true) or un-became Middling (false)
         is_middling: bool,
 
         #[serde(flatten)]
@@ -4276,6 +4276,19 @@ pub enum FedEventData {
 
         /// The player's star rating. TODO: Is this with or without items?
         player_rating: f64,
+    },
+
+    /// Player gains or loses Coasting
+    #[serde(rename_all = "camelCase")]
+    PlayerCoasting {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Whether this player just became Coasting (true) or un-became Coasting (false)
+        is_coasting: bool,
+
+        #[serde(flatten)]
+        change_event: ModChangeSubEventWithNamedPlayer,
     },
 }
 

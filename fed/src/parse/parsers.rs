@@ -1945,3 +1945,7 @@ pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
 
     Ok((input, player_name))
 }
+
+pub(crate) fn parse_coasting(input: &str) -> ParserResult<&str> {
+    parse_terminated(" is Coasting.").parse(input)
+}
