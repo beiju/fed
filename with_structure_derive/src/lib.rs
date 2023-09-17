@@ -18,7 +18,6 @@ fn impl_with_structure(ast: DeriveInput) -> Result<TokenStream2> {
     let name = ast.ident;
     let generics = ast.generics;
 
-
     match ast.data {
         Data::Struct(s) => impl_with_structure_for_struct(item_vis, name, generics, s),
         // TODO Enum generics too

@@ -2563,7 +2563,7 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::SalmonSwim { game, inning_num, run_losses, item_restored, player_expelled } => {
+            FedEventData::SalmonSwim { game, inning_num, run_losses, item_repaired: item_restored, player_expelled } => {
                 eb.set_game(game);
                 eb.push_description("The Salmon swim upstream!");
                 eb.push_description(&format!("Inning {inning_num} begins again."));
@@ -2576,7 +2576,7 @@ impl FedEvent {
                         // Not sure if the code looks for plurals or if the item has a plural flag.
                         // I'll try looking for plurals first and if that fails I'll add a tag.
                         if item_restored.item_name.ends_with('s') { "were" } else { "was" },
-                        if item_restored.was_restored { "restored!" } else { "repaired." },
+                        if item_restored.health_before == 0 { "restored!" } else { "repaired." },
                     );
                     eb.push_description(&restored_description);
                     eb.push_child(item_restored.sub_event, |mut child| {

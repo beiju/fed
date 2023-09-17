@@ -33,6 +33,7 @@ pub enum Being {
     Lootcrates = 5,
     Namerifeht = 6,
 }
+
 /// Game data. Every game event has one of these.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -138,7 +139,7 @@ pub struct ScoringPlayer {
     pub attraction: Option<Attraction>,
 
     /// Info about the Hotel Motel party on this score, if any
-    pub hotel_motel_party: Option<PlayerBoostSubEventWithTeam>
+    pub hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1184,26 +1185,8 @@ pub struct ItemGained {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
-// These supertraits aren't part of the BoolOrUnit functionality but if I don't put them in (or do
-// a "newtrait" sort of thing, which I might change to) I have to repeat them every goddamn where
-pub trait BoolOrUnit: WithStructure + std::hash::Hash + Eq {
-    fn is_unit(&self) -> bool;
-    fn as_bool(&self) -> bool;
-}
-impl BoolOrUnit for bool {
-    fn is_unit(&self) -> bool { false }
-    fn as_bool(&self) -> bool { *self }
-}
-impl BoolOrUnit for () {
-    fn is_unit(&self) -> bool { true }
-    fn as_bool(&self) -> bool { false }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-    pub struct ItemRepaired<Restorable: BoolOrUnit> {
-    /// Whether this item was repaired (+1 health) or restored (back to full health)
-    #[serde(skip_serializing_if = "BoolOrUnit::is_unit")]
-    pub was_restored: Restorable,
+#[derive(Debug, Clone, PartialEq,Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemRepaired {
     /// Uuid of item that was repaired
     pub item_id: Uuid,
 
@@ -1216,8 +1199,13 @@ impl BoolOrUnit for () {
     /// Durability of item. This is its max health.
     pub durability: i64,
 
-    /// Current health of item
-    pub health: i64,
+    /// Health of item before being repaired. This cannot be calculated, apparently, since salmon
+    /// cannons sometimes restores by one and sometimes restores to full. This may be a change that
+    /// took effect in s17, or maybe s17 just happened to be the first time it restored to full.
+    pub health_before: i64,
+
+    /// Health of item after being repaired
+    pub health_after: i64,
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
     /// before being repaired (TODO Clarify damage vs. breaking)
@@ -2002,7 +1990,7 @@ pub enum FedEventData {
         damaged_items: Vec<(String, ItemDamaged)>,
 
         /// If this was a Holiday Inning, contains the Hotel Motel parties
-        hotel_motel_parties: Vec<HotelMotelScoringPlayer>
+        hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
     },
 
     /// Stolen base
@@ -3671,8 +3659,8 @@ pub enum FedEventData {
         /// Runs lost to the Salmon
         run_losses: RunLossesFromSalmon,
 
-        /// Item restored by the salmon, if any
-        item_restored: Option<ItemRepaired<bool>>,
+        /// Item repaired or restored by the salmon, if any
+        item_repaired: Option<ItemRepaired>,
 
         /// Player caught in the bind, if any
         player_expelled: Option<ModChangeSubEventWithNamedPlayer>,
@@ -4206,7 +4194,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         #[serde(flatten)]
-        repair: ItemRepaired<()>,
+        repair: ItemRepaired,
     },
 
     /// Holiday Inning is announced

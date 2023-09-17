@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, BoolOrUnit, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -559,12 +559,12 @@ impl EventBuilder {
         }
     }
 
-    pub fn build_item_repaired<Restorable: BoolOrUnit>(mut self, item_repaired: ItemRepaired<Restorable>) -> EventuallyEvent {
+    pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);
         self.push_team_tag(item_repaired.team_id);
         self.push_metadata_i64("itemDurability", item_repaired.durability);
-        self.push_metadata_i64("itemHealthAfter", item_repaired.health);
-        self.push_metadata_i64("itemHealthBefore", if item_repaired.was_restored.as_bool() { 0 } else { item_repaired.health - 1 });
+        self.push_metadata_i64("itemHealthAfter", item_repaired.health_after);
+        self.push_metadata_i64("itemHealthBefore", item_repaired.health_before);
         self.push_metadata_uuid("itemId", item_repaired.item_id);
         self.push_metadata_str("itemName", item_repaired.item_name);
         self.push_metadata_str_vec("mods", item_repaired.item_mods);
@@ -574,7 +574,7 @@ impl EventBuilder {
         // In season 17 days 7-10 inclusive, the Coasting event type was accidentally used instead
         // of BrokenItemRepaired
         let use_coasting = self.0.season == 17 && self.0.day >= 7 && self.0.day <= 10;
-        self.build(if item_repaired.health == 1 || item_repaired.was_restored.as_bool() {
+        self.build(if item_repaired.health_before == 0 {
             if use_coasting {
                 EventType::Coasting
             } else {

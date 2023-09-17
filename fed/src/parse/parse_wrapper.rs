@@ -672,16 +672,16 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn next_item_repaired<Restorable: BoolOrUnit>(&mut self, player_name: String, was_restored: Restorable) -> Result<ItemRepaired<Restorable>, FeedParseError> {
+    pub fn next_item_repaired(&mut self, player_name: String) -> Result<ItemRepaired, FeedParseError> {
         // Coasting was used for a time, possibly by mistake
         let mut child = self.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired, EventType::Coasting])?;
         Ok(ItemRepaired {
-            was_restored,
             item_id: child.metadata_uuid("itemId")?,
             item_name: child.metadata_str("itemName")?.to_string(),
             item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
             durability: child.metadata_i64("itemDurability")?,
-            health: child.metadata_i64("itemHealthAfter")?,
+            health_before: child.metadata_i64("itemHealthBefore")?,
+            health_after: child.metadata_i64("itemHealthAfter")?,
             player_item_rating_before: child.metadata_f64("playerItemRatingBefore")?,
             player_item_rating_after: child.metadata_f64("playerItemRatingAfter")?,
             player_rating: child.metadata_f64("playerRating")?,
