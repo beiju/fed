@@ -4337,6 +4337,35 @@ pub enum FedEventData {
         #[serde(flatten)]
         change_event: ModChangeSubEventWithNamedPlayer,
     },
+
+    /// Team wins gifts from the Gift Shop.
+    #[serde(rename_all = "camelCase")]
+    TeamReceivedGifts {
+        // TODO: Document these fields. I suppose I should verify that they do what they obviously
+        //   are meant to do.
+        recipient: Uuid,
+        top_3_benefactor_coins: [i64; 3],
+        top_3_benefactors: [Uuid; 3],
+        total_benefactor_coins: i64,
+        total_gifts: i64,
+    },
+
+    /// Team received a Gift. This event is currently minimally parsed, with metadata simply
+    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
+    /// useful please let us know in the SIBR discord.
+    #[serde(rename_all = "camelCase")]
+    GiftReceived {
+        /// Uuid of the team that received the gift
+        team_id: Uuid,
+
+        /// Title of Gift that was received along with the name of who received it. If you have a
+        /// use case where having these separate would be useful, let us know. This may be redundant
+        /// with the title and team name in `metadata`
+        title_and_recipient: String,
+
+        /// Event metadata exactly as it appears in the Feed event
+        metadata: EventMetadata,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]

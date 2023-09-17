@@ -1882,16 +1882,11 @@ impl FedEvent {
                     .build()
             }
             FedEventData::BlessingWon { team_tags, blessing_title, metadata } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BlessingOrGiftWon,
-                        category: EventCategory::Outcomes,
-                        description: format!("Blessing Won: {blessing_title}"),
-                        team_tags,
-                        ..Default::default()
-                    })
-                    .full_metadata(metadata)
-                    .build()
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(&format!("Blessing Won: {blessing_title}"));
+                eb.set_team_tags(team_tags);
+                eb.set_full_metadata(metadata);
+                eb.build(EventType::BlessingOrGiftWon)
             }
             FedEventData::EarlbirdsAddedToTeam { ref game, team_id, ref team_nickname, ref sub_event } => {
                 let child = EventBuilderChild::new(sub_event)
@@ -3281,6 +3276,23 @@ impl FedEvent {
                     child.build(if is_coasting { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
                 });
                 eb.build(EventType::Coasting)
+            }
+            FedEventData::TeamReceivedGifts { recipient, top_3_benefactor_coins, top_3_benefactors, total_benefactor_coins, total_gifts } => {
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_team_tag(recipient);
+                eb.push_metadata_uuid("recipient", recipient);
+                eb.push_metadata_json("top3BenefactorCoins", serde_json::to_value(top_3_benefactor_coins).unwrap());
+                eb.push_metadata_json("top3Benefactors", serde_json::to_value(top_3_benefactors).unwrap());
+                eb.push_metadata_i64("totalBenefactorCoins", total_benefactor_coins);
+                eb.push_metadata_i64("totalGifts", total_gifts);
+                eb.build(EventType::TeamReceivedGifts)
+            }
+            FedEventData::GiftReceived { team_id, title_and_recipient, metadata } => {
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(&format!("Gift Received: {title_and_recipient}"));
+                eb.push_team_tag(team_id);
+                eb.set_full_metadata(metadata);
+                eb.build(EventType::BlessingOrGiftWon)
             }
         }
     }

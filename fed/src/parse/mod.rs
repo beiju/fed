@@ -1375,12 +1375,23 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::BlessingOrGiftWon => {
-            let blessing_title = event.next_parse(parse_blessing_won)?;
+            let blessing_or_gift = event.next_parse(parse_blessing_or_gift)?;
 
-            FedEventData::BlessingWon {
-                team_tags: event.team_tags()?.into(),
-                blessing_title: blessing_title.into(),
-                metadata: event.full_metadata().clone(),
+            match blessing_or_gift {
+                ParsedBlessingOrGift::Blessing(blessing_title) => {
+                    FedEventData::BlessingWon {
+                        team_tags: event.team_tags()?.into(),
+                        blessing_title: blessing_title.into(),
+                        metadata: event.full_metadata().clone(),
+                    }
+                }
+                ParsedBlessingOrGift::Gift(title_and_recipient) => {
+                    FedEventData::GiftReceived {
+                        team_id: event.next_team_id()?,
+                        title_and_recipient: title_and_recipient.into(),
+                        metadata: event.full_metadata().clone(),
+                    }
+                }
             }
         }
         EventType::WillRecieved => {
@@ -2740,6 +2751,19 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                 item_name: item_name.to_string(),
             }
         }
+        EventType::TeamReceivedGifts => {
+            // Since this variant is just a one-to-one conversion of the metadata, it's easiest to
+            // use the serde parsing that already exists. I just need to make serde deserialize to
+            // the right variant
+            let mut metadata = event.metadata().clone();
+            metadata.as_object_mut()
+                .ok_or_else(|| FeedParseError::MetadataWasNotAnObject {
+                    event_type: EventType::TeamReceivedGifts
+                })?
+                .insert("type".to_string(), "TeamReceivedGifts".into());
+
+            serde_json::from_value(metadata)?
+        }
         EventType::Smithy => {
             let (player_name, _item_name) = event.next_parse(parse_smithy)?;
             // The () indicates that smithy never restores items
@@ -2749,6 +2773,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                 repair,
             }
         }
+        EventType::PlayerSoulIncrease => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }

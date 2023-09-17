@@ -1275,8 +1275,28 @@ pub(crate) fn parse_will_received(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
+pub(crate) enum ParsedBlessingOrGift<'a> {
+    Blessing(&'a str),
+    Gift(&'a str),
+}
+
+pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<ParsedBlessingOrGift> {
+    alt((
+        parse_blessing_won.map(|n| ParsedBlessingOrGift::Blessing(n)),
+        parse_gift_received.map(|n| ParsedBlessingOrGift::Gift(n)),
+    )).parse(input)
+}
+
 pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("Blessing Won: ").parse(input)?;
+    // This should take the rest because there shouldn't be any newlines
+    let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
+
+    Ok((input, blessing_title))
+}
+
+pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Gift Received: ").parse(input)?;
     // This should take the rest because there shouldn't be any newlines
     let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
 

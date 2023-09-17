@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
-use eventually_api::{EventCategory, EventType, EventuallyEvent};
+use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{Attraction, AttractionWithPlayer, BatterDebt, BoolOrUnit, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
@@ -115,10 +115,18 @@ impl EventBuilder {
             .push(team_id)
     }
 
+    pub fn set_team_tags(&mut self, team_tags: Vec<Uuid>) {
+        self.0.team_tags = Some(team_tags);
+    }
+
     fn metadata_mut(&mut self) -> &mut Map<String, Value> {
         self.0.metadata.other
             .as_object_mut()
             .expect("Internal error: This metadata should always be an object")
+    }
+
+    pub fn set_full_metadata(&mut self, metadata: EventMetadata) {
+        self.0.metadata = metadata;
     }
 
     pub fn push_metadata_null(&mut self, key: impl Into<String>) {
@@ -134,6 +142,10 @@ impl EventBuilder {
     pub fn push_metadata_str_vec(&mut self, key: impl Into<String>, value: Vec<String>) {
         self.metadata_mut()
             .insert(key.into(), value.into());
+    }
+
+    pub fn push_metadata_json(&mut self, key: impl Into<String>, value: Value) {
+        self.metadata_mut().insert(key.into(), value);
     }
 
     pub fn push_metadata_json_vec(&mut self, key: impl Into<String>, value: Vec<Value>) {
