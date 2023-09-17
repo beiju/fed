@@ -188,10 +188,13 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
         }
         EventType::StolenBase => {
             let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = event.next_parse(parse_stolen_base)?;
+
+            // TODO Right now each of these is in one branch and both should be in both
+            let runner_item_damage = event.parse_item_damage(runner_name)?;
+            let fielder_item_damage = event.parse_item_damage_and_name(true)?;
+
             if is_successful {
                 let runner_id = event.next_player_id()?;
-
-                let runner_item_damage = event.parse_item_damage(runner_name)?;
 
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
@@ -216,6 +219,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                     game: event.game(unscatter, attractor_secret_base)?,
                     runner_name: runner_name.to_string(),
                     base_stolen,
+                    fielder_item_damage,
                 }
             }
         }

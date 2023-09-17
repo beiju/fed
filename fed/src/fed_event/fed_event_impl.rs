@@ -443,16 +443,11 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Walk)
             }
-            FedEventData::CaughtStealing { game, runner_name, base_stolen } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::StolenBase,
-                        description: format!("{runner_name} gets caught stealing {base_stolen} base."),
-                        player_tags: vec![],
-                        team_tags: vec![],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::CaughtStealing { game, runner_name, base_stolen, fielder_item_damage } => {
+                eb.set_game(game);
+                eb.push_description(&format!("{runner_name} gets caught stealing {base_stolen} base."));
+                eb.push_named_item_damage(fielder_item_damage);
+                eb.build(EventType::StolenBase)
             }
             FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
                 let (children, suffix) = self.make_mod_change_sub_events(lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");

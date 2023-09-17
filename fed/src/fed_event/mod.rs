@@ -1949,6 +1949,10 @@ pub enum FedEventData {
 
         /// Which base they tried to steal
         base_stolen: Base,
+
+        /// Fielder item damage if any, otherwise null
+        // TODO do this in a way that serializes nicely
+        fielder_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Strikeout swinging
