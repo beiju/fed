@@ -143,25 +143,22 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
         }
         EventType::HalfInning => {
             // Starting in s16, subseasonal mods (mods that apply only during Earl/Mid/Lateseason)
-            // announce when they start or end in the first HalfInning of the game. It's
-            // theoretically possible that there would be some starting and others ending in the
-            // same event (the days coincide) but it didn't happen in Beta, so I don't know the
-            // order it would apply in. I'm assuming it would be interleaved.
-            let mut subseasonal_mod_effects = Vec::new();
-            while let Some(mut child) = event.next_child_any_opt(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])? {
-                // The nickname and mod name are on both child and parent, but we need to consume
-                // the description from the parent anyway, so it's better to parse it from there
-                let (team_nickname, source_mod_name) = event.next_parse(parse_subseasonal_mod_change)?;
-                assert!(is_known_team_nickname(team_nickname));
-                subseasonal_mod_effects.push(TeamPerformingChanged {
-                    team_id: child.next_team_id()?,
-                    team_nickname: team_nickname.to_string(),
-                    source_mod_id: child.metadata_str("source")?.to_string(),
-                    source_mod_name: source_mod_name.to_string(),
-                    was_added: child.event_type == EventType::AddedModFromOtherMod,
-                    sub_event: child.as_sub_event(),
+            // sometimes announce when they start or end in the first HalfInning of the game. This
+            // smells like a bug to me.
+            let subseasonal_mod_effects = event.next_parse(parse_subseasonal_mod_changes)?.into_iter()
+                .map(|(team_nickname, source_mod, is_active)| {
+                    let mut child = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+                    ParseOk(SubseasonalModChange {
+                        subject: ModChangeSubject::Team {
+                            team_id: child.next_team_id()?,
+                            team_nickname: Some(team_nickname.to_string()),
+                        },
+                        source_mod,
+                        active: child.event_type == EventType::AddedModFromOtherMod,
+                        sub_event: Some(child.as_sub_event()),
+                    })
                 })
-            }
+                .collect::<Result<Vec<_>, _>>()?;
 
             let (top_of_inning, inning, team_name) = event.next_parse(parse_half_inning)?;
             assert!(is_known_team_name(team_name));
@@ -1868,89 +1865,149 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::Earlbird => {
-            match event.next_parse(parse_earlbird)? {
-                EarlbirdsChange::AddedToTeam(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
+            let changes = event.next_parse(parse_earlbird)?.into_iter()
+                .map(|change| {
+                    ParseOk(match change {
+                        EarlbirdsChange::AddedToTeam(team_nickname) => {
+                            assert!(is_known_team_nickname(team_nickname));
 
-                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                    FedEventData::EarlbirdsAddedToTeam {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: sub_event.next_team_id()?,
-                        team_nickname: team_nickname.to_string(),
-                        sub_event: sub_event.as_sub_event(),
-                    }
-                }
-                EarlbirdsChange::RemovedFromTeam => {
-                    let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                    FedEventData::EarlbirdsRemovedFromTeam {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: sub_event.next_team_id()?,
-                        sub_event: sub_event.as_sub_event(),
-                    }
-                }
-                EarlbirdsChange::AddedToPlayer(player_name) => {
-                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                    FedEventData::EarlbirdsAddedToPlayer {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: sub_event.next_team_id()?,
-                        player_id: sub_event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        sub_event: sub_event.as_sub_event(),
-                    }
-                }
-                EarlbirdsChange::RemovedFromPlayer(player_name) => {
-                    let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                    FedEventData::EarlbirdsRemovedFromPlayer {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: sub_event.next_team_id()?,
-                        player_id: sub_event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        sub_event: sub_event.as_sub_event(),
-                    }
-                }
+                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Team {
+                                    team_id: sub_event.next_team_id()?,
+                                    team_nickname: Some(team_nickname.to_string()),
+                                },
+                                source_mod: SubseasonalMod::Earlbirds,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: true,
+                            }
+                        }
+                        EarlbirdsChange::RemovedFromTeam => {
+                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Team {
+                                    team_id: sub_event.next_team_id()?,
+                                    team_nickname: None,
+                                },
+                                source_mod: SubseasonalMod::Earlbirds,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: false,
+                            }
+                        }
+                        EarlbirdsChange::AddedToPlayer(player_name) => {
+                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Player {
+                                    team_id: sub_event.next_team_id()?,
+                                    player_id: sub_event.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                },
+                                source_mod: SubseasonalMod::Earlbirds,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: true,
+                            }
+                        }
+                        EarlbirdsChange::RemovedFromPlayer(player_name) => {
+                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Player {
+                                    team_id: sub_event.next_team_id()?,
+                                    player_id: sub_event.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                },
+                                source_mod: SubseasonalMod::Earlbirds,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: false,
+                            }
+                        }
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::SubseasonalModsChange {
+                game: event.game(unscatter, attractor_secret_base)?,
+                changes,
             }
         }
         EventType::LateToTheParty => {
-            match event.next_parse(parse_late_to_the_party)? {
-                LateToThePartyChange::AddedToTeam(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
+            let changes = event.next_parse(parse_late_to_the_party)?.into_iter()
+                .map(|change| {
+                    ParseOk(match change {
+                        LateToThePartyChange::AddedToTeam(team_nickname) => {
+                            assert!(is_known_team_nickname(team_nickname));
 
-                    let mut sub_event = event.next_child_if_mod_effect(EventType::AddedModFromOtherMod, "OVERPERFORMING")?;
-                    FedEventData::LateToThePartyAdded {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: sub_event.as_mut().map(|e| e.next_team_id()).transpose()?,
-                        team_nickname: team_nickname.to_string(),
-                        sub_event: sub_event.map(|e| e.as_sub_event()),
-                    }
-                }
-                LateToThePartyChange::RemovedFromTeam(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
+                            // In s13 there wasn't always a child
+                            let mut sub_event = event.next_child_opt(EventType::AddedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Team {
+                                    team_id: if let Some(se) = &mut sub_event {
+                                        se.next_team_id()?
+                                    } else {
+                                        // This only ever happened to the firefighters, so...
+                                        assert_eq!(team_nickname, "Firefighters");
+                                        uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
+                                    },
+                                    team_nickname: Some(team_nickname.to_string()),
+                                },
+                                source_mod: SubseasonalMod::LateToTheParty,
+                                sub_event: sub_event.map(|s| s.as_sub_event()),
+                                active: true,
+                            }
+                        }
+                        LateToThePartyChange::RemovedFromTeam(team_nickname) => {
+                            assert!(is_known_team_nickname(team_nickname));
 
-                    FedEventData::LateToThePartyRemoved {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_nickname: team_nickname.to_string(),
-                    }
-                }
-                LateToThePartyChange::AddedToPlayer(player_name) => {
-                    let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
-                    FedEventData::LateToThePartyAddedToPlayer {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: child.next_team_id()?,
-                        player_id: child.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        sub_event: child.as_sub_event(),
-                    }
-                }
-                LateToThePartyChange::RemovedFromPlayer(player_name) => {
-                    let mut child = event.next_child(EventType::RemovedModFromOtherMod)?;
-                    FedEventData::LateToThePartyRemovedFromPlayer {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_id: child.next_team_id()?,
-                        player_id: child.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        sub_event: child.as_sub_event(),
-                    }
-                }
+                            // In s13 there wasn't always a child
+                            let mut sub_event = event.next_child_opt(EventType::RemovedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Team {
+                                    team_id: if let Some(se) = &mut sub_event {
+                                        se.next_team_id()?
+                                    } else {
+                                        // This only ever happened to the firefighters, so...
+                                        assert_eq!(team_nickname, "Firefighters");
+                                        uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
+                                    },
+                                    team_nickname: Some(team_nickname.to_string()),
+                                },
+                                source_mod: SubseasonalMod::LateToTheParty,
+                                sub_event: sub_event.map(|s| s.as_sub_event()),
+                                active: false,
+                            }
+                        }
+                        LateToThePartyChange::AddedToPlayer(player_name) => {
+                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Player {
+                                    team_id: sub_event.next_team_id()?,
+                                    player_id: sub_event.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                },
+                                source_mod: SubseasonalMod::LateToTheParty,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: true,
+                            }
+                        }
+                        LateToThePartyChange::RemovedFromPlayer(player_name) => {
+                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Player {
+                                    team_id: sub_event.next_team_id()?,
+                                    player_id: sub_event.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                },
+                                source_mod: SubseasonalMod::LateToTheParty,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active: false,
+                            }
+                        }
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::SubseasonalModsChange {
+                game: event.game(unscatter, attractor_secret_base)?,
+                changes,
             }
         }
         EventType::ShameDonor => { todo!() }
@@ -2595,42 +2652,45 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::Middling => {
-            match event.next_parse(parse_middling)? {
-                ParsedMiddling::Team((team_nickname, is_middling)) => {
-                    assert!(is_known_team_nickname(team_nickname));
+            let changes = event.next_parse(parse_middling)?.into_iter()
+                .map(|change| {
+                    ParseOk(match change {
+                        ParsedMiddling::Team((team_nickname, active)) => {
+                            assert!(is_known_team_nickname(team_nickname));
 
-                    let mut child = event.next_child(if is_middling {
-                        EventType::AddedModFromOtherMod
-                    } else {
-                        EventType::RemovedModFromOtherMod
-                    })?;
-                    FedEventData::TeamMiddling {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_nickname: team_nickname.to_string(),
-                        is_middling,
-                        change_event: ModChangeSubEvent {
-                            sub_event: child.as_sub_event(),
-                            team_id: child.next_team_id()?,
-                        },
-                    }
-                }
-                ParsedMiddling::Player((player_name, is_middling)) => {
-                    let mut child = event.next_child(if is_middling {
-                        EventType::AddedModFromOtherMod
-                    } else {
-                        EventType::RemovedModFromOtherMod
-                    })?;
-                    FedEventData::PlayerMiddling {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        is_middling,
-                        change_event: ModChangeSubEventWithNamedPlayer {
-                            sub_event: child.as_sub_event(),
-                            team_id: child.next_team_id()?,
-                            player_id: child.next_player_id()?,
-                            player_name: player_name.to_string(),
-                        },
-                    }
-                }
+                            let mut sub_event = event.next_child(
+                                if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Team {
+                                    team_id: sub_event.next_team_id()?,
+                                    team_nickname: Some(team_nickname.to_string()),
+                                },
+                                source_mod: SubseasonalMod::Middling,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active,
+                            }
+                        }
+                        ParsedMiddling::Player((player_name, active)) => {
+                            let mut sub_event = event.next_child(
+                                if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                            SubseasonalModChange {
+                                subject: ModChangeSubject::Player {
+                                    team_id: sub_event.next_team_id()?,
+                                    player_id: sub_event.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                },
+                                source_mod: SubseasonalMod::Middling,
+                                sub_event: Some(sub_event.as_sub_event()),
+                                active,
+                            }
+                        }
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::SubseasonalModsChange {
+                game: event.game(unscatter, attractor_secret_base)?,
+                changes,
             }
         }
         EventType::PlayerAttributeIncrease => { todo!() }
@@ -2658,36 +2718,49 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::Ambitious => {
-            let (player_name, was_added) = event.next_parse(parse_ambitious)?;
+            let changes = event.next_parse(parse_ambitious)?.into_iter()
+                .map(|(player_name, active)| {
+                    let mut sub_event = event.next_child(
+                        if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                    ParseOk(SubseasonalModChange {
+                        subject: ModChangeSubject::Player {
+                            team_id: sub_event.next_team_id()?,
+                            player_id: sub_event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        },
+                        source_mod: SubseasonalMod::Ambitious,
+                        sub_event: Some(sub_event.as_sub_event()),
+                        active,
+                    })
+                })
+                .collect::<Result<_, _>>()?;
 
-            let mut child = event.next_child(if was_added {
-                EventType::AddedModFromOtherMod
-            } else {
-                EventType::RemovedModFromOtherMod
-            })?;
-            FedEventData::Ambitious {
+            FedEventData::SubseasonalModsChange {
                 game: event.game(unscatter, attractor_secret_base)?,
-                was_added,
-                mod_change: ModChangeSubEventWithNamedPlayer {
-                    sub_event: child.as_sub_event(),
-                    team_id: child.next_team_id()?,
-                    player_id: child.next_player_id()?,
-                    player_name: player_name.to_string(),
-                },
+                changes,
             }
         }
         EventType::Coasting => {
-            let player_name = event.next_parse(parse_coasting)?;
-            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
-            FedEventData::PlayerCoasting {
+            let changes = event.next_parse(parse_coasting)?.into_iter()
+                .map(|player_name| {
+                    // AFAICT coasting being removed is always part of the HalfInning event?
+                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                    ParseOk(SubseasonalModChange {
+                        subject: ModChangeSubject::Player {
+                            team_id: sub_event.next_team_id()?,
+                            player_id: sub_event.next_player_id()?,
+                            player_name: player_name.to_string(),
+                        },
+                        source_mod: SubseasonalMod::Coasting,
+                        sub_event: Some(sub_event.as_sub_event()),
+                        active: true,
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+
+            FedEventData::SubseasonalModsChange {
                 game: event.game(unscatter, attractor_secret_base)?,
-                is_coasting: true, // Will populate when I hit the un-coasting event
-                change_event: ModChangeSubEventWithNamedPlayer {
-                    sub_event: child.as_sub_event(),
-                    team_id: child.next_team_id()?,
-                    player_id: child.next_player_id()?,
-                    player_name: player_name.to_string(),
-                },
+                changes,
             }
         }
         EventType::ItemBreaks => { todo!() }

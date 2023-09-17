@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -43,6 +43,76 @@ fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mo
                 "to": mod_name,
                 "type": 0, // ?
             }))
+    }
+}
+
+fn push_subseasonal_mod_changes(eb: &mut EventBuilder, effects: Vec<SubseasonalModChange>, season: i32) {
+    for effect in effects {
+        match effect.subject {
+            ModChangeSubject::Player { team_id, player_id, player_name } => {
+                let description = if effect.active {
+                    format!("{} is {}.", player_name, effect.source_mod.label_for_players())
+                } else if effect.source_mod == SubseasonalMod::Ambitious {
+                    // If there's more than one special case I'll need to change the system. ugh
+                    format!("{} loses their Ambition.", player_name)
+                } else {
+                    format!("{} is no longer {}.", player_name, effect.source_mod.label_for_players())
+                };
+
+                eb.push_description(&description);
+                eb.push_player_tag(player_id);
+                if let Some(sub_event) = effect.sub_event {
+                    eb.push_child(sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_team_tag(team_id);
+                        child.push_player_tag(player_id);
+                        child.push_metadata_str("mod", effect.source_mod.performing_mod_id());
+                        child.push_metadata_str("source", effect.source_mod.mod_id());
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(if effect.active {
+                            EventType::AddedModFromOtherMod
+                        } else {
+                            EventType::RemovedModFromOtherMod
+                        })
+                    })
+                }
+            }
+            ModChangeSubject::Team { team_id, team_nickname } => {
+                let display_team_nickname = team_nickname.unwrap_or_else(|| "[object Object]".to_string());
+                let description = if season < 15 {
+                    if let Some(prefix) = effect.source_mod.prefix() {
+                        eb.push_description(prefix);
+                    }
+                    if effect.active {
+                        format!("The {} are {}!", display_team_nickname, effect.source_mod.label_for_teams())
+                    } else {
+                        format!("{} wears off for the {}.", effect.source_mod.label_for_teams(), display_team_nickname)
+                    }
+                } else {
+                    if effect.active {
+                        format!("The {} are {}.", display_team_nickname, effect.source_mod.label_for_teams())
+                    } else {
+                        format!("{} are no longer {}.", display_team_nickname, effect.source_mod.label_for_teams())
+                    }
+                };
+
+                eb.push_description(&description);
+                if let Some(sub_event) = effect.sub_event {
+                    eb.push_child(sub_event, |mut child| {
+                        child.push_description(&description);
+                        child.push_team_tag(team_id);
+                        child.push_metadata_str("mod", effect.source_mod.performing_mod_id());
+                        child.push_metadata_str("source", effect.source_mod.mod_id());
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(if effect.active {
+                            EventType::AddedModFromOtherMod
+                        } else {
+                            EventType::RemovedModFromOtherMod
+                        })
+                    })
+                }
+            }
+        }
     }
 }
 
@@ -128,30 +198,7 @@ impl FedEvent {
             }
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, subseasonal_mod_effects } => {
                 eb.set_game(game);
-                for effect in subseasonal_mod_effects {
-                    let description = if effect.was_added {
-                        format!("The {} are {}.", effect.team_nickname, effect.source_mod_name)
-                    } else {
-                        format!("{} are no longer {}.", effect.team_nickname, effect.source_mod_name)
-                    };
-                    eb.push_description(&description);
-                    eb.push_child(effect.sub_event, |mut child| {
-                        child.push_description(&description);
-                        child.push_team_tag(effect.team_id);
-                        child.push_metadata_str("mod", match effect.source_mod_id.as_str() {
-                            "MIDDLING" | "LATE_TO_PARTY" => "OVERPERFORMING",
-                            "EARLY_TO_PARTY" => "UNDERPERFORMING",
-                            other => panic!("Unexpected mod in TeamPerformingChanged: '{other}'")
-                        });
-                        child.push_metadata_str("source", effect.source_mod_id);
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(if effect.was_added {
-                            EventType::AddedModFromOtherMod
-                        } else {
-                            EventType::RemovedModFromOtherMod
-                        })
-                    })
-                }
+                push_subseasonal_mod_changes(&mut eb, subseasonal_mod_effects, self.season);
                 eb.push_description(&format!("{} of {inning}, {batting_team_name} batting.",
                                              if top_of_inning { "Top" } else { "Bottom" }));
                 eb.build(EventType::HalfInning)
@@ -1888,30 +1935,19 @@ impl FedEvent {
                 eb.set_full_metadata(metadata);
                 eb.build(EventType::BlessingOrGiftWon)
             }
-            FedEventData::EarlbirdsAddedToTeam { ref game, team_id, ref team_nickname, ref sub_event } => {
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedModFromOtherMod,
-                        category: EventCategory::Changes,
-                        description: format!("The {team_nickname} are Earlbirds!"),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "OVERPERFORMING",
-                        "source": "EARLBIRDS",
-                        "type": 0, // ?
-                    }));
+            FedEventData::SubseasonalModsChange { game, changes } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Earlbird,
-                        category: EventCategory::Special,
-                        description: format!("Happy Earlseason!\nThe {team_nickname} are Earlbirds!"),
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                // I'm guessing the first mod determines the event type?
+                let event_type = changes.first()
+                    .expect("SubseasonalModsChange should never have an empty changes vec")
+                    .source_mod
+                    .event_type();
+
+                push_subseasonal_mod_changes(&mut eb, changes, self.season);
+
+                eb.build(event_type)
             }
             FedEventData::DecreePassed { decree_title, metadata } => {
                 event_builder
@@ -1969,31 +2005,6 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::EarlbirdsRemovedFromTeam { ref game, team_id, ref sub_event } => {
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::RemovedModFromOtherMod,
-                        category: EventCategory::Changes,
-                        description: format!("Earlbirds wears off for the [object Object]."),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "OVERPERFORMING",
-                        "source": "EARLBIRDS",
-                        "type": 0, // ?
-                    }));
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Earlbird,
-                        category: EventCategory::Special,
-                        description: format!("Happy Earlseason!\nEarlbirds wears off for the [object Object]."),
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
-            }
             FedEventData::Undersea { ref game, ref team_name, team_id, ref sub_event } => {
                 let description = format!("The {team_name} go Undersea. They're now Overperforming!");
                 let child = EventBuilderChild::new(sub_event)
@@ -2033,35 +2044,6 @@ impl FedEvent {
                         "title": renovation_title,
                         "votes": votes,
                     }))
-                    .build()
-            }
-            FedEventData::LateToThePartyAdded { ref game, team_id, ref team_nickname, ref sub_event } => {
-                let children = if let Some(sub_event) = sub_event {
-                    vec![EventBuilderChild::new(sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::AddedModFromOtherMod,
-                            category: EventCategory::Changes,
-                            description: format!("The {team_nickname} are Late to the Party!"),
-                            team_tags: team_id.into_iter().collect(),
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "mod": "OVERPERFORMING",
-                            "source": "LATE_TO_PARTY",
-                            "type": 0, // ?
-                        }))]
-                } else {
-                    vec![]
-                };
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::LateToTheParty,
-                        category: EventCategory::Special,
-                        description: format!("Late to the Party!\nThe {team_nickname} are Late to the Party!"),
-                        ..Default::default()
-                    })
-                    .children(children)
                     .build()
             }
             FedEventData::PeanutMister { game, player_id, player_name, superallergy } => {
@@ -2135,16 +2117,6 @@ impl FedEvent {
                         }))
                         .build()
                 }
-            }
-            FedEventData::LateToThePartyRemoved { game, team_nickname } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::LateToTheParty,
-                        category: EventCategory::Special,
-                        description: format!("Late to the Party!\nLate to the Party wears off for the {team_nickname}."),
-                        ..Default::default()
-                    })
-                    .build()
             }
             FedEventData::BirdsUnshell { game, team_id, player_id, player_name, pecked_free_event, superallergy_event } => {
                 let pecked_free_child = EventBuilderChild::new(&pecked_free_event)
@@ -2695,37 +2667,6 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::TeamMiddling { game, team_nickname, change_event, is_middling } => {
-                let child_description = if is_middling {
-                    format!("The {team_nickname} are Middling!")
-                } else {
-                    format!("Middling wears off for the {team_nickname}.")
-                };
-                let parent_description = format!("Happy Midseason!\n{child_description}");
-                let child = EventBuilderChild::new(&change_event.sub_event)
-                    .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
-                        r#type: if is_middling { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod },
-                        description: child_description,
-                        team_tags: vec![change_event.team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "OVERPERFORMING",
-                        "source": "MIDDLING",
-                        "type": 0, // ?
-                    }));
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Middling,
-                        category: EventCategory::Special,
-                        description: parent_description,
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
-            }
             FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, enter_crime_scene_sub_event: crime_scene_sub_event, enter_shadows_sub_event } => {
                 let crime_child = EventBuilderChild::new(&crime_scene_sub_event)
                     .update(EventBuilderUpdate {
@@ -2922,23 +2863,6 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
                 eb.build(EventType::ConsumersAttack)
             }
-            FedEventData::EarlbirdsAddedToPlayer { game, team_id, player_id, player_name, sub_event } => {
-                let description = format!("{player_name} is an Earlbird.");
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                eb.push_description(&description);
-                eb.push_player_tag(player_id);
-                eb.push_child(sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(player_id);
-                    child.push_team_tag(team_id);
-                    child.push_metadata_str("mod", "OVERPERFORMING");
-                    child.push_metadata_str("source", "EARLBIRDS");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(EventType::AddedModFromOtherMod)
-                });
-                eb.build(EventType::Earlbird)
-            }
             FedEventData::MindTrickWalk { game, pitch, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -2976,23 +2900,6 @@ impl FedEvent {
                 eb.push_player_tag(sippee_id);
                 eb.build(EventType::BlooddrainBlocked)
             }
-            FedEventData::EarlbirdsRemovedFromPlayer { game, team_id, player_id, player_name, sub_event } => {
-                let description = format!("{player_name} is no longer an Earlbird.");
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                eb.push_description(&description);
-                eb.push_player_tag(player_id);
-                eb.push_child(sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(player_id);
-                    child.push_team_tag(team_id);
-                    child.push_metadata_str("mod", "OVERPERFORMING");
-                    child.push_metadata_str("source", "EARLBIRDS");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(EventType::RemovedModFromOtherMod)
-                });
-                eb.build(EventType::Earlbird)
-            }
             FedEventData::TarotReadingAddedOrRemovedItem { description, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_id, item_gained } => {
                 eb.set_category(EventCategory::Changes);
                 eb.set_description(description);
@@ -3005,27 +2912,6 @@ impl FedEvent {
                 eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
                 eb.push_metadata_f64("playerRating", player_rating);
                 eb.build(if item_gained { EventType::PlayerGainedItem } else { EventType::PlayerLostItem })
-            }
-            FedEventData::PlayerMiddling { game, is_middling, change_event } => {
-                let description = if is_middling {
-                    format!("{} is Middling.", change_event.player_name)
-                } else {
-                    format!("{} is no longer Middling.", change_event.player_name)
-                };
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                eb.push_description(&description);
-                eb.push_player_tag(change_event.player_id);
-                eb.push_child(change_event.sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(change_event.player_id);
-                    child.push_team_tag(change_event.team_id);
-                    child.push_metadata_str("mod", "OVERPERFORMING");
-                    child.push_metadata_str("source", "MIDDLING");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(if is_middling { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
-                });
-                eb.build(EventType::Middling)
             }
             FedEventData::CommunityChestOpens { item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_name, player_id } => {
                 // Starting with the drop on season 18 day 59, the out-of-game community chest
@@ -3155,55 +3041,6 @@ impl FedEvent {
                     nuts: self.nuts,
                 }
             }
-            FedEventData::Ambitious { game, was_added, mod_change } => {
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                if was_added {
-                    let description = format!("{} is feeling Ambitious...", mod_change.player_name);
-                    eb.push_description(&description);
-                    eb.push_player_tag(mod_change.player_id);
-                    eb.push_child(mod_change.sub_event, |mut child| {
-                        child.push_description(&description);
-                        child.push_player_tag(mod_change.player_id);
-                        child.push_team_tag(mod_change.team_id);
-                        child.push_metadata_str("mod", "OVERPERFORMING");
-                        child.push_metadata_str("source", "AMBITIOUS");
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(EventType::AddedModFromOtherMod)
-                    });
-                } else {
-                    let description = format!("{} loses their Ambition.", mod_change.player_name);
-                    eb.push_description(&description);
-                    eb.push_player_tag(mod_change.player_id);
-                    eb.push_child(mod_change.sub_event, |mut child| {
-                        child.push_description(&description);
-                        child.push_player_tag(mod_change.player_id);
-                        child.push_team_tag(mod_change.team_id);
-                        child.push_metadata_str("mod", "OVERPERFORMING");
-                        child.push_metadata_str("source", "AMBITIOUS");
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(EventType::RemovedModFromOtherMod)
-                    });
-                }
-                eb.build(EventType::Ambitious)
-            }
-            FedEventData::LateToThePartyRemovedFromPlayer { game, team_id, player_id, player_name, sub_event } => {
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                let description = format!("{player_name} is no longer Late to the Party.");
-                eb.push_description(&description);
-                eb.push_player_tag(player_id);
-                eb.push_child(sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(player_id);
-                    child.push_team_tag(team_id);
-                    child.push_metadata_str("mod", "OVERPERFORMING");
-                    child.push_metadata_str("source", "LATE_TO_PARTY");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(EventType::RemovedModFromOtherMod)
-                });
-                eb.build(EventType::LateToTheParty)
-            }
             FedEventData::Smithy { game, repair } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -3255,27 +3092,6 @@ impl FedEvent {
                 eb.push_metadata_f64("playerRating", player_rating);
 
                 eb.build(EventType::PlayerGainedItem)
-            }
-            FedEventData::PlayerCoasting { game, is_coasting, change_event } => {
-                let description = if is_coasting {
-                    format!("{} is Coasting.", change_event.player_name)
-                } else {
-                    format!("{} stops Coasting.", change_event.player_name)
-                };
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                eb.push_description(&description);
-                eb.push_player_tag(change_event.player_id);
-                eb.push_child(change_event.sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(change_event.player_id);
-                    child.push_team_tag(change_event.team_id);
-                    child.push_metadata_str("mod", "UNDERPERFORMING");
-                    child.push_metadata_str("source", "COASTING");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(if is_coasting { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
-                });
-                eb.build(EventType::Coasting)
             }
             FedEventData::TeamReceivedGifts { recipient, top_3_benefactor_coins, top_3_benefactors, total_benefactor_coins, total_gifts } => {
                 eb.set_category(EventCategory::Outcomes);

@@ -9,7 +9,7 @@ use enum_access::EnumDisplay;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use eventually_api::{EventMetadata, Weather};
+use eventually_api::{EventMetadata, EventType, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
@@ -389,7 +389,7 @@ impl Display for ModDuration {
 }
 
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
-// Which of those it is will come from context. If the od of the player is not present in the
+// Which of those it is will come from context. If the id of the player is not present in the
 // containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -453,26 +453,120 @@ pub enum SpicyStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TeamPerformingChanged {
-    /// Nickname of the team who gained or lost Over or Underperforming
-    pub team_nickname: String,
+pub enum ModChangeSubject {
+    Player {
+        /// Uuid of the team whose player's mod changed
+        team_id: Uuid,
 
-    /// Uuid of the team who gained or lost Over or Underperforming
-    pub team_id: Uuid,
+        /// Uuid of the player whose mod changed
+        player_id: Uuid,
 
-    /// Internal ID of the mod which caused the addition or removal. Which mod was added or removed
+        /// Name of the player whose mod changed
+        player_name: String,
+    },
+    Team {
+        /// Uuid of the team whose mod changed
+        team_id: Uuid,
+
+        /// Nickname of the team whose mod changed. There is (at least?) one instance where the
+        /// team's name was not shown and \[object Object] was in its place. For those events, this
+        /// field will be null (to try to encourage clients to handle this edge case). If you want
+        /// to replicate the displayed event, replace nulls with "\[object Object]".
+        team_nickname: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SubseasonalMod {
+    Earlbirds,
+    LateToTheParty,
+    Middling,
+    Coasting,
+    Ambitious,
+}
+
+impl SubseasonalMod {
+    pub fn performing_mod_id(&self) -> &'static str {
+        match self {
+            SubseasonalMod::Earlbirds => { "OVERPERFORMING" }
+            SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
+            SubseasonalMod::Middling => { "OVERPERFORMING" }
+            SubseasonalMod::Coasting => { "UNDERPERFORMING" }
+            SubseasonalMod::Ambitious => { "OVERPERFORMING" }
+        }
+    }
+
+    pub fn mod_id(&self) -> &'static str {
+        match self {
+            SubseasonalMod::Earlbirds => { "EARLBIRDS" }
+            SubseasonalMod::LateToTheParty => { "LATE_TO_PARTY" }
+            SubseasonalMod::Middling => { "MIDDLING" }
+            SubseasonalMod::Coasting => { "COASTING" }
+            SubseasonalMod::Ambitious => { "AMBITIOUS" }
+        }
+    }
+
+    pub fn label_for_teams(&self) -> &'static str {
+        match self {
+            SubseasonalMod::Earlbirds => { "Earlbirds" }
+            SubseasonalMod::LateToTheParty => { "Late to the Party" }
+            SubseasonalMod::Middling => { "Middling" }
+            SubseasonalMod::Coasting => { "Coasting" }
+            SubseasonalMod::Ambitious => { "Ambitious" }
+        }
+    }
+
+    pub fn label_for_players(&self) -> &'static str {
+        match self {
+            SubseasonalMod::Earlbirds => { "an Earlbird" }
+            SubseasonalMod::LateToTheParty => { "Late to the Party" }
+            SubseasonalMod::Middling => { "Middling" }
+            SubseasonalMod::Coasting => { "Coasting" }
+            // The 2/3 ellipsis is a little hack. The "period" after the label will complete it.
+            SubseasonalMod::Ambitious => { "feeling Ambitious.." }
+        }
+    }
+
+    pub fn prefix(&self) -> Option<&'static str> {
+        match self {
+            SubseasonalMod::Earlbirds => { Some("Happy Earlseason!") }
+            SubseasonalMod::LateToTheParty => { Some("Late to the Party!") }
+            SubseasonalMod::Middling => { Some("Happy Midseason!") }
+            SubseasonalMod::Coasting => { None }
+            SubseasonalMod::Ambitious => { None }
+        }
+    }
+
+    pub fn event_type(&self) -> EventType {
+        match self {
+            SubseasonalMod::Earlbirds => { EventType::Earlbird }
+            SubseasonalMod::LateToTheParty => { EventType::LateToTheParty }
+            SubseasonalMod::Middling => { EventType::Middling }
+            SubseasonalMod::Coasting => { EventType::Coasting }
+            SubseasonalMod::Ambitious => { EventType::Ambitious }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SubseasonalModChange {
+    /// Team or player whose subseasonal mod (de)activated
+    pub subject: ModChangeSubject,
+
+    /// Mod which caused the addition or removal. Whether over/underperforming was added or removed
     /// is not stored, but is inferred from this ID.
-    // TODO: Make this an enum?
-    pub source_mod_id: String,
+    pub source_mod: SubseasonalMod,
 
-    /// Name of the mod which caused the addition or removal
-    pub source_mod_name: String,
+    /// True if the over/underperforming mod was added, false if it was removed
+    pub active: bool,
 
-    /// True if the mod was added, false if it was removed
-    pub was_added: bool,
-
-    /// Metadata for the sub-event associated with the mod change
-    pub sub_event: SubEvent,
+    /// Metadata for the sub-event associated with the mod change. In Season 13, Late to the Party
+    /// announced itself on every game during lateseason, but it only had a sub-event the first time
+    /// (the game only generates a sub-event if the mod actually changed). For those events, this
+    /// will be null.
+    pub sub_event: Option<SubEvent>,
 }
 
 impl SpicyStatus {
@@ -1484,7 +1578,7 @@ pub enum FedEventData {
         /// Full name of the team at bat
         batting_team_name: String,
 
-        /// List of subseasonal mods that came into effect on this HalfInning. Currently, all of
+        /// List of subseasonal mods that came into effect on this HalfInning. All of
         /// these mods add either Overperforming or Underperforming for the subseason.
         ///
         /// This array is only populated on the first HalfInning event of a game on the first game a
@@ -1492,9 +1586,9 @@ pub enum FedEventData {
         /// of the time this is the first day of the subseason, but the wildcard rounds in the
         /// Postseason mean that some teams don't have their first game on the first day.
         ///
-        /// Subseasonal mods only started working like this in season 16. Prior to season 16 there
-        /// was a separate event for these effects.
-        subseasonal_mod_effects: Vec<TeamPerformingChanged>,
+        /// This is an apparent bug that only started in season 16. Ordinarily these changes have
+        /// their own separate event.
+        subseasonal_mod_effects: Vec<SubseasonalModChange>,
     },
 
     /// Marks a new batter stepping up to the plate
@@ -3126,20 +3220,16 @@ pub enum FedEventData {
         metadata: EventMetadata,
     },
 
-    /// Earlbirds mod procs at the beginning of Earlseason
+    /// Subseasonal mods are added or removed. Multiple adds/removes can happen in the same event.
+    /// It can also be a mixture of add and remove, e.g. earlseason mods being removed in the same
+    /// event that midseason mods are added.
     #[serde(rename_all = "camelCase")]
-    EarlbirdsAddedToTeam {
+    SubseasonalModsChange {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of Earlbird team
-        team_id: Uuid,
-
-        /// Name of Earlbird team
-        team_nickname: String,
-
-        /// Metadata for the sub-event that adds the Overperforming mod
-        sub_event: SubEvent,
+        /// Individual changes to the subseasonal mods
+        changes: Vec<SubseasonalModChange>,
     },
 
     /// Decree passed. This event is currently minimally parsed, with metadata simply included
@@ -3147,7 +3237,7 @@ pub enum FedEventData {
     /// please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
     DecreePassed {
-        /// Title of Decree that passesd. This may be redundant with the title in `metadata`
+        /// Title of Decree that passed. This may be redundant with the title in `metadata`
         decree_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
@@ -3198,19 +3288,6 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
-    /// Earlbirds mod is removed at the end of Earlseason
-    #[serde(rename_all = "camelCase")]
-    EarlbirdsRemovedFromTeam {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Uuid of Earlbird team
-        team_id: Uuid,
-
-        /// Metadata for the sub-event that removes the Overperforming mod
-        sub_event: SubEvent,
-    },
-
     /// Team went Undersea
     #[serde(rename_all = "camelCase")]
     Undersea {
@@ -3250,28 +3327,6 @@ pub enum FedEventData {
         votes: RenovationVotes,
     },
 
-    /// Late to the Party mod procs at the beginning of Lateseason
-    #[serde(rename_all = "camelCase")]
-    LateToThePartyAdded {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Uuid of Late to the Party team
-        ///
-        /// It seems that there's one event that has the sub-event and team Uuid and then another
-        /// that doesn't. Shrug emoji.
-        team_id: Option<Uuid>,
-
-        /// Name of Late to the Party team
-        team_nickname: String,
-
-        /// Metadata for the sub-event that adds the Overperforming mod
-        ///
-        /// It seems that there's one event that has the sub-event and team Uuid and then another
-        /// that doesn't. Shrug emoji.
-        sub_event: Option<SubEvent>,
-    },
-
     /// The peanut mister activates and cures a player's peanut allergy
     #[serde(rename_all = "camelCase")]
     PeanutMister {
@@ -3304,16 +3359,6 @@ pub enum FedEventData {
         /// Which level of MVP this player attained. The associated ego mod will be EGO{level}. This
         /// is 1-indexed.
         level: i32,
-    },
-
-    /// Late to the Party wore off for the team
-    #[serde(rename_all = "camelCase")]
-    LateToThePartyRemoved {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Nickname of team whose Late to the Party wore off
-        team_nickname: String,
     },
 
     /// The birds circle and peck a Shelled player free
@@ -3684,24 +3729,6 @@ pub enum FedEventData {
         num_runs: f32,
     },
 
-    // TODO: Earlseason is separate Fed events for add and remove, but Middling is the same event.
-    //   Choose one and stick with it.
-    /// Team gains or loses Middling
-    #[serde(rename_all = "camelCase")]
-    TeamMiddling {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Nickname of team became or un-became Middling
-        team_nickname: String,
-
-        /// Whether this team just became Middling (true) or un-became Middling (false)
-        is_middling: bool,
-
-        #[serde(flatten)]
-        change_event: ModChangeSubEvent,
-    },
-
     /// Detective enters a Crime Scene
     #[serde(rename_all = "camelCase")]
     EnterCrimeScene {
@@ -3889,25 +3916,6 @@ pub enum FedEventData {
         player_id: Uuid,
     },
 
-    /// Earlbirds mod procs at the beginning of Earlseason
-    #[serde(rename_all = "camelCase")]
-    EarlbirdsAddedToPlayer {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Team uuid of Earlbird player
-        team_id: Uuid,
-
-        /// Uuid of Earlbird player
-        player_id: Uuid,
-
-        /// Name of Earlbird player
-        player_name: String,
-
-        /// Metadata for the sub-event that adds the Overperforming mod
-        sub_event: SubEvent,
-    },
-
     /// Walk as a result of a Mind Trick
     #[serde(rename_all = "camelCase")]
     MindTrickWalk {
@@ -3981,25 +3989,6 @@ pub enum FedEventData {
         sippee_name: String,
     },
 
-    /// Earlbirds is removed at the beginning of Midseason
-    #[serde(rename_all = "camelCase")]
-    EarlbirdsRemovedFromPlayer {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Team uuid of Earlbird player
-        team_id: Uuid,
-
-        /// Uuid of Earlbird player
-        player_id: Uuid,
-
-        /// Name of Earlbird player
-        player_name: String,
-
-        /// Metadata for the sub-event that adds the Overperforming mod
-        sub_event: SubEvent,
-    },
-
     /// Added or removed an item as a result of a Tarot reading
     #[serde(rename_all = "camelCase")]
     TarotReadingAddedOrRemovedItem {
@@ -4033,21 +4022,6 @@ pub enum FedEventData {
 
         /// True if the player gained the item, false otherwise
         item_gained: bool,
-    },
-
-    // TODO: Earlseason is separate Fed events for add and remove, but Middling and Coasting use 
-    //   the same event. Choose one and stick with it.
-    /// Player gains or loses Middling
-    #[serde(rename_all = "camelCase")]
-    PlayerMiddling {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Whether this player just became Middling (true) or un-became Middling (false)
-        is_middling: bool,
-
-        #[serde(flatten)]
-        change_event: ModChangeSubEventWithNamedPlayer,
     },
 
     /// Player gets an item from the Community Chest
@@ -4218,38 +4192,6 @@ pub enum FedEventData {
         scales: i64,
     },
 
-    /// A Redacted event
-    #[serde(rename_all = "camelCase")]
-    Ambitious {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// True if the mod was added, false otherwise
-        was_added: bool,
-
-        #[serde(flatten)]
-        mod_change: ModChangeSubEventWithNamedPlayer,
-    },
-
-    /// Late to the Party mod removed at the beginning of Postseason
-    #[serde(rename_all = "camelCase")]
-    LateToThePartyRemovedFromPlayer {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Team Uuid of Late to to the Party player
-        team_id: Uuid,
-
-        /// Uuid of Late to to the Party player
-        player_id: Uuid,
-
-        /// Name of Late to the Party player
-        player_name: String,
-
-        /// Metadata for the sub-event that removes the Overperforming mod
-        sub_event: SubEvent,
-    },
-
     /// Smithy procs and repairs a player's item
     #[serde(rename_all = "camelCase")]
     Smithy {
@@ -4323,19 +4265,6 @@ pub enum FedEventData {
 
         /// The player's star rating. TODO: Is this with or without items?
         player_rating: f64,
-    },
-
-    /// Player gains or loses Coasting
-    #[serde(rename_all = "camelCase")]
-    PlayerCoasting {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Whether this player just became Coasting (true) or un-became Coasting (false)
-        is_coasting: bool,
-
-        #[serde(flatten)]
-        change_event: ModChangeSubEventWithNamedPlayer,
     },
 
     /// Team wins gifts from the Gift Shop.

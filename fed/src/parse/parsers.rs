@@ -8,7 +8,7 @@ use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
-use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, TimeElsewhere};
+use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, SubseasonalMod, TimeElsewhere};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 
@@ -1050,7 +1050,7 @@ pub(crate) enum ParsedReturnFromElsewhere<'a> {
 }
 
 pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
-    separated_list1(tag("\n"),parse_return_from_elsewhere).parse(input)
+    separated_list1(tag("\n"), parse_return_from_elsewhere).parse(input)
 }
 
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
@@ -1305,14 +1305,14 @@ pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
 
 pub(crate) enum EarlbirdsChange<'a> {
     AddedToTeam(&'a str),
-    RemovedFromTeam,
     // This one says [object Object]. lol & lmao
+    RemovedFromTeam,
     AddedToPlayer(&'a str),
     RemovedFromPlayer(&'a str),
 }
 
-pub(crate) fn parse_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
-    alt((parse_team_earlbird, parse_player_earlbird)).parse(input)
+pub(crate) fn parse_earlbird(input: &str) -> ParserResult<Vec<EarlbirdsChange>> {
+    separated_list1(tag("\n"), alt((parse_team_earlbird, parse_player_earlbird))).parse(input)
 }
 
 pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
@@ -1338,20 +1338,26 @@ pub(crate) fn parse_player_earlbird(input: &str) -> ParserResult<EarlbirdsChange
 pub(crate) enum LateToThePartyChange<'a> {
     AddedToTeam(&'a str),
     RemovedFromTeam(&'a str),
-    // This one does not say [object Object]
     AddedToPlayer(&'a str),
     RemovedFromPlayer(&'a str),
 }
 
-pub(crate) fn parse_late_to_the_party(input: &str) -> ParserResult<LateToThePartyChange> {
+pub(crate) fn parse_one_late_to_the_party(input: &str) -> ParserResult<LateToThePartyChange> {
     let (input, result) = alt((
+        // Pre-s15
         preceded(tag("Late to the Party!\nThe "), parse_terminated(" are Late to the Party!")).map(|n| LateToThePartyChange::AddedToTeam(n)),
+        // Post-s15
+        preceded(tag("The "), parse_terminated(" are Late to the Party.")).map(|n| LateToThePartyChange::AddedToTeam(n)),
         preceded(tag("Late to the Party!\nLate to the Party wears off for the "), parse_terminated(".")).map(|n| LateToThePartyChange::RemovedFromTeam(n)),
         parse_terminated(" is Late to the Party.").map(|n| LateToThePartyChange::AddedToPlayer(n)),
         parse_terminated(" is no longer Late to the Party.").map(|n| LateToThePartyChange::RemovedFromPlayer(n)),
     )).parse(input)?;
 
     Ok((input, result))
+}
+
+pub(crate) fn parse_late_to_the_party(input: &str) -> ParserResult<Vec<LateToThePartyChange>> {
+    separated_list1(tag("\n"), parse_one_late_to_the_party).parse(input)
 }
 
 pub(crate) fn parse_decree_passed(input: &str) -> ParserResult<&str> {
@@ -1591,11 +1597,11 @@ pub(crate) enum ParsedMiddling<'a> {
     Player((&'a str, bool)),
 }
 
-pub(crate) fn parse_middling(input: &str) -> ParserResult<ParsedMiddling> {
-    alt((
+pub(crate) fn parse_middling(input: &str) -> ParserResult<Vec<ParsedMiddling>> {
+    separated_list1(tag("\n"), alt((
         parse_team_middling.map(|res| ParsedMiddling::Team(res)),
         parse_player_middling.map(|res| ParsedMiddling::Player(res)),
-    )).parse(input)
+    ))).parse(input)
 }
 
 pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
@@ -1777,23 +1783,23 @@ pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(&s
     Ok((input, (player_name, mod_name)))
 }
 
-pub(crate) fn parse_subseasonal_mod_change(input: &str) -> ParserResult<(&str, &str)> {
-    alt((parse_subseasonal_mod_added, parse_subseasonal_mod_removed)).parse(input)
+pub(crate) fn parse_subseasonal_mod_changes(input: &str) -> ParserResult<Vec<(&str, SubseasonalMod, bool)>> {
+    many0(parse_subseasonal_mod).parse(input)
 }
 
-pub(crate) fn parse_subseasonal_mod_added(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, _) = tag("The ").parse(input)?;
-    let (input, team_name) = parse_terminated(" are ").parse(input)?;
-    let (input, mod_name) = parse_terminated(".\n").parse(input)?;
+pub(crate) fn parse_subseasonal_mod(input: &str) -> ParserResult<(&str, SubseasonalMod, bool)> {
+    let (input, (team_name, active)) = alt((
+        preceded(tag("The "), parse_terminated(" are ")).map(|n| (n, true)),
+        // When the mod deactivates you don't get the "The" apparently
+        parse_terminated(" are no longer ").map(|n| (n, false)),
+    )).parse(input)?;
+    let (input, which_mod) = alt((
+        tag("Middling").map(|_| SubseasonalMod::Middling),
+        tag("Late to the Party").map(|_| SubseasonalMod::LateToTheParty),
+    )).parse(input)?;
+    let (input, _) = tag(".\n").parse(input)?;
 
-    Ok((input, (team_name, mod_name)))
-}
-
-pub(crate) fn parse_subseasonal_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, team_name) = parse_terminated(" are no longer ").parse(input)?;
-    let (input, mod_name) = parse_terminated(".\n").parse(input)?;
-
-    Ok((input, (team_name, mod_name)))
+    Ok((input, (team_name, which_mod, active)))
 }
 
 pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<&str> {
@@ -1824,7 +1830,7 @@ pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(bool, &str,
     let (input, sipper_name) = if let Some(siphon_name) = siphon {
         let (input, _) = pair(tag(siphon_name), tag(" tried to siphon blood from ")).parse(input)?;
         (input, siphon_name)
-    }  else {
+    } else {
         parse_terminated(" tried to siphon blood from ").parse(input)?
     };
     let (input, sippee_name) = parse_terminated(", but they were Sealed!").parse(input)?;
@@ -1935,11 +1941,11 @@ pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (exiting_pitcher_name, entering_pitcher_name)))
 }
 
-pub(crate) fn parse_ambitious(input: &str) -> ParserResult<(&str, bool)> {
-    alt((
+pub(crate) fn parse_ambitious(input: &str) -> ParserResult<Vec<(&str, bool)>> {
+    separated_list1(tag("\n"), alt((
         parse_terminated(" is feeling Ambitious...").map(|n| (n, true)),
         parse_terminated(" loses their Ambition.").map(|n| (n, false)),
-    )).parse(input)
+    ))).parse(input)
 }
 
 pub(crate) fn parse_smithy(input: &str) -> ParserResult<(&str, &str)> {
@@ -1983,6 +1989,6 @@ pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_coasting(input: &str) -> ParserResult<&str> {
-    parse_terminated(" is Coasting.").parse(input)
+pub(crate) fn parse_coasting(input: &str) -> ParserResult<Vec<&str>> {
+    separated_list1(tag("\n"), parse_terminated(" is Coasting.")).parse(input)
 }
