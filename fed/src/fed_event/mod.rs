@@ -2466,6 +2466,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// Uuid of the batter that did the charming
         batter_id: Uuid,
 
@@ -3907,6 +3910,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        #[serde(flatten)]
+        pitch: GamePitch,
+
         /// The type of strikeout this originally was (swinging or looking)
         strikeout_type: StrikeoutType,
 
@@ -3935,6 +3941,9 @@ pub enum FedEventData {
     MindTrickStrikeout {
         #[serde(flatten)]
         game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
 
         /// Uuid of the batter that was mind tricked
         batter_id: Uuid,

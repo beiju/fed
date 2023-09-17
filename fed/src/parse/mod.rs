@@ -258,6 +258,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
 
                     FedEventData::CharmWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_name: batter_name.to_string(),
                         batter_id,
                         pitcher_name: pitcher_name.to_string(),
@@ -271,6 +272,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                     let scores = event.parse_scores(" scores!")?;
                     FedEventData::MindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         strikeout_type,
                         batter_id: event.next_player_id()?,
                         batter_name: batter_name.to_string(),
@@ -281,6 +283,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                 ParsedWalk::MindTrickWalkIntoStrikeout((batter_name, pitcher_name)) => {
                     FedEventData::MindTrickStrikeout {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
                         batter_id: event.next_player_id()?,
                         batter_name: batter_name.to_string(),
                         pitcher_name: pitcher_name.to_string(),

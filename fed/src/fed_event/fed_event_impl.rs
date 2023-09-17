@@ -901,19 +901,18 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::CharmWalk { game, batter_name, batter_id, pitcher_name, batter_item_damage, pitcher_item_damage, scores } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Walk,
-                        category: EventCategory::Special,
-                        description: format!("{batter_name} charms {pitcher_name}!\n{batter_name} walks to first base."),
-                        player_tags: vec![batter_id, batter_id], // two of them
-                        ..Default::default()
-                    })
-                    .scores(&scores, " scores!")
-                    .item_damage_before_event(&pitcher_item_damage, &pitcher_name)
-                    .item_damage_before_event(&batter_item_damage, &batter_name)
-                    .build()
+            FedEventData::CharmWalk { game, pitch, batter_name, batter_id, pitcher_name, batter_item_damage, pitcher_item_damage, scores } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_pitch(pitch);
+                eb.push_item_damage(pitcher_item_damage, &pitcher_name);
+                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_description(&format!("{batter_name} charms {pitcher_name}!"));
+                eb.push_description(&format!("{batter_name} walks to first base."));
+                eb.push_player_tag(batter_id);
+                eb.push_player_tag(batter_id); // two of them
+                eb.push_scores(scores, "scores!");
+                eb.build(EventType::Walk)
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
                 let child = EventBuilderChild::new(sub_event)
@@ -2950,9 +2949,10 @@ impl FedEvent {
                 });
                 eb.build(EventType::Earlbird)
             }
-            FedEventData::MindTrickWalk { game, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
+            FedEventData::MindTrickWalk { game, pitch, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
+                eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} strikes out {strikeout_type}."));
                 eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
@@ -2963,9 +2963,10 @@ impl FedEvent {
                 eb.push_player_tag(batter_id);
                 eb.build(EventType::Walk)
             }
-            FedEventData::MindTrickStrikeout { game, batter_id, batter_name, pitcher_name } => {
+            FedEventData::MindTrickStrikeout { game, pitch, batter_id, batter_name, pitcher_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
+                eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} draws a walk."));
                 eb.push_description(&format!("{pitcher_name} uses a Mind Trick!"));
                 eb.push_description(&format!("{batter_name} strikes out thinking."));
