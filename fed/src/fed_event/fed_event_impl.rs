@@ -2970,13 +2970,16 @@ impl FedEvent {
                 eb.push_player_tag(batter_id); // batter twice, apparently
                 eb.build(EventType::Walk) // ugh
             }
-            FedEventData::BlooddrainBlocked { game, sipper_id, sipper_name, sippee_id, sippee_name } => {
+            FedEventData::BlooddrainBlocked { game, is_siphon, sipper_id, sipper_name, sippee_id, sippee_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Blooddrain gurgled!");
+                if is_siphon {
+                    eb.push_description(&format!("{sipper_name}'s Siphon activates!"));
+                }
                 eb.push_description(&format!("{sipper_name} tried to siphon blood from {sippee_name}, but they were Sealed!"));
                 eb.push_player_tag(sipper_id);
-                eb.push_player_tag(sippee_id); // batter twice, apparently
+                eb.push_player_tag(sippee_id);
                 eb.build(EventType::BlooddrainBlocked)
             }
             FedEventData::EarlbirdsRemovedFromPlayer { game, team_id, player_id, player_name, sub_event } => {

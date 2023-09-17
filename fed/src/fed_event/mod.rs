@@ -3934,6 +3934,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        /// True if the attempted sipper was a Siphon, false otherwise
+        is_siphon: bool,
+
         /// Uuid of the player that attempted to blooddrain the Sealed player
         sipper_id: Uuid,
 

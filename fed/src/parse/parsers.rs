@@ -1796,11 +1796,17 @@ pub(crate) fn parse_birds(input: &str) -> ParserResult<i32> {
     parse_whole_number.parse(input)
 }
 
-pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(bool, &str, &str)> {
     let (input, _) = tag("The Blooddrain gurgled!\n").parse(input)?;
-    let (input, sipper_name) = parse_terminated(" tried to siphon blood from ").parse(input)?;
+    let (input, siphon) = opt(parse_terminated("'s Siphon activates!\n")).parse(input)?;
+    let (input, sipper_name) = if let Some(siphon_name) = siphon {
+        let (input, _) = pair(tag(siphon_name), tag(" tried to siphon blood from ")).parse(input)?;
+        (input, siphon_name)
+    }  else {
+        parse_terminated(" tried to siphon blood from ").parse(input)?
+    };
     let (input, sippee_name) = parse_terminated(", but they were Sealed!").parse(input)?;
-    Ok((input, (sipper_name, sippee_name)))
+    Ok((input, (siphon.is_some(), sipper_name, sippee_name)))
 }
 
 pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {

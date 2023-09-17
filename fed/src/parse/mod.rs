@@ -1239,10 +1239,11 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::BlooddrainBlocked => {
-            let (sipper_name, sippee_name) = event.next_parse(parse_blooddrain_blocked)?;
+            let (is_siphon, sipper_name, sippee_name) = event.next_parse(parse_blooddrain_blocked)?;
 
             FedEventData::BlooddrainBlocked {
                 game: event.game(unscatter, attractor_secret_base)?,
+                is_siphon,
                 sipper_id: event.next_player_id()?,
                 sipper_name: sipper_name.to_string(),
                 sippee_id: event.next_player_id()?,
