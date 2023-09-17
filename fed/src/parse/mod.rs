@@ -343,6 +343,15 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                         num_swings,
                     }
                 }
+                ParsedStrikeout::MindTrick { pitcher_name, batter_name } => {
+                    FedEventData::MindTrickStrikeout {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
+                        batter_id: event.next_player_id()?,
+                        batter_name: batter_name.to_string(),
+                        pitcher_name: pitcher_name.to_string(),
+                    }
+                }
             }
         }
         EventType::FlyOut => {

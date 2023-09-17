@@ -3949,7 +3949,10 @@ pub enum FedEventData {
         scores: Scores,
     },
 
-    /// Strikeout as a result of a Mind Trick ("strikes out thinking")
+    /// Strikeout as a result of a Mind Trick ("strikes out thinking"). From the introduction of
+    /// Mind Tricks until s18d43, mind trick strikeouts were under the Walk event type. From s18d94
+    /// onward, they were under the Strikeout event type. (There were no mind trick strikeouts
+    /// between those two game days.)
     #[serde(rename_all = "camelCase")]
     MindTrickStrikeout {
         #[serde(flatten)]

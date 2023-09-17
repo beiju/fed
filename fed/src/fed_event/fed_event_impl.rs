@@ -2883,12 +2883,16 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{batter_name} draws a walk."));
+                // Before s18d94 the mind trick strikeout was classed as a walk and had the
+                // batter_id in there twice.
+                if (self.season, self.day) < (17, 93) {
+                    eb.push_description(&format!("{batter_name} draws a walk."));
+                    eb.push_player_tag(batter_id);
+                }
                 eb.push_description(&format!("{pitcher_name} uses a Mind Trick!"));
                 eb.push_description(&format!("{batter_name} strikes out thinking."));
-                eb.push_player_tag(batter_id);
                 eb.push_player_tag(batter_id); // batter twice, apparently
-                eb.build(EventType::Walk) // ugh
+                eb.build(if (self.season, self.day) < (17, 93) { EventType::Walk } else { EventType::Strikeout })
             }
             FedEventData::BlooddrainBlocked { game, is_siphon, sipper_id, sipper_name, sippee_id, sippee_name } => {
                 eb.set_game(game);

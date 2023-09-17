@@ -429,12 +429,18 @@ pub(crate) enum ParsedStrikeout<'a> {
         charmed_name: &'a str,
         num_swings: i32,
     },
+
+    MindTrick {
+        pitcher_name: &'a str,
+        batter_name: &'a str,
+    },
 }
 
 pub(crate) fn parse_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     alt((
         parse_normal_strikeout,
-        parse_charm_strikeout
+        parse_charm_strikeout,
+        parse_strikeout_type_mind_trick_strikeout,
     )).parse(input)
 }
 
@@ -461,6 +467,13 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
     Ok((input, ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings }))
 }
 
+pub(crate) fn parse_strikeout_type_mind_trick_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+    let (input, pitcher_name) = parse_terminated(" uses a Mind Trick!\n").parse(input)?;
+    let (input, batter_name) = parse_terminated(" strikes out thinking.").parse(input)?;
+
+    Ok((input, ParsedStrikeout::MindTrick { pitcher_name, batter_name }))
+}
+
 pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<Base>)),
     Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
@@ -471,7 +484,7 @@ pub(crate) enum ParsedWalk<'s> {
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     alt((
         // mind trick strikeout must be before walk, because walk is a prefix of it
-        parse_mind_trick_strikeout.map(|res| ParsedWalk::MindTrickWalkIntoStrikeout(res)),
+        parse_walk_type_mind_trick_strikeout.map(|res| ParsedWalk::MindTrickWalkIntoStrikeout(res)),
         parse_mind_trick_walk.map(|res| ParsedWalk::MindTrickStrikeoutIntoWalk(res)),
         parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
         parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
@@ -545,7 +558,7 @@ pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<(&str, Strikeou
     Ok((input, (batter_name, strikeout_type)))
 }
 
-pub(crate) fn parse_mind_trick_strikeout(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_walk_type_mind_trick_strikeout(input: &str) -> ParserResult<(&str, &str)> {
     // I'm gonna need to incorporate items in this at some point
     let (input, batter_name) = parse_terminated(" draws a walk.\n").parse(input)?;
     let (input, pitcher_name) = parse_terminated(" uses a Mind Trick!\n").parse(input)?;
