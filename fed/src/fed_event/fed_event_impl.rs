@@ -1076,17 +1076,7 @@ impl FedEvent {
 
                 build_child(&mut eb, &sipped,
                             format!("{} had blood drained by {}.", sipped.player_name, sipper.player_name));
-
-                if let Some(maintenance_mode) = maintenance_mode {
-                    eb.push_child(maintenance_mode.sub_event, |mut child| {
-                        child.push_description("Impairment Detected. Entering Maintenance Mode.");
-                        child.push_team_tag(maintenance_mode.team_id);
-                        child.push_metadata_str("mod", "EXTRA_OUT");
-                        child.push_metadata_i64("type", ModDuration::Game as i64);
-                        child.build(EventType::AddedMod)
-                    });
-                }
-
+                eb.push_maintenance_mode(maintenance_mode);
                 build_child(&mut eb, &sipper,
                             format!("{} drained blood from {}.", sipper.player_name, sipped.player_name));
 

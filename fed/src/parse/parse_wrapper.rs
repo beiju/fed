@@ -751,6 +751,18 @@ impl<'e> EventParseWrapper<'e> {
                 // Both events have to be both increase and decrease because of negative attributes
                 // (unless I want to check against sipped_attribute_name, which I don't)
                 let mut batter_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
+                let maintenance_mode = self.next_child_opt(EventType::AddedMod)?
+                    .map(|mut mm_event| {
+                        // Make sure this is a maintenance mode event by verifying the description
+                        mm_event.next_parse_tag("Impairment Detected. Entering Maintenance Mode.")?;
+
+                        ParseOk(MaintenanceMode {
+                            sub_event: mm_event.as_sub_event(),
+                            team_id: mm_event.next_team_id()?,
+                        })
+                    })
+                    .transpose()?;
+
                 let mut pitcher_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
                 ParseOk(Parasite {
                     batter_team_id: batter_event.next_team_id()?,
@@ -761,6 +773,7 @@ impl<'e> EventParseWrapper<'e> {
                     pitcher_name: sipper_name.to_string(),
                     attribute_name: sipped_attribute_name.to_string(),
                     attribute_id: batter_event.metadata_i64("type")?,
+                    maintenance_mode,
                     batter_rating_before: batter_event.metadata_f64("before")?,
                     batter_rating_after: batter_event.metadata_f64("after")?,
                     batter_sub_event: batter_event.as_sub_event(),

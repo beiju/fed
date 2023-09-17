@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, BoolOrUnit, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, BoolOrUnit, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -501,6 +501,7 @@ impl EventBuilder {
                 child.push_team_tag(parasite.batter_team_id);
                 child.build_player_attribute_changed(parasite.batter_rating_before, parasite.batter_rating_after, parasite.attribute_id)
             });
+            self.push_maintenance_mode(parasite.maintenance_mode);
             self.push_child(parasite.pitcher_sub_event, |mut child| {
                 child.push_description(&format!("Parasite {} drained blood from {}.",
                                                 parasite.pitcher_name, parasite.batter_name));
@@ -543,6 +544,18 @@ impl EventBuilder {
         for player in gravity_players {
             self.push_description(&format!("{}'s Gravity kept them in place!", player.player_name));
             self.push_player_tag(player.player_id);
+        }
+    }
+
+    pub fn push_maintenance_mode(&mut self, maintenance_mode: Option<MaintenanceMode>) {
+        if let Some(maintenance_mode) = maintenance_mode {
+            self.push_child(maintenance_mode.sub_event, |mut child| {
+                child.push_description("Impairment Detected. Entering Maintenance Mode.");
+                child.push_team_tag(maintenance_mode.team_id);
+                child.push_metadata_str("mod", "EXTRA_OUT");
+                child.push_metadata_i64("type", ModDuration::Game as i64);
+                child.build(EventType::AddedMod)
+            });
         }
     }
 

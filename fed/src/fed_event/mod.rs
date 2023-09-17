@@ -1461,6 +1461,9 @@ pub struct Parasite {
     /// Drained attribute numeric ID. Should agree with attribute_name.
     pub attribute_id: i64,
 
+    /// Metadata for the sub-event associated with activating Maintenance Mode, if applicable
+    pub maintenance_mode: Option<MaintenanceMode>,
+
     /// Sipped player's rating before the stats changed
     pub batter_rating_before: f64,
 
