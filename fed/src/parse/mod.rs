@@ -1289,7 +1289,6 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::IncinerationBlocked => {
-            // For now I only support magmatic, that may have to change
             let (is_unstable, player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
             match blocked_reason {
                 IncinerationBlockedReason::Magmatic => {
