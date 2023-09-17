@@ -1487,7 +1487,7 @@ pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, O
     )).parse(input)?;
     let (input, item_breaks) = if defended {
         // TODO unwrap this horrible expression
-        opt(preceded(tag("\n\n"), alt((parse_terminated(" BREAKS"), parse_terminated(" DAMAGED"))))).parse(input)?
+        opt(preceded(tag("\n\n"), alt((parse_terminated(" BREAKS"), parse_terminated(" BREAK"), parse_terminated(" DAMAGED"))))).parse(input)?
     } else {
         (input, None)
     };

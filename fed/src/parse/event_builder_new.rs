@@ -260,8 +260,8 @@ impl EventBuilder {
             child.push_metadata_uuid("itemId", dmg.item_id);
             child.push_metadata_str("itemName", dmg.item_name);
             child.push_metadata_str_vec("mods", dmg.item_mods);
-            child.push_metadata_f64("playerItemRatingAfter", dmg.player_item_rating_after);
-            child.push_metadata_f64("playerItemRatingBefore", dmg.player_item_rating_before);
+            child.push_metadata_f64_opt("playerItemRatingAfter", dmg.player_item_rating_after);
+            child.push_metadata_f64_opt("playerItemRatingBefore", dmg.player_item_rating_before);
             child.push_metadata_f64("playerRating", dmg.player_rating);
             child.build(if dmg.health == 0 {
                 if use_ambitious {
@@ -581,8 +581,8 @@ impl EventBuilder {
         self.push_metadata_uuid("itemId", item_damaged.item_id);
         self.push_metadata_str("itemName", item_damaged.item_name);
         self.push_metadata_str_vec("mods", item_damaged.item_mods);
-        self.push_metadata_f64("playerItemRatingAfter", item_damaged.player_item_rating_after);
-        self.push_metadata_f64("playerItemRatingBefore", item_damaged.player_item_rating_before);
+        self.push_metadata_f64_opt("playerItemRatingAfter", item_damaged.player_item_rating_after);
+        self.push_metadata_f64_opt("playerItemRatingBefore", item_damaged.player_item_rating_before);
         self.push_metadata_f64("playerRating", item_damaged.player_rating);
         self.build(if item_damaged.health == 0 {
             EventType::ItemBreaks

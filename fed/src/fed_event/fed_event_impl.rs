@@ -402,8 +402,8 @@ impl FedEvent {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
                 }
 
-                eb.push_free_refills(free_refills);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_free_refills(free_refills);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_attraction_with_player(attraction);
 
@@ -2448,7 +2448,9 @@ impl FedEvent {
                         eb.push_description(&format!("{player_name} DEFENDS\n"));
                         eb.push_description(&format!("{} {}",
                                                      damage.item_name.to_ascii_uppercase(),
-                                                     if damage.health == 0 { "BREAKS" } else { "DAMAGED" }));
+                                                     if damage.health > 0 { "DAMAGED" }
+                                                     else if damage.item_name.ends_with('s') { "BREAK" }
+                                                     else { "BREAKS" }));
                         let description = eb.description().to_string();
                         eb.push_child(damage.sub_event, |mut child| {
                             child.set_description(description);

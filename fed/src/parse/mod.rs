@@ -485,12 +485,15 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
 
             let hotel_motel_parties = event.parse_hotel_motel_parties()?;
 
+            // stopped_inhabiting definitely happens before free_refills
+            // (event d4805130-be10-42ab-81b2-f8eefb14a4e4)
+            let batter_id = event.next_player_id()?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
+
             let big_bucket = event.next_parse(parse_big_bucket)?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
-            let batter_id = event.next_player_id()?;
-            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1142,7 +1145,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             let sipper_id = event.next_player_id()?;
             let sipped_id = event.next_player_id()?;
 
-            let mut sipped_event = event.next_child(EventType::PlayerStatDecrease)?;
+            // This is for you, Chorby Soul III
+            let mut sipped_event = event.next_child_any(&[EventType::PlayerStatDecrease, EventType::PlayerStatIncrease])?;
             let maintenance_mode = event.next_child_opt(EventType::AddedMod)?
                 .map(|mut mm_event| {
                     // Make sure this is a maintenance mode event by verifying the description
@@ -1511,8 +1515,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
                             item_mods: break_child.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
                             durability: break_child.metadata_i64("itemDurability")?,
                             health: break_child.metadata_i64("itemHealthAfter")?,
-                            player_item_rating_before: break_child.metadata_f64("playerItemRatingBefore")?,
-                            player_item_rating_after: break_child.metadata_f64("playerItemRatingAfter")?,
+                            player_item_rating_before: break_child.metadata_f64_opt("playerItemRatingBefore")?,
+                            player_item_rating_after: break_child.metadata_f64_opt("playerItemRatingAfter")?,
                             player_rating: break_child.metadata_f64("playerRating")?,
                             team_id,
                             player_id: break_child.next_player_id()?,

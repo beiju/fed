@@ -512,6 +512,7 @@ pub fn make_free_refill_child(free_refill: &FreeRefill) -> EventBuilderChildFull
             }))
 }
 
+#[deprecated = "Use build_item_damage or push_item_damage instead"]
 fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDamaged, extra_space: bool) -> EventBuilderChildFull {
     EventBuilderChild::new(&item_damage.sub_event)
         .update(EventBuilderUpdate {
@@ -530,8 +531,8 @@ fn make_item_damage_child(player_name_possessive: String, item_damage: &ItemDama
             "itemId": item_damage.item_id,
             "itemName": item_damage.item_name,
             "mods": Vec::<String>::new(), // TODO vec of what?
-            "playerItemRatingAfter": zero_int(item_damage.player_item_rating_after),
-            "playerItemRatingBefore": zero_int(item_damage.player_item_rating_before),
+            "playerItemRatingAfter": item_damage.player_item_rating_after.map(zero_int),
+            "playerItemRatingBefore": item_damage.player_item_rating_before.map(zero_int),
             "playerRating": zero_int(item_damage.player_rating),
         }))
 }

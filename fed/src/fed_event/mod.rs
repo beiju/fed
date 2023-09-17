@@ -1116,12 +1116,13 @@ pub struct ItemDamaged {
     pub health: i64,
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before being damaged (TODO Clarify damage vs. breaking)
-    pub player_item_rating_before: f64,
+    /// before being damaged. This is null sometimes and I don't know why.
+    // TODO Clarify damage vs. breaking)
+    pub player_item_rating_before: Option<f64>,
 
     /// The increase or decrease that all the wielding player's remaining items cause to their star
-    /// rating.
-    pub player_item_rating_after: f64,
+    /// rating. This is null sometimes and I don't know why.
+    pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
     pub player_rating: f64,
