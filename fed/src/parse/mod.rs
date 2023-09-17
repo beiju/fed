@@ -1427,8 +1427,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
         EventType::SalmonSwim => {
             let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
             let item_restored = event.next_parse_opt(parse_item_restored)
-                .map(|(player_name, _item_name)| {
-                    event.next_item_repaired(player_name.to_string())
+                .map(|(player_name, _item_name, restored)| {
+                    event.next_item_repaired(player_name.to_string(), restored)
                 })
                 .transpose()?;
 
@@ -2735,7 +2735,8 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
         }
         EventType::Smithy => {
             let (player_name, _item_name) = event.next_parse(parse_smithy)?;
-            let repair = event.next_item_repaired(player_name.to_string())?;
+            // The () indicates that smithy never restores items
+            let repair = event.next_item_repaired(player_name.to_string(), ())?;
             FedEventData::Smithy {
                 game: event.game(unscatter, attractor_secret_base)?,
                 repair,

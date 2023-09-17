@@ -576,7 +576,7 @@ impl<'e> EventParseWrapper<'e> {
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
                 let attraction = if let Some((attracted_player_id, _, _)) = attractions.peek() && attracted_player_id == &player_id {
-                    let (attracted_player_id, attracted_team_nickname, attracted_player_name) = attractions.next()
+                    let (_, attracted_team_nickname, attracted_player_name) = attractions.next()
                         .expect("This code should only run when there is a next item in the iterator");
                     assert!(is_known_team_nickname(&attracted_team_nickname));
                     // If these ever don't match that will be fun
@@ -672,10 +672,11 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn next_item_repaired(&mut self, player_name: String) -> Result<ItemRepaired, FeedParseError> {
+    pub fn next_item_repaired<Restorable: BoolOrUnit>(&mut self, player_name: String, was_restored: Restorable) -> Result<ItemRepaired<Restorable>, FeedParseError> {
         // Coasting was used for a time, possibly by mistake
         let mut child = self.next_child_any(&[EventType::BrokenItemRepaired, EventType::DamagedItemRepaired, EventType::Coasting])?;
         Ok(ItemRepaired {
+            was_restored,
             item_id: child.metadata_uuid("itemId")?,
             item_name: child.metadata_str("itemName")?.to_string(),
             item_mods: child.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),

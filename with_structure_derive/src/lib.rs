@@ -14,19 +14,24 @@ pub fn with_structure_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_with_structure(ast: DeriveInput) -> Result<TokenStream2> {
-        let item_vis = ast.vis;
-        let name = ast.ident;
+    let item_vis = ast.vis;
+    let name = ast.ident;
+    let generics = ast.generics;
 
-        match ast.data {
-            Data::Struct(s) => impl_with_structure_for_struct(item_vis, name, s),
-            Data::Enum(e) => impl_with_structure_for_enum(item_vis, name, e),
-            Data::Union(_) => todo!(),
-        }
+
+    match ast.data {
+        Data::Struct(s) => impl_with_structure_for_struct(item_vis, name, generics, s),
+        // TODO Enum generics too
+        Data::Enum(e) => impl_with_structure_for_enum(item_vis, name, e),
+        Data::Union(_) => todo!(),
+    }
 }
 
-fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStruct) -> Result<TokenStream2> {
+fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, generics: Generics, s: DataStruct) -> Result<TokenStream2> {
     let structure_name = Ident::new(&format!("{}Structure", name), name.span());
     let structure_record_name = Ident::new(&format!("{}StructureRecord", name), name.span());
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let definition_fields: Vec<_> = s.fields.iter()
         .map(|field: &Field| {
@@ -46,18 +51,18 @@ fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, s: DataStru
     Ok({
         quote! {
             #[derive(Eq, PartialEq, ::std::hash::Hash)]
-            #item_vis struct #structure_name {
+            #item_vis struct #structure_name #generics {
                 #(#definition_fields),*
             }
 
-            impl ::with_structure::ItemStructure for #structure_name {}
+            impl #impl_generics ::with_structure::ItemStructure for #structure_name #ty_generics #where_clause {}
 
-            #item_vis struct #structure_record_name {
+            #item_vis struct #structure_record_name #generics {
                 #(#definition_fields),*
             }
 
-            impl ::with_structure::WithStructure for #name {
-                type Structure = #structure_name;
+            impl #impl_generics ::with_structure::WithStructure for #name #ty_generics #where_clause {
+                type Structure = #structure_name #ty_generics;
 
                 fn structure(&self) -> Self::Structure {
                     Self::Structure {

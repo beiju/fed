@@ -1722,15 +1722,17 @@ pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<(&s
     Ok((input, (player_name, gained, lost)))
 }
 
-pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str, bool)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
-    let (input, item_name) = alt((
-        parse_terminated(" was repaired."),
-        parse_terminated(" was restored!"),
+    let (input, (item_name, restored)) = alt((
+        parse_terminated(" was repaired.").map(|n| (n, false)),
+        parse_terminated(" was restored!").map(|n| (n, true)),
+        parse_terminated(" were repaired.").map(|n| (n, false)),
+        parse_terminated(" were restored!").map(|n| (n, true)),
     )).parse(input)?;
 
-    Ok((input, (player_name, item_name)))
+    Ok((input, (player_name, item_name, restored)))
 }
 
 pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str)> {

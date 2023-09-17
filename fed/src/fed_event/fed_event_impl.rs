@@ -2618,16 +2618,19 @@ impl FedEvent {
 
                 if let Some(item_restored) = item_restored {
                     let restored_description = format!(
-                        "{} {} was {}",
+                        "{} {} {} {}",
                         Possessive(&item_restored.player_name), item_restored.item_name,
-                        if item_restored.health == 1 { "restored!" } else { "repaired." },
+                        // Not sure if the code looks for plurals or if the item has a plural flag.
+                        // I'll try looking for plurals first and if that fails I'll add a tag.
+                        if item_restored.item_name.ends_with('s') { "were" } else { "was" },
+                        if item_restored.was_restored { "restored!" } else { "repaired." },
                     );
                     eb.push_description(&restored_description);
                     eb.push_child(item_restored.sub_event, |mut child| {
                         // Yes, the parent says swim and the child says swam
                         child.push_description("The Salmon swam upstream!");
                         child.push_description(&restored_description);
-                        child.build_item_repaired(item_restored, true)
+                        child.build_item_repaired(item_restored)
                     });
                 }
 
@@ -3217,7 +3220,7 @@ impl FedEvent {
                 eb.push_description(&format!("{} is repaired!", repair.item_name));
                 eb.push_child(repair.sub_event, |mut child| {
                     child.push_description(&format!("{} {} was repaired by Smithy.", Possessive(&repair.player_name), repair.item_name));
-                    child.build_item_repaired(repair, false)
+                    child.build_item_repaired(repair)
                 });
                 eb.build(EventType::Smithy)
             }

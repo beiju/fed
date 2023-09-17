@@ -1089,8 +1089,26 @@ pub struct ItemGained {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
+// These supertraits aren't part of the BoolOrUnit functionality but if I don't put them in (or do
+// a "newtrait" sort of thing, which I might change to) I have to repeat them every goddamn where
+pub trait BoolOrUnit: WithStructure + std::hash::Hash + Eq {
+    fn is_unit(&self) -> bool;
+    fn as_bool(&self) -> bool;
+}
+impl BoolOrUnit for bool {
+    fn is_unit(&self) -> bool { false }
+    fn as_bool(&self) -> bool { *self }
+}
+impl BoolOrUnit for () {
+    fn is_unit(&self) -> bool { true }
+    fn as_bool(&self) -> bool { false }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct ItemRepaired {
+    pub struct ItemRepaired<Restorable: BoolOrUnit> {
+    /// Whether this item was repaired (+1 health) or restored (back to full health)
+    #[serde(skip_serializing_if = "BoolOrUnit::is_unit")]
+    pub was_restored: Restorable,
     /// Uuid of item that was repaired
     pub item_id: Uuid,
 
@@ -1128,7 +1146,7 @@ pub struct ItemRepaired {
     /// Name of player whose item broke
     pub player_name: String,
 
-    /// Metadata for the event associated with the item being damaged
+    /// Metadata for the event associated with the item being repaired
     pub sub_event: SubEvent,
 }
 
@@ -3598,7 +3616,7 @@ pub enum FedEventData {
         run_losses: RunLossesFromSalmon,
 
         /// Item restored by the salmon, if any
-        item_restored: Option<ItemRepaired>,
+        item_restored: Option<ItemRepaired<bool>>,
 
         /// Player caught in the bind, if any
         player_expelled: Option<ModChangeSubEventWithNamedPlayer>,
@@ -4226,7 +4244,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         #[serde(flatten)]
-        repair: ItemRepaired,
+        repair: ItemRepaired<()>,
     },
 
     /// Holiday Inning is announced
