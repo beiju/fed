@@ -3037,7 +3037,9 @@ impl FedEvent {
                 eb.build(EventType::Middling)
             }
             FedEventData::CommunityChestOpens { item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_name, player_id } => {
-                eb.set_category(EventCategory::Special);
+                // Starting with the drop on season 18 day 59, the out-of-game community chest
+                // messages (but not the in game ones!) change category from Special to Changes
+                eb.set_category(if (self.season, self.day) < (17, 58) { EventCategory::Special } else { EventCategory::Changes });
                 eb.push_description(&format!("The Community Chest Opens! {player_name} gained {item_name}."));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
