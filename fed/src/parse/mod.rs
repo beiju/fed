@@ -1663,63 +1663,73 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
             }
         }
         EventType::ReturnFromElsewhere => {
-            let (player_name, flavor) = match event.next_parse(parse_return_from_elsewhere)? {
-                ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere, is_peanut)) => {
-                    let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
-                        .map(|mut scattered_sub_event| {
-                            let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
+            let returns = event.next_parse(parse_returns_from_elsewhere)?.into_iter()
+                .map(|ret| {
+                    let (player_name, flavor) = match ret {
+                        ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere, is_peanut)) => {
+                            let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
+                                .map(|mut scattered_sub_event| {
+                                    let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
 
-                            ParseOk(Scattered {
-                                scattered_name: scattered_name.to_string(),
-                                sub_event: scattered_sub_event.as_sub_event(),
+                                    ParseOk(Scattered {
+                                        scattered_name: scattered_name.to_string(),
+                                        sub_event: scattered_sub_event.as_sub_event(),
+                                    })
+                                })
+                                .transpose()?;
+
+                            let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
+
+                            let recongealed_differently = event.next_child_any_opt(&[EventType::PlayerStatIncrease, EventType::PlayerStatDecrease])?
+                                .map(|mut child| {
+                                    let player_name = child.next_parse(parse_terminated(" re-congealed differently."))?;
+                                    Ok::<_, FeedParseError>(PlayerStatChange {
+                                        team_id: child.next_team_id()?,
+                                        player_id: child.next_player_id()?,
+                                        player_name: player_name.to_string(),
+                                        rating_before: child.metadata_f64("before")?,
+                                        rating_after: child.metadata_f64("after")?,
+                                        sub_event: child.as_sub_event(),
+                                    })
+                                })
+                                .transpose()?;
+
+                            (player_name, ReturnFromElsewhereFlavor::Full {
+                                team_id: return_sub_event.next_team_id()?,
+                                player_id: return_sub_event.next_player_id()?,
+                                is_peanut,
+                                sub_event: return_sub_event.as_sub_event(),
+                                time_elsewhere,
+                                scattered,
+                                recongealed_differently,
                             })
-                        })
-                        .transpose()?;
+                        }
+                        ParsedReturnFromElsewhere::Short((player_name, is_peanut)) => {
+                            if let Some(mut return_sub_event) = event.next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")? {
+                                (player_name, ReturnFromElsewhereFlavor::Short {
+                                    team_id: return_sub_event.next_team_id()?,
+                                    player_id: return_sub_event.next_player_id()?,
+                                    sub_event: return_sub_event.as_sub_event(),
+                                    is_peanut,
+                                })
+                            } else {
+                                (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
+                            }
+                        }
+                    };
 
-                    let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
-
-                    let recongealed_differently = event.next_child_any_opt(&[EventType::PlayerStatIncrease, EventType::PlayerStatDecrease])?
-                        .map(|mut child| {
-                            let player_name = child.next_parse(parse_terminated(" re-congealed differently."))?;
-                            Ok::<_, FeedParseError>(PlayerStatChange {
-                                team_id: child.next_team_id()?,
-                                player_id: child.next_player_id()?,
-                                player_name: player_name.to_string(),
-                                rating_before: child.metadata_f64("before")?,
-                                rating_after: child.metadata_f64("after")?,
-                                sub_event: child.as_sub_event(),
-                            })
-                        })
-                        .transpose()?;
-
-                    (player_name, ReturnFromElsewhereFlavor::Full {
-                        team_id: return_sub_event.next_team_id()?,
-                        player_id: return_sub_event.next_player_id()?,
-                        is_peanut,
-                        sub_event: return_sub_event.as_sub_event(),
-                        time_elsewhere,
-                        scattered,
-                        recongealed_differently,
+                    ParseOk(ReturnFromElsewhere {
+                        player_name: player_name.to_string(),
+                        flavor,
                     })
-                }
-                ParsedReturnFromElsewhere::Short((player_name, is_peanut)) => {
-                    if let Some(mut return_sub_event) = event.next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")? {
-                        (player_name, ReturnFromElsewhereFlavor::Short {
-                            team_id: return_sub_event.next_team_id()?,
-                            player_id: return_sub_event.next_player_id()?,
-                            sub_event: return_sub_event.as_sub_event(),
-                            is_peanut,
-                        })
-                    } else {
-                        (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
-                    }
-                }
-            };
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            assert!(!returns.is_empty(), "Parser should never return an empty list of returns");
 
             FedEventData::ReturnFromElsewhere {
                 game: event.game(unscatter, attractor_secret_base)?,
-                player_name: player_name.to_string(),
-                flavor,
+                returns,
             }
         }
         EventType::OverUnder => {

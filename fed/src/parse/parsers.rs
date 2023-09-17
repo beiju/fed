@@ -1044,6 +1044,10 @@ pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Normal((&'a str, TimeElsewhere, bool)),
 }
 
+pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
+    separated_list1(tag("\n"),parse_return_from_elsewhere).parse(input)
+}
+
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
     alt((
         parse_terminated(" has returned from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, false))),

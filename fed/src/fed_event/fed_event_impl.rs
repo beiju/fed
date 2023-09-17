@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -1516,119 +1516,79 @@ impl FedEvent {
                     .children(children)
                     .build()
             }
-            FedEventData::ReturnFromElsewhere { ref game, ref player_name, ref flavor } => {
-                let (description, children) = match flavor {
-                    ReturnFromElsewhereFlavor::Full { team_id, player_id, is_peanut, sub_event, time_elsewhere, scattered, recongealed_differently } => {
-                        let returned_text = if *is_peanut {
-                            "rolled back"
-                        } else {
-                            "returned"
-                        };
-                        let description = match time_elsewhere {
-                            TimeElsewhere::Days(days) => {
-                                let s = if *days == 1 { "" } else { "s" };
-                                format!("{player_name} has {returned_text} from Elsewhere after {days} day{s}!")
-                            }
-                            TimeElsewhere::Seasons(1) => {
-                                format!("{player_name} has {returned_text} from Elsewhere after one season!")
-                            }
-                            TimeElsewhere::Seasons(seasons) => {
-                                format!("{player_name} has {returned_text} from Elsewhere after {seasons} seasons!")
-                            }
-                        };
-                        let elsewhere_child = EventBuilderChild::new(sub_event)
-                            .update(EventBuilderUpdate {
-                                category: EventCategory::Changes,
-                                r#type: EventType::RemovedMod,
-                                description: description.clone(),
-                                team_tags: vec![*team_id],
-                                player_tags: vec![*player_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "ELSEWHERE",
-                                "type": 0, // ?
-                            }));
+            FedEventData::ReturnFromElsewhere { game, returns } => {
+                eb.set_game(game);
 
-                        let mut children = if let Some(Scattered { scattered_name, sub_event }) = scattered {
-                            let scattered_child = EventBuilderChild::new(sub_event)
-                                .update(EventBuilderUpdate {
-                                    category: EventCategory::Changes,
-                                    r#type: EventType::AddedMod,
-                                    description: format!("{scattered_name} was Scattered..."),
-                                    team_tags: vec![*team_id],
-                                    player_tags: vec![*player_id],
-                                    ..Default::default()
-                                })
-                                .metadata(json!({
-                                    "mod": "SCATTERED",
-                                    "type": 0, // ?
-                                }));
+                for ReturnFromElsewhere { player_name, flavor } in returns {
+                    match flavor {
+                        ReturnFromElsewhereFlavor::Full { team_id, player_id, is_peanut, sub_event, time_elsewhere, scattered, recongealed_differently } => {
+                            let returned_text = if is_peanut { "rolled back" } else { "returned" };
+                            let description = match time_elsewhere {
+                                TimeElsewhere::Days(days) => {
+                                    let s = if days == 1 { "" } else { "s" };
+                                    format!("{player_name} has {returned_text} from Elsewhere after {days} day{s}!")
+                                }
+                                TimeElsewhere::Seasons(1) => {
+                                    format!("{player_name} has {returned_text} from Elsewhere after one season!")
+                                }
+                                TimeElsewhere::Seasons(seasons) => {
+                                    format!("{player_name} has {returned_text} from Elsewhere after {seasons} seasons!")
+                                }
+                            };
+                            eb.push_description(&description);
 
-                            vec![scattered_child, elsewhere_child]
-                        } else {
-                            vec![elsewhere_child]
-                        };
+                            if let Some(Scattered { scattered_name, sub_event }) = scattered {
+                                eb.push_child(sub_event, |mut child| {
+                                    child.push_description(&format!("{scattered_name} was Scattered..."));
+                                    child.push_team_tag(team_id);
+                                    child.push_player_tag(player_id);
+                                    child.push_metadata_str("mod", "SCATTERED");
+                                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                    child.build(EventType::AddedMod)
+                                });
+                            }
 
-                        if let Some(recongeal) = recongealed_differently {
-                            children.push(
-                                EventBuilderChild::new(&recongeal.sub_event)
-                                    .update(EventBuilderUpdate {
-                                        category: EventCategory::Changes,
-                                        r#type: if recongeal.rating_after > recongeal.rating_before {
-                                            EventType::PlayerStatIncrease
-                                        } else {
-                                            EventType::PlayerStatDecrease
-                                        },
-                                        description: format!("{} re-congealed differently.", recongeal.player_name),
-                                        team_tags: vec![recongeal.team_id],
-                                        player_tags: vec![recongeal.player_id],
-                                        ..Default::default()
-                                    })
-                                    .metadata(json!({
-                                    "after": recongeal.rating_after,
-                                    "before": recongeal.rating_before,
-                                    "type": 4,
-                                }))
-                            );
+                            eb.push_child(sub_event, |mut child| {
+                                child.push_description(&description);
+                                child.push_team_tag(team_id);
+                                child.push_player_tag(player_id);
+                                child.push_metadata_str("mod", "ELSEWHERE");
+                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.build(EventType::RemovedMod)
+                            });
+
+                            if let Some(recongeal) = recongealed_differently {
+                                eb.push_child(recongeal.sub_event, |mut child| {
+                                    child.push_description(&format!("{} re-congealed differently.", recongeal.player_name));
+                                    child.push_team_tag(recongeal.team_id);
+                                    child.push_player_tag(recongeal.player_id);
+                                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                    child.build_player_stat_changed(recongeal.rating_before, recongeal.rating_after, 4)
+                                });
+                            }
                         }
-
-                        (description, children)
+                        ReturnFromElsewhereFlavor::Short { team_id, player_id, is_peanut, sub_event } => {
+                            let description = format!("{player_name} has {} from Elsewhere!",
+                                                      if is_peanut { "rolled back" } else { "returned" });
+                            eb.push_description(&description);
+                            eb.push_child(sub_event, |mut child| {
+                                child.push_description(&description);
+                                child.push_team_tag(team_id);
+                                child.push_player_tag(player_id);
+                                child.push_metadata_str("mod", "ELSEWHERE");
+                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.build(EventType::RemovedMod)
+                            });
+                        }
+                        ReturnFromElsewhereFlavor::False { is_peanut } => {
+                            let description = format!("{player_name} has {} from Elsewhere!",
+                                                      if is_peanut { "rolled back" } else { "returned" });
+                            eb.push_description(&description);
+                        }
                     }
-                    ReturnFromElsewhereFlavor::Short { team_id, player_id, is_peanut, sub_event } => {
-                        let description = format!("{player_name} has {} from Elsewhere!",
-                                                  if *is_peanut { "rolled back" } else { "returned" });
-                        let elsewhere_child = EventBuilderChild::new(sub_event)
-                            .update(EventBuilderUpdate {
-                                category: EventCategory::Changes,
-                                r#type: EventType::RemovedMod,
-                                description: description.clone(),
-                                team_tags: vec![*team_id],
-                                player_tags: vec![*player_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "ELSEWHERE",
-                                "type": 0, // ?
-                            }));
+                }
 
-                        (description, vec![elsewhere_child])
-                    }
-                    ReturnFromElsewhereFlavor::False { is_peanut} => {
-                        let description = format!("{player_name} has {} from Elsewhere!",
-                                                  if *is_peanut { "rolled back" } else { "returned" });
-                        (description, vec![])
-                    }
-                };
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::ReturnFromElsewhere,
-                        description,
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                eb.build(EventType::ReturnFromElsewhere)
             }
             FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref unstable_chain, ref sub_events } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;

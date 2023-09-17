@@ -745,6 +745,17 @@ pub enum TimeElsewhere {
     Seasons(i32),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReturnFromElsewhere {
+    /// Name of player who returned from Elsewhere
+    pub player_name: String,
+
+    /// Which flavor of return from elsewhere this is
+    #[serde(flatten)]
+    pub flavor: ReturnFromElsewhereFlavor,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "flavor", rename_all = "camelCase")]
 pub enum ReturnFromElsewhereFlavor {
@@ -2823,18 +2834,17 @@ pub enum FedEventData {
         flood_pumps: bool,
     },
 
-    /// Player returned from Elsewhere
+    /// Player(s) returned from Elsewhere
     #[serde(rename_all = "camelCase")]
     ReturnFromElsewhere {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Name of player who returned from Elsewhere
-        player_name: String,
-
-        /// Which flavor of return from elsewhere this is
-        #[serde(flatten)]
-        flavor: ReturnFromElsewhereFlavor,
+        // List of returns from elsewhere. This is almost always a length-1 array, but it is
+        // possible for multiple players to return on the same event, and it has happened at least
+        // once (Basilos Mason and Fig, Season 18 Day 33). The array should never be empty.
+        // TODO: Make this a Nonempty<>? Compile time non-emptiness guarantee.
+        returns: Vec<ReturnFromElsewhere>,
     },
 
     /// Player was incinerated
