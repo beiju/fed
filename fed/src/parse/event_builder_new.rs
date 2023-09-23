@@ -32,6 +32,7 @@ impl EventBuilder {
             metadata: Default::default(),
             blurb: "".to_string(),
             description: "".to_string(),
+            election_option_id: None,
             player_tags: Some(vec![]),
             game_tags: Some(vec![]),
             team_tags: Some(vec![]),

@@ -95,6 +95,8 @@ pub struct EventuallyEvent {
     #[builder(default)] pub metadata: EventMetadata,
     pub blurb: String,
     pub description: String,
+    // Idk what this even is
+    pub election_option_id: Option<String>,
     // These three are null for redacted events
     #[builder(default)] pub player_tags: Option<Vec<Uuid>>,
     #[builder(default)] pub game_tags: Option<Vec<Uuid>>,

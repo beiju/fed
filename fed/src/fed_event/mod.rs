@@ -3876,6 +3876,7 @@ pub enum FedEventData {
     },
 
     /// A player's mods created from another mod were removed
+    // TODO Try to combine each of these with the event that removed the source mod
     #[serde(rename_all = "camelCase")]
     ModsFromAnotherModRemoved {
         /// Uuid of the team who lost the mod(s)
@@ -4116,25 +4117,6 @@ pub enum FedEventData {
         second_player_dropped_item: Option<String>,
     },
 
-    /// Late to the Party mod procs at the beginning of Lateseason
-    #[serde(rename_all = "camelCase")]
-    LateToThePartyAddedToPlayer {
-        #[serde(flatten)]
-        game: GameEvent,
-
-        /// Team Uuid of Late to to the Party player
-        team_id: Uuid,
-
-        /// Uuid of Late to to the Party player
-        player_id: Uuid,
-
-        /// Name of Late to the Party player
-        player_name: String,
-
-        /// Metadata for the sub-event that adds the Overperforming mod
-        sub_event: SubEvent,
-    },
-
     /// Fax Machine activates
     #[serde(rename_all = "camelCase")]
     Fax {
@@ -4277,6 +4259,8 @@ pub enum FedEventData {
     /// Team received a Gift. This event is currently minimally parsed, with metadata simply
     /// included as-is. If you have a use-case where thoroughly parsing this event type would be
     /// useful please let us know in the SIBR discord.
+    // TODO: Now that I decided to open the "combining events" can of worms, should this be 
+    //   combined with TeamReceivedGifts?
     #[serde(rename_all = "camelCase")]
     GiftReceived {
         /// Uuid of the team that received the gift

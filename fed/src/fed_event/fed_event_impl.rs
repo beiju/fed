@@ -127,12 +127,14 @@ impl FedEvent {
             // I know it makes no sense to have a match statement with only a wildcard match but
             // trust me, there will be special cases in the future.
             _ => {
-                self.into_feed_event().description
+                self.into_feed_events().into_iter()
+                    .map(|event| event.description)
+                    .join("\n")
             }
         }
     }
 
-    pub fn into_feed_event(self) -> EventuallyEvent {
+    pub fn into_feed_events(self) -> Vec<EventuallyEvent> {
         let event_builder = EventBuilderCommon {
             id: self.id,
             created: self.created,
@@ -155,7 +157,7 @@ impl FedEvent {
             self.nuts,
         );
 
-        match self.data {
+        let item = match self.data {
             FedEventData::BeingSpeech { being, message } => {
                 let being_id: i32 = being.into();
                 event_builder
@@ -2953,23 +2955,6 @@ impl FedEvent {
                 }
                 eb.build(EventType::CommunityChestOpens)
             }
-            FedEventData::LateToThePartyAddedToPlayer { game, team_id, player_id, player_name, sub_event } => {
-                eb.set_game(game);
-                eb.set_category(EventCategory::Special);
-                let description = format!("{player_name} is Late to the Party.");
-                eb.push_description(&description);
-                eb.push_player_tag(player_id);
-                eb.push_child(sub_event, |mut child| {
-                    child.push_description(&description);
-                    child.push_player_tag(player_id);
-                    child.push_team_tag(team_id);
-                    child.push_metadata_str("mod", "OVERPERFORMING");
-                    child.push_metadata_str("source", "LATE_TO_PARTY");
-                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                    child.build(EventType::AddedModFromOtherMod)
-                });
-                eb.build(EventType::LateToTheParty)
-            }
             FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -3026,6 +3011,7 @@ impl FedEvent {
                     },
                     blurb: "".to_string(),
                     description,
+                    election_option_id: None,
                     player_tags: None,
                     game_tags: None,
                     team_tags: None,
@@ -3106,7 +3092,9 @@ impl FedEvent {
                 eb.set_full_metadata(metadata);
                 eb.build(EventType::BlessingOrGiftWon)
             }
-        }
+        };
+
+        vec![item]
     }
 
     #[deprecated = "This is part of the old event builder"]

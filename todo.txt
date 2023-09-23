@@ -2,3 +2,5 @@
   another reason for the event to be special and rename it to indicate that
 - Figure out and properly taxonify the various "type" integers in the metadata
 - Consume and produce tags, children, and pieces of description one by one
+
+https://discord.com/channels/738107179294523402/834940656211591178/879495741779902495

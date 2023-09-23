@@ -17,7 +17,7 @@ use crate::parse::parsers::*;
 use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::fed_event::*;
 
-pub use stream::expansion_era_events;
+// pub use stream::expansion_era_events;
 
 const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
@@ -83,16 +83,11 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
     Ok(v)
 }
 
-pub fn parse_feed_event(feed_event: &EventuallyEvent, state: &InterEventState) -> Result<FedEvent, FeedParseError> {
-    if feed_event.metadata.siblings.is_empty() {
-        parse_single_feed_event(feed_event, state)
-    } else {
-        todo!()
-    }
-}
-
-fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> Result<FedEvent, FeedParseError> {
-    let mut event = EventParseWrapper::new(event)?;
+pub fn parse_next_event(event_iter: &mut impl Iterator<Item=EventuallyEvent>, state: &InterEventState) -> Result<Option<FedEvent>, FeedParseError> {
+    let Some(event) = event_iter.next() else {
+        return Ok(None)
+    };
+    let mut event = EventParseWrapper::new(&event)?;
     // This variable exists just for me to look at in the debugger, because the debugger
     // representation of the Uuid type is to low-level to copy-paste
     let _id_string = event.id.to_string();
@@ -2928,7 +2923,7 @@ fn parse_single_feed_event(event: &EventuallyEvent, state: &InterEventState) -> 
         }
     };
 
-    event.to_fed(data)
+    Ok(Some(event.to_fed(data)?))
 }
 
 fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
