@@ -3039,6 +3039,7 @@ pub enum FedEventData {
     },
 
     /// Player was hatched from the Field of Eggs
+    // TODO: Can all of these be merged with another event?
     #[serde(rename_all = "camelCase")]
     PlayerHatched {
         /// Uuid of newly hatched player

@@ -13,6 +13,7 @@ use flate2::read::GzDecoder;
 use with_structure::WithStructure;
 use enum_flatten::{EnumFlatten, EnumFlattened};
 use clap::Parser;
+use itertools::Itertools;
 use eventually_api::EventuallyEvent;
 
 use fed::{FedEvent, InterEventStateSync, parse_next_event};
@@ -85,9 +86,10 @@ fn run_test(args: Args) -> anyhow::Result<()> {
     let progress = MultiProgress::new();
     progress.set_move_cursor(true);
 
+    let capture_progress = progress.clone();
     let iter = SEASONS
         .into_par_iter_async(move |(sim, season, count)| {
-            Ok(run_test_on_season(sim, season, count, &progress, args.clone()))
+            Ok(run_test_on_season(sim, season, count, &capture_progress, args.clone()))
         });
 
     for value in iter {
@@ -130,7 +132,8 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
         })
         .filter_map(Result::transpose)
         // TODO Is there a better way to do this where I don't have to unwrap?
-        .map(Result::unwrap);
+        .map(Result::unwrap)
+        .peekable();
 
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 
@@ -138,7 +141,9 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     let progress = multi_progress.add(progress);
-    while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())? {
+    while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())
+        .with_context(|| format!("Parsing events: \n{}", consumed.borrow().iter()
+            .map(|event| format!("  - {}: {}", event.id, event.description)).format("\n")))? {
         check_parse(&parsed_event, &consumed.borrow())?;
         progress.inc(consumed.borrow().len() as u64);
         progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));

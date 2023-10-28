@@ -5,6 +5,7 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
+use std::iter::Peekable;
 use std::sync::{Arc, Mutex};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -83,7 +84,10 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
     Ok(v)
 }
 
-pub fn parse_next_event(event_iter: &mut impl Iterator<Item=EventuallyEvent>, state: &InterEventState) -> Result<Option<FedEvent>, FeedParseError> {
+pub fn parse_next_event(
+    event_iter: &mut Peekable<impl Iterator<Item=EventuallyEvent>>,
+    state: &InterEventState
+) -> Result<Option<FedEvent>, FeedParseError> {
     let Some(event) = event_iter.next() else {
         return Ok(None)
     };
@@ -2314,9 +2318,47 @@ pub fn parse_next_event(event_iter: &mut impl Iterator<Item=EventuallyEvent>, st
             // For now this only has the breach events, it will need to be updated for s24
             let player_name = event.next_parse(parse_player_hatched)?;
 
-            FedEventData::PlayerHatched {
-                player_id: event.next_player_id()?,
-                player_name: player_name.to_string(),
+            if let Some(next_event) = event_iter.peek() &&
+                next_event.r#type == EventType::PlayerAddedToTeam &&
+                next_event.description.contains("Postseason Birth") {
+                let birth_event = event_iter.next().expect("This happens after a successful peek()");
+                let mut birth_event = EventParseWrapper::new(&birth_event)?;
+                let shadow_event = event_iter.next().ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                    expected_type: EventType::PlayerStatIncrease,
+                    found_type: None,
+                    after_type: EventType::PlayerAddedToTeam,
+                })?;
+                if shadow_event.r#type != EventType::PlayerStatIncrease {
+                    Err(FeedParseError::MissingFollowingEvent {
+                        expected_type: EventType::PlayerStatIncrease,
+                        found_type: Some(shadow_event.r#type),
+                        after_type: EventType::PlayerAddedToTeam,
+                    })?
+                }
+                let mut shadow_event = EventParseWrapper::new(&shadow_event)?;
+                let earned_spot_event = event_iter.next().ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                    expected_type: EventType::EarnedPostseasonSlot,
+                    found_type: None,
+                    after_type: EventType::PlayerStatIncrease,
+                })?;
+                if earned_spot_event.r#type != EventType::EarnedPostseasonSlot {
+                    Err(FeedParseError::MissingFollowingEvent {
+                        expected_type: EventType::EarnedPostseasonSlot,
+                        found_type: Some(earned_spot_event.r#type),
+                        after_type: EventType::PlayerStatIncrease,
+                    })?
+                }
+                let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
+                todo!("Add birth to EarnedPostseasonSlot");
+                FedEventData::EarnedPostseasonSlot {
+                    team_id: earned_spot_event.next_team_id()?,
+                    team_nickname: birth_event.metadata_str("teamName")?.to_string(),
+                }
+            } else {
+                FedEventData::PlayerHatched {
+                    player_id: event.next_player_id()?,
+                    player_name: player_name.to_string(),
+                }
             }
         }
         EventType::PlayerEvolves => { todo!() }

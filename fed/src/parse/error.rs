@@ -122,5 +122,12 @@ pub enum FeedParseError {
         expected: &'static [i64],
         actual: i64,
     },
+
+    #[error("Expected {expected_type:?} event after {after_type:?} event but found {found_type:?}")]
+    MissingFollowingEvent {
+        expected_type: EventType,
+        found_type: Option<EventType>,
+        after_type: EventType,
+    },
 }
 
