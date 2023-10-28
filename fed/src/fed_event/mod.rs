@@ -1,4 +1,5 @@
 mod fed_event_impl;
+
 pub use fed_event_impl::*;
 
 use std::cmp::Ordering;
@@ -4070,6 +4071,150 @@ pub struct FedEvent {
     #[serde(flatten)]
     #[serde(with = "FedEventData")]
     pub data: FedEventData,
+}
+
+impl FedEventData {
+    pub fn game(&self) -> Option<&GameEvent> {
+        match self {
+            FedEventData::BeingSpeech { .. } => { None }
+            FedEventData::LetsGo { game, .. } => { Some(game) }
+            FedEventData::PlayBall { game, .. } => { Some(game) }
+            FedEventData::HalfInningStart { game, .. } => { Some(game) }
+            FedEventData::BatterUp { game, .. } => { Some(game) }
+            FedEventData::SuperyummyGameStart { game, .. } => { Some(game) }
+            FedEventData::EchoedSuperyummyGameStart { game, .. } => { Some(game) }
+            FedEventData::Ball { game, .. } => { Some(game) }
+            FedEventData::FoulBall { game, .. } => { Some(game) }
+            FedEventData::StrikeSwinging { game, .. } => { Some(game) }
+            FedEventData::StrikeLooking { game, .. } => { Some(game) }
+            FedEventData::StrikeFlinching { game, .. } => { Some(game) }
+            FedEventData::Flyout { game, .. } => { Some(game) }
+            FedEventData::GroundOut { game, .. } => { Some(game) }
+            FedEventData::FieldersChoice { game, .. } => { Some(game) }
+            FedEventData::DoublePlay { game, .. } => { Some(game) }
+            FedEventData::Hit { game, .. } => { Some(game) }
+            FedEventData::HomeRun { game, .. } => { Some(game) }
+            FedEventData::StolenBase { game, .. } => { Some(game) }
+            FedEventData::CaughtStealing { game, .. } => { Some(game) }
+            FedEventData::StrikeoutSwinging { game, .. } => { Some(game) }
+            FedEventData::StrikeoutLooking { game, .. } => { Some(game) }
+            FedEventData::Walk { game, .. } => { Some(game) }
+            FedEventData::InningEnd { game, .. } => { Some(game) }
+            FedEventData::CharmStrikeout { game, .. } => { Some(game) }
+            FedEventData::StrikeZapped { game, .. } => { Some(game) }
+            FedEventData::PeanutFlavorText { game, .. } => { Some(game) }
+            FedEventData::GameEnd { game, .. } => { Some(game) }
+            FedEventData::MildPitch { game, .. } => { Some(game) }
+            FedEventData::MildPitchWalk { game, .. } => { Some(game) }
+            FedEventData::CoffeeBean { game, .. } => { Some(game) }
+            FedEventData::BecameMagmatic { game, .. } => { Some(game) }
+            FedEventData::Blooddrain { game, .. } => { Some(game) }
+            FedEventData::SpecialBlooddrain { game, .. } => { Some(game) }
+            FedEventData::PlayerModExpires { .. } => { None }
+            FedEventData::TeamModExpires { .. } => { None }
+            FedEventData::BirdsCircle { game, .. } => { Some(game) }
+            FedEventData::AmbushedByCrows { game, .. } => { Some(game) }
+            FedEventData::Sun2SetWin { .. } => { None }
+            FedEventData::BlackHoleSwallowedWin { .. } => { None }
+            FedEventData::Sun2 { game, .. } => { Some(game) }
+            FedEventData::BlackHole { game, .. } => { Some(game) }
+            FedEventData::TeamDidShame { .. } => { None }
+            FedEventData::TeamWasShamed { .. } => { None }
+            FedEventData::CharmWalk { game, .. } => { Some(game) }
+            FedEventData::GainFreeRefill { game, .. } => { Some(game) }
+            FedEventData::AllergicReaction { game, .. } => { Some(game) }
+            FedEventData::PerkUp { game, .. } => { Some(game) }
+            FedEventData::Feedback { game, .. } => { Some(game) }
+            FedEventData::BestowReverberating { game, .. } => { Some(game) }
+            FedEventData::Reverb { game, .. } => { Some(game) }
+            FedEventData::TarotReading { .. } => { None }
+            FedEventData::TarotReadingAddedOrRemovedMod { .. } => { None }
+            FedEventData::TeamEnteredPartyTime { .. } => { None }
+            FedEventData::BecomeTripleThreat { game, .. } => { Some(game) }
+            FedEventData::UnderOver { game, .. } => { Some(game) }
+            FedEventData::OverUnder { game, .. } => { Some(game) }
+            FedEventData::TasteTheInfinite { game, .. } => { Some(game) }
+            FedEventData::BatterSkipped { game, .. } => { Some(game) }
+            FedEventData::FeedbackBlocked { game, .. } => { Some(game) }
+            FedEventData::FlagPlanted { .. } => { None }
+            FedEventData::EmergencyAlert { .. } => { None }
+            FedEventData::TeamJoinedILB { .. } => { None }
+            FedEventData::FloodingSwept { game, .. } => { Some(game) }
+            FedEventData::ReturnFromElsewhere { game, .. } => { Some(game) }
+            FedEventData::Incineration { game, .. } => { Some(game) }
+            FedEventData::PitcherChange { game, .. } => { Some(game) }
+            FedEventData::Party { game, .. } => { Some(game) }
+            FedEventData::PlayerHatched { .. } => { None }
+            FedEventData::PostseasonBirth { .. } => { None }
+            FedEventData::FinalStandings { .. } => { None }
+            FedEventData::TeamLeftPartyTimeForPostseason { .. } => { None }
+            FedEventData::EarnedPostseasonSlot { .. } => { None }
+            FedEventData::PostseasonAdvance { .. } => { None }
+            FedEventData::PostseasonEliminated { .. } => { None }
+            FedEventData::PlayerBoosted { .. } => { None }
+            FedEventData::TeamWonInternetSeries { .. } => { None }
+            FedEventData::BottomDwellers { .. } => { None }
+            FedEventData::WillReceived { .. } => { None }
+            FedEventData::BlessingWon { .. } => { None }
+            FedEventData::EarlbirdsAddedToTeam { game, .. } => { Some(game) }
+            FedEventData::DecreePassed { .. } => { None }
+            FedEventData::PlayerJoinedILB { .. } => { None }
+            FedEventData::PlayerPermittedToStay { .. } => { None }
+            FedEventData::FireproofIncineration { game, .. } => { Some(game) }
+            FedEventData::LineupSorted { .. } => { None }
+            FedEventData::EarlbirdsRemovedFromTeam { game, .. } => { Some(game) }
+            FedEventData::Undersea { game, .. } => { Some(game) }
+            FedEventData::RenovationBuilt { .. } => { None }
+            FedEventData::LateToThePartyAdded { game, .. } => { Some(game) }
+            FedEventData::PeanutMister { game, .. } => { Some(game) }
+            FedEventData::PlayerNamedMvp { .. } => { None }
+            FedEventData::LateToThePartyRemoved { game, .. } => { Some(game) }
+            FedEventData::BirdsUnshell { game, .. } => { Some(game) }
+            FedEventData::ReplaceReturnedPlayerFromShadows { .. } => { None }
+            FedEventData::PlayerCalledBackToHall { .. } => { None }
+            FedEventData::TeamUsedFreeWill { .. } => { None }
+            FedEventData::PlayerLostMod { .. } => { None }
+            FedEventData::InvestigationMessage { .. } => { None }
+            FedEventData::HighPressure { game, .. } => { Some(game) }
+            FedEventData::PlayerPulledThroughRift { .. } => { None }
+            FedEventData::PlayerLocalized { .. } => { None }
+            FedEventData::Echo { game, .. } => { Some(game) }
+            FedEventData::SolarPanelsAwait { game, .. } => { Some(game) }
+            FedEventData::EchoIntoStatic { game, .. } => { Some(game) }
+            FedEventData::Psychoacoustics { game, .. } => { Some(game) }
+            FedEventData::EchoReceiver { game, .. } => { Some(game) }
+            FedEventData::ConsumerAttack { game, .. } => { Some(game) }
+            FedEventData::TeamGainedFreeWill { .. } => { None }
+            FedEventData::Tidings { .. } => { None }
+            FedEventData::HomebodyGameStart { game, .. } => { Some(game) }
+            FedEventData::SalmonSwim { game, .. } => { Some(game) }
+            FedEventData::HitByPitch { game, .. } => { Some(game) }
+            FedEventData::SolarPanelsActivate { game, .. } => { Some(game) }
+            FedEventData::RunsOverflowing { game, .. } => { Some(game) }
+            FedEventData::TeamMiddling { game, .. } => { Some(game) }
+            FedEventData::EnterCrimeScene { game, .. } => { Some(game) }
+            FedEventData::ReturnFromInvestigation { .. } => { None }
+            FedEventData::InvestigationConcluded { .. } => { None }
+            FedEventData::GrindRail { game, .. } => { Some(game) }
+            FedEventData::EnterSecretBase { game, .. } => { Some(game) }
+            FedEventData::ExitSecretBase { game, .. } => { Some(game) }
+            FedEventData::EchoChamber { game, .. } => { Some(game) }
+            FedEventData::Roam { .. } => { None }
+            FedEventData::GlitterCrate { game, .. } => { Some(game) }
+            FedEventData::ModsFromAnotherModRemoved { .. } => { None }
+            FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
+            FedEventData::EarlbirdsAddedToPlayer { game, .. } => { Some(game) }
+            FedEventData::MindTrickWalk { game, .. } => { Some(game) }
+            FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }
+            FedEventData::BlooddrainBlocked { game, .. } => { Some(game) }
+            FedEventData::EarlbirdsRemovedFromPlayer { game, .. } => { Some(game) }
+            FedEventData::TarotReadingAddedOrRemovedItem { .. } => { None }
+            FedEventData::PlayerMiddling { game, .. } => { Some(game) }
+            FedEventData::CommunityChestOpens { .. } => { None }
+            FedEventData::PlayerDropsItem { .. } => { None }
+            FedEventData::CommunityChestGameMessage { game, .. } => { Some(game) }
+        }
+    }
 }
 
 impl Eq for FedEvent {}
