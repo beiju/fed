@@ -21,7 +21,7 @@ use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 use crate::FeedParseError;
 use crate::parse::builder::possessive;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum Being {
     EmergencyAlert = -1,
@@ -34,7 +34,7 @@ pub enum Being {
     Namerifeht = 6,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Unscatter {
     pub sub_event: SubEvent,
@@ -44,7 +44,7 @@ pub struct Unscatter {
 }
 
 /// Game data. Every game event has one of these.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEvent {
     /// Game uuid
@@ -68,7 +68,7 @@ pub struct GameEvent {
 }
 
 /// Pitch data. The normal-baseball game events all have one of these.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GamePitch {
     /// If a Double Strike was fired, the name of the pitcher who fired it. Otherwise null.
@@ -77,7 +77,7 @@ pub struct GamePitch {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct SubEvent {
     /// Uuid of sub-event
@@ -91,7 +91,7 @@ pub struct SubEvent {
     pub nuts: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FreeRefill {
     /// Metadata for the sub-event associated with losing the Free Refill mod
@@ -109,7 +109,7 @@ pub struct FreeRefill {
     pub team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoringPlayer {
     /// Player uuid
@@ -125,7 +125,7 @@ pub struct ScoringPlayer {
     pub attraction: Option<Attraction>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores {
     /// Info for all the scores that happened on this event
@@ -177,7 +177,7 @@ impl Scores {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Score {
     /// Info for the score that happened on this event, if any, otherwise null
@@ -216,7 +216,7 @@ impl Score {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
     /// Metadata for the sub-event associated with adding the Inhabiting modifier. If the player
@@ -240,7 +240,7 @@ pub struct Inhabiting {
 }
 
 // TODO: Have a variant of this where the player name and id are inferred from the batter's
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedInhabiting {
     /// Sub-event associated with losing the Inhabiting mod
@@ -258,7 +258,7 @@ pub struct StoppedInhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum CoffeeBeanMod {
     Wired,
     Tired,
@@ -285,7 +285,7 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum AttrCategory {
     Batting,
@@ -317,7 +317,7 @@ impl AttrCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "action", content = "strikeoutBatterName")]
 pub enum BlooddrainAction {
     AddBall,
@@ -345,7 +345,7 @@ impl Display for BlooddrainAction {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema, WithStructure, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ModDuration {
@@ -369,7 +369,7 @@ impl Display for ModDuration {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the od of the player is not present in the
 // containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEvent {
     /// Metadata for the sub-event associated with the mod change
@@ -382,7 +382,7 @@ pub struct ModChangeSubEvent {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is not present in the
 // containing event, use ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithPlayer {
     /// Metadata for the sub-event associated with the mod change
@@ -398,7 +398,7 @@ pub struct ModChangeSubEventWithPlayer {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is present in the
 // containing event, use ModChangeSubEventWithPlayer instead.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithNamedPlayer {
     /// Metadata for the sub-event associated with the mod change
@@ -414,7 +414,7 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub player_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SpicyStatus {
     /// Nothing Spicy-related is happening
@@ -429,7 +429,7 @@ pub enum SpicyStatus {
     RedHot(Option<ModChangeSubEvent>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamPerformingChanged {
     /// Nickname of the team who gained or lost Over or Underperforming
@@ -468,7 +468,7 @@ impl SpicyStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerStatChange {
     /// Team uuid of player whose stats changed
@@ -491,7 +491,7 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ActivePositionType {
@@ -515,7 +515,7 @@ impl ActivePositionType {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ShadowPositionType {
@@ -523,7 +523,7 @@ pub enum ShadowPositionType {
     Bullpen = 3,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum PositionType {
@@ -543,7 +543,7 @@ impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedbackPlayerData {
     pub team_id: Uuid,
@@ -553,7 +553,7 @@ pub struct FeedbackPlayerData {
     pub location: ActivePositionType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum PlayerReverb {
     RepeatId(Uuid),
@@ -584,7 +584,7 @@ pub enum PlayerReverb {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 // This uses a combo of flatten and adjacent tagging
 #[serde(rename_all = "camelCase", tag = "type", content = "subEvent")]
 pub enum ReverbType {
@@ -594,7 +594,7 @@ pub enum ReverbType {
     SeveralPlayers(Vec<PlayerReverb>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum BatterSkippedReason {
     /// Batter is Shelled
@@ -606,7 +606,7 @@ pub enum BatterSkippedReason {
     Elsewhere(Uuid),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[repr(i64)]
 pub enum StatChangeCategory {
     Batting = 0,
@@ -616,7 +616,7 @@ pub enum StatChangeCategory {
     All = 4,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerInfo {
     /// Player uuid
@@ -627,7 +627,7 @@ pub struct PlayerInfo {
 }
 
 // This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PitcherInfo {
     /// Pitcher uuid
@@ -637,7 +637,7 @@ pub struct PitcherInfo {
     pub pitcher_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Scattered {
     /// Name of player after being Scattered
@@ -647,7 +647,7 @@ pub struct Scattered {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum FloodingSweptEffect {
     Elsewhere(ModChangeSubEventWithNamedPlayer),
@@ -655,14 +655,14 @@ pub enum FloodingSweptEffect {
     Ego(PlayerInfo),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged, rename_all = "camelCase")]
 pub enum RenovationVotes {
     Normal(i64),
     Manual(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MultipleModsAddedOrRemoved {
     /// Vector of mods that were added/removed. Each mod is represented by its internal ID.
@@ -672,7 +672,7 @@ pub struct MultipleModsAddedOrRemoved {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Echo {
     /// Team Uuid of player who received the Echo.
@@ -691,7 +691,7 @@ pub struct Echo {
     pub mods_added: MultipleModsAddedOrRemoved,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EchoIntoStatic {
     /// Team Uuid of player who echoed into static
@@ -713,14 +713,14 @@ pub struct EchoIntoStatic {
     pub mod_changed_sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "time_elsewhere_type", content = "time_elsewhere", rename_all = "camelCase")]
 pub enum TimeElsewhere {
     Days(i32),
     Seasons(i32),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "flavor", rename_all = "camelCase")]
 pub enum ReturnFromElsewhereFlavor {
     /// The normal one
@@ -774,7 +774,7 @@ pub enum ReturnFromElsewhereFlavor {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamRunsLost {
     /// Number of runs lost
@@ -791,7 +791,7 @@ impl Display for TeamRunsLost {
 }
 
 // TODO: Make this into a static vec with max size 2 (third-party crate)
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(into = "SerdeRunLossesFromSalmon", try_from = "SerdeRunLossesFromSalmon")]
 pub enum RunLossesFromSalmon {
     None,
@@ -836,7 +836,7 @@ impl Display for RunLossesFromSalmon {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectiveActivity {
     /// Uuid of the detective
@@ -849,7 +849,7 @@ pub struct DetectiveActivity {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BatterDebt {
     /// Batter Uuid. For some reason this is only added to the event when Debt procs, even though
@@ -865,7 +865,7 @@ pub struct BatterDebt {
     pub sub_event: Option<ModChangeSubEvent>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TogglePerforming {
     /// Uuid of the player whose Overperforming/Underperforming was toggled
@@ -888,7 +888,7 @@ pub struct TogglePerforming {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct GrindRailTrick {
     /// Name of this Grind Rail trick
     pub trick_name: String,
@@ -903,7 +903,7 @@ impl Display for GrindRailTrick {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(tag = "success")]
 pub enum GrindRailSuccess {
     /// The player was Safe, and secondTrick was successful
@@ -932,7 +932,7 @@ impl Display for GrindRailSuccess {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum EchoChamberModAdded {
     Repeating,
     Reverberating,
@@ -947,7 +947,7 @@ impl Display for EchoChamberModAdded {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(tag = "type")]
 pub enum ConsumerAttackEffect {
     Chomp {
@@ -964,7 +964,7 @@ pub enum ConsumerAttackEffect {
     DefendedWithItem(ItemDamaged),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemDamaged {
     /// Uuid of item that was damaged
     pub item_id: Uuid,
@@ -1018,7 +1018,7 @@ impl Display for ItemDamaged {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemGained {
     /// Uuid of item that was gained
     pub item_id: Uuid,
@@ -1053,7 +1053,7 @@ pub struct ItemGained {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemRepaired {
     /// Uuid of item that was repaired
     pub item_id: Uuid,
@@ -1098,7 +1098,7 @@ pub struct ItemRepaired {
 
 // This event is intended for situations where the player's id and team are already encoded in a
 // ItemGained struct. If a player
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemDroppedForNewItem {
     /// Uuid of item that was dropped
     pub item_id: Uuid,
@@ -1123,7 +1123,7 @@ pub struct ItemDroppedForNewItem {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerMovedTeams {
     /// Uuid of player who moved teams
     pub player_id: Uuid,
@@ -1150,7 +1150,7 @@ pub struct PlayerMovedTeams {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Carcinization {
     #[serde(flatten)]
     pub mv: PlayerMovedTeams,
@@ -1162,7 +1162,7 @@ pub struct Carcinization {
     pub mod_added_sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct AttractionWithPlayer {
     /// Nickname of team who attracted this player
     pub team_nickname: String,
@@ -1181,7 +1181,7 @@ pub struct AttractionWithPlayer {
 }
 
 // Use this in contexts where the player name and ID are stored outside
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Attraction {
     /// Nickname of team who attracted this player
     pub team_nickname: String,
@@ -1193,7 +1193,7 @@ pub struct Attraction {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ModDesc {
     /// Internal name of the mod
     pub mod_id: String,
@@ -1202,7 +1202,7 @@ pub struct ModDesc {
     pub mod_duration: ModDuration,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HitType {
     Single,
@@ -1222,7 +1222,7 @@ impl Display for HitType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum Base {
     First,
     Second,
@@ -1243,7 +1243,7 @@ impl Display for Base {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HomeRunType {
     Solo,
@@ -1263,7 +1263,7 @@ impl Display for HomeRunType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum StrikeoutType {
     Looking,
     Swinging,
@@ -1278,7 +1278,7 @@ impl Display for StrikeoutType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Parasite {
     /// Team uuid of the batter who was parasitically drained
     pub batter_team_id: Uuid,
@@ -1325,7 +1325,7 @@ pub struct Parasite {
     pub pitcher_sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -4001,7 +4001,7 @@ pub enum FedEventData {
 
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum SimPhase {
     GodsDay = 0,
