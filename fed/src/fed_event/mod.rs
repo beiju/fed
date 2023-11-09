@@ -1394,8 +1394,8 @@ pub enum FedEventData {
         /// Batter's name
         batter_name: String,
 
-        /// Batter's team's name
-        team_name: String,
+        /// Batter's team's nickname
+        team_nickname: String,
 
         /// The name of the player's legacy (pre-s15 election) item, if any, otherwise null. This
         /// should always be null from season 16 onward.

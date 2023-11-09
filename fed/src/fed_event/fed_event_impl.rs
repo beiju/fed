@@ -156,7 +156,7 @@ impl FedEvent {
                                              if top_of_inning { "Top" } else { "Bottom" }));
                 eb.build(EventType::HalfInning)
             }
-            FedEventData::BatterUp { ref game, ref batter_name, ref team_name, ref wielding_item, ref inhabiting, is_repeating } => {
+            FedEventData::BatterUp { ref game, ref batter_name, team_nickname: ref team_name, ref wielding_item, ref inhabiting, is_repeating } => {
                 let item_suffix = if let Some(item_name) = wielding_item {
                     format!(", wielding {}", item_name)
                 } else {

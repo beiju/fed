@@ -528,7 +528,7 @@ fn parse_single_feed_event(event: &EventuallyEvent) -> Result<FedEvent, FeedPars
             FedEventData::BatterUp {
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: batter_name.to_string(),
-                team_name: team_name.to_string(),
+                team_nickname: team_name.to_string(),
                 wielding_item: wielding_item.map(|s| s.to_string()),
                 inhabiting: inhabited.map(|inhabited| {
                     // Haunting doesn't have a sub-event if the player who Haunted already has the
