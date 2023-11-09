@@ -91,6 +91,17 @@ pub struct SubEvent {
     pub nuts: i32,
 }
 
+impl SubEvent {
+    // For use when you are generating Fed events and don't care about the SubEvent data
+    pub fn nil() -> Self {
+        Self {
+            id: Uuid::nil(),
+            created: DateTime::default(),
+            nuts: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FreeRefill {
