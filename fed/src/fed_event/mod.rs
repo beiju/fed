@@ -77,7 +77,7 @@ pub struct GamePitch {
 
 // This contains only the event properties that will differ from the parent, including id, created,
 // and nuts; but not properties that will be the same, like day, season, and tournament.
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct SubEvent {
     /// Uuid of sub-event
@@ -99,6 +99,14 @@ impl SubEvent {
             created: DateTime::default(),
             nuts: 0,
         }
+    }
+}
+
+// I am doing this crime because i want to compare measured events to generated events and i don't
+// care about the non-generatable data. i am sure this will bite me in the ass eventually
+impl PartialEq for SubEvent {
+    fn eq(&self, other: &Self) -> bool {
+        true
     }
 }
 
