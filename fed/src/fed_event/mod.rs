@@ -1472,7 +1472,7 @@ pub struct Parasite {
 }
 
 // TODO A bunch of places this is inlined should be replaced with PlayerBoostSubEvent and  #[serde(flatten)]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerBoostSubEvent {
     /// Player's rating before the boost
     pub rating_before: f64,
@@ -1484,7 +1484,7 @@ pub struct PlayerBoostSubEvent {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerBoostSubEventWithTeam {
     /// Team uuid of the player who was boosted
     pub team_id: Uuid,
@@ -1517,7 +1517,7 @@ pub enum WonPrizeMatchEventVariants {
     WithPlayerName(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct MaintenanceMode {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
@@ -4432,19 +4432,15 @@ impl FedEventData {
             FedEventData::BottomDwellers { .. } => { None }
             FedEventData::WillReceived { .. } => { None }
             FedEventData::BlessingWon { .. } => { None }
-            FedEventData::EarlbirdsAddedToTeam { game, .. } => { Some(game) }
             FedEventData::DecreePassed { .. } => { None }
             FedEventData::PlayerJoinedILB { .. } => { None }
             FedEventData::PlayerPermittedToStay { .. } => { None }
             FedEventData::FireproofIncineration { game, .. } => { Some(game) }
             FedEventData::LineupSorted { .. } => { None }
-            FedEventData::EarlbirdsRemovedFromTeam { game, .. } => { Some(game) }
             FedEventData::Undersea { game, .. } => { Some(game) }
             FedEventData::RenovationBuilt { .. } => { None }
-            FedEventData::LateToThePartyAdded { game, .. } => { Some(game) }
             FedEventData::PeanutMister { game, .. } => { Some(game) }
             FedEventData::PlayerNamedMvp { .. } => { None }
-            FedEventData::LateToThePartyRemoved { game, .. } => { Some(game) }
             FedEventData::BirdsUnshell { game, .. } => { Some(game) }
             FedEventData::ReplaceReturnedPlayerFromShadows { .. } => { None }
             FedEventData::PlayerCalledBackToHall { .. } => { None }
@@ -4467,7 +4463,6 @@ impl FedEventData {
             FedEventData::HitByPitch { game, .. } => { Some(game) }
             FedEventData::SolarPanelsActivate { game, .. } => { Some(game) }
             FedEventData::RunsOverflowing { game, .. } => { Some(game) }
-            FedEventData::TeamMiddling { game, .. } => { Some(game) }
             FedEventData::EnterCrimeScene { game, .. } => { Some(game) }
             FedEventData::ReturnFromInvestigation { .. } => { None }
             FedEventData::InvestigationConcluded { .. } => { None }
@@ -4479,16 +4474,23 @@ impl FedEventData {
             FedEventData::GlitterCrate { game, .. } => { Some(game) }
             FedEventData::ModsFromAnotherModRemoved { .. } => { None }
             FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
-            FedEventData::EarlbirdsAddedToPlayer { game, .. } => { Some(game) }
             FedEventData::MindTrickWalk { game, .. } => { Some(game) }
             FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }
             FedEventData::BlooddrainBlocked { game, .. } => { Some(game) }
-            FedEventData::EarlbirdsRemovedFromPlayer { game, .. } => { Some(game) }
             FedEventData::TarotReadingAddedOrRemovedItem { .. } => { None }
-            FedEventData::PlayerMiddling { game, .. } => { Some(game) }
             FedEventData::CommunityChestOpens { .. } => { None }
             FedEventData::PlayerDropsItem { .. } => { None }
             FedEventData::CommunityChestGameMessage { game, .. } => { Some(game) }
+            FedEventData::SubseasonalModsChange { game, .. } => { Some(game) }
+            FedEventData::Fax { game, .. } => { Some(game) }
+            FedEventData::Redacted { .. } => { None }
+            FedEventData::Smithy { game, .. } => { Some(game) }
+            FedEventData::HolidayInning { game, .. } => { Some(game) }
+            FedEventData::HomeFieldAdvantage { game, .. } => { Some(game) }
+            FedEventData::PrizeMatch { game, .. } => { Some(game) }
+            FedEventData::WonPrizeMatch { .. } => { None }
+            FedEventData::TeamReceivedGifts { .. } => { None }
+            FedEventData::GiftReceived { .. } => { None }
         }
     }
 }
