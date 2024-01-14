@@ -99,7 +99,7 @@ impl SubEvent {
 // I am doing this crime because i want to compare measured events to generated events and i don't
 // care about the non-generatable data. i am sure this will bite me in the ass eventually
 impl PartialEq for SubEvent {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         true
     }
 }

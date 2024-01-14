@@ -3,13 +3,11 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, BufReader, prelude::*};
-use par_iter_sync::{IntoParallelIteratorAsync, IntoParallelIteratorSync};
+use std::io::{BufReader, prelude::*};
+use par_iter_sync::IntoParallelIteratorAsync;
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
-use clap::builder::TypedValueParser;
 use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
-use flate2::read::GzDecoder;
 use with_structure::WithStructure;
 use enum_flatten::{EnumFlatten, EnumFlattened};
 use clap::Parser;
