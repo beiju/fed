@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -47,6 +47,15 @@ impl EventBuilder {
         builder.0.metadata.other = serde_json::json!({});
 
         builder
+    }
+
+    pub fn connected_event(&self, sub_event: SubEvent) -> Self {
+        Self(EventuallyEvent {
+            id: sub_event.id,
+            created: sub_event.created,
+            nuts: sub_event.nuts,
+            ..self.0.clone()
+        })
     }
 
     pub fn description(&self) -> &str {
@@ -185,6 +194,12 @@ impl EventBuilder {
         } else {
             self.push_metadata_null(key)
         }
+    }
+
+    pub fn push_known_boost(&mut self, boost: &KnownPlayerStatChange) {
+        self.push_metadata_f64("before", boost.rating_before);
+        self.push_metadata_f64("after", boost.rating_after);
+        self.push_metadata_i64("type", 4); // TODO what does this mean?
     }
 
     pub fn push_gained_item(&mut self, player_name: String, gained_item: ItemGained) {

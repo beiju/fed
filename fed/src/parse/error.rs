@@ -123,9 +123,9 @@ pub enum FeedParseError {
         actual: i64,
     },
 
-    #[error("Expected {expected_type:?} event after {after_type:?} event but found {found_type:?}")]
+    #[error("Expected one of {expected_types:?} event after {after_type:?} event but found {found_type:?}")]
     MissingFollowingEvent {
-        expected_type: EventType,
+        expected_types: Vec<EventType>,
         found_type: Option<EventType>,
         after_type: EventType,
     },

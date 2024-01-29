@@ -321,6 +321,14 @@ impl<'e> EventParseWrapper<'e> {
         }
     }
 
+    pub fn as_known_player_boost(&self) -> Result<KnownPlayerStatChange, FeedParseError> {
+        Ok(KnownPlayerStatChange {
+            rating_before: self.metadata_f64("before")?,
+            rating_after: self.metadata_f64("after")?,
+            sub_event: self.as_sub_event(),
+        })
+    }
+
     pub fn get_metadata(&self, key: &'static str) -> Result<&'e serde_json::Value, FeedParseError> {
         self.metadata.other
             .as_object()

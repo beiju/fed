@@ -608,6 +608,21 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
+// Like PlayerStatChange for when the player and team is known from other context. Intended for use in an Option
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KnownPlayerStatChange {
+    /// Player's rating before the stats changed. The rating category is stored externally. Rating
+    /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
+    pub rating_before: f64,
+
+    /// Player's rating after the stats changed
+    pub rating_after: f64,
+
+    /// Metadata for the sub-event associated with the player stat change event
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
@@ -1521,6 +1536,14 @@ pub enum WonPrizeMatchEventVariants {
 pub struct MaintenanceMode {
     pub sub_event: SubEvent,
     pub team_id: Uuid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+pub enum PostseasonBirthBoostEventOrder {
+    // TODO Do all 3 of these actually appear in real data?
+    AfterHatch,
+    AfterBirth,
+    AfterEarnedSlot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -3102,6 +3125,28 @@ pub enum FedEventData {
 
         /// Nickname of team who earned a slot in the postseason
         team_nickname: String,
+
+        /// Name of postseason birth
+        postseason_birth_name: String,
+
+        /// Uuid of postseason birth
+        postseason_birth_id: Uuid,
+
+        /// Location of postseason birth
+        postseason_birth_location: ShadowPositionType,
+
+        /// Metadata for the postseason birth's hatching event
+        hatch_event_metadata: SubEvent,
+
+        /// Metadata for the team-left-the-party event, if applicable
+        left_party_event_metadata: Option<SubEvent>,
+
+        /// Metadata for the postseason birth's shadow boost, if applicable
+        /// (shadow boosts began in Season 18 [TODO: fact check])
+        shadow_boost: Option<(KnownPlayerStatChange, PostseasonBirthBoostEventOrder)>,
+
+        /// Metadata for the postseason birth's added-to-team event
+        postseason_birth_event_metadata: SubEvent,
     },
 
     /// Team advanced to next round of the postseason

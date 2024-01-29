@@ -1,6 +1,5 @@
 #![feature(let_chains)]
 
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
@@ -15,6 +14,7 @@ use itertools::Itertools;
 use eventually_api::EventuallyEvent;
 
 use fed::{FedEvent, InterEventStateSync, parse_next_event};
+use fed::MakePeekableWithLogging;
 
 const SEASONS: [(&'static str, i64, i64); 7] = [
     // sim, season number, number of events in that season
@@ -100,7 +100,7 @@ fn run_test(args: Args) -> anyhow::Result<()> {
 }
 
 fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, args: Args) -> anyhow::Result<()> {
-    // If these files doesn't exist, download feed_dump.ndjson from
+    // If these files don't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
     let file = File::open(format!("feed_dump_filtered/sim-{sim}-season-{season}.ndjson"))?;
@@ -108,7 +108,6 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     let reader = BufReader::new(file);
 
     let state = InterEventStateSync::new();
-    let consumed = RefCell::new(Vec::new());
 
     let mut event_iter = reader.lines()
         .map(|json_str| {
@@ -124,14 +123,12 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
             feed_event.metadata.ingest_source = None;
             feed_event.metadata.ingest_time = None;
 
-            consumed.borrow_mut().push(feed_event.clone());
-
             Ok(Some(feed_event))
         })
         .filter_map(Result::transpose)
         // TODO Is there a better way to do this where I don't have to unwrap?
         .map(Result::unwrap)
-        .peekable();
+        .peekable_with_logging();
 
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 
@@ -140,12 +137,12 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     let progress = multi_progress.add(progress);
     while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())
-        .with_context(|| format!("Parsing events: \n{}", consumed.borrow().iter()
+        .with_context(|| format!("Parsing events: \n{}", event_iter.log().iter()
             .map(|event| format!("  - {}: {}", event.id, event.description)).format("\n")))? {
-        check_parse(&parsed_event, &consumed.borrow())?;
-        progress.inc(consumed.borrow().len() as u64);
+        check_parse(&parsed_event, event_iter.log())?;
+        progress.inc(event_iter.log().len() as u64);
         progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));
-        consumed.borrow_mut().clear();
+        event_iter.take_log();
 
         let Some(ref sample_path) = args.sample_outputs else {
             continue;

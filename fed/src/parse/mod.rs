@@ -5,7 +5,7 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
-use std::iter::Peekable;
+use crate::PeekableWithLogging;
 use std::sync::{Arc, Mutex};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -84,16 +84,43 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
     Ok(v)
 }
 
+// Maybe this should be a newtype instead and keep track of the prev emitted event for error reporting purposes?
+trait EventIterator {
+    fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
+}
+
+impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
+    fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
+        let Some(event) = self.peek() else {
+            Err(FeedParseError::MissingFollowingEvent {
+                expected_types: vec![ty], // after refactor this might not need to be a vec
+                found_type: None,
+                after_type,
+            })?
+        };
+
+        if event.r#type == ty {
+            Ok(self.next().expect("This call is always after a successful peek()"))
+        } else {
+            Err(FeedParseError::MissingFollowingEvent {
+                expected_types: vec![ty], // after refactor this might not need to be a vec
+                found_type: Some(event.r#type),
+                after_type,
+            })
+        }
+    }
+}
+
 pub fn parse_next_event(
-    event_iter: &mut Peekable<impl Iterator<Item=EventuallyEvent>>,
-    state: &InterEventState
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item=EventuallyEvent>>,
+    state: &InterEventState,
 ) -> Result<Option<FedEvent>, FeedParseError> {
     let Some(event) = event_iter.next() else {
-        return Ok(None)
+        return Ok(None);
     };
     let mut event = EventParseWrapper::new(&event)?;
     // This variable exists just for me to look at in the debugger, because the debugger
-    // representation of the Uuid type is to low-level to copy-paste
+    // representation of the Uuid type is too low-level to copy-paste
     let _id_string = event.id.to_string();
 
     // This can happen on the majority of events, so I handle it outside
@@ -2315,51 +2342,58 @@ pub fn parse_next_event(
         EventType::ReverbLineupShuffle => { todo!() }
         EventType::ReverbRotationShuffle => { todo!() }
         EventType::PlayerHatched => {
+            // Apparently this event type is only top-level during postseason births. I think.
+
             // For now this only has the breach events, it will need to be updated for s24
             let player_name = event.next_parse(parse_player_hatched)?;
+            let mut prev_type = EventType::PlayerHatched;
 
-            if let Some(next_event) = event_iter.peek() &&
-                next_event.r#type == EventType::PlayerAddedToTeam &&
-                next_event.description.contains("Postseason Birth") {
-                let birth_event = event_iter.next().expect("This happens after a successful peek()");
-                let mut birth_event = EventParseWrapper::new(&birth_event)?;
-                let shadow_event = event_iter.next().ok_or_else(|| FeedParseError::MissingFollowingEvent {
-                    expected_type: EventType::PlayerStatIncrease,
-                    found_type: None,
-                    after_type: EventType::PlayerAddedToTeam,
-                })?;
-                if shadow_event.r#type != EventType::PlayerStatIncrease {
-                    Err(FeedParseError::MissingFollowingEvent {
-                        expected_type: EventType::PlayerStatIncrease,
-                        found_type: Some(shadow_event.r#type),
-                        after_type: EventType::PlayerAddedToTeam,
-                    })?
-                }
-                let mut shadow_event = EventParseWrapper::new(&shadow_event)?;
-                let earned_spot_event = event_iter.next().ok_or_else(|| FeedParseError::MissingFollowingEvent {
-                    expected_type: EventType::EarnedPostseasonSlot,
-                    found_type: None,
-                    after_type: EventType::PlayerStatIncrease,
-                })?;
-                if earned_spot_event.r#type != EventType::EarnedPostseasonSlot {
-                    Err(FeedParseError::MissingFollowingEvent {
-                        expected_type: EventType::EarnedPostseasonSlot,
-                        found_type: Some(earned_spot_event.r#type),
-                        after_type: EventType::PlayerStatIncrease,
-                    })?
-                }
-                let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
-                todo!("Add birth to EarnedPostseasonSlot");
-                FedEventData::EarnedPostseasonSlot {
-                    team_id: earned_spot_event.next_team_id()?,
-                    team_nickname: birth_event.metadata_str("teamName")?.to_string(),
-                }
-            } else {
-                FedEventData::PlayerHatched {
-                    player_id: event.next_player_id()?,
-                    player_name: player_name.to_string(),
-                }
-            }
+            let boost_event = event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+                .map(|e| (e, PostseasonBirthBoostEventOrder::AfterHatch));
+            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
+            // let mut boost_event = boost_event.as_ref().map(EventParseWrapper::new).transpose()?;
+
+            let earned_birth_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, prev_type)?;
+            prev_type = earned_birth_event.r#type;
+            let mut earned_birth_event = EventParseWrapper::new(&earned_birth_event)?;
+
+            let boost_event = if let Some(e) = boost_event { Some(e) } else {
+                event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+                    .map(|e| (e, PostseasonBirthBoostEventOrder::AfterBirth))
+            };
+            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
+
+            let left_party_event = event_iter.next_expect_type(EventType::RemovedMod, prev_type).ok();
+            if let Some(e) = &left_party_event { prev_type = e.r#type; }
+            let mut left_party_event = left_party_event.as_ref().map(EventParseWrapper::new).transpose()?;
+
+            let earned_spot_event = event_iter.next_expect_type(EventType::EarnedPostseasonSlot, prev_type)?;
+            prev_type = earned_spot_event.r#type;
+            let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
+
+            let boost_event = if let Some(e) = boost_event { Some(e) } else {
+                event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+                    .map(|e| (e, PostseasonBirthBoostEventOrder::AfterEarnedSlot))
+            };
+            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
+            let mut boost_event = boost_event.as_ref().map(|(e, o)| EventParseWrapper::new(e).map(|w| (w, *o))).transpose()?;
+
+            let shadow_boost = boost_event.as_ref().map(|(w, o)| EventParseWrapper::as_known_player_boost(w).map(|e| (e, *o))).transpose()?;
+            let data = FedEventData::EarnedPostseasonSlot {
+                team_id: earned_spot_event.next_team_id()?,
+                team_nickname: earned_birth_event.metadata_str("teamName")?.to_string(),
+                postseason_birth_name: earned_birth_event.metadata_str("playerName")?.to_string(),
+                postseason_birth_id: earned_birth_event.metadata_uuid("playerId")?,
+                postseason_birth_location: earned_birth_event.metadata_enum("location")?,
+                hatch_event_metadata: event.as_sub_event(),
+                postseason_birth_event_metadata: earned_birth_event.as_sub_event(),
+                shadow_boost,
+                left_party_event_metadata: left_party_event.as_ref().map(EventParseWrapper::as_sub_event),
+            };
+
+            // Shortcutting the return because the returned FedEvent should be based on the `earned_spot_event`
+            // EventuallyEvent but the return statement at the end of the function uses `event`
+            return Ok(Some(earned_spot_event.to_fed(data)?));
         }
         EventType::PlayerEvolves => { todo!() }
         EventType::TeamDivisionMove => {
@@ -2410,10 +2444,12 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(team_nickname));
             assert_eq!(season_num, event.season + 1);
 
-            FedEventData::EarnedPostseasonSlot {
-                team_id: event.next_team_id()?,
-                team_nickname: team_nickname.to_string(),
-            }
+            // FedEventData::EarnedPostseasonSlot {
+            //     team_id: event.next_team_id()?,
+            //     team_nickname: team_nickname.to_string(),
+            // }
+
+            todo!("I think this should be turned into a \"this event must come after a PlayerHatched event\" error")
         }
         EventType::FinalStandings => {
             let (team_nickname, place, division_name) = event.next_parse(parse_final_standings)?;

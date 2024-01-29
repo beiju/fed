@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -1794,6 +1794,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::TeamLeftPartyTimeForPostseason { team_id, team_nickname } => {
+                // TODO This was combined into another event, should it be deleted?
                 event_builder
                     .fill(EventBuilderUpdate {
                         r#type: EventType::RemovedMod,
@@ -1808,16 +1809,57 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::EarnedPostseasonSlot { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::EarnedPostseasonSlot,
-                        category: EventCategory::Outcomes,
-                        description: format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::EarnedPostseasonSlot { team_id, team_nickname, postseason_birth_name, postseason_birth_id, postseason_birth_location, hatch_event_metadata, postseason_birth_event_metadata, shadow_boost, left_party_event_metadata } => {
+                let mut hatch_eb = eb.connected_event(hatch_event_metadata);
+                hatch_eb.set_category(EventCategory::Changes);
+                hatch_eb.push_description(&format!("{postseason_birth_name} has been hatched from the field of eggs."));
+                hatch_eb.push_player_tag(postseason_birth_id);
+                hatch_eb.push_metadata_uuid("id", postseason_birth_id);
+                let hatch_event = hatch_eb.build(EventType::PlayerHatched);
+                
+                let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
+                birth_eb.set_category(EventCategory::Changes);
+                birth_eb.push_description(&format!("The {team_nickname} earn a Postseason Birth!"));
+                birth_eb.push_player_tag(postseason_birth_id);
+                birth_eb.push_team_tag(team_id);
+                birth_eb.push_metadata_i64("location", postseason_birth_location);
+                birth_eb.push_metadata_uuid("playerId", postseason_birth_id);
+                birth_eb.push_metadata_str("playerName", &postseason_birth_name);
+                birth_eb.push_metadata_uuid("teamId", team_id);
+                birth_eb.push_metadata_str("teamName", &team_nickname);
+                let birth_event = birth_eb.build(EventType::PlayerAddedToTeam);
+
+                let party_event = left_party_event_metadata.map(|left_party_time| {
+                    let mut party_eb = eb.connected_event(left_party_time);
+                    party_eb.set_category(EventCategory::Changes);
+                    party_eb.push_description(&format!("The {team_nickname} have been removed from Party Time to join the Postseason!"));
+                    party_eb.push_team_tag(team_id);
+                    party_eb.push_metadata_str("mod", "PARTY_TIME");
+                    party_eb.push_metadata_i64("type", ModDuration::Seasonal);
+                    party_eb.build(EventType::RemovedMod)
+                });
+
+                let order = shadow_boost.as_ref().map(|(boost, order)| *order);
+                let shadow_event = shadow_boost.map(|(boost, _)| {
+                    let mut shadow_eb = eb.connected_event(boost.sub_event);
+                    shadow_eb.set_category(EventCategory::Changes);
+                    shadow_eb.push_description(&format!("{postseason_birth_name} entered the Shadows."));
+                    shadow_eb.push_team_tag(team_id);
+                    shadow_eb.push_player_tag(postseason_birth_id);
+                    shadow_eb.push_known_boost(&boost);
+                    shadow_eb.build(EventType::PlayerStatIncrease)
+                });
+
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(&format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1));
+                eb.push_team_tag(team_id);
+                let main_event = eb.build(EventType::EarnedPostseasonSlot);
+
+                return match order {
+                    None | Some(PostseasonBirthBoostEventOrder::AfterBirth) => [Some(hatch_event), Some(birth_event), shadow_event, party_event, Some(main_event)],
+                    Some(PostseasonBirthBoostEventOrder::AfterHatch) => [Some(hatch_event), shadow_event, Some(birth_event), party_event, Some(main_event)],
+                    Some(PostseasonBirthBoostEventOrder::AfterEarnedSlot) => [Some(hatch_event), Some(birth_event), party_event, Some(main_event), shadow_event],
+                }.into_iter().filter_map(|x| x).collect();
             }
             FedEventData::PostseasonAdvance { team_id, team_nickname, round, displayed_season: season } => {
                 let round_str = if let Some(round) = round {
