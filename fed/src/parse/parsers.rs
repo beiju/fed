@@ -177,7 +177,6 @@ pub(crate) enum ParsedGroundOut<'a> {
     Simple {
         batter_name: &'a str,
         fielder_name: &'a str,
-        hype_stadium_name: Option<&'a str>,
     },
     FieldersChoice {
         runner_out_name: &'a str,
@@ -197,12 +196,9 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundO
     let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
-    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
-
     let parsed = ParsedGroundOut::Simple {
         batter_name,
         fielder_name,
-        hype_stadium_name,
     };
     Ok((input, (parsed)))
 }

@@ -830,7 +830,7 @@ impl<'e> EventParseWrapper<'e> {
         Ok(parties)
     }
 
-    pub fn parse_hype(&mut self, stadium_name: &str) -> Result<HypeBuilds, FeedParseError> {
+    pub fn parse_hype_from_stadium(&mut self, stadium_name: &str) -> Result<HypeBuilds, FeedParseError> {
         let hype_child = self.next_child(EventType::HypeBuilds)?;
         
         Ok(HypeBuilds {
@@ -839,6 +839,12 @@ impl<'e> EventParseWrapper<'e> {
             hype_after: hype_child.metadata_f64("after")?,
             sub_event: hype_child.as_sub_event(),
         })
+    }
+
+    pub fn parse_hype(&mut self) -> Result<Option<HypeBuilds>, FeedParseError> {
+        self.next_parse(opt(parse_hype_suffix))?
+            .map(|stadium| self.parse_hype_from_stadium(stadium))
+            .transpose()
     }
 
     pub fn parse_ambush(&mut self, player_name: &str, team_name: &str) -> Result<Ambush, FeedParseError> {

@@ -430,12 +430,20 @@ impl FedEvent {
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_hype(hype.as_ref(), home_team_id);
-                eb.push_scores(scores, "advances on the sacrifice.");
-                // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
-                // definitely somewhere after scores. Rest of the order is not yet known
-                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
-                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
+                if self.season < 18 {
+                    eb.push_scores(scores, "advances on the sacrifice.");
+                    // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
+                    // definitely somewhere after scores. Rest of the order is not yet known
+                    eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                    eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                    eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
+                } else {
+                    // Seems like order was changed in s19
+                    eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                    eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                    eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
+                    eb.push_scores(scores, "advances on the sacrifice.");
+                }
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)

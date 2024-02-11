@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use crate::PeekableWithLogging;
 use std::sync::{Arc, Mutex};
 use itertools::Itertools;
+use nom::combinator::opt;
 use nom::Parser;
 use serde::Deserialize;
 // the second one is a macro
@@ -380,7 +381,7 @@ pub fn parse_next_event(
             if is_successful {
                 let runner_id = event.next_player_id()?;
 
-                let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+                let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
 
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
@@ -548,7 +549,7 @@ pub fn parse_next_event(
             // Order matters
             let pitch = event.parse_pitch()?;
             let (batter_name, fielder_name, hype_stadium_name) = event.next_parse(parse_flyout)?;
-            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let scores = event.parse_scores(" tags up and scores!")?;
@@ -577,15 +578,29 @@ pub fn parse_next_event(
         EventType::GroundOut => {
             let pitch = event.parse_pitch()?;
             match event.next_parse(parse_ground_out)? {
-                ParsedGroundOut::Simple { batter_name, fielder_name, hype_stadium_name } => {
+                ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
-                    let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
-                    let scores = event.parse_scores(" advances on the sacrifice.")?;
-                    // Damages definitely belong after scores and in this order but not sure if any
-                    // other events come in between
-                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
-                    let batter_item_damage = event.parse_item_damage(batter_name)?;
-                    let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+                    let hype = event.parse_hype()?;
+                    // I can't think of a less ugly way to handle different ordering
+                    let (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage) = if event.season < 18 {
+                        let scores = event.parse_scores(" advances on the sacrifice.")?;
+                        // Damages definitely belong after scores and in this order but not sure if any
+                        // other events come in between
+                        let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
+                        let batter_item_damage = event.parse_item_damage(batter_name)?;
+                        let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+
+                        (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage)
+                    } else {
+                        // It seems like this was reordered in s19 so damage is before scores
+                        let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
+                        let batter_item_damage = event.parse_item_damage(batter_name)?;
+                        let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+
+                        let scores = event.parse_scores(" advances on the sacrifice.")?;
+
+                        (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage)
+                    };
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
@@ -605,7 +620,7 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base, hype_stadium_name } => {
-                    let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+                    let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!")?;
@@ -700,7 +715,7 @@ pub fn parse_next_event(
                 assert!(hype_stadium_name.is_none());
                 hype_stadium_name = Some(name);
             }
-            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
@@ -755,7 +770,7 @@ pub fn parse_next_event(
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
-            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
