@@ -328,9 +328,16 @@ pub(crate) struct ParsedAttraction<'a> {
 
 pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
-        let (input, scorers) = many0(parse_score(score_label, extra_space)).parse(input)?;
+        let (input, mut scorers) = many0(parse_score(score_label, extra_space)).parse(input)?;
 
-        let (input, attractions) = many0(parse_attraction).parse(input)?;
+        let (mut input, attractions) = many0(parse_attraction).parse(input)?;
+
+        // Fill in hotel_motel_parties, which were defaulted to false
+        for scorer in &mut scorers {
+            let (i, party) = opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
+            scorer.hotel_motel_party = party.is_some();
+            input = i;
+        }
 
         Ok((input, (scorers, attractions)))
     }
@@ -350,12 +357,10 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl 
             (input, (None, name))
         };
 
-        let (input, party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
-
         Ok((input, ParsedScore {
             damaged_item_name,
             player_name,
-            hotel_motel_party: party.is_some(),
+            hotel_motel_party: false, // Filled in later in a subsequent loop
         }))
     }
 }

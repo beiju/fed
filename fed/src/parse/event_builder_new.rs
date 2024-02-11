@@ -244,25 +244,25 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_named_item_damage(&mut self, item_damage: Option<(String, ItemDamaged)>) {
+    pub fn push_named_item_damage(&mut self, item_damage: Option<(&str, &ItemDamaged)>) {
         if let Some((player_name, dmg)) = item_damage {
-            self.push_item_damage_impl(dmg, &player_name);
+            self.push_item_damage(dmg, player_name);
         }
     }
 
-    pub fn push_named_item_damages(&mut self, item_damages: impl IntoIterator<Item=(String, ItemDamaged)>) {
+    pub fn push_named_item_damages<'a>(&mut self, item_damages: impl IntoIterator<Item=(&'a str, &'a ItemDamaged)>) {
         for (player_name, dmg) in item_damages {
-            self.push_item_damage_impl(dmg, &player_name);
+            self.push_item_damage(dmg, player_name);
         }
     }
 
-    pub fn push_item_damage(&mut self, item_damage: Option<ItemDamaged>, player_name: &str) {
-        if let Some(dmg) = item_damage {
-            self.push_item_damage_impl(dmg, player_name);
+    pub fn push_opt_item_damage(&mut self, dmg: Option<&ItemDamaged>, player_name: &str) {
+        if let Some(d) = dmg {
+            self.push_item_damage(d, player_name)
         }
     }
 
-    fn push_item_damage_impl(&mut self, dmg: ItemDamaged, player_name: &str) {
+    pub fn push_item_damage(&mut self, dmg: &ItemDamaged, player_name: &str) {
         let description = format!("{}{} {dmg}",
                                   // bug-for-bug compatibility :)
                                   if (self.0.season, self.0.day) < (15, 3) { " " } else { "" },
@@ -279,8 +279,8 @@ impl EventBuilder {
             child.push_metadata_i64("itemHealthAfter", dmg.health);
             child.push_metadata_i64("itemHealthBefore", dmg.health + 1);
             child.push_metadata_uuid("itemId", dmg.item_id);
-            child.push_metadata_str("itemName", dmg.item_name);
-            child.push_metadata_str_vec("mods", dmg.item_mods);
+            child.push_metadata_str("itemName", &dmg.item_name);
+            child.push_metadata_str_vec("mods", dmg.item_mods.clone());
             child.push_metadata_f64_opt("playerItemRatingAfter", dmg.player_item_rating_after);
             child.push_metadata_f64_opt("playerItemRatingBefore", dmg.player_item_rating_before);
             child.push_metadata_f64("playerRating", dmg.player_rating);
@@ -340,7 +340,7 @@ impl EventBuilder {
         self.push_free_refills(scores.free_refills);
     }
 
-    pub fn push_attraction(&mut self, attraction: Attraction, player_name: &str, player_id: Uuid) {
+    pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
         self.push_description(&format!("The {} Attract {player_name}!", attraction.team_nickname));
         self.push_child(attraction.sub_event, |mut child| {
@@ -351,10 +351,10 @@ impl EventBuilder {
             child.push_metadata_uuid("playerId", player_id);
             child.push_metadata_str("playerName", player_name);
             child.push_metadata_uuid("teamId", attraction.team_id);
-            child.push_metadata_str("teamName", attraction.team_nickname);
+            child.push_metadata_str("teamName", &attraction.team_nickname);
             child.build(EventType::PlayerAddedToTeam)
         });
-        if let Some(boost) = attraction.boost {
+        if let Some(boost) = &attraction.boost {
             self.push_child(boost.sub_event, |mut child| {
                 child.push_description(&format!("{player_name} entered the Shadows."));
                 child.push_player_tag(player_id);
@@ -364,15 +364,14 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: Option<PlayerBoostSubEventWithTeam>, player_name: &str, player_id: Uuid) {
-        let Some(party) = hotel_motel_party else { return; };
+    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: &PlayerBoostSubEventWithTeam, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
         let description = format!("{player_name} is Partying!");
         self.push_description(&description);
-        self.push_child(party.sub_event, |mut child| {
+        self.push_child(hotel_motel_party.sub_event, |mut child| {
             child.push_description(&description);
             child.push_player_tag(player_id);
-            child.build_boost_with_team(party)
+            child.build_boost_with_team(hotel_motel_party)
         })
     }
 
@@ -394,20 +393,26 @@ impl EventBuilder {
     }
 
     pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, score_label: &str) {
-        // This is my lazy way of dealing with the move into the for loop
-        let mut attractions = Vec::new();
-        for scorer in scorers {
+        // Base scores
+        for scorer in &scorers {
             self.push_player_tag(scorer.player_id);
-            self.push_item_damage(scorer.item_damage, &scorer.player_name);
-            self.push_description(&format!("{} {score_label}", scorer.player_name));
-            self.push_hotel_motel_party(scorer.hotel_motel_party, &scorer.player_name, scorer.player_id);
-            if let Some(attraction) = scorer.attraction {
-                attractions.push((attraction, scorer.player_name, scorer.player_id));
+            if let Some(damage) = &scorer.item_damage {
+                self.push_item_damage(damage, &scorer.player_name);
             }
+            self.push_description(&format!("{} {score_label}", scorer.player_name));
         }
         // Attractions happen in a block after the scores block
-        for (attraction, player_name, player_id) in attractions {
-            self.push_attraction(attraction, &player_name, player_id);
+        for scorer in &scorers {
+            if let Some(attraction) = &scorer.attraction {
+                self.push_attraction(attraction, &scorer.player_name, scorer.player_id);
+            }
+        }
+        // Hotel motel parties happen in a block after the scores block (not sure of order w/r/t
+        // attractions)
+        for scorer in &scorers {
+            if let Some(party) = &scorer.hotel_motel_party {
+                self.push_hotel_motel_party(party, &scorer.player_name, scorer.player_id)
+            }
         }
     }
 
@@ -547,7 +552,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hotel_motel(&mut self, parties: Vec<HotelMotelScoringPlayer>) {
+    pub fn push_hotel_motel(&mut self, parties: &[HotelMotelScoringPlayer]) {
         for party in parties {
             let description = format!("{} is Partying!", party.player_name);
             self.push_description(&description);
@@ -556,7 +561,7 @@ impl EventBuilder {
                 child.push_description(&description);
                 child.push_player_tag(party.player_id);
                 child.push_team_tag(party.team_id);
-                child.build_boost(party.boost)
+                child.build_boost(&party.boost)
             });
         }
     }
@@ -664,11 +669,11 @@ impl EventBuilder {
         })
     }
 
-    pub fn build_boost(self, boost: PlayerBoostSubEvent) -> EventuallyEvent {
+    pub fn build_boost(self, boost: &PlayerBoostSubEvent) -> EventuallyEvent {
         self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }
 
-    pub fn build_boost_with_team(mut self, boost: PlayerBoostSubEventWithTeam) -> EventuallyEvent {
+    pub fn build_boost_with_team(mut self, boost: &PlayerBoostSubEventWithTeam) -> EventuallyEvent {
         self.push_team_tag(boost.team_id);
         self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }

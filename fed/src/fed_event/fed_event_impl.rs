@@ -287,7 +287,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("Ball. {}-{}", balls, strikes));
-                eb.push_named_item_damage(batter_item_damage);
+                // I think this conversion should be implicit but the compiler disagrees
+                eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Ball)
             }
             FedEventData::StrikeSwinging { game, pitch, balls, strikes, pitcher_item_damage } => {
@@ -297,7 +298,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("Strike{}, swinging. {balls}-{strikes}",
                                              if is_double_strike { "s" } else { "" }));
-                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
             FedEventData::StrikeLooking { game, pitch, balls, strikes, pitcher_item_damage } => {
@@ -305,7 +306,7 @@ impl FedEvent {
                 if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("Strike, looking. {balls}-{strikes}"));
-                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
             FedEventData::StrikeFlinching { game, pitch, balls, strikes, pitcher_item_damage } => {
@@ -313,7 +314,7 @@ impl FedEvent {
                 if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("Strike, flinching. {balls}-{strikes}"));
-                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
             FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds } => {
@@ -326,7 +327,7 @@ impl FedEvent {
                 };
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{foul_ball_text}. {balls}-{strikes}"));
-                eb.push_named_item_damage(batter_item_damage);
+                eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
             }
@@ -337,9 +338,9 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a flyout to {fielder_name}."));
                 eb.push_hype(hype, home_team_id);
-                eb.push_item_damage(batter_item_damage, &batter_name);
-                eb.push_item_damage(fielder_item_damage, &fielder_name);
-                eb.push_named_item_damage(other_player_item_damage);
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
+                eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_scores(scores, "tags up and scores!");
                 eb.push_stopped_inhabiting(stopped_inhabiting);
@@ -370,8 +371,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.push_pitch(pitch);
                 eb.set_category(EventCategory::special_if(is_special));
-                eb.push_named_item_damage(pitcher_item_damage);
-                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_description(&format!("{batter_name} hits a {hit_type}!"));
                 eb.push_player_tag(batter_id);
                 match hit_type {
@@ -387,7 +388,7 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_scores(scores, "scores!");
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
-                eb.push_named_item_damage(other_player_item_damage);
+                eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
 
                 eb.build(EventType::Hit)
             }
@@ -396,7 +397,7 @@ impl FedEvent {
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
                 eb.push_pitch(pitch);
-                eb.push_named_item_damages(damaged_items);
+                eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_magmatic(magmatic, &batter_name, batter_id);
                 eb.push_hype(hype, home_team_id); // Not sure about ordering yet
 
@@ -404,7 +405,7 @@ impl FedEvent {
                 eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
                 eb.push_player_tag(batter_id);
 
-                eb.push_hotel_motel(hotel_motel_parties);
+                eb.push_hotel_motel(&hotel_motel_parties);
 
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
@@ -428,9 +429,9 @@ impl FedEvent {
                 eb.push_scores(scores, "advances on the sacrifice.");
                 // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
                 // definitely somewhere after scores. Rest of the order is not yet known
-                eb.push_named_item_damage(pitcher_item_damage);
-                eb.push_item_damage(batter_item_damage, &batter_name);
-                eb.push_item_damage(fielder_item_damage, &fielder_name);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
@@ -469,7 +470,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out swinging.", batter_name));
-                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
@@ -480,7 +481,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out looking.", batter_name));
-                eb.push_named_item_damage(pitcher_item_damage);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
@@ -495,7 +496,7 @@ impl FedEvent {
                     eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
                 }
                 eb.push_player_tag(batter_id);
-                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_scores(scores, "scores!");
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Walk)
@@ -503,7 +504,7 @@ impl FedEvent {
             FedEventData::CaughtStealing { game, runner_name, base_stolen, fielder_item_damage } => {
                 eb.set_game(game);
                 eb.push_description(&format!("{runner_name} gets caught stealing {base_stolen} base."));
-                eb.push_named_item_damage(fielder_item_damage);
+                eb.push_named_item_damage(fielder_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::StolenBase)
             }
             FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
@@ -538,7 +539,7 @@ impl FedEvent {
                 eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_scorers(scores.scores, "scores!");
-                eb.push_named_item_damages(damaged_items);
+                eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
                 eb.push_free_refills(scores.free_refills);
                 eb.push_cooled_off(cooled_off, &batter_name);
@@ -991,8 +992,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
-                eb.push_item_damage(pitcher_item_damage, &pitcher_name);
-                eb.push_item_damage(batter_item_damage, &batter_name);
+                eb.push_opt_item_damage(pitcher_item_damage.as_ref(), &pitcher_name);
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_description(&format!("{batter_name} charms {pitcher_name}!"));
                 eb.push_description(&format!("{batter_name} walks to first base."));
                 eb.push_player_tag(batter_id);
@@ -1159,7 +1160,7 @@ impl FedEvent {
                             child.push_description(&format!("The LCD Soundsystem boosted {}!", player.player_name));
                             child.push_player_tag(player.player_id);
                             child.push_team_tag(player.team_id);
-                            child.build_boost(lcd)
+                            child.build_boost(&lcd)
                         });
                     }
                 }
