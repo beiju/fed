@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, WonPrizeMatchEventVariants, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -715,62 +715,96 @@ impl FedEvent {
                 //     .child(child)
                 //     .build()
             }
-            FedEventData::SpecialBlooddrain { ref game, sipper_id, ref sipper_name, sipped_id, sipped_team_id, ref sipped_name, sipped_category, ref action, ref sipped_event, rating_before, rating_after } => {
-                let child = EventBuilderChild::new(sipped_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::PlayerStatDecrease,
-                        category: EventCategory::Changes,
-                        description: format!("{sipped_name} had blood drained by {sipper_name}."),
-                        team_tags: vec![sipped_team_id],
-                        player_tags: vec![sipped_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "type": sipped_category as i64, // ?
-                        "before": rating_before,
-                        "after": rating_after,
-                    }));
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BlooddrainSiphon,
-                        category: EventCategory::Special,
-                        description: format!("The Blooddrain gurgled!\n{sipper_name}'s Siphon activates!\n{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!\n{sipper_name} {action}"),
-                        player_tags: vec![sipper_id, sipped_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+            FedEventData::SpecialBlooddrain { game, sipper_id, sipper_name, sipped_id, sipped_team_id, sipped_name, sipped_category, action, sipped_event, rating_before, rating_after, maintenance_mode } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Blooddrain gurgled!");
+                eb.push_description(&format!("{sipper_name}'s Siphon activates!"));
+                eb.push_description(&format!("{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!"));
+                eb.push_description(&format!("{sipper_name} {action}"));
+                eb.push_player_tag(sipper_id);
+                eb.push_player_tag(sipped_id);
+
+
+                eb.push_child(sipped_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.push_description(&format!("{sipped_name} had blood drained by {sipper_name}."));
+                    child_eb.push_team_tag(sipped_team_id);
+                    child_eb.push_player_tag(sipped_id);
+                    child_eb.push_metadata_i64("type", sipped_category);
+                    child_eb.push_metadata_f64("before", rating_before);
+                    child_eb.push_metadata_f64("after", rating_after);
+                    child_eb.build(EventType::PlayerStatDecrease)
+                });
+
+                if let Some(mm) = maintenance_mode {
+                    eb.push_child(mm, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Changes);
+                        child_eb.push_description("Impairment Detected. Entering Maintenance Mode.");
+                        child_eb.push_team_tag(sipped_team_id);
+                        child_eb.push_metadata_i64("type", ModDuration::Game);
+                        child_eb.push_metadata_str("mod", "EXTRA_OUT");
+                        child_eb.build(EventType::AddedMod)
+                    });
+                }
+
+                eb.build(EventType::BlooddrainSiphon)
             }
             FedEventData::PlayerModExpires { team_id, player_id, player_name, mods, mod_duration } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::ModExpires,
-                        category: EventCategory::Changes,
-                        description: format!("{} {} mods wore off.", possessive(player_name), mod_duration.to_string()),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mods": mods,
-                        "type": mod_duration as i32
-                    }))
-                    .build()
+                let mod_ids: Vec<_> = mods.iter()
+                    .map(|removal| removal.mod_id.clone())
+                    .collect();
+
+                let mut events: Vec<_> = mods.into_iter()
+                    .filter_map(|r| r.dependent_mod_removal
+                        .map(|mod_removal| {
+                            let mut child_eb = eb.connected_event(mod_removal.event);
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(&mod_removal.format_description_player(&player_name));
+                            child_eb.push_player_tag(player_id);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_metadata_json("removes", mod_removal.mods_removed.into());
+                            child_eb.push_metadata_str("source", r.mod_id);
+                            child_eb.build(EventType::RemovedModsFromAnotherMod)
+                        })
+                    )
+                    .collect();
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{} {mod_duration} mods wore off.", possessive(player_name)));
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_str_vec("mods", mod_ids);
+                eb.push_metadata_i64("type", mod_duration);
+                events.push(eb.build(EventType::ModExpires));
+
+                return events;
             }
             FedEventData::TeamModExpires { team_id, team_nickname, mods, mod_duration } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::ModExpires,
-                        category: EventCategory::Changes,
-                        description: format!("The {} {mod_duration} mods wore off.", possessive(team_nickname)),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mods": mods,
-                        "type": mod_duration as i32
-                    }))
-                    .build()
+                let mod_ids: Vec<_> = mods.iter()
+                    .map(|removal| removal.mod_id.clone())
+                    .collect();
+
+                let mut events: Vec<_> = mods.into_iter()
+                    .filter_map(|r| r.dependent_mod_removal
+                        .map(|mod_removal| {
+                            let mut child_eb = eb.connected_event(mod_removal.event);
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(&mod_removal.format_description_team(&team_nickname));
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_metadata_json("removes", mod_removal.mods_removed.into());
+                            child_eb.push_metadata_str("source", r.mod_id);
+                            child_eb.build(EventType::RemovedModsFromAnotherMod)
+                        })
+                    )
+                    .collect();
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("The {} {mod_duration} mods wore off.", possessive(team_nickname)));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str_vec("mods", mod_ids);
+                eb.push_metadata_i64("type", mod_duration);
+                events.push(eb.build(EventType::ModExpires));
+
+                return events;
             }
             FedEventData::BirdsCircle { game } => {
                 event_builder.for_game(&game)
@@ -984,32 +1018,43 @@ impl FedEvent {
                     .children(vec![child])
                     .build()
             }
-            FedEventData::AllergicReaction { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::PlayerStatDecrease,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} had an allergic reaction."),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "type": 4, // ?
-                        "before": rating_before,
-                        "after": rating_after,
-                    }));
+            FedEventData::AllergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{player_name} swallowed a stray peanut and had an allergic reaction!"));
+                eb.push_player_tag(player_id);
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AllergicReaction,
-                        category: EventCategory::Special,
-                        description: format!("{player_name} swallowed a stray peanut and had an allergic reaction!"),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.push_description(&format!("{player_name} had an allergic reaction."));
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_metadata_i64("type", 4);
+                    child_eb.push_metadata_f64("before", rating_before);
+                    child_eb.push_metadata_f64("after", rating_after);
+                    child_eb.build(EventType::PlayerStatDecrease)
+                });
+
+                eb.build(EventType::AllergicReaction)
+            }
+            FedEventData::SuperallergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{player_name} swallowed a stray peanut and had a Superallergic reaction!"));
+                eb.push_player_tag(player_id);
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.push_description(&format!("{player_name} had a Superallergic reaction."));
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_metadata_i64("type", 4);
+                    child_eb.push_metadata_f64("before", rating_before);
+                    child_eb.push_metadata_f64("after", rating_after);
+                    child_eb.build(EventType::PlayerStatDecreaseFromSuperallergic)
+                });
+
+                eb.build(EventType::SuperallergicReaction)
             }
             FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores } => {
                 event_builder.for_game(game)
@@ -1266,21 +1311,36 @@ impl FedEvent {
                     .metadata(metadata)
                     .build()
             }
-            FedEventData::TarotReadingAddedOrRemovedMod { team_id, player_id, description, r#mod, mod_duration, mod_removed } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: if mod_removed { EventType::RemovedMod } else { EventType::AddedMod },
-                        category: EventCategory::Changes,
-                        description,
-                        team_tags: vec![team_id],
-                        player_tags: player_id.into_iter().collect(),
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": r#mod,
-                        "type": mod_duration as i64,
-                    }))
-                    .build()
+            FedEventData::TarotReadingAddedOrRemovedMod { team_id, player_id, description, r#mod, mod_duration, mod_removed, mods_removed_from_other_mod } => {
+                let mut events = Vec::new();
+
+                if let Some(from_other_mod) = mods_removed_from_other_mod {
+                    let mut other_eb = eb.connected_event(from_other_mod.event);
+                    other_eb.set_category(EventCategory::Changes);
+                    other_eb.push_team_tag(team_id);
+                    if let Some(pid) = player_id { other_eb.push_player_tag(pid); }
+                    other_eb.push_description(&from_other_mod.format_description());
+                    let removes: Vec<_> = from_other_mod.mods_removed.iter()
+                        .map(|mod_desc| json!({ "type": mod_desc.mod_duration as i64, "mod": mod_desc.mod_id }))
+                        .collect();
+                    other_eb.push_metadata_json_vec("removes", removes);
+                    other_eb.push_metadata_str("source", &r#mod);
+                    events.push(other_eb.build(EventType::RemovedModsFromAnotherMod));
+                }
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&description);
+                eb.push_team_tag(team_id);
+                if let Some(pid) = player_id { eb.push_player_tag(pid); }
+                eb.push_metadata_str("mod", r#mod);
+                eb.push_metadata_i64("type", mod_duration);
+                events.push(eb.build(if mod_removed { EventType::RemovedMod } else { EventType::AddedMod }));
+
+                // This is not the most elegant way to do this
+                events.reverse();
+
+                // Bypass the code that makes a single-event vec since we have multiple events
+                return events;
             }
             FedEventData::BecomeTripleThreat { ref game, ref pitchers } => {
                 let children = pitchers.iter()
@@ -1816,7 +1876,7 @@ impl FedEvent {
                 hatch_eb.push_player_tag(postseason_birth_id);
                 hatch_eb.push_metadata_uuid("id", postseason_birth_id);
                 let hatch_event = hatch_eb.build(EventType::PlayerHatched);
-                
+
                 let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
                 birth_eb.set_category(EventCategory::Changes);
                 birth_eb.push_description(&format!("The {team_nickname} earn a Postseason Birth!"));
@@ -2482,9 +2542,7 @@ impl FedEvent {
                         eb.push_description(&format!("{player_name} DEFENDS\n"));
                         eb.push_description(&format!("{} {}",
                                                      damage.item_name.to_ascii_uppercase(),
-                                                     if damage.health > 0 { "DAMAGED" }
-                                                     else if damage.item_name.ends_with('s') { "BREAK" }
-                                                     else { "BREAKS" }));
+                                                     if damage.health > 0 { "DAMAGED" } else if damage.item_name.ends_with('s') { "BREAK" } else { "BREAKS" }));
                         let description = eb.description().to_string();
                         eb.push_child(damage.sub_event, |mut child| {
                             child.set_description(description);
@@ -2851,27 +2909,38 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_nickname, new_team_id, new_team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::PlayerMoved,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} wandered to a new team."),
-                        player_tags: vec![player_id],
-                        team_tags: vec![previous_team_id, new_team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "location": location as i64,
-                        "playerId": player_id,
-                        "playerName": player_name,
-                        "receiveLocation": location as i64,
-                        "receiveTeamId": new_team_id,
-                        "receiveTeamName": new_team_nickname,
-                        "sendTeamId": previous_team_id,
-                        "sendTeamName": previous_team_nickname,
-                    }))
-                    .build()
+            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_nickname, new_team_id, new_team_nickname, good_riddance_parties } => {
+                let mut events = Vec::with_capacity(good_riddance_parties.len() + 1);
+
+                for party in good_riddance_parties {
+                    let mut party_eb = eb.connected_event(party.sub_event);
+                    party_eb.set_category(EventCategory::Changes);
+                    party_eb.push_description(&format!("{} is Partying!", party.player_name));
+                    party_eb.push_player_tag(party.player_id);
+                    party_eb.push_team_tag(previous_team_id);
+                    party_eb.push_metadata_f64("before", party.rating_before);
+                    party_eb.push_metadata_f64("after", party.rating_after);
+                    party_eb.push_metadata_i64("type", 4); // "all categories"
+                    events.push(party_eb.build(EventType::PlayerStatIncrease));
+                }
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name} {} to a new team.",
+                                             if self.season < 17 { "wandered" } else { "roamed" }));
+                eb.push_player_tag(player_id);
+                eb.push_team_tag(previous_team_id);
+                eb.push_team_tag(new_team_id);
+                eb.push_metadata_i64("location", location);
+                eb.push_metadata_uuid("playerId", player_id);
+                eb.push_metadata_str("playerName", player_name);
+                eb.push_metadata_i64("receiveLocation", location);
+                eb.push_metadata_uuid("receiveTeamId", new_team_id);
+                eb.push_metadata_str("receiveTeamName", new_team_nickname);
+                eb.push_metadata_uuid("sendTeamId", previous_team_id);
+                eb.push_metadata_str("sendTeamName", previous_team_nickname);
+                events.insert(0, eb.build(EventType::PlayerMoved));
+
+                return events;
             }
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);
@@ -3099,10 +3168,10 @@ impl FedEvent {
             FedEventData::WonPrizeMatch { team_nickname_or_player_name, team_id, player_id, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating } => {
                 eb.set_category(EventCategory::Changes);
                 match team_nickname_or_player_name {
-                    WonPrizeMatchEventVariants::WithTeamNickname(team_nickname) => {
+                    TeamNicknameOrPlayerName::TeamNickname(team_nickname) => {
                         eb.push_description(&format!("The {team_nickname} won the Prize Match!"));
                     }
-                    WonPrizeMatchEventVariants::WithPlayerName(player_name) => {
+                    TeamNicknameOrPlayerName::PlayerName(player_name) => {
                         eb.push_description(&format!("{player_name} gained the Prized {item_name}."));
                     }
                 }
@@ -3133,6 +3202,28 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.set_full_metadata(metadata);
                 eb.build(EventType::BlessingOrGiftWon)
+            }
+            FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event } => {
+                let mut dust_eb = eb.connected_event(mod_added_event);
+                dust_eb.set_category(EventCategory::Changes);
+                dust_eb.push_description(&format!("{player_name} faded to dust."));
+                dust_eb.push_team_tag(team_id);
+                dust_eb.push_player_tag(player_id);
+                dust_eb.push_metadata_str("mod", "DUST");
+                dust_eb.push_metadata_i64("type", ModDuration::Permanent);
+                let dust_add_event = dust_eb.build(EventType::AddedMod);
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name} faded away from the {team_nickname}."));
+                eb.push_team_tag(team_id);
+                eb.push_player_tag(player_id);
+                eb.push_metadata_uuid("playerId", player_id);
+                eb.push_metadata_str("playerName", player_name);
+                eb.push_metadata_uuid("teamId", team_id);
+                eb.push_metadata_str("teamName", team_nickname);
+                let main_event = eb.build(EventType::PlayerRemovedFromTeam);
+
+                return vec![main_event, dust_add_event];
             }
         };
 

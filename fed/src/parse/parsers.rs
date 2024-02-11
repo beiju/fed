@@ -849,6 +849,12 @@ pub(crate) fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
+pub(crate) fn parse_superallergic_reaction(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" swallowed a stray peanut and had a Superallergic reaction!").parse(input)?;
+
+    Ok((input, player_name))
+}
+
 pub(crate) fn parse_feedback(input: &str) -> ParserResult<(&str, &str, Option<&str>, ActivePositionType)> {
     let (input, _) = tag("Reality flickers. Things look different ...\n").parse(input)?;
     let (input, player1_name) = parse_terminated(" and ").parse(input)?;
@@ -1649,7 +1655,9 @@ pub(crate) enum ParsedPlayerMoved<'a> {
 pub(crate) fn parse_player_moved(input: &str) -> ParserResult<ParsedPlayerMoved> {
     alt((
         parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)),
+        // It was "wandered" up through season 17, then it changed to "roamed"
         parse_terminated(" wandered to a new team.").map(|n| ParsedPlayerMoved::Roamin(n)),
+        parse_terminated(" roamed to a new team.").map(|n| ParsedPlayerMoved::Roamin(n)),
     )).parse(input)
 }
 
@@ -1789,11 +1797,31 @@ pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) enum ParsedName<'a> {
+    Player(&'a str),
+    Team(&'a str),
+}
+
+pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(ParsedName, &str)> {
+    alt((
+        parse_player_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Player(n), m)),
+        parse_team_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Team(n), m)),
+    )).parse(input)
+}
+
+pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
     let (input, player_name) = parse_terminated("'s mods caused by ").parse(input)?;
     let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
 
     Ok((input, (player_name, mod_name)))
+}
+
+pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_name) = parse_terminated("' mods caused by ").parse(input)?;
+    let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
+
+    Ok((input, (team_name, mod_name)))
 }
 
 pub(crate) fn parse_subseasonal_mod_changes(input: &str) -> ParserResult<Vec<(&str, SubseasonalMod, bool)>> {
@@ -2004,4 +2032,10 @@ pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_coasting(input: &str) -> ParserResult<Vec<&str>> {
     separated_list1(tag("\n"), parse_terminated(" is Coasting.")).parse(input)
+}
+
+pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" faded away from the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(".").parse(input)?;
+    Ok((input, (player_name, team_nickname)))
 }

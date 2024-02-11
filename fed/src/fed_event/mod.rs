@@ -568,6 +568,10 @@ pub struct SubseasonalModChange {
     /// (the game only generates a sub-event if the mod actually changed). For those events, this
     /// will be null.
     pub sub_event: Option<SubEvent>,
+
+    /// If this mod change caused a dependent mod to be removed, this is the information about that
+    /// mod removal.
+    pub dependent_mod_change: Option<ModsFromAnotherModRemoved>,
 }
 
 impl SpicyStatus {
@@ -1360,6 +1364,15 @@ pub struct ModDesc {
     pub mod_duration: ModDuration,
 }
 
+impl Into<serde_json::Value> for ModDesc {
+    fn into(self) -> serde_json::Value {
+        serde_json::json!({
+            "mod": self.mod_id,
+            "type": self.mod_duration as i64,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HitType {
@@ -1527,9 +1540,9 @@ pub struct NamedPlayerBoostSubEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
-pub enum WonPrizeMatchEventVariants {
-    WithTeamNickname(String),
-    WithPlayerName(String),
+pub enum TeamNicknameOrPlayerName {
+    TeamNickname(String),
+    PlayerName(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1544,6 +1557,66 @@ pub enum PostseasonBirthBoostEventOrder {
     AfterHatch,
     AfterBirth,
     AfterEarnedSlot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ModsFromAnotherModRemoved {
+    /// List of mods that were removed
+    pub mods_removed: Vec<ModDesc>,
+
+    /// Name of the mod that had originally added the removed mods. It's implied that this mod
+    /// was just removed, which caused these others to be removed as well.
+    pub source_mod_name: String,
+
+    /// Metadata for the mod-added/removed-from-other-mod event
+    pub event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ModsFromAnotherModRemovedWithName {
+    /// Name of the player or team who lost the mod(s)
+    pub name: TeamNicknameOrPlayerName,
+
+    /// List of mods that were removed
+    pub mods_removed: Vec<ModDesc>,
+
+    /// Name of the mod that had originally added the removed mods. It's implied that this mod
+    /// was just removed, which caused these others to be removed as well.
+    pub source_mod_name: String,
+
+    /// Metadata for the mod-added/removed-from-other-mod event
+    pub event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ModRemoval {
+    /// Internal ID of the mod that was removed
+    pub mod_id: String,
+
+    /// If this mod change caused a dependent mod to be removed, this is the information about that
+    /// mod removal.
+    pub dependent_mod_removal: Option<ModsFromAnotherModRemoved>,
+
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct GoodRiddanceParty {
+    /// Uuid of player who partied
+    pub player_id: Uuid,
+
+    /// Name of player who partied
+    pub player_name: String,
+
+    /// Metadata for sub-event associated with player stat change
+    pub sub_event: SubEvent,
+
+    /// Player's rating before the party
+    ///
+    /// TODO I think SIBR figured out how this rating works. Look that up
+    pub rating_before: f64,
+
+    /// Player's rating after the party
+    pub rating_after: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -2414,6 +2487,9 @@ pub enum FedEventData {
 
         /// Player's rating after the stats changed
         rating_after: f64,
+
+        /// If maintenance mode activated, contains metadata about that event. Otherwise null.
+        maintenance_mode: Option<SubEvent>,
     },
 
     /// Mod expired after set time period (game, week, or season)
@@ -2429,7 +2505,7 @@ pub enum FedEventData {
         player_name: String,
 
         /// The mod(s) that were removed
-        mods: Vec<String>,
+        mods: Vec<ModRemoval>,
 
         /// Duration after which the mod(s) were removed (game, week, or season)
         mod_duration: ModDuration,
@@ -2445,7 +2521,7 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// The mod(s) that were removed
-        mods: Vec<String>,
+        mods: Vec<ModRemoval>,
 
         /// Duration after which the mod(s) were removed (game, week, or season)
         mod_duration: ModDuration,
@@ -2657,6 +2733,31 @@ pub enum FedEventData {
         rating_after: f64,
     },
 
+    /// Player suffered a Superallergic reaction
+    #[serde(rename_all = "camelCase")]
+    SuperallergicReaction {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the team of the player who suffered the allergic reaction
+        team_id: Uuid,
+
+        /// Uuid of the player who suffered the allergic reaction
+        player_id: Uuid,
+
+        /// Name of the player who suffered the allergic reaction
+        player_name: String,
+
+        /// Metadata for the sub-event associated with the player stat change event
+        sub_event: SubEvent,
+
+        /// Player rating before the stat change
+        rating_before: f64,
+
+        /// Player rating after the stat change
+        rating_after: f64,
+    },
+
     /// Player perked up at start of game
     #[serde(rename_all = "camelCase")]
     PerkUp {
@@ -2764,6 +2865,9 @@ pub enum FedEventData {
 
         /// True if the mod was lost, false if it was gained
         mod_removed: bool,
+
+        /// If this mod removal caused other mods to be removed, this is that
+        mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>,
     },
 
     /// Team entered Party Time!
@@ -3471,6 +3575,7 @@ pub enum FedEventData {
     },
 
     /// Player lost a mod
+    // TODO: Can this be more specific?
     #[serde(rename_all = "camelCase")]
     PlayerLostMod {
         /// Team uuid of player who lost the mod
@@ -3905,6 +4010,9 @@ pub enum FedEventData {
 
         /// Nickname of player's new team
         new_team_nickname: String,
+
+        /// Parties as a result of the Good Riddance mod
+        good_riddance_parties: Vec<GoodRiddanceParty>
     },
 
     /// A shimmering Crate descends during Glitter weather
@@ -4261,7 +4369,7 @@ pub enum FedEventData {
         /// There are two formats for this event. In the first format, the nickname of team who won
         /// the Prize Match is mentioned, but not the player name. In the second, it's the reverse.
         // TODO: Serialize this as either team_nickname or player_name
-        team_nickname_or_player_name: WonPrizeMatchEventVariants,
+        team_nickname_or_player_name: TeamNicknameOrPlayerName,
 
         /// Uuid of team who won the Prize Match
         team_id: Uuid,
@@ -4319,6 +4427,25 @@ pub enum FedEventData {
 
         /// Event metadata exactly as it appears in the Feed event
         metadata: EventMetadata,
+    },
+
+    /// Replica player faded to dust at the end of the season
+    #[serde(rename_all = "camelCase")]
+    ReplicaFadedToDust {
+        /// Uuid of the team whose replica faded
+        team_id: Uuid,
+
+        /// Nickname of the team whose replica faded
+        team_nickname: String,
+
+        /// Uuid of the player who faded
+        player_id: Uuid,
+
+        /// Name of the player who faded
+        player_name: String,
+
+        /// Metadata for the associated ModAdded event for adding the Dust mod
+        mod_added_event: SubEvent,
     },
 }
 
@@ -4444,6 +4571,7 @@ impl FedEventData {
             FedEventData::CharmWalk { game, .. } => { Some(game) }
             FedEventData::GainFreeRefill { game, .. } => { Some(game) }
             FedEventData::AllergicReaction { game, .. } => { Some(game) }
+            FedEventData::SuperallergicReaction { game, .. } => { Some(game) }
             FedEventData::PerkUp { game, .. } => { Some(game) }
             FedEventData::Feedback { game, .. } => { Some(game) }
             FedEventData::BestowReverberating { game, .. } => { Some(game) }
@@ -4536,6 +4664,7 @@ impl FedEventData {
             FedEventData::WonPrizeMatch { .. } => { None }
             FedEventData::TeamReceivedGifts { .. } => { None }
             FedEventData::GiftReceived { .. } => { None }
+            FedEventData::ReplicaFadedToDust { .. } => { None }
         }
     }
 }

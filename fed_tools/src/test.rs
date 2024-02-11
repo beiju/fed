@@ -25,7 +25,6 @@ const SEASONS: [(&'static str, i64, i64); 7] = [
     ("thisidisstaticyo", 15, 377404),
     ("thisidisstaticyo", 16, 377163),
     ("thisidisstaticyo", 17, 365149),
-
     // ("thisidisstaticyo", 18, 397322),
     // ("thisidisstaticyo", 19, 411748),
     // ("thisidisstaticyo", 20, 401722),

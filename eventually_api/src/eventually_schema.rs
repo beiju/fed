@@ -343,6 +343,7 @@ pub enum EventType {
     Smithy = 195,
     PlayerSoulIncrease = 199,
     Announcement = 201,
+    Ratification = 203,
     RunsScored = 209,
     WinCollectedRegular = 214,
     WinCollectedPostseason = 215,

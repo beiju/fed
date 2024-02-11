@@ -5,9 +5,11 @@ mod parsers;
 pub mod stream;
 mod parse_wrapper;
 
+use std::collections::HashMap;
 use crate::PeekableWithLogging;
 use std::sync::{Arc, Mutex};
 use itertools::Itertools;
+use nom::Parser;
 use serde::Deserialize;
 // the second one is a macro
 use uuid::{Uuid, uuid};
@@ -58,14 +60,24 @@ pub struct PendingPrizeMatch {
 #[derive(Default)]
 pub struct InterEventState {
     pending_prize_matches: Mutex<Vec<PendingPrizeMatch>>,
+    // This is a map from (player/team uuid, source mod) to ModsFromAnotherModRemoved
+    // TODO: After the upcoming changes this should only ever have one (Uuid, String), so it should
+    //   be either a vec or option
+    pending_mod_removed_from_other_mod: Mutex<HashMap<(Uuid, String), ModsFromAnotherModRemoved>>,
 }
 
 impl InterEventState {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn extract_dependent_mod(&self, key: &(Uuid, String)) -> Option<ModsFromAnotherModRemoved> {
+        let mut map = self.pending_mod_removed_from_other_mod.lock().unwrap();
+        map.remove(key)
+    }
 }
 
+// TODO now that each season gets its own thread, do I need a Sync version of this?
 #[derive(Default, Clone)]
 pub struct InterEventStateSync(Arc<InterEventState>);
 
@@ -110,6 +122,119 @@ impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T>
         }
     }
 }
+
+impl ModsFromAnotherModRemovedWithName {
+    pub fn from_event(event: &mut EventParseWrapper) -> Result<Self, FeedParseError> {
+        let (name, mod_name) = event.next_parse(parse_mods_from_other_mod_removed)?;
+
+        let mods_removed = event.get_metadata("removes")?
+            .as_array()
+            .ok_or_else(|| {
+                FeedParseError::MetadataTypeError {
+                    event_type: event.event_type,
+                    field: "removes".to_string(),
+                    ty: "array",
+                }
+            })?
+            .iter()
+            .enumerate()
+            .map(|(i, removes)| {
+                let obj = removes.as_object()
+                    .ok_or_else(|| {
+                        FeedParseError::MetadataTypeError {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}]"),
+                            ty: "object",
+                        }
+                    })?;
+
+                let mod_id = obj.get("mod")
+                    .ok_or_else(|| {
+                        FeedParseError::MissingMetadata {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}].mod"),
+                        }
+                    })?
+                    .as_str()
+                    .ok_or_else(|| {
+                        FeedParseError::MetadataTypeError {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}].mod"),
+                            ty: "str",
+                        }
+                    })?
+                    .to_string();
+
+                let mod_duration = obj.get("type")
+                    .ok_or_else(|| {
+                        FeedParseError::MissingMetadata {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}].type"),
+                        }
+                    })?
+                    .as_i64()
+                    .ok_or_else(|| {
+                        FeedParseError::MetadataTypeError {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}].type"),
+                            ty: "i64",
+                        }
+                    })?
+                    .try_into()
+                    .map_err(|err: <i64 as TryInto<ModDuration>>::Error| {
+                        FeedParseError::MetadataIntToEnumError {
+                            event_type: event.event_type,
+                            field: format!("removes[{i}].type"),
+                            err: err.to_string(),
+                        }
+                    })?;
+
+                ParseOk(ModDesc { mod_id, mod_duration })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            name: match name {
+                ParsedName::Player(n) => { TeamNicknameOrPlayerName::PlayerName(n.to_string()) }
+                ParsedName::Team(n) => { TeamNicknameOrPlayerName::TeamNickname(n.to_string()) }
+            },
+            mods_removed,
+            source_mod_name: mod_name.to_string(),
+            event: event.as_sub_event(),
+        })
+    }
+
+    pub fn format_description(&self) -> String {
+        match &self.name {
+            TeamNicknameOrPlayerName::TeamNickname(team_nickname) => {
+                format!("The {team_nickname}' mods caused by {} were removed.", self.source_mod_name)
+            }
+            TeamNicknameOrPlayerName::PlayerName(player_name) => {
+                format!("{player_name}'s mods caused by {} were removed.", self.source_mod_name)
+            }
+        }
+    }
+}
+
+impl ModsFromAnotherModRemoved {
+    pub fn from_event(event: &mut EventParseWrapper) -> Result<Self, FeedParseError> {
+        let with_name = ModsFromAnotherModRemovedWithName::from_event(event)?;
+        Ok(Self {
+            mods_removed: with_name.mods_removed,
+            source_mod_name: with_name.source_mod_name,
+            event: with_name.event,
+        })
+    }
+
+    pub fn format_description_player(&self, player_name: &str) -> String {
+        format!("{player_name}'s mods caused by {} were removed.", self.source_mod_name)
+    }
+
+    pub fn format_description_team(&self, team_nickname: &str) -> String {
+        format!("The {team_nickname}' mods caused by {} were removed.", self.source_mod_name)
+    }
+}
+
 
 pub fn parse_next_event(
     event_iter: &mut PeekableWithLogging<impl Iterator<Item=EventuallyEvent>>,
@@ -174,14 +299,19 @@ pub fn parse_next_event(
             let subseasonal_mod_effects = event.next_parse(parse_subseasonal_mod_changes)?.into_iter()
                 .map(|(team_nickname, source_mod, is_active)| {
                     let mut child = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+                    let team_id = child.next_team_id()?;
+
                     ParseOk(SubseasonalModChange {
                         subject: ModChangeSubject::Team {
-                            team_id: child.next_team_id()?,
+                            team_id,
                             team_nickname: Some(team_nickname.to_string()),
                         },
                         source_mod,
                         active: child.event_type == EventType::AddedModFromOtherMod,
                         sub_event: Some(child.as_sub_event()),
+                        // There's probably a way to get around the to_string here, but it's not
+                        // important enough to worry about
+                        dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -1065,7 +1195,21 @@ pub fn parse_next_event(
                 sub_event: sub_event.as_sub_event(),
             }
         }
-        EventType::SuperallergicReaction => { todo!() }
+        EventType::SuperallergicReaction => {
+            let player_name = event.next_parse(parse_superallergic_reaction)?;
+            let player_id = event.next_player_id()?;
+            let mut sub_event = event.next_child(EventType::PlayerStatDecreaseFromSuperallergic)?;
+            assert_eq!(player_id, sub_event.next_player_id()?);
+            FedEventData::SuperallergicReaction {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: sub_event.next_team_id()?,
+                player_id,
+                player_name: player_name.to_string(),
+                sub_event: sub_event.as_sub_event(),
+                rating_before: sub_event.metadata_f64("before")?,
+                rating_after: sub_event.metadata_f64("after")?,
+            }
+        }
         EventType::AllergicReaction => {
             let player_name = event.next_parse(parse_allergic_reaction)?;
             let player_id = event.next_player_id()?;
@@ -1258,6 +1402,8 @@ pub fn parse_next_event(
                     // These are in the opposite order for normal vs special blooddrains! fun!
                     let sipper_id = event.next_player_id()?;
                     let sipped_id = event.next_player_id()?;
+
+                    let mut maintenance_mode_event = event.next_child_opt(EventType::AddedMod)?;
                     FedEventData::SpecialBlooddrain {
                         game: event.game(unscatter, attractor_secret_base)?,
                         sipper_id,
@@ -1277,6 +1423,7 @@ pub fn parse_next_event(
                         sipped_event: stat_decrease_event.as_sub_event(),
                         rating_before: stat_decrease_event.metadata_f64("before")?,
                         rating_after: stat_decrease_event.metadata_f64("after")?,
+                        maintenance_mode: maintenance_mode_event.as_ref().map(EventParseWrapper::as_sub_event),
                     }
                 }
             }
@@ -1911,52 +2058,69 @@ pub fn parse_next_event(
                             assert!(is_known_team_nickname(team_nickname));
 
                             let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            let team_id = sub_event.next_team_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Team {
-                                    team_id: sub_event.next_team_id()?,
+                                    team_id,
                                     team_nickname: Some(team_nickname.to_string()),
                                 },
                                 source_mod: SubseasonalMod::Earlbirds,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: true,
+                                // There's probably a way to get around the to_string here, but it's not
+                                // important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
                             }
                         }
                         EarlbirdsChange::RemovedFromTeam => {
                             let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            let team_id = sub_event.next_team_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Team {
-                                    team_id: sub_event.next_team_id()?,
+                                    team_id,
                                     team_nickname: None,
                                 },
                                 source_mod: SubseasonalMod::Earlbirds,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: false,
+                                // There's probably a way to get around the to_string here, but it's not
+                                // important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
                             }
                         }
                         EarlbirdsChange::AddedToPlayer(player_name) => {
                             let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            let player_id = sub_event.next_player_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Player {
                                     team_id: sub_event.next_team_id()?,
-                                    player_id: sub_event.next_player_id()?,
+                                    player_id,
                                     player_name: player_name.to_string(),
                                 },
                                 source_mod: SubseasonalMod::Earlbirds,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: true,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
+
                             }
                         }
                         EarlbirdsChange::RemovedFromPlayer(player_name) => {
                             let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            let player_id = sub_event.next_player_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Player {
                                     team_id: sub_event.next_team_id()?,
-                                    player_id: sub_event.next_player_id()?,
+                                    player_id,
                                     player_name: player_name.to_string(),
                                 },
                                 source_mod: SubseasonalMod::Earlbirds,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: false,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
                             }
                         }
                     })
@@ -1977,20 +2141,25 @@ pub fn parse_next_event(
 
                             // In s13 there wasn't always a child
                             let mut sub_event = event.next_child_opt(EventType::AddedModFromOtherMod)?;
+                            let team_id = if let Some(se) = &mut sub_event {
+                                se.next_team_id()?
+                            } else {
+                                // This only ever happened to the firefighters, so...
+                                assert_eq!(team_nickname, "Firefighters");
+                                uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
+                            };
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Team {
-                                    team_id: if let Some(se) = &mut sub_event {
-                                        se.next_team_id()?
-                                    } else {
-                                        // This only ever happened to the firefighters, so...
-                                        assert_eq!(team_nickname, "Firefighters");
-                                        uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
-                                    },
+                                    team_id,
                                     team_nickname: Some(team_nickname.to_string()),
                                 },
                                 source_mod: SubseasonalMod::LateToTheParty,
                                 sub_event: sub_event.map(|s| s.as_sub_event()),
                                 active: true,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
+
                             }
                         }
                         LateToThePartyChange::RemovedFromTeam(team_nickname) => {
@@ -1998,46 +2167,58 @@ pub fn parse_next_event(
 
                             // In s13 there wasn't always a child
                             let mut sub_event = event.next_child_opt(EventType::RemovedModFromOtherMod)?;
+                            let team_id = if let Some(se) = &mut sub_event {
+                                se.next_team_id()?
+                            } else {
+                                // This only ever happened to the firefighters, so...
+                                assert_eq!(team_nickname, "Firefighters");
+                                uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
+                            };
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Team {
-                                    team_id: if let Some(se) = &mut sub_event {
-                                        se.next_team_id()?
-                                    } else {
-                                        // This only ever happened to the firefighters, so...
-                                        assert_eq!(team_nickname, "Firefighters");
-                                        uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
-                                    },
+                                    team_id,
                                     team_nickname: Some(team_nickname.to_string()),
                                 },
                                 source_mod: SubseasonalMod::LateToTheParty,
                                 sub_event: sub_event.map(|s| s.as_sub_event()),
                                 active: false,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
                             }
                         }
                         LateToThePartyChange::AddedToPlayer(player_name) => {
                             let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            let player_id = sub_event.next_player_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Player {
                                     team_id: sub_event.next_team_id()?,
-                                    player_id: sub_event.next_player_id()?,
+                                    player_id,
                                     player_name: player_name.to_string(),
                                 },
                                 source_mod: SubseasonalMod::LateToTheParty,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: true,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
                             }
                         }
                         LateToThePartyChange::RemovedFromPlayer(player_name) => {
                             let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
+                            let player_id = sub_event.next_player_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Player {
                                     team_id: sub_event.next_team_id()?,
-                                    player_id: sub_event.next_player_id()?,
+                                    player_id,
                                     player_name: player_name.to_string(),
                                 },
                                 source_mod: SubseasonalMod::LateToTheParty,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active: false,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
                             }
                         }
                     })
@@ -2053,7 +2234,7 @@ pub fn parse_next_event(
         EventType::AddedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully
-                make_mod_tarot_event(&mut event, false)?
+                make_mod_tarot_event(&mut event, false, None)?
             } else {
                 match event.next_parse(parse_added_mod)? {
                     ParsedAddedMod::EnteredPartyTime(team_nickname) => {
@@ -2083,8 +2264,16 @@ pub fn parse_next_event(
         }
         EventType::RemovedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
+                let pending_sub_removal = event_iter.next_expect_type(EventType::RemovedModsFromAnotherMod, EventType::RemovedMod)
+                    .ok()
+                    .map(|event| {
+                        let mut event = EventParseWrapper::new(&event)?;
+                        ModsFromAnotherModRemovedWithName::from_event(&mut event)
+                    })
+                    .transpose()?;
+
                 // Then it's a tarot event and we can forget parsing. Thankfully
-                make_mod_tarot_event(&mut event, true)?
+                make_mod_tarot_event(&mut event, true, pending_sub_removal)?
             } else {
                 match event.next_parse(parse_removed_mod)? {
                     ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(team_nickname) => {
@@ -2120,7 +2309,7 @@ pub fn parse_next_event(
             }
         }
         EventType::ModExpires => {
-            let mods = event.metadata_str_vec("mods")?
+            let mods: Vec<_> = event.metadata_str_vec("mods")?
                 .into_iter().map(String::from).collect();
             if let Some(player_id) = event.next_player_id_opt()? {
                 let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
@@ -2128,16 +2317,27 @@ pub fn parse_next_event(
                     team_id: event.next_team_id()?,
                     player_id,
                     player_name: player_name.to_string(),
-                    mods,
+                    mods: mods.into_iter()
+                        .map(|mod_id| ModRemoval {
+                            mod_id: mod_id.clone(),
+                            dependent_mod_removal: state.extract_dependent_mod(&(player_id, mod_id)),
+                        })
+                        .collect(),
                     mod_duration,
                 }
             } else {
                 let (team_nickname, mod_duration) = event.next_parse(parse_team_mod_expires)?;
                 assert!(is_known_team_nickname(team_nickname));
+                let team_id = event.next_team_id()?;
                 FedEventData::TeamModExpires {
-                    team_id: event.next_team_id()?,
+                    team_id,
                     team_nickname: team_nickname.to_string(),
-                    mods,
+                    mods: mods.into_iter()
+                        .map(|mod_id| ModRemoval {
+                            mod_id: mod_id.clone(),
+                            dependent_mod_removal: state.extract_dependent_mod(&(team_id, mod_id)),
+                        })
+                        .collect(),
                     mod_duration,
                 }
             }
@@ -2180,7 +2380,31 @@ pub fn parse_next_event(
                 removed_location: event.metadata_enum("removeLocation")?,
             }
         }
-        EventType::PlayerRemovedFromTeam => { todo!() }
+        EventType::PlayerRemovedFromTeam => {
+            // For now replica fading to dust is the only variant I handle, but that should
+            // presumably change
+            let (player_name, team_nickname) = event.next_parse(parse_player_dusted)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let player_id = event.next_player_id()?;
+            let mod_event = event_iter.extract_next_match(|e| {
+                e.r#type == EventType::AddedMod && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+            })
+                .ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                    expected_types: vec![EventType::AddedMod],
+                    found_type: None,
+                    after_type: EventType::PlayerRemovedFromTeam,
+                })?;
+            let mod_event = EventParseWrapper::new(&mod_event)?;
+
+            FedEventData::ReplicaFadedToDust {
+                team_id: event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                player_id,
+                player_name: player_name.to_string(),
+                mod_added_event: mod_event.as_sub_event(),
+            }
+        }
         EventType::PlayerTraded => { todo!() }
         EventType::PlayerSwap => { todo!() }
         EventType::PlayerMoved => {
@@ -2197,15 +2421,30 @@ pub fn parse_next_event(
                         emptyhanded,
                     }
                 }
-                ParsedPlayerMoved::Roamin(_player_name) => {
+                ParsedPlayerMoved::Roamin(player_name) => {
+                    let mut good_riddance_parties = Vec::new();
+
+                    while let Some(party) = event_iter.next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved).ok() {
+                        let mut party = EventParseWrapper::new(&party)?;
+                        let player_name = party.next_parse(parse_party)?;
+                        good_riddance_parties.push(GoodRiddanceParty {
+                            player_id: party.next_player_id()?,
+                            player_name: player_name.to_string(),
+                            sub_event: party.as_sub_event(),
+                            rating_before: party.metadata_f64("before")?,
+                            rating_after: party.metadata_f64("after")?,
+                        });
+                    }
+
                     FedEventData::Roam {
                         player_id: event.metadata_uuid("playerId")?,
-                        player_name: event.metadata_str("playerName")?.to_string(),
+                        player_name: player_name.to_string(),
                         location: event.metadata_enum("location")?,
                         previous_team_id: event.metadata_uuid("sendTeamId")?,
                         previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
                         new_team_id: event.metadata_uuid("receiveTeamId")?,
                         new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
+                        good_riddance_parties,
                     }
                 }
             }
@@ -2285,7 +2524,7 @@ pub fn parse_next_event(
                     ParsedPlayerGainedItem::WonPrizeMatchExplicit(team_nickname) => {
                         assert!(is_known_team_nickname(team_nickname));
                         FedEventData::WonPrizeMatch {
-                            team_nickname_or_player_name: WonPrizeMatchEventVariants::WithTeamNickname(team_nickname.to_string()),
+                            team_nickname_or_player_name: TeamNicknameOrPlayerName::TeamNickname(team_nickname.to_string()),
                             team_id: event.next_team_id()?,
                             player_id: event.next_player_id()?,
                             item_id: event.metadata_uuid("itemId")?,
@@ -2304,7 +2543,7 @@ pub fn parse_next_event(
                             .0;
                         pending_prize_matches.swap_remove(remove_index);
                         FedEventData::WonPrizeMatch {
-                            team_nickname_or_player_name: WonPrizeMatchEventVariants::WithPlayerName(player_name.to_string()),
+                            team_nickname_or_player_name: TeamNicknameOrPlayerName::PlayerName(player_name.to_string()),
                             team_id: event.next_team_id()?,
                             player_id: event.next_player_id()?,
                             item_id: event.metadata_uuid("itemId")?,
@@ -2578,82 +2817,27 @@ pub fn parse_next_event(
         }
         EventType::AddedModsFromAnotherMod => { todo!() }
         EventType::RemovedModsFromAnotherMod => {
-            let (player_name, mod_name) = event.next_parse(parse_mods_from_other_mod_removed)?;
+            // What the hell did I just write
+            let player_or_team_id = Ok(event.next_player_id_opt()?).transpose()
+                .unwrap_or_else(|| event.next_team_id())?;
+            let source_name = event.metadata_str("source")?;
+            let event = ModsFromAnotherModRemoved::from_event(&mut event)?;
 
-            let mods_removed = event.get_metadata("removes")?
-                .as_array()
-                .ok_or_else(|| {
-                    FeedParseError::MetadataTypeError {
-                        event_type: event.event_type,
-                        field: "removes".to_string(),
-                        ty: "array",
-                    }
-                })?
-                .iter()
-                .enumerate()
-                .map(|(i, removes)| {
-                    let obj = removes.as_object()
-                        .ok_or_else(|| {
-                            FeedParseError::MetadataTypeError {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}]"),
-                                ty: "object",
-                            }
-                        })?;
+            let replaced = {
+                let mut pending = state.pending_mod_removed_from_other_mod.lock().unwrap();
+                pending.insert((player_or_team_id, source_name.to_string()), event)
+            };
 
-                    let mod_id = obj.get("mod")
-                        .ok_or_else(|| {
-                            FeedParseError::MissingMetadata {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}].mod"),
-                            }
-                        })?
-                        .as_str()
-                        .ok_or_else(|| {
-                            FeedParseError::MetadataTypeError {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}].mod"),
-                                ty: "str",
-                            }
-                        })?
-                        .to_string();
-
-                    let mod_duration = obj.get("type")
-                        .ok_or_else(|| {
-                            FeedParseError::MissingMetadata {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}].type"),
-                            }
-                        })?
-                        .as_i64()
-                        .ok_or_else(|| {
-                            FeedParseError::MetadataTypeError {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}].type"),
-                                ty: "i64",
-                            }
-                        })?
-                        .try_into()
-                        .map_err(|err: <i64 as TryInto<ModDuration>>::Error| {
-                            FeedParseError::MetadataIntToEnumError {
-                                event_type: event.event_type,
-                                field: format!("removes[{i}].type"),
-                                err: err.to_string(),
-                            }
-                        })?;
-
-                    ParseOk(ModDesc { mod_id, mod_duration })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            FedEventData::ModsFromAnotherModRemoved {
-                team_id: event.next_team_id()?,
-                player_id: event.next_player_id()?,
-                player_name: player_name.to_string(),
-                mods_removed,
-                source_mod_name: mod_name.to_string(),
-                source_mod_id: event.metadata_str("source")?.to_string(),
+            // Expect only one of these at a time
+            if replaced.is_some() {
+                Err(FeedParseError::IllegalFollowingEvent {
+                    preceding_type: EventType::RemovedModsFromAnotherMod,
+                    illegal_type: EventType::RemovedModsFromAnotherMod,
+                })?;
             }
+
+            // Recurse to process the next event without returning control to the calling loop
+            return parse_next_event(event_iter, state);
         }
         EventType::Psychoacoustics => {
             // For some reason the description on the main event is empty and the description is
@@ -2746,28 +2930,37 @@ pub fn parse_next_event(
 
                             let mut sub_event = event.next_child(
                                 if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                            let team_id = sub_event.next_team_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Team {
-                                    team_id: sub_event.next_team_id()?,
+                                    team_id,
                                     team_nickname: Some(team_nickname.to_string()),
                                 },
                                 source_mod: SubseasonalMod::Middling,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Middling.mod_id().to_string())),
+
                             }
                         }
                         ParsedMiddling::Player((player_name, active)) => {
                             let mut sub_event = event.next_child(
                                 if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                            let player_id = sub_event.next_player_id()?;
                             SubseasonalModChange {
                                 subject: ModChangeSubject::Player {
                                     team_id: sub_event.next_team_id()?,
-                                    player_id: sub_event.next_player_id()?,
+                                    player_id,
                                     player_name: player_name.to_string(),
                                 },
                                 source_mod: SubseasonalMod::Middling,
                                 sub_event: Some(sub_event.as_sub_event()),
                                 active,
+                                // There's probably a way to get around the to_string here, but it's
+                                // not important enough to worry about
+                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Middling.mod_id().to_string())),
                             }
                         }
                     })
@@ -2808,15 +3001,19 @@ pub fn parse_next_event(
                 .map(|(player_name, active)| {
                     let mut sub_event = event.next_child(
                         if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+                    let player_id = sub_event.next_player_id()?;
                     ParseOk(SubseasonalModChange {
                         subject: ModChangeSubject::Player {
                             team_id: sub_event.next_team_id()?,
-                            player_id: sub_event.next_player_id()?,
+                            player_id,
                             player_name: player_name.to_string(),
                         },
                         source_mod: SubseasonalMod::Ambitious,
                         sub_event: Some(sub_event.as_sub_event()),
                         active,
+                        // There's probably a way to get around the to_string here, but it's
+                        // not important enough to worry about
+                        dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Middling.mod_id().to_string())),
                     })
                 })
                 .collect::<Result<_, _>>()?;
@@ -2831,15 +3028,19 @@ pub fn parse_next_event(
                 .map(|player_name| {
                     // AFAICT coasting being removed is always part of the HalfInning event?
                     let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                    let player_id = sub_event.next_player_id()?;
                     ParseOk(SubseasonalModChange {
                         subject: ModChangeSubject::Player {
                             team_id: sub_event.next_team_id()?,
-                            player_id: sub_event.next_player_id()?,
+                            player_id,
                             player_name: player_name.to_string(),
                         },
                         source_mod: SubseasonalMod::Coasting,
                         sub_event: Some(sub_event.as_sub_event()),
                         active: true,
+                        // There's probably a way to get around the to_string here, but it's
+                        // not important enough to worry about
+                        dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Coasting.mod_id().to_string())),
                     })
                 })
                 .collect::<Result<_, _>>()?;
@@ -2934,6 +3135,7 @@ pub fn parse_next_event(
         }
         EventType::PlayerSoulIncrease => { todo!() }
         EventType::Announcement => { todo!() }
+        EventType::Ratification => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }
@@ -3004,7 +3206,7 @@ pub fn parse_next_event(
     Ok(Some(event.to_fed(data)?))
 }
 
-fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Result<FedEventData, FeedParseError> {
+fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool, mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedMod {
         team_id: event.next_team_id()?,
         player_id: event.next_player_id_opt()?,
@@ -3012,6 +3214,7 @@ fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool) -> Res
         r#mod: event.metadata_str("mod")?.to_string(),
         mod_duration: event.metadata_enum("type")?,
         mod_removed,
+        mods_removed_from_other_mod,
     })
 }
 

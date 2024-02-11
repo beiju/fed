@@ -129,5 +129,11 @@ pub enum FeedParseError {
         found_type: Option<EventType>,
         after_type: EventType,
     },
+
+    #[error("Cannot have a {preceding_type:?} event following a {illegal_type:?} event")]
+    IllegalFollowingEvent {
+        preceding_type: EventType,
+        illegal_type: EventType,
+    },
 }
 
