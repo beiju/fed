@@ -228,7 +228,7 @@ pub(crate) enum ParsedHitType {
     Quadruple,
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>, Option<&str>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, broken_item_name_plural, player_name)) = broke {
         let (input, item_was_batters) = opt(tag(player_name)).parse(input)?;
@@ -253,7 +253,16 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Optio
         tag("Quadruple!").map(|_| ParsedHitType::Quadruple),
     )).parse(input)?;
 
-    Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke)))
+    let (input, hype) = opt(parse_hype).parse(input)?;
+
+    Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke, hype)))
+}
+
+pub(crate) fn parse_hype(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\nShame!\nHype Builds in ").parse(input)?;
+    let (input, stadium_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, stadium_name))
 }
 
 #[derive(PartialEq)]

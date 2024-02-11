@@ -1619,6 +1619,21 @@ pub struct GoodRiddanceParty {
     pub rating_after: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct HypeBuilds {
+    /// Name of stadium who built hype
+    pub stadium_name: String,
+
+    /// Stadium hype before
+    pub hype_before: f64,
+
+    /// Stadium hype after
+    pub hype_after: f64,
+
+    /// Metadata for sub-event associated with hype change
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2032,6 +2047,9 @@ pub enum FedEventData {
         /// Damage that any non-batter player's item took, if any. It's not possible to know the
         /// role of the other player (pitcher, fielder, runner?) from the event alone.
         other_player_item_damage: Option<(String, ItemDamaged)>,
+
+        /// If Hype built on this event, this is the metadata
+        hype: Option<HypeBuilds>
     },
 
     /// Home run, including Grand Slam

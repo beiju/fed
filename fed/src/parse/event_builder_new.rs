@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, HypeBuilds, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -573,6 +573,22 @@ impl EventBuilder {
                 child.build(EventType::AddedMod)
             });
         }
+    }
+
+    pub fn push_hype(&mut self, hype: Option<HypeBuilds>, home_team_id: Uuid) {
+        let hype = if let Some(h) = hype { h } else { return; };
+        self.push_description("Shame!");
+        self.push_description(&format!("Hype Builds in {}!", hype.stadium_name));
+        self.push_child(hype.sub_event, |mut child_eb| {
+            child_eb.set_category(EventCategory::Changes);
+            // Love how the descriptions are slightly different
+            child_eb.push_description(&format!("Hype built in {}!", hype.stadium_name));
+            child_eb.push_team_tag(home_team_id);
+            child_eb.push_metadata_f64("before", hype.hype_before);
+            child_eb.push_metadata_f64("after", hype.hype_after);
+
+            child_eb.build(EventType::HypeBuilds)
+        });
     }
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {

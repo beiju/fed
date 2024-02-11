@@ -363,7 +363,8 @@ impl FedEvent {
                 //     .named_item_damage_before_score(&other_player_item_damage)
                 //     .build()
             }
-            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
+            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage, hype } => {
+                let home_team_id = game.home_team; // Need this later
                 eb.set_game(game);
                 eb.push_pitch(pitch);
                 eb.set_category(EventCategory::special_if(is_special));
@@ -380,6 +381,7 @@ impl FedEvent {
                     }
                     _ => {}
                 }
+                eb.push_hype(hype, home_team_id);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_scores(scores, "scores!");
                 eb.push_spicy(spicy_status, &batter_name, batter_id);

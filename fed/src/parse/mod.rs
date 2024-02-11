@@ -680,7 +680,7 @@ pub fn parse_next_event(
         }
         EventType::Hit => {
             let pitch = event.parse_pitch()?;
-            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
+            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke, hype_stadium_name) = event.next_parse(parse_hit)?;
             // resim research says pitcher goes first
             let pitcher_item_damage = pitcher_item_broke
                 .map(|(_item_name, item_name_plural, player_name)| {
@@ -710,6 +710,8 @@ pub fn parse_next_event(
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
+            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
+
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
@@ -723,6 +725,7 @@ pub fn parse_next_event(
                 pitcher_item_damage,
                 batter_item_damage,
                 other_player_item_damage,
+                hype,
             }
         }
         EventType::GameEnd => {
@@ -2728,6 +2731,7 @@ pub fn parse_next_event(
         EventType::WillResults => { todo!() }
         EventType::TeamStatAdjustment => { todo!() }
         EventType::TeamWasShamed => {
+            // TODO combine with the event for the shaming run?
             let (shaming_team, shamed_team) = event.next_parse(parse_team_was_shamed)?;
             assert!(is_known_team_nickname(shaming_team));
             assert!(is_known_team_nickname(shamed_team));
@@ -2741,6 +2745,7 @@ pub fn parse_next_event(
             }
         }
         EventType::TeamDidShame => {
+            // TODO combine with the event for the shaming run?
             let (shaming_team, shamed_team) = event.next_parse(parse_team_did_shame)?;
             assert!(is_known_team_nickname(shaming_team));
             assert!(is_known_team_nickname(shamed_team));
@@ -3152,6 +3157,7 @@ pub fn parse_next_event(
         EventType::PlayerSoulIncrease => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::Ratification => { todo!() }
+        EventType::HypeBuilds => { todo!() }
         EventType::RunsScored => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }

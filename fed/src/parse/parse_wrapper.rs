@@ -812,7 +812,6 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-
     pub fn parse_hotel_motel_parties(&mut self) -> Result<Vec<HotelMotelScoringPlayer>, FeedParseError> {
         let mut parties = Vec::new();
         while let Some(player_name) = self.next_parse_opt(parse_hotel_motel_party) {
@@ -829,6 +828,17 @@ impl<'e> EventParseWrapper<'e> {
             });
         }
         Ok(parties)
+    }
+
+    pub fn parse_hype(&mut self, stadium_name: &str) -> Result<HypeBuilds, FeedParseError> {
+        let hype_child = self.next_child(EventType::HypeBuilds)?;
+        
+        Ok(HypeBuilds {
+            stadium_name: stadium_name.to_string(),
+            hype_before: hype_child.metadata_f64("before")?,
+            hype_after: hype_child.metadata_f64("after")?,
+            sub_event: hype_child.as_sub_event(),
+        })
     }
 
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
