@@ -841,6 +841,24 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
+    pub fn parse_ambush(&mut self, player_name: &str, team_name: &str) -> Result<Ambush, FeedParseError> {
+        let exit_hall_child = self.next_child(EventType::ExitHallOfFlame)?;
+        let mut join_team_child = self.next_child(EventType::PlayerAddedToTeam)?;
+        let mut shadow_boost_child = self.next_child(EventType::PlayerStatIncrease)?;
+
+        Ok(Ambush {
+            team_id: join_team_child.next_team_id()?,
+            team_nickname: team_name.to_string(),
+            player_id: join_team_child.next_player_id()?,
+            player_name: player_name.to_string(),
+            exit_hall_event: exit_hall_child.as_sub_event(),
+            added_to_team_event: join_team_child.as_sub_event(),
+            shadow_boost_event: shadow_boost_child.as_sub_event(),
+            player_rating_before: shadow_boost_child.metadata_f64("before")?,
+            player_rating_after: shadow_boost_child.metadata_f64("after")?,
+        })
+    }
+
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 

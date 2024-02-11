@@ -1698,88 +1698,183 @@ impl FedEvent {
 
                 eb.build(EventType::ReturnFromElsewhere)
             }
-            FedEventData::Incineration { ref game, team_id, ref team_nickname, victim_id, ref victim_name, replacement_id, ref replacement_name, location, ref unstable_chain, ref sub_events } => {
+            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
-                let location_int: i64 = location.into();
-                let mut prefix = String::new();
-                let mut suffix = String::new();
-                let mut children = vec![
-                    EventBuilderChild::new(incin_child)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::Incineration,
-                            description: format!("Rogue Umpire incinerated {victim_name}!"),
-                            team_tags: vec![team_id],
-                            player_tags: vec![victim_id],
-                            ..Default::default()
-                        }),
-                    EventBuilderChild::new(enter_hall_child)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::EnterHallOfFlame,
-                            description: format!("{victim_name} entered the Hall of Flame."),
-                            player_tags: vec![victim_id],
-                            ..Default::default()
-                        }),
-                    EventBuilderChild::new(hatch_child)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::PlayerHatched,
-                            description: format!("{replacement_name} has been hatched from the field of eggs."),
-                            player_tags: vec![replacement_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({ "id": replacement_id })),
-                    EventBuilderChild::new(replace_child)
-                        .update(EventBuilderUpdate {
-                            category: EventCategory::Changes,
-                            r#type: EventType::PlayerBornFromIncineration,
-                            description: format!("{replacement_name} replaced the incinerated {victim_name}."),
-                            team_tags: vec![team_id],
-                            player_tags: vec![victim_id, replacement_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "inPlayerId": replacement_id,
-                            "inPlayerName": replacement_name,
-                            "location": location_int,
-                            "outPlayerId": victim_id,
-                            "outPlayerName": victim_name,
-                            "teamId": team_id,
-                            "teamName": team_nickname,
-                        })),
-                ];
 
-                if let Some(chain) = unstable_chain {
-                    prefix = format!("{victim_name} is Unstable!\nA Debt was collected.\n");
-                    suffix = format!("\nThe Instability chains to {}!", chain.player_name);
-                    children.push(
-                        EventBuilderChild::new(&chain.sub_event)
-                            .update(EventBuilderUpdate {
-                                category: EventCategory::Changes,
-                                r#type: EventType::AddedMod,
-                                description: format!("The Instability chains to {}!", chain.player_name),
-                                team_tags: vec![chain.team_id],
-                                player_tags: vec![chain.player_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "mod": "MARKED",
-                                "type": ModDuration::Weekly as i64,
-                            }))
-                    )
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_player_tag(victim_id);
+                eb.push_player_tag(replacement_id);
+
+                if unstable_chain.is_some() {
+                    eb.push_description(&format!("{victim_name} is Unstable!"));
+                    eb.push_description("A Debt was collected.");
                 }
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Incineration,
-                        category: EventCategory::Special,
-                        description: format!("{prefix}Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}.{suffix}"),
-                        player_tags: vec![victim_id, replacement_id],
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
+                eb.push_description(&format!("They're replaced by {replacement_name}."));
+
+                eb.push_child(incin_child, |mut child_eb| {
+                    child_eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
+                    child_eb.push_player_tag(victim_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.build(EventType::Incineration)
+                });
+
+                eb.push_child(enter_hall_child, |mut child_eb| {
+                    child_eb.push_description(&format!("{victim_name} entered the Hall of Flame."));
+                    child_eb.push_player_tag(victim_id);
+                    child_eb.build(EventType::EnterHallOfFlame)
+                });
+
+                eb.push_child(hatch_child, |mut child_eb| {
+                    child_eb.push_description(&format!("{replacement_name} has been hatched from the field of eggs."));
+                    child_eb.push_player_tag(replacement_id);
+                    child_eb.push_metadata_uuid("id", replacement_id);
+                    child_eb.build(EventType::PlayerHatched)
+                });
+
+                eb.push_child(replace_child, |mut child_eb| {
+                    child_eb.push_description(&format!("{replacement_name} replaced the incinerated {victim_name}."));
+                    child_eb.push_player_tag(victim_id);
+                    child_eb.push_player_tag(replacement_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_uuid("inPlayerId", replacement_id);
+                    child_eb.push_metadata_str("inPlayerName", replacement_name);
+                    child_eb.push_metadata_i64("location", location);
+                    child_eb.push_metadata_uuid("outPlayerId", victim_id);
+                    child_eb.push_metadata_str("outPlayerName", victim_name);
+                    child_eb.push_metadata_uuid("teamId", team_id);
+                    child_eb.push_metadata_str("teamName", team_nickname);
+                    child_eb.build(EventType::PlayerBornFromIncineration)
+                });
+
+                if let Some(unstable) = unstable_chain {
+                    let unstable_desc = format!("The Instability chains to {}!", unstable.player_name);
+                    eb.push_description(&unstable_desc);
+                    eb.push_child(unstable.sub_event, |mut child_eb| {
+                        child_eb.push_description(&unstable_desc);
+                        child_eb.push_team_tag(unstable.team_id);
+                        child_eb.push_player_tag(unstable.player_id);
+                        child_eb.push_metadata_str("mod", "MARKED");
+                        child_eb.push_metadata_i64("type", ModDuration::Weekly);
+                        child_eb.build(EventType::AddedMod)
+                    });
+                }
+
+                if let Some(ambush) = ambush {
+                    eb.push_description("An Ambush.");
+                    eb.push_description(&format!("{} enters the {} shadows.", ambush.player_name, possessive(ambush.team_nickname.clone())));
+                    eb.push_child(ambush.exit_hall_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{} exited the Hall of Flame", ambush.player_name));
+                        child_eb.push_player_tag(ambush.player_id);
+                        child_eb.build(EventType::ExitHallOfFlame)
+                    });
+                    eb.push_child(ambush.added_to_team_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{} joins the Ambush.", ambush.player_name));
+                        child_eb.push_player_tag(ambush.player_id);
+                        child_eb.push_team_tag(ambush.team_id);
+                        child_eb.push_metadata_uuid("playerId", ambush.player_id);
+                        child_eb.push_metadata_str("playerName", &ambush.player_name);
+                        child_eb.push_metadata_uuid("teamId", ambush.team_id);
+                        child_eb.push_metadata_str("teamName", &ambush.team_nickname);
+                        // Ambush didn't exist until after shadows were unified, so the location
+                        // is always "shadows" (location 2)
+                        child_eb.push_metadata_i64("location", 2);
+                        child_eb.build(EventType::PlayerAddedToTeam)
+                    });
+                    eb.push_child(ambush.shadow_boost_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{} entered the Shadows.", ambush.player_name));
+                        child_eb.push_player_tag(ambush.player_id);
+                        child_eb.push_team_tag(ambush.team_id);
+                        child_eb.push_metadata_f64("after", ambush.player_rating_after);
+                        child_eb.push_metadata_f64("before", ambush.player_rating_before);
+                        child_eb.push_metadata_i64("type", 4); // 4 = "all categories"
+                        child_eb.build(EventType::PlayerStatIncrease)
+                    });
+                }
+
+                eb.build(EventType::Incineration)
+                // let location_int: i64 = location.into();
+                // let mut prefix = String::new();
+                // let mut suffix = String::new();
+                // let mut children = vec![
+                //     EventBuilderChild::new(incin_child)
+                //         .update(EventBuilderUpdate {
+                //             category: ,
+                //             r#type: ,
+                //             description: format!("Rogue Umpire incinerated {victim_name}!"),
+                //             team_tags: vec![team_id],
+                //             player_tags: vec![victim_id],
+                //             ..Default::default()
+                //         }),
+                //     EventBuilderChild::new(enter_hall_child)
+                //         .update(EventBuilderUpdate {
+                //             category: EventCategory::Changes,
+                //             r#type: EventType::EnterHallOfFlame,
+                //             description: format!("{victim_name} entered the Hall of Flame."),
+                //             player_tags: vec![victim_id],
+                //             ..Default::default()
+                //         }),
+                //     EventBuilderChild::new(hatch_child)
+                //         .update(EventBuilderUpdate {
+                //             category: EventCategory::Changes,
+                //             r#type: EventType::PlayerHatched,
+                //             description: format!("{replacement_name} has been hatched from the field of eggs."),
+                //             player_tags: vec![replacement_id],
+                //             ..Default::default()
+                //         })
+                //         .metadata(json!({ "id": replacement_id })),
+                //     EventBuilderChild::new(replace_child)
+                //         .update(EventBuilderUpdate {
+                //             category: EventCategory::Changes,
+                //             r#type: EventType::PlayerBornFromIncineration,
+                //             description: format!("{replacement_name} replaced the incinerated {victim_name}."),
+                //             team_tags: vec![team_id],
+                //             player_tags: vec![victim_id, replacement_id],
+                //             ..Default::default()
+                //         })
+                //         .metadata(json!({
+                //             "inPlayerId": replacement_id,
+                //             "inPlayerName": replacement_name,
+                //             "location": location_int,
+                //             "outPlayerId": victim_id,
+                //             "outPlayerName": victim_name,
+                //             "teamId": team_id,
+                //             "teamName": team_nickname,
+                //         })),
+                // ];
+                //
+                // if let Some(chain) = unstable_chain {
+                //     prefix = format!("{victim_name} is Unstable!\nA Debt was collected.\n");
+                //     suffix = format!("\nThe Instability chains to {}!", chain.player_name);
+                //     children.push(
+                //         EventBuilderChild::new(&chain.sub_event)
+                //             .update(EventBuilderUpdate {
+                //                 category: EventCategory::Changes,
+                //                 r#type: EventType::AddedMod,
+                //                 description: format!("The Instability chains to {}!", chain.player_name),
+                //                 team_tags: vec![chain.team_id],
+                //                 player_tags: vec![chain.player_id],
+                //                 ..Default::default()
+                //             })
+                //             .metadata(json!({
+                //                 "mod": "MARKED",
+                //                 "type": ModDuration::Weekly as i64,
+                //             }))
+                //     )
+                // }
+                //
+                // event_builder.for_game(game)
+                //     .fill(EventBuilderUpdate {
+                //         r#type: EventType::Incineration,
+                //         category: EventCategory::Special,
+                //         description: format!("{prefix}Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}.{suffix}"),
+                //         player_tags: vec![victim_id, replacement_id],
+                //         ..Default::default()
+                //     })
+                //     .children(children)
+                //     .build()
             }
             FedEventData::PitcherChange { game, team_nickname: team_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)

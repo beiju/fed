@@ -1649,6 +1649,39 @@ impl Display for NumbersGo {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Ambush {
+    /// Uuid of ambushing team. Note that this is not necessarily the team whose player was
+    /// incinerated, it can also be the other team in the same game
+    pub team_id: Uuid,
+
+    /// Nickname of ambushing team. Note that this is not necessarily the team whose player was
+    /// incinerated, it can also be the other team in the same game
+    pub team_nickname: String,
+
+    /// Uuid of ambushed player
+    pub player_id: Uuid,
+
+    /// Name of ambushed player
+    pub player_name: String,
+
+    /// Metadata for the exit-hall-of-flame event
+    pub exit_hall_event: SubEvent,
+
+    /// Metadata for the player-added-to-team event
+    pub added_to_team_event: SubEvent,
+
+    /// Metadata for the player's shadow boost event. Ambush was added after shadow boosts, so this
+    /// sub-event always exists.
+    pub shadow_boost_event: SubEvent,
+
+    /// Ambushed player's rating before the shadow boost
+    pub player_rating_before: f64,
+
+    /// Ambushed player's rating after the shadow boost
+    pub player_rating_after: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3161,6 +3194,9 @@ pub enum FedEventData {
         /// Metadata for the incineration sub-event, the enters-hall sub-event, the hatch sub-event,
         /// and the replacement sub-event, in that order
         sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
+
+        /// If a player was Ambushed, information about the ambush. Otherwise null.
+        ambush: Option<Ambush>
     },
 
     /// Pitcher change event. This happens automatically when something incapacitates the active

@@ -1449,7 +1449,7 @@ pub fn parse_next_event(
             }
         }
         EventType::Incineration => {
-            let (victim_name, replacement_name, unstable_chain_name) = event.next_parse(parse_incineration)?;
+            let (victim_name, replacement_name, unstable_chain_name, ambush) = event.next_parse(parse_incineration)?;
             let mut incin_child = event.next_child(EventType::Incineration)?;
             let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
             let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
@@ -1466,6 +1466,8 @@ pub fn parse_next_event(
                     })
                 })
                 .transpose()?;
+
+            let ambush = ambush.map(|(p, t)| event.parse_ambush(p, t)).transpose()?;
 
             let team_nickname = replace_child.metadata_str("teamName")?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1485,6 +1487,7 @@ pub fn parse_next_event(
                     hatch_child.as_sub_event(),
                     replace_child.as_sub_event(),
                 ),
+                ambush,
             }
         }
         EventType::IncinerationBlocked => {
