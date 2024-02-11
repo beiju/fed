@@ -2135,8 +2135,12 @@ pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_coasting(input: &str) -> ParserResult<Vec<&str>> {
-    separated_list1(tag("\n"), parse_terminated(" is Coasting.")).parse(input)
+pub(crate) fn parse_coasting(input: &str) -> ParserResult<(bool, Vec<&str>)> {
+    alt((
+        separated_list1(tag("\n"), parse_terminated(" is Coasting.")).map(|v| (true, v)),
+        separated_list1(tag("\n"), parse_terminated(" stops Coasting.")).map(|v| (false, v)),
+    )).parse(input)
+
 }
 
 pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {

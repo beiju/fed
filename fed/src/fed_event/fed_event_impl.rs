@@ -50,13 +50,13 @@ fn push_subseasonal_mod_changes(eb: &mut EventBuilder, effects: Vec<SubseasonalM
     for effect in effects {
         match effect.subject {
             ModChangeSubject::Player { team_id, player_id, player_name } => {
-                let description = if effect.active {
-                    format!("{} is {}.", player_name, effect.source_mod.label_for_players())
-                } else if effect.source_mod == SubseasonalMod::Ambitious {
-                    // If there's more than one special case I'll need to change the system. ugh
-                    format!("{} loses their Ambition.", player_name)
-                } else {
-                    format!("{} is no longer {}.", player_name, effect.source_mod.label_for_players())
+                let description = match (effect.active, effect.source_mod) {
+                    // Specific language for specific mods
+                    (false, SubseasonalMod::Ambitious) => format!("{} loses their Ambition.", player_name),
+                    (false, SubseasonalMod::Coasting) => format!("{} stops Coasting.", player_name),
+                    // General cases
+                    (true, m) => format!("{} is {}.", player_name, m.label_for_players()),
+                    (false, m) => format!("{} is no longer {}.", player_name, m.label_for_players()),
                 };
 
                 eb.push_description(&description);

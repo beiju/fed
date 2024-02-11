@@ -3124,10 +3124,14 @@ pub fn parse_next_event(
             }
         }
         EventType::Coasting => {
-            let changes = event.next_parse(parse_coasting)?.into_iter()
+            let (is_now_coasting, coasters) = event.next_parse(parse_coasting)?;
+            let changes = coasters.into_iter()
                 .map(|player_name| {
-                    // AFAICT coasting being removed is always part of the HalfInning event?
-                    let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                    let mut sub_event = event.next_child(if is_now_coasting {
+                        EventType::AddedModFromOtherMod
+                    } else {
+                        EventType::RemovedModFromOtherMod
+                    })?;
                     let player_id = sub_event.next_player_id()?;
                     ParseOk(SubseasonalModChange {
                         subject: ModChangeSubject::Player {
@@ -3137,7 +3141,7 @@ pub fn parse_next_event(
                         },
                         source_mod: SubseasonalMod::Coasting,
                         sub_event: Some(sub_event.as_sub_event()),
-                        active: true,
+                        active: is_now_coasting,
                         // There's probably a way to get around the to_string here, but it's
                         // not important enough to worry about
                         dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Coasting.mod_id().to_string())),
