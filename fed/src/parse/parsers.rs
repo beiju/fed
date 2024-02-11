@@ -421,9 +421,18 @@ pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &st
 pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<Option<Option<&str>>> {
     let (input, big_buckets) = opt(preceded(
         tag("\nThe ball lands in a Big Bucket. An extra Run scores!"),
-        opt(parse_hype_suffix)
+        opt(parse_hype_suffix),
     )).parse(input)?;
     Ok((input, big_buckets))
+}
+
+pub(crate) fn parse_hoops(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, oop) = alt((
+        parse_terminated(" went up for the alley oop...\n...but they can't connect.").map(|n| (n, false)),
+        parse_terminated(" went up for the alley oop...\n...they slammed it down for an extra Run!").map(|n| (n, true)),
+    )).parse(input)?;
+    Ok((input, oop))
 }
 
 pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
@@ -1124,7 +1133,6 @@ pub(crate) fn parse_flipped_negative(swept_player_name: &str) -> impl Fn(&str) -
         let (input, _) = tag(" was flipped Negative!").parse(input)?;
 
         Ok((input, flipper_name))
-
     }
 }
 
@@ -1132,7 +1140,7 @@ pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Short((&'a str, bool)),
     Normal((&'a str, TimeElsewhere, bool)),
     // For now, I don't support peanuts being pulled back, I'll add it if it ever happened
-    Seeker((&'a str, &'a str, TimeElsewhere))
+    Seeker((&'a str, &'a str, TimeElsewhere)),
 }
 
 pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
@@ -2140,7 +2148,6 @@ pub(crate) fn parse_coasting(input: &str) -> ParserResult<(bool, Vec<&str>)> {
         separated_list1(tag("\n"), parse_terminated(" is Coasting.")).map(|v| (true, v)),
         separated_list1(tag("\n"), parse_terminated(" stops Coasting.")).map(|v| (false, v)),
     )).parse(input)
-
 }
 
 pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {

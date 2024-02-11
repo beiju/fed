@@ -392,7 +392,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
@@ -413,6 +413,15 @@ impl FedEvent {
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
                     eb.push_hype(hype.as_ref(), home_team_id);
+                }
+
+                if let Some((ooper, success)) = alley_oop {
+                    eb.push_description(&format!("{ooper} went up for the alley oop..."));
+                    eb.push_description(if success {
+                        "...they slammed it down for an extra Run!"
+                    } else {
+                        "...but they can't connect."
+                    });
                 }
 
                 eb.push_stopped_inhabiting(stopped_inhabiting);

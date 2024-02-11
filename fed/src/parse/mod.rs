@@ -697,6 +697,7 @@ pub fn parse_next_event(
                 assert!(hype_stadium_name.is_none());
                 hype_stadium_name = Some(name);
             }
+            let alley_oop = event.next_parse(opt(parse_hoops))?;
             let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
@@ -718,6 +719,7 @@ pub fn parse_next_event(
                 damaged_items,
                 hotel_motel_parties,
                 hype,
+                alley_oop: alley_oop.map(|(name, success)| (name.to_string(), success)),
             }
         }
         EventType::Hit => {

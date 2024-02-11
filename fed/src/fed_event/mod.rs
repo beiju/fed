@@ -2252,6 +2252,9 @@ pub enum FedEventData {
 
         /// If this event built hype, the metadata about the hype event
         hype: Option<HypeBuilds>,
+
+        /// TODO Describe alley oops
+        alley_oop: Option<(String, bool)>,
     },
 
     /// Stolen base
