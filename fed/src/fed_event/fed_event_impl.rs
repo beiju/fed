@@ -2777,12 +2777,14 @@ impl FedEvent {
                 eb.push_description(&run_losses.to_string());
 
                 if let Some(item_restored) = item_restored {
+                    let item_base_name = item_restored.item_name.split(" of ").next()
+                        .expect("API of split doesn't allow for empty iterator, I think");
                     let restored_description = format!(
                         "{} {} {} {}",
                         Possessive(&item_restored.player_name), item_restored.item_name,
                         // Not sure if the code looks for plurals or if the item has a plural flag.
                         // I'll try looking for plurals first and if that fails I'll add a tag.
-                        if item_restored.item_name.ends_with('s') { "were" } else { "was" },
+                        if item_base_name.ends_with('s') { "were" } else { "was" },
                         if item_restored.health_before == 0 { "restored!" } else { "repaired." },
                     );
                     eb.push_description(&restored_description);
