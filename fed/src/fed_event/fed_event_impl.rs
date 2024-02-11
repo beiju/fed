@@ -522,11 +522,13 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items } => {
+            FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items, hype } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
+                eb.push_hype(hype, home_team_id);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_scorers(scores.scores, "scores!");
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));

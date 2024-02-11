@@ -2071,6 +2071,9 @@ pub enum FedEventData {
         /// Items that were damaged, if any. Like home runs there isn't enough information to 
         /// properly attribute the damage to pitchers, batters, fielders, and runners.
         damaged_items: Vec<(String, ItemDamaged)>,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<HypeBuilds>,
     },
 
     /// Double play event

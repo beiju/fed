@@ -182,6 +182,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     FieldersChoice {
         runner_out_name: &'a str,
         base: Base,
+        hype_stadium_name: Option<&'a str>,
     },
     DoublePlay {
         batter_name: &'a str,
@@ -211,7 +212,9 @@ pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.").parse(input)?;
 
-    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, base })))
+    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, base, hype_stadium_name })))
 }
 
 pub(crate) fn parse_reaches_on_fielders_choice(input: &str) -> ParserResult<&str> {

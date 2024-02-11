@@ -604,7 +604,8 @@ pub fn parse_next_event(
                         hype,
                     }
                 }
-                ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
+                ParsedGroundOut::FieldersChoice { runner_out_name, base, hype_stadium_name } => {
+                    let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!")?;
@@ -623,6 +624,7 @@ pub fn parse_next_event(
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
                         damaged_items,
+                        hype,
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
