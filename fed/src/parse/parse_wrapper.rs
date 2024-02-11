@@ -865,6 +865,20 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
+    pub fn parse_flipped_negative(&mut self, undertaker_name: Option<&str>) -> Result<Option<FlipNegative>, FeedParseError> {
+        undertaker_name.map(|flipper_name| {
+            let mut undertaker_elsewhere_event = self.next_child(EventType::AddedMod)?;
+            let mut negative_event = self.next_child(EventType::AddedMod)?;
+
+            ParseOk(FlipNegative {
+                undertaker_player_id: undertaker_elsewhere_event.next_player_id()?,
+                undertaker_player_name: flipper_name.to_string(),
+                undertaker_elsewhere_sub_event: undertaker_elsewhere_event.as_sub_event(),
+                flip_negative_sub_event: negative_event.as_sub_event(),
+            })
+        }).transpose()
+    }
+
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 

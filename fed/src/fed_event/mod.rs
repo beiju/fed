@@ -804,23 +804,27 @@ pub struct Scattered {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct PlayerSentElsewhere {
+    /// Uuid of the team whose player was sent Elsewhere
+    pub team_id: Uuid,
+
+    /// Uuid of the player who was sent Elsewhere
+    pub player_id: Uuid,
+
+    /// Name of the player who was sent Elsewhere
+    pub player_name: String,
+
+    /// Metadata for the sub-event associated with adding the Elsewhere mod
+    pub sub_event: SubEvent,
+
+    /// If the player was flipped negative, this is information about that
+    pub flipped_negative: Option<FlipNegative>
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub enum FloodingSweptEffect {
-    Elsewhere {
-        /// Uuid of the team whose player was swept Elsewhere
-        team_id: Uuid,
-
-        /// Uuid of the player who was swept Elsewhere
-        player_id: Uuid,
-
-        /// Name of the player who was swept Elsewhere
-        player_name: String,
-
-        /// Metadata for the sub-event associated with adding the Elsewhere mod
-        sub_event: SubEvent,
-
-        /// If the player was flipped negative, this is information about that
-        flipped_negative: Option<FlipNegative>
-    },
+    Elsewhere(PlayerSentElsewhere),
     Flippers(PlayerNameId),
     Ego(PlayerNameId),
 }
@@ -3968,7 +3972,7 @@ pub enum FedEventData {
         item_repaired: Option<ItemRepaired>,
 
         /// Player caught in the bind, if any
-        player_expelled: Option<ModChangeSubEventWithNamedPlayer>,
+        player_expelled: Option<PlayerSentElsewhere>,
     },
 
     /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)

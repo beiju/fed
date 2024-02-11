@@ -1658,27 +1658,16 @@ pub fn parse_next_event(
             let effects = parsed_effects.into_iter()
                 .map(|effect| {
                     ParseOk(match effect {
-                        ParsedFloodingEffect::Elsewhere((player_name, flipped_negative)) => {
+                        ParsedFloodingEffect::Elsewhere((player_name, undertaker_name)) => {
                             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
-                            let flipped_negative = flipped_negative.map(|flipper_name| {
-                                let mut undertaker_elsewhere_event = event.next_child(EventType::AddedMod)?;
-                                let mut negative_event = event.next_child(EventType::AddedMod)?;
-
-                                ParseOk(FlipNegative {
-                                    undertaker_player_id: undertaker_elsewhere_event.next_player_id()?,
-                                    undertaker_player_name: flipper_name.to_string(),
-                                    undertaker_elsewhere_sub_event: undertaker_elsewhere_event.as_sub_event(),
-                                    flip_negative_sub_event: negative_event.as_sub_event(),
-                                })
-                            }).transpose()?;
-                            FloodingSweptEffect::Elsewhere {
+                            FloodingSweptEffect::Elsewhere(PlayerSentElsewhere {
                                 team_id: sub_event.next_team_id()?,
                                 player_id: sub_event.next_player_id()?,
                                 player_name: player_name.to_string(),
                                 sub_event: sub_event.as_sub_event(),
-                                flipped_negative,
-                            }
+                                flipped_negative: event.parse_flipped_negative(undertaker_name)?,
+                            })
                         }
                         ParsedFloodingEffect::Flippers(player_name) => {
                             FloodingSweptEffect::Flippers(PlayerNameId {
@@ -1714,13 +1703,14 @@ pub fn parse_next_event(
                 .transpose()?;
 
             let player_expelled = event.next_parse_opt(parse_caught_in_the_bind)
-                .map(|player_name| {
-                    let mut child = event.next_child(EventType::AddedMod)?;
-                    Ok::<_, FeedParseError>(ModChangeSubEventWithNamedPlayer {
-                        sub_event: child.as_sub_event(),
-                        team_id: child.next_team_id()?,
-                        player_id: child.next_player_id()?,
-                        player_name: player_name.to_string(),
+                .map(|(caught_player_name, undertaker_name)| {
+                    let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    ParseOk(PlayerSentElsewhere {
+                        team_id: sub_event.next_team_id()?,
+                        player_id: sub_event.next_player_id()?,
+                        player_name: caught_player_name.to_string(),
+                        sub_event: sub_event.as_sub_event(),
+                        flipped_negative: event.parse_flipped_negative(undertaker_name)?,
                     })
                 })
                 .transpose()?;

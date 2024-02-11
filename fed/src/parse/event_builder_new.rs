@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, HypeBuilds, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, HypeBuilds, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -599,6 +599,45 @@ impl EventBuilder {
 
             child_eb.build(EventType::HypeBuilds)
         });
+    }
+
+    pub fn push_sent_elsewhere(&mut self, sent_elsewhere: PlayerSentElsewhere, outer_description: &str, inner_description: &str) {
+        self.push_description(outer_description);
+        self.push_child(sent_elsewhere.sub_event, |mut child_self| {
+            child_self.push_description(inner_description);
+            child_self.push_team_tag(sent_elsewhere.team_id);
+            child_self.push_player_tag(sent_elsewhere.player_id);
+            child_self.push_metadata_str("mod", "ELSEWHERE");
+            child_self.push_metadata_i64("type", ModDuration::Permanent);
+            child_self.build(EventType::AddedMod)
+        });
+
+        if let Some(flip) = sent_elsewhere.flipped_negative {
+            // First, undertaker also goes Elsewhere
+            let undertaker_description = format!("{} dove in after {}.", flip.undertaker_player_name, sent_elsewhere.player_name);
+            self.push_description(&undertaker_description);
+            self.push_player_tag(flip.undertaker_player_id);
+            self.push_child(flip.undertaker_elsewhere_sub_event, |mut child_self| {
+                child_self.push_description(&undertaker_description);
+                child_self.push_team_tag(sent_elsewhere.team_id);
+                child_self.push_player_tag(flip.undertaker_player_id);
+                child_self.push_metadata_str("mod", "ELSEWHERE");
+                child_self.push_metadata_i64("type", ModDuration::Permanent);
+                child_self.build(EventType::AddedMod)
+            });
+
+            // Then the actual flipping
+            self.push_description(&format!("{} was flipped Negative!", sent_elsewhere.player_name));
+            self.push_player_tag(sent_elsewhere.player_id);
+            self.push_child(flip.flip_negative_sub_event, |mut child_self| {
+                child_self.push_description(&format!("{} flipped {} Negative.", flip.undertaker_player_name, sent_elsewhere.player_name));
+                child_self.push_team_tag(sent_elsewhere.team_id);
+                child_self.push_player_tag(sent_elsewhere.player_id);
+                child_self.push_metadata_str("mod", "NEGATIVE");
+                child_self.push_metadata_i64("type", ModDuration::Permanent);
+                child_self.build(EventType::AddedMod)
+            });
+        }
     }
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {

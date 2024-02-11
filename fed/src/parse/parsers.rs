@@ -1944,9 +1944,13 @@ pub(crate) fn parse_subseasonal_mod(input: &str) -> ParserResult<(&str, Subseaso
     Ok((input, (team_name, which_mod, active)))
 }
 
-pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
-    parse_terminated(" is caught in the bind!").parse(input)
+    let (input, caught_player_name) = parse_terminated(" is caught in the bind!").parse(input)?;
+
+    let (input, undertaker_name) = opt(parse_flipped_negative(caught_player_name)).parse(input)?;
+
+    Ok((input, (caught_player_name, undertaker_name)))
 }
 
 pub(crate) fn parse_charge_blood<'a>(batter_name: &'a str, a: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {

@@ -1570,48 +1570,14 @@ impl FedEvent {
                 eb.push_description("A surge of Immateria rushes up from Under!");
                 eb.push_description("Baserunners are swept from play!");
 
-                let is_was = if self.season < 18 { "is" } else { "was" };
-
                 for effect in effects {
                     match effect {
-                        FloodingSweptEffect::Elsewhere { team_id, player_id, player_name, sub_event, flipped_negative } => {
-                            let elsewhere_description = format!("{player_name} {is_was} swept Elsewhere!");
-                            eb.push_description(&elsewhere_description);
-                            eb.push_child(sub_event, |mut child_eb| {
-                                child_eb.push_description(&elsewhere_description);
-                                child_eb.push_team_tag(team_id);
-                                child_eb.push_player_tag(player_id);
-                                child_eb.push_metadata_str("mod", "ELSEWHERE");
-                                child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                                child_eb.build(EventType::AddedMod)
-                            });
-                            
-                            if let Some(flip) = flipped_negative {
-                                // First, undertaker also goes Elsewhere
-                                let undertaker_description = format!("{} dove in after {player_name}.", flip.undertaker_player_name);
-                                eb.push_description(&undertaker_description);
-                                eb.push_player_tag(flip.undertaker_player_id);
-                                eb.push_child(flip.undertaker_elsewhere_sub_event, |mut child_eb| {
-                                    child_eb.push_description(&undertaker_description);
-                                    child_eb.push_team_tag(team_id);
-                                    child_eb.push_player_tag(flip.undertaker_player_id);
-                                    child_eb.push_metadata_str("mod", "ELSEWHERE");
-                                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                                    child_eb.build(EventType::AddedMod)
-                                });
-
-                                // Then the actual flipping
-                                eb.push_description(&format!("{player_name} was flipped Negative!"));
-                                eb.push_player_tag(player_id);
-                                eb.push_child(flip.flip_negative_sub_event, |mut child_eb| {
-                                    child_eb.push_description(&format!("{} flipped {player_name} Negative.", flip.undertaker_player_name));
-                                    child_eb.push_team_tag(team_id);
-                                    child_eb.push_player_tag(player_id);
-                                    child_eb.push_metadata_str("mod", "NEGATIVE");
-                                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                                    child_eb.build(EventType::AddedMod)
-                                });
-                            }
+                        FloodingSweptEffect::Elsewhere(sent_elsewhere) => {
+                            // This form uses the same text for inner and outer description
+                            let description = format!("{} {} swept Elsewhere!",
+                                                      sent_elsewhere.player_name,
+                                                      if self.season < 18 { "is" } else { "was" });
+                            eb.push_sent_elsewhere(sent_elsewhere, &description, &description);
                         }
                         FloodingSweptEffect::Flippers(PlayerNameId { player_name, player_id }) => {
                             // There's a danger that this could end a game and therefore have hype
@@ -2796,6 +2762,7 @@ impl FedEvent {
             }
             FedEventData::SalmonSwim { game, inning_num, run_losses, item_repaired: item_restored, player_expelled } => {
                 eb.set_game(game);
+                eb.set_category(EventCategory::special_if(player_expelled.is_some()));
                 eb.push_description("The Salmon swim upstream!");
                 eb.push_description(&format!("Inning {inning_num} begins again."));
                 eb.push_description(&run_losses.to_string());
@@ -2818,18 +2785,11 @@ impl FedEvent {
                     });
                 }
 
-                if let Some(mod_change) = player_expelled {
-                    eb.set_category(EventCategory::Special);
-                    eb.push_description(&format!("{} is caught in the bind!", mod_change.player_name));
-                    eb.push_player_tag(mod_change.player_id);
-                    eb.push_child(mod_change.sub_event, |mut child| {
-                        child.push_description(&format!("Salmon Cannons expelled {} Elsewhere.", mod_change.player_name));
-                        child.push_player_tag(mod_change.player_id);
-                        child.push_team_tag(mod_change.team_id);
-                        child.push_metadata_str("mod", "ELSEWHERE");
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(EventType::AddedMod)
-                    });
+                if let Some(sent_elsewhere) = player_expelled {
+                    eb.push_player_tag(sent_elsewhere.player_id);
+                    let outer_description = format!("{} is caught in the bind!", sent_elsewhere.player_name);
+                    let inner_description = format!("Salmon Cannons expelled {} Elsewhere.", sent_elsewhere.player_name);
+                    eb.push_sent_elsewhere(sent_elsewhere, &outer_description, &inner_description);
                 }
 
                 eb.build(EventType::SalmonSwim)
