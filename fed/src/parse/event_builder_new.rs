@@ -585,7 +585,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hype(&mut self, hype: Option<HypeBuilds>, home_team_id: Uuid) {
+    pub fn push_hype(&mut self, hype: Option<&HypeBuilds>, home_team_id: Uuid) {
         let hype = if let Some(h) = hype { h } else { return; };
         self.push_description("Shame!");
         self.push_description(&format!("Hype Builds in {}!", hype.stadium_name));

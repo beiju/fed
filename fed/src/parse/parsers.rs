@@ -418,9 +418,16 @@ pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &st
     Ok((input, (team_nickname, player_name)))
 }
 
-pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
-    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
-    Ok((input, big_buckets.is_some()))
+// Nested option is meaningful:
+// - None: no big buckets
+// - Some(None): big buckets, no hype
+// - Some(Some(..)): big buckets and hype
+pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<Option<Option<&str>>> {
+    let (input, big_buckets) = opt(preceded(
+        tag("\nThe ball lands in a Big Bucket. An extra Run scores!"),
+        opt(parse_hype_suffix)
+    )).parse(input)?;
+    Ok((input, big_buckets))
 }
 
 pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {

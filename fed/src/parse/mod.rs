@@ -659,7 +659,7 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let (batter_name, home_run_type,  hype_stadium_name) = event.next_parse(parse_hr)?;
+            let (batter_name, home_run_type,  mut hype_stadium_name) = event.next_parse(parse_hr)?;
 
             // Parsed specially because AFAIK this is the only place an attraction happens and you
             // don't already know the player name
@@ -695,8 +695,12 @@ pub fn parse_next_event(
             let batter_id = event.next_player_id()?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
-            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
             let big_bucket = event.next_parse(parse_big_bucket)?;
+            if let Some(Some(name)) = big_bucket {
+                assert!(hype_stadium_name.is_none());
+                hype_stadium_name = Some(name);
+            }
+            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
@@ -712,7 +716,7 @@ pub fn parse_next_event(
                 free_refills,
                 spicy_status,
                 is_special: event.category == EventCategory::Special,
-                big_bucket,
+                big_bucket: big_bucket.is_some(),
                 attraction,
                 damaged_items,
                 hotel_motel_parties,
