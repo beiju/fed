@@ -1672,7 +1672,16 @@ pub fn parse_next_event(
                 player_expelled,
             }
         }
-        EventType::PolarityShift => { todo!() }
+        EventType::PolarityShift => {
+            let numbers_go = event.next_parse(parse_polarity)?;
+            let weather_change_event = event.next_child(EventType::WeatherChange)?;
+
+            FedEventData::PolarityShift {
+                game: event.game(unscatter, attractor_secret_base)?,
+                numbers_go,
+                sub_event: weather_change_event.as_sub_event(),
+            }
+        }
         EventType::EnterSecretBase => {
             let player_name = event.next_parse(parse_terminated(" enters the Secret Base..."))?;
 

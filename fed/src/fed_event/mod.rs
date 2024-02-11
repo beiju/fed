@@ -1634,6 +1634,21 @@ pub struct HypeBuilds {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum NumbersGo {
+    Up,
+    Down,
+}
+
+impl Display for NumbersGo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumbersGo::Up => { write!(f, "up") }
+            NumbersGo::Down => { write!(f, "down") }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -4493,6 +4508,19 @@ pub enum FedEventData {
         /// Metadata for the associated ModAdded event
         sub_event: SubEvent,
     },
+
+    /// Polarity weather shifts between Positive and Negative polarity
+    #[serde(rename_all = "camelCase")]
+    PolarityShift {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Which way numbers go, i.e. which Polarity weather is now active
+        numbers_go: NumbersGo,
+
+        /// Metadata for the WeatherChange sub event
+        sub_event: SubEvent,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4712,6 +4740,7 @@ impl FedEventData {
             FedEventData::GiftReceived { .. } => { None }
             FedEventData::ReplicaFadedToDust { .. } => { None }
             FedEventData::ABloodType { game, .. } => { Some(game) }
+            FedEventData::PolarityShift { game, .. } => { Some(game) }
         }
     }
 }

@@ -173,6 +173,11 @@ impl EventBuilder {
             .insert(key.into(), value.into().into());
     }
 
+    pub fn push_metadata_i32(&mut self, key: impl Into<String>, value: impl Into<i32>) {
+        self.metadata_mut()
+            .insert(key.into(), value.into().into());
+    }
+
     pub fn push_metadata_f64_forced(&mut self, key: impl Into<String>, value: f64) {
         self.metadata_mut()
             .insert(key.into(), value.into());

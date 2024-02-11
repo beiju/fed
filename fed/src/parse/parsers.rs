@@ -8,7 +8,7 @@ use nom::number::complete::float;
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
-use crate::{Base, EchoChamberModAdded, HomeRunType, StrikeoutType, SubseasonalMod, TimeElsewhere};
+use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 
@@ -2078,4 +2078,14 @@ pub(crate) fn parse_a_blood(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" have A Blood Type.").parse(input)?;
     Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_polarity(input: &str) -> ParserResult<NumbersGo> {
+    let (input, _) = tag("The Polarity shifted!\nNumbers go ").parse(input)?;
+    let (input, numbers_go) = alt((
+        tag("up.").map(|_| NumbersGo::Up),
+        tag("down.").map(|_| NumbersGo::Down),
+    )).parse(input)?;
+
+    Ok((input, numbers_go))
 }

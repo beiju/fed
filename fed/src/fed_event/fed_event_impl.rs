@@ -1,4 +1,4 @@
-use eventually_api::{EventCategory, EventType, EventuallyEvent};
+use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use itertools::Itertools;
 use serde_json::json;
 use std::fmt::Write;
@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -3253,6 +3253,27 @@ impl FedEvent {
                     child_eb.build(EventType::AddedModFromOtherMod)
                 });
                 eb.build(EventType::ABloodType)
+            }
+            FedEventData::PolarityShift { game, numbers_go, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                let description = format!("The Polarity shifted!\nNumbers go {numbers_go}.");
+                eb.push_description(&description);
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(&description);
+                    match numbers_go {
+                        NumbersGo::Up => {
+                            child_eb.push_metadata_i32("before", Weather::PolarityMinus);
+                            child_eb.push_metadata_i32("after", Weather::PolarityPlus);
+                        }
+                        NumbersGo::Down => {
+                            child_eb.push_metadata_i32("before", Weather::PolarityPlus);
+                            child_eb.push_metadata_i32("after", Weather::PolarityMinus);
+                        }
+                    }
+                    child_eb.build(EventType::WeatherChange)
+                });
+                eb.build(EventType::PolarityShift)
             }
         };
 
