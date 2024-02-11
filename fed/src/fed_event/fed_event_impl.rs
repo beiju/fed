@@ -1556,6 +1556,7 @@ impl FedEvent {
                 let mut children = Vec::new();
                 let mut player_tags = Vec::new();
                 let mut description = "A surge of Immateria rushes up from Under!\nBaserunners are swept from play!".to_string();
+                let is_was = if self.season < 18 { "is" } else { "was" };
 
                 for effect in effects {
                     match effect {
@@ -1565,7 +1566,7 @@ impl FedEvent {
                                     .update(EventBuilderUpdate {
                                         r#type: EventType::AddedMod,
                                         category: EventCategory::Changes,
-                                        description: format!("{player_name} is swept Elsewhere!"),
+                                        description: format!("{player_name} {is_was} swept Elsewhere!"),
                                         team_tags: vec![*team_id],
                                         player_tags: vec![*player_id],
                                         ..Default::default()
@@ -1575,7 +1576,7 @@ impl FedEvent {
                                         "type": 0, // ?
                                     }))
                             );
-                            write!(description, "\n{player_name} is swept Elsewhere!").unwrap();
+                            write!(description, "\n{player_name} {is_was} swept Elsewhere!").unwrap();
                         }
                         FloodingSweptEffect::Flippers(PlayerNameId { player_name, player_id }) => {
                             player_tags.push(*player_id);

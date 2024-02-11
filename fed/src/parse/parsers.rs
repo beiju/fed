@@ -1054,7 +1054,8 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
 
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
     alt((
-        preceded(tag("\n"), parse_terminated(" is swept Elsewhere!"))
+        // In season 19 it changed from "is" to "was"
+        preceded(tag("\n"), alt((parse_terminated(" is swept Elsewhere!"), parse_terminated(" was swept Elsewhere!"))))
             .map(|n| ParsedFloodingEffect::Elsewhere(n)),
         preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
             .map(|n| ParsedFloodingEffect::Flippers(n)),
