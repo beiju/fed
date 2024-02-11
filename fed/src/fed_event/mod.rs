@@ -439,6 +439,22 @@ pub struct ModChangeSubEventWithNamedPlayer {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct FlipNegative {
+    /// Uuid of the undertaker player (the one who did the flipping)
+    pub undertaker_player_id: Uuid,
+
+    /// Name of the undertaker player (the one who did the flipping)
+    pub undertaker_player_name: String,
+
+    /// Metadata for the sub-event associated with sending the undertaker player Elsewhere as well
+    pub undertaker_elsewhere_sub_event: SubEvent,
+
+    /// Metadata for the sub-event associated with flipping the player negative
+    pub flip_negative_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub enum SpicyStatus {
     /// Nothing Spicy-related is happening
     None,
@@ -789,7 +805,22 @@ pub struct Scattered {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum FloodingSweptEffect {
-    Elsewhere(ModChangeSubEventWithNamedPlayer),
+    Elsewhere {
+        /// Uuid of the team whose player was swept Elsewhere
+        team_id: Uuid,
+
+        /// Uuid of the player who was swept Elsewhere
+        player_id: Uuid,
+
+        /// Name of the player who was swept Elsewhere
+        player_name: String,
+
+        /// Metadata for the sub-event associated with adding the Elsewhere mod
+        sub_event: SubEvent,
+
+        /// If the player was flipped negative, this is information about that
+        flipped_negative: Option<FlipNegative>
+    },
     Flippers(PlayerNameId),
     Ego(PlayerNameId),
 }

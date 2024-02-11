@@ -1656,30 +1656,44 @@ pub fn parse_next_event(
             let (parsed_effects, flood_pumps) = event.next_parse(parse_flooding_swept)?;
 
             let effects = parsed_effects.into_iter()
-                .map(|effect| ParseOk(match effect {
-                    ParsedFloodingEffect::Elsewhere(player_name) => {
-                        let mut sub_event = event.next_child(EventType::AddedMod)?;
+                .map(|effect| {
+                    ParseOk(match effect {
+                        ParsedFloodingEffect::Elsewhere((player_name, flipped_negative)) => {
+                            let mut sub_event = event.next_child(EventType::AddedMod)?;
 
-                        FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer {
-                            sub_event: sub_event.as_sub_event(),
-                            team_id: sub_event.next_team_id()?,
-                            player_id: sub_event.next_player_id()?,
-                            player_name: player_name.to_string(),
-                        })
-                    }
-                    ParsedFloodingEffect::Flippers(player_name) => {
-                        FloodingSweptEffect::Flippers(PlayerNameId {
-                            player_id: event.next_player_id()?,
-                            player_name: player_name.to_string(),
-                        })
-                    }
-                    ParsedFloodingEffect::Ego(player_name) => {
-                        FloodingSweptEffect::Ego(PlayerNameId {
-                            player_id: event.next_player_id()?,
-                            player_name: player_name.to_string(),
-                        })
-                    }
-                }))
+                            let flipped_negative = flipped_negative.map(|flipper_name| {
+                                let mut undertaker_elsewhere_event = event.next_child(EventType::AddedMod)?;
+                                let mut negative_event = event.next_child(EventType::AddedMod)?;
+
+                                ParseOk(FlipNegative {
+                                    undertaker_player_id: undertaker_elsewhere_event.next_player_id()?,
+                                    undertaker_player_name: flipper_name.to_string(),
+                                    undertaker_elsewhere_sub_event: undertaker_elsewhere_event.as_sub_event(),
+                                    flip_negative_sub_event: negative_event.as_sub_event(),
+                                })
+                            }).transpose()?;
+                            FloodingSweptEffect::Elsewhere {
+                                team_id: sub_event.next_team_id()?,
+                                player_id: sub_event.next_player_id()?,
+                                player_name: player_name.to_string(),
+                                sub_event: sub_event.as_sub_event(),
+                                flipped_negative,
+                            }
+                        }
+                        ParsedFloodingEffect::Flippers(player_name) => {
+                            FloodingSweptEffect::Flippers(PlayerNameId {
+                                player_id: event.next_player_id()?,
+                                player_name: player_name.to_string(),
+                            })
+                        }
+                        ParsedFloodingEffect::Ego(player_name) => {
+                            FloodingSweptEffect::Ego(PlayerNameId {
+                                player_id: event.next_player_id()?,
+                                player_name: player_name.to_string(),
+                            })
+                        }
+                    })
+                })
                 .collect::<Result<Vec<_>, _>>()?;
 
             let free_refills = event.parse_free_refills()?;

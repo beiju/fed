@@ -1564,64 +1564,75 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { ref game, ref effects, ref free_refills, flood_pumps } => {
-                // I'm being uncharacteristically imperative with this one
-                let mut children = Vec::new();
-                let mut player_tags = Vec::new();
-                let mut description = "A surge of Immateria rushes up from Under!\nBaserunners are swept from play!".to_string();
+            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("A surge of Immateria rushes up from Under!");
+                eb.push_description("Baserunners are swept from play!");
+
                 let is_was = if self.season < 18 { "is" } else { "was" };
 
                 for effect in effects {
                     match effect {
-                        FloodingSweptEffect::Elsewhere(ModChangeSubEventWithNamedPlayer { sub_event, team_id, player_id, player_name }) => {
-                            children.push(
-                                EventBuilderChild::new(&sub_event)
-                                    .update(EventBuilderUpdate {
-                                        r#type: EventType::AddedMod,
-                                        category: EventCategory::Changes,
-                                        description: format!("{player_name} {is_was} swept Elsewhere!"),
-                                        team_tags: vec![*team_id],
-                                        player_tags: vec![*player_id],
-                                        ..Default::default()
-                                    })
-                                    .metadata(json!({
-                                        "mod": "ELSEWHERE",
-                                        "type": 0, // ?
-                                    }))
-                            );
-                            write!(description, "\n{player_name} {is_was} swept Elsewhere!").unwrap();
+                        FloodingSweptEffect::Elsewhere { team_id, player_id, player_name, sub_event, flipped_negative } => {
+                            let elsewhere_description = format!("{player_name} {is_was} swept Elsewhere!");
+                            eb.push_description(&elsewhere_description);
+                            eb.push_child(sub_event, |mut child_eb| {
+                                child_eb.push_description(&elsewhere_description);
+                                child_eb.push_team_tag(team_id);
+                                child_eb.push_player_tag(player_id);
+                                child_eb.push_metadata_str("mod", "ELSEWHERE");
+                                child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                                child_eb.build(EventType::AddedMod)
+                            });
+                            
+                            if let Some(flip) = flipped_negative {
+                                // First, undertaker also goes Elsewhere
+                                let undertaker_description = format!("{} dove in after {player_name}.", flip.undertaker_player_name);
+                                eb.push_description(&undertaker_description);
+                                eb.push_player_tag(flip.undertaker_player_id);
+                                eb.push_child(flip.undertaker_elsewhere_sub_event, |mut child_eb| {
+                                    child_eb.push_description(&undertaker_description);
+                                    child_eb.push_team_tag(team_id);
+                                    child_eb.push_player_tag(flip.undertaker_player_id);
+                                    child_eb.push_metadata_str("mod", "ELSEWHERE");
+                                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                                    child_eb.build(EventType::AddedMod)
+                                });
+
+                                // Then the actual flipping
+                                eb.push_description(&format!("{player_name} was flipped Negative!"));
+                                eb.push_player_tag(player_id);
+                                eb.push_child(flip.flip_negative_sub_event, |mut child_eb| {
+                                    child_eb.push_description(&format!("{} flipped {player_name} Negative.", flip.undertaker_player_name));
+                                    child_eb.push_team_tag(team_id);
+                                    child_eb.push_player_tag(player_id);
+                                    child_eb.push_metadata_str("mod", "NEGATIVE");
+                                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                                    child_eb.build(EventType::AddedMod)
+                                });
+                            }
                         }
                         FloodingSweptEffect::Flippers(PlayerNameId { player_name, player_id }) => {
-                            player_tags.push(*player_id);
-                            write!(description, "\n{player_name} uses their Flippers to slingshot home!").unwrap();
+                            // There's a danger that this could end a game and therefore have hype
+                            // and whatever else comes with it, but I'll deal with that if and when
+                            // it actually occurs
+                            eb.push_description(&format!("{player_name} uses their Flippers to slingshot home!"));
+                            eb.push_player_tag(player_id);
                         }
                         FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
-                            player_tags.push(*player_id);
-                            write!(description, "\n{player_name}'s Ego keeps them on base!").unwrap();
+                            eb.push_description(&format!("{player_name}'s Ego keeps them on base!"));
+                            eb.push_player_tag(player_id);
                         }
                     }
                 }
 
-                for refill in free_refills {
-                    write!(description, "\n{} used their Free Refill.\n{} Refills the In!",
-                           refill.player_name, refill.player_name).unwrap();
-                    children.push(make_free_refill_child(refill));
-                }
-
                 if flood_pumps {
-                    write!(description, "\nThe Flood Pumps activate!").unwrap();
+                    eb.push_description("The Flood Pumps activate!");
                 }
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::FloodingSwept,
-                        category: EventCategory::Special,
-                        description,
-                        player_tags,
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                eb.push_free_refills(free_refills);
+                eb.build(EventType::FloodingSwept)
             }
             FedEventData::ReturnFromElsewhere { game, returns } => {
                 eb.set_game(game);

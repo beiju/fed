@@ -1077,7 +1077,7 @@ pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<ParsedPlay
 }
 
 pub(crate) enum ParsedFloodingEffect<'a> {
-    Elsewhere(&'a str),
+    Elsewhere((&'a str, Option<&'a str>)),
     Flippers(&'a str),
     Ego(&'a str),
 }
@@ -1093,14 +1093,39 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
 
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
     alt((
-        // In season 19 it changed from "is" to "was"
-        preceded(tag("\n"), alt((parse_terminated(" is swept Elsewhere!"), parse_terminated(" was swept Elsewhere!"))))
-            .map(|n| ParsedFloodingEffect::Elsewhere(n)),
+        parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
         preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
             .map(|n| ParsedFloodingEffect::Flippers(n)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
     )).parse(input)
+}
+
+pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<(&str, Option<&str>)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, swept_name) = alt((
+        // In season 19 it changed from "is" to "was"
+        parse_terminated(" is swept Elsewhere!"),
+        parse_terminated(" was swept Elsewhere!"),
+    )).parse(input)?;
+
+    let (input, flipped_negative) = opt(parse_flipped_negative(swept_name)).parse(input)?;
+
+    Ok((input, (swept_name, flipped_negative)))
+}
+
+pub(crate) fn parse_flipped_negative(swept_player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, flipper_name) = parse_terminated(" dove in after ").parse(input)?;
+        let (input, _) = tag(swept_player_name).parse(input)?;
+        let (input, _) = tag(".\n").parse(input)?;
+        let (input, _) = tag(swept_player_name).parse(input)?;
+        let (input, _) = tag(" was flipped Negative!").parse(input)?;
+
+        Ok((input, flipper_name))
+
+    }
 }
 
 pub(crate) enum ParsedReturnFromElsewhere<'a> {
