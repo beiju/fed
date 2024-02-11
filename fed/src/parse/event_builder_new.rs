@@ -106,6 +106,10 @@ impl EventBuilder {
         self.0.metadata.children.push(build_func(child_builder))
     }
 
+    pub fn clear_sub_play(&mut self) {
+        self.0.metadata.sub_play = None;
+    }
+
     pub fn push_description(&mut self, desc: &str) {
         if !self.0.description.is_empty() {
             self.0.description.push('\n');

@@ -1756,6 +1756,19 @@ pub struct Ambush {
     pub player_rating_after: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct StadiumModAdded {
+    /// Description for the AddedMod sub-event. This description is not currently parsed but
+    /// contributions are welcome.
+    pub description: String,
+
+    /// Internal ID of the mod that was added
+    pub mod_id: String,
+
+    /// Metadata for the AddedMod sub-event
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3625,6 +3638,10 @@ pub enum FedEventData {
         /// undo the reno fraud of season 14 it is a string.
         // TODO Verify that this serializes without any intermediate structure
         votes: RenovationVotes,
+
+        /// Starting in s19, there's a ModAdded child when a stadium mod is added. This is metadata
+        /// for that event, if applicable. Otherwise null.
+        mod_add_event: Option<StadiumModAdded>
     },
 
     /// The peanut mister activates and cures a player's peanut allergy

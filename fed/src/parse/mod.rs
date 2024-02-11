@@ -1600,6 +1600,16 @@ pub fn parse_next_event(
                 })?
                 .is_string();
 
+            let mod_add_event = event.next_child_opt(EventType::AddedMod)?
+                .map(|mod_add_child| {
+                    ParseOk(StadiumModAdded {
+                        description: mod_add_child.description().to_string(),
+                        mod_id: mod_add_child.metadata_str("mod")?.to_string(),
+                        sub_event: mod_add_child.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
             // It may be valuable to parse which reno is built, but there isn't one unified syntax
             // so I'm not going to put in the work now. Contributions welcome.
             FedEventData::RenovationBuilt {
@@ -1612,6 +1622,7 @@ pub fn parse_next_event(
                 } else {
                     RenovationVotes::Normal(event.metadata_i64("votes")?)
                 },
+                mod_add_event
             }
         }
         EventType::LightSwitchToggled => { todo!() }

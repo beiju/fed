@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -2219,21 +2219,30 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::RenovationBuilt,
-                        category: EventCategory::Changes,
-                        description,
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "renoId": renovation_id,
-                        "title": renovation_title,
-                        "votes": votes,
-                    }))
-                    .build()
+            FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes, mod_add_event } => {
+                eb.set_category(EventCategory::Changes);
+                eb.set_description(description);
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("renoId", renovation_id);
+                eb.push_metadata_str("title", renovation_title);
+                match votes {
+                    RenovationVotes::Normal(v) => { eb.push_metadata_i64("votes", v) }
+                    RenovationVotes::Manual(v) => { eb.push_metadata_str("votes", v) }
+                }
+
+                if let Some(mod_add) = mod_add_event {
+                    eb.push_child(mod_add.sub_event, |mut child_eb| {
+                        child_eb.set_description(mod_add.description);
+                        child_eb.push_team_tag(team_id);
+                        child_eb.push_metadata_str("mod", mod_add.mod_id);
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        // Grumble grumble inconsistency
+                        child_eb.clear_sub_play();
+                        child_eb.build(EventType::AddedMod)
+                    });
+                }
+
+                eb.build(EventType::RenovationBuilt)
             }
             FedEventData::PeanutMister { game, player_id, player_name, superallergy } => {
                 let effect_str = if superallergy.is_some() {
