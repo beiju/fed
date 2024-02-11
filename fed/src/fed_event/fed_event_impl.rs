@@ -1623,16 +1623,17 @@ impl FedEvent {
                     match flavor {
                         ReturnFromElsewhereFlavor::Full { team_id, player_id, is_peanut, sub_event, time_elsewhere, scattered, recongealed_differently } => {
                             let returned_text = if is_peanut { "rolled back" } else { "returned" };
+                            let has = if self.season < 18 { "has " } else { "" };
                             let description = match time_elsewhere {
                                 TimeElsewhere::Days(days) => {
                                     let s = if days == 1 { "" } else { "s" };
-                                    format!("{player_name} has {returned_text} from Elsewhere after {days} day{s}!")
+                                    format!("{player_name} {has}{returned_text} from Elsewhere after {days} day{s}!")
                                 }
                                 TimeElsewhere::Seasons(1) => {
-                                    format!("{player_name} has {returned_text} from Elsewhere after one season!")
+                                    format!("{player_name} {has}{returned_text} from Elsewhere after one season!")
                                 }
                                 TimeElsewhere::Seasons(seasons) => {
-                                    format!("{player_name} has {returned_text} from Elsewhere after {seasons} seasons!")
+                                    format!("{player_name} {has}{returned_text} from Elsewhere after {seasons} seasons!")
                                 }
                             };
                             eb.push_description(&description);

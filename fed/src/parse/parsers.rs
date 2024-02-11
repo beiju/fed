@@ -1108,9 +1108,14 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
 }
 
 pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&str, TimeElsewhere, bool)> {
-    let (input, player_name) = parse_terminated(" has ").parse(input)?;
-    let (input, is_peanut) = alt((tag("rolled back").map(|_| true), tag("returned").map(|_| false))).parse(input)?;
-    let (input, _) = tag(" from Elsewhere after ").parse(input)?;
+    // They took out the "has" in s19
+    let (input, (player_name, is_peanut)) = alt((
+        parse_terminated(" has returned ").map(|n| (n, false)),
+        parse_terminated(" returned ").map(|n| (n, false)),
+        parse_terminated(" has rolled back ").map(|n| (n, true)),
+        parse_terminated(" rolled back ").map(|n| (n, true)),
+    )).parse(input)?;
+    let (input, _) = tag("from Elsewhere after ").parse(input)?;
     let (input, after_days) = alt((
         tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
         terminated(parse_whole_number, tag(" seasons!")).map(|n| TimeElsewhere::Seasons(n)),

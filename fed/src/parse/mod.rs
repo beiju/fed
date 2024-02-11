@@ -2544,7 +2544,8 @@ pub fn parse_next_event(
                     ParsedPlayerGainedItem::WonPrizeMatchImplicit(player_name, game_id) => {
                         // This ends the prize match, so it's no longer pending
                         let remove_index = pending_prize_matches.iter()
-                            .find_position(|item| item.game_id != game_id)
+                            // I changed a != to an == here and I'm not entirely sure that was right
+                            .find_position(|item| item.game_id == game_id)
                             .expect("The item we're finding came from this vec in the first place, so it should always be there")
                             .0;
                         pending_prize_matches.swap_remove(remove_index);
