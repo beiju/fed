@@ -29,7 +29,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
     "Mechanics",
 ];
 
-const TAROT_EVENTS: [Uuid; 16] = [
+const TAROT_EVENTS: [Uuid; 40] = [
     uuid!("0d96d9ed-8e40-47ca-a543-b27518b276ef"), // Curry gets Over Under
     uuid!("6dd0204e-213b-4798-9fad-e042a232edc6"), // Krod gets Under Over
     uuid!("760ee47b-7698-4216-9612-e67c13ba12ef"), // Fridays get Sinking Ship
@@ -46,6 +46,37 @@ const TAROT_EVENTS: [Uuid; 16] = [
     uuid!("015262ca-5903-4960-82af-d9c682255796"), // ...getting the Force Field of Observation
     uuid!("64021788-163a-47a5-9bb7-a2b7d4b3830d"), // Justice Spoon gets Negative
     uuid!("ed20a77c-8149-48ee-90cf-f172117c3ca4"), // Lotus Mango gets Negative
+    uuid!("b0bef8a4-e33a-4c60-83af-c2f5c2f3cf67"), // s19 tarot readings, every team got a mod
+    uuid!("b3cb7f44-0dab-4bd6-9e07-51736f3ce3de"),
+    uuid!("260f6038-3a07-478d-89fd-a49a78743ac4"),
+    // uuid!("1ea258e2-2aa5-4b3a-905e-58518d1e601c"),
+    uuid!("10d649f3-d5a2-408d-ba43-0b7e19ee864e"),
+    uuid!("b8df090b-9645-4565-949e-02ae6de3304d"),
+    uuid!("3e4a2af4-36bb-46f3-9af0-3af44d243114"),
+    // uuid!("30a1e929-0955-47dc-83fc-9421ab1b0615"),
+    uuid!("cfbfba36-f732-4ee1-af95-6a5409ae2d11"),
+    uuid!("3174d3b8-122d-481a-902e-3e5f3f491f66"),
+    uuid!("2b9fca0d-b864-4de5-961e-5b86c6acd08d"),
+    // uuid!("b83fe76b-5596-4985-9e10-4add48ec1552"),
+    uuid!("ac8c1093-960f-4b70-aa85-1b8a4d6b66c6"),
+    uuid!("4dbd0e70-637c-41bb-ac8b-fe9365d7c104"),
+    uuid!("f8336ae5-1db9-443b-882e-a7f7338b2b3c"),
+    // uuid!("1179c8cc-7d5b-4fd8-96be-2d1b98b7e834"),
+    uuid!("4ea1e46f-6fe3-4934-9f78-1fbabf0825c7"),
+    uuid!("322e0583-82cc-4408-b703-e341aaacdff1"),
+    uuid!("d95a3f39-e0d3-49d0-9f57-5bebfcf719ed"),
+    // uuid!("b0445ab4-dbfe-475b-80a7-2c9b3a1653b1"), // this is a TarotReading type event, do i need to list it?
+    uuid!("567c3f41-665a-4f29-8e86-73dbca62db47"),
+    uuid!("c156a09f-5645-4656-854c-5c03823e6f97"),
+    uuid!("8a6e8ccc-e33b-487a-ab68-7bdeae757013"),
+    // uuid!("7d281c4b-e8b1-464a-9e71-04993836dcd9"), // also TarotReading
+    uuid!("d1dcce2b-9cc8-4fab-a905-68584dabe705"),
+    uuid!("813be80b-4380-4e1d-bbb0-f956d9aadd57"),
+    uuid!("5f2020ae-653e-4f8a-a1ba-efdce4bff44f"),
+    // uuid!("2a46a2a0-f608-45dd-978f-e5d597b9d668"), // TarotReading
+    uuid!("3164efbf-6fa4-4986-bac3-b25b33734a81"),
+    uuid!("393e0d96-20e6-45bc-bbc2-3a192e9e7ee8"),
+    uuid!("987292c6-7137-49d7-855c-0edd949aa7fa"),
 ];
 
 pub struct PendingPrizeMatch {
