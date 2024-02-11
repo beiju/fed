@@ -436,34 +436,24 @@ impl FedEvent {
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }
-            FedEventData::StolenBase { ref game, ref runner_name, runner_id, base_stolen, blaserunning, ref free_refill, ref runner_item_damage, is_special } => {
-                let blaserunning_str = if blaserunning {
-                    format!("\n{} scores with Blaserunning!", runner_name)
-                } else {
-                    String::new()
-                };
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.push_player_tag(runner_id);
+                eb.set_category(EventCategory::special_if(blaserunning || free_refill.is_some() || is_special));
+                eb.push_description(&format!("{runner_name} steals {base_stolen} base!"));
 
-                let free_refill_str = if let Some(free_refill) = free_refill {
-                    format!("\n{} used their Free Refill.\n{} Refills the In!",
-                            free_refill.player_name, free_refill.player_name)
-                } else {
-                    String::new()
-                };
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::StolenBase,
-                        category: EventCategory::special_if(blaserunning || free_refill.is_some() || is_special),
-                        description: format!("{runner_name} steals {base_stolen} base!{blaserunning_str}{free_refill_str}"),
-                        player_tags: if blaserunning { vec![runner_id, runner_id] } else { vec![runner_id] },
-                        ..Default::default()
-                    })
-                    .children(
-                        free_refill.as_ref()
-                            .map(|free_refill| make_free_refill_child(free_refill))
-                            .into_iter()
-                    )
-                    .item_damage_after_score(runner_item_damage, runner_name)
-                    .build()
+                if blaserunning {
+                    eb.push_description(&format!("{} scores with Blaserunning!", runner_name));
+                    // The player tag appears a second time when there's blaserunning
+                    eb.push_player_tag(runner_id);
+                }
+
+                eb.push_free_refill(free_refill);
+                eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
+                eb.push_hype(hype, home_team_id);
+
+                eb.build(EventType::StolenBase)
             }
             FedEventData::StrikeoutSwinging { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite } => {
                 eb.set_game(game);

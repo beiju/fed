@@ -2193,6 +2193,9 @@ pub enum FedEventData {
         /// Special but that was the only way of knowing. (It's possible that there are other
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<HypeBuilds>,
     },
 
     /// Caught stealing

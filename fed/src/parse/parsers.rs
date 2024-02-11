@@ -424,7 +424,7 @@ pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
     many0(parse_free_refill).parse(input)
 }
 
-pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, bool, Option<&str>)> {
+pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -438,7 +438,9 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, 
     let (input, blaserunning) = opt(preceded(tag("\n"), preceded(tag(runner_name), tag(" scores with Blaserunning!")))).parse(input)?;
     let (input, free_refill) = opt(parse_free_refill).parse(input)?;
 
-    Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill)))
+    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+
+    Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill, hype_stadium_name)))
 }
 
 pub(crate) fn parse_named_base(input: &str) -> ParserResult<Base> {

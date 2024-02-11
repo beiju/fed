@@ -340,7 +340,7 @@ pub fn parse_next_event(
             }
         }
         EventType::StolenBase => {
-            let (runner_name, base_stolen, is_successful, blaserunning, free_refiller) = event.next_parse(parse_stolen_base)?;
+            let (runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name) = event.next_parse(parse_stolen_base)?;
 
             // TODO Right now each of these is in one branch and both should be in both
             let runner_item_damage = event.parse_item_damage(runner_name)?;
@@ -348,6 +348,8 @@ pub fn parse_next_event(
 
             if is_successful {
                 let runner_id = event.next_player_id()?;
+
+                let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
 
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
@@ -366,6 +368,7 @@ pub fn parse_next_event(
                     }).transpose()?,
                     runner_item_damage,
                     is_special: event.category == EventCategory::Special,
+                    hype,
                 }
             } else {
                 FedEventData::CaughtStealing {
