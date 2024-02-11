@@ -1891,6 +1891,9 @@ pub enum FedEventData {
         /// If there was a parasite blooddrain on this strikeout, contains information about it.
         /// Otherwise null.
         parasite: Option<Parasite>,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<HypeBuilds>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or

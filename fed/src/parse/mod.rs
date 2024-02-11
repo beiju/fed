@@ -513,7 +513,8 @@ pub fn parse_next_event(
         EventType::FlyOut => {
             // Order matters
             let pitch = event.parse_pitch()?;
-            let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
+            let (batter_name, fielder_name, hype_stadium_name) = event.next_parse(parse_flyout)?;
+            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let scores = event.parse_scores(" tags up and scores!")?;
@@ -536,6 +537,7 @@ pub fn parse_next_event(
                 fielder_item_damage,
                 other_player_item_damage,
                 parasite,
+                hype,
             }
         }
         EventType::GroundOut => {

@@ -150,11 +150,13 @@ pub(crate) fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
-    Ok((input, (batter_name, fielder_name)))
+    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+
+    Ok((input, (batter_name, fielder_name, hype_stadium_name)))
 }
 
 pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {

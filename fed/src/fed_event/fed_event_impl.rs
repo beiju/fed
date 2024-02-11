@@ -330,11 +330,13 @@ impl FedEvent {
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
             }
-            FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite, } => {
+            FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite, hype } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a flyout to {fielder_name}."));
+                eb.push_hype(hype, home_team_id);
                 eb.push_item_damage(batter_item_damage, &batter_name);
                 eb.push_item_damage(fielder_item_damage, &fielder_name);
                 eb.push_named_item_damage(other_player_item_damage);
