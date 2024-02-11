@@ -3133,6 +3133,22 @@ pub fn parse_next_event(
                 repair,
             }
         }
+        EventType::ABloodType => {
+            // Only the shoe thieves ever had this, and Psychoacoustics is incompatible with it.
+            // Still, I'm going to parse it
+            let team_nickname = event.next_parse(parse_a_blood)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let mut mod_add_event = event.next_child(EventType::AddedModFromOtherMod)?;
+
+            FedEventData::ABloodType {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: mod_add_event.next_team_id()?,
+                team_nickname: team_nickname.to_string(),
+                blood_type_mod_id: mod_add_event.metadata_str("mod")?.to_string(),
+                sub_event: mod_add_event.as_sub_event(),
+            }
+        }
         EventType::PlayerSoulIncrease => { todo!() }
         EventType::Announcement => { todo!() }
         EventType::Ratification => { todo!() }

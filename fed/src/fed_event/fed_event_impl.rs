@@ -3225,6 +3225,20 @@ impl FedEvent {
 
                 return vec![main_event, dust_add_event];
             }
+            FedEventData::ABloodType { game, team_id, team_nickname, blood_type_mod_id, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("The {team_nickname} have A Blood Type."));
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("The {team_nickname} have A Blood Type."));
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_str("mod", blood_type_mod_id);
+                    child_eb.push_metadata_str("source", "A");
+                    child_eb.push_metadata_i64("type", ModDuration::Game);
+                    child_eb.build(EventType::AddedModFromOtherMod)
+                });
+                eb.build(EventType::ABloodType)
+            }
         };
 
         vec![item]

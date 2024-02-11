@@ -2039,3 +2039,9 @@ pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
     let (input, team_nickname) = parse_terminated(".").parse(input)?;
     Ok((input, (player_name, team_nickname)))
 }
+
+pub(crate) fn parse_a_blood(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" have A Blood Type.").parse(input)?;
+    Ok((input, team_nickname))
+}

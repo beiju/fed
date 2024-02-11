@@ -4447,6 +4447,25 @@ pub enum FedEventData {
         /// Metadata for the associated ModAdded event for adding the Dust mod
         mod_added_event: SubEvent,
     },
+
+    /// Team with A Blood gets A blood type at the beginning of a game
+    #[serde(rename_all = "camelCase")]
+    ABloodType {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the team whose blood triggered
+        team_id: Uuid,
+
+        /// Nickname of the team whose blood triggered
+        team_nickname: String,
+
+        /// Mod ID of the blood mod the team gained
+        blood_type_mod_id: String,
+
+        /// Metadata for the associated ModAdded event
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4665,6 +4684,7 @@ impl FedEventData {
             FedEventData::TeamReceivedGifts { .. } => { None }
             FedEventData::GiftReceived { .. } => { None }
             FedEventData::ReplicaFadedToDust { .. } => { None }
+            FedEventData::ABloodType { game, .. } => { Some(game) }
         }
     }
 }
