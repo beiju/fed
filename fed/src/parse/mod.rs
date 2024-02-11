@@ -541,8 +541,9 @@ pub fn parse_next_event(
         EventType::GroundOut => {
             let pitch = event.parse_pitch()?;
             match event.next_parse(parse_ground_out)? {
-                ParsedGroundOut::Simple { batter_name, fielder_name } => {
+                ParsedGroundOut::Simple { batter_name, fielder_name, hype_stadium_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
+                    let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
                     let scores = event.parse_scores(" advances on the sacrifice.")?;
                     // Damages definitely belong after scores and in this order but not sure if any
                     // other events come in between
@@ -564,6 +565,7 @@ pub fn parse_next_event(
                         batter_item_damage,
                         pitcher_item_damage,
                         fielder_item_damage,
+                        hype,
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
@@ -619,7 +621,7 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
+            let (batter_name, home_run_type,  hype_stadium_name) = event.next_parse(parse_hr)?;
 
             // Parsed specially because AFAIK this is the only place an attraction happens and you
             // don't already know the player name
@@ -655,10 +657,10 @@ pub fn parse_next_event(
             let batter_id = event.next_player_id()?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
+            let hype = hype_stadium_name.map(|n| event.parse_hype(n)).transpose()?;
             let big_bucket = event.next_parse(parse_big_bucket)?;
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
-
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -676,6 +678,7 @@ pub fn parse_next_event(
                 attraction,
                 damaged_items,
                 hotel_motel_parties,
+                hype,
             }
         }
         EventType::Hit => {

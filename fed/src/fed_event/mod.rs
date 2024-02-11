@@ -1938,6 +1938,9 @@ pub enum FedEventData {
 
         /// Damage that the fielder's item took, if any
         fielder_item_damage: Option<ItemDamaged>,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<HypeBuilds>,
     },
 
     /// Fielders choice event
@@ -2105,6 +2108,9 @@ pub enum FedEventData {
 
         /// If this was a Holiday Inning, contains the Hotel Motel parties
         hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<HypeBuilds>,
     },
 
     /// Stolen base

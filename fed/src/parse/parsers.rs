@@ -175,6 +175,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     Simple {
         batter_name: &'a str,
         fielder_name: &'a str,
+        hype_stadium_name: Option<&'a str>,
     },
     FieldersChoice {
         runner_out_name: &'a str,
@@ -193,9 +194,12 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundO
     let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
+    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+
     let parsed = ParsedGroundOut::Simple {
         batter_name,
         fielder_name,
+        hype_stadium_name,
     };
     Ok((input, (parsed)))
 }
@@ -253,12 +257,21 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Optio
         tag("Quadruple!").map(|_| ParsedHitType::Quadruple),
     )).parse(input)?;
 
-    let (input, hype) = opt(parse_hype).parse(input)?;
+    let (input, hype) = opt(parse_hype_suffix).parse(input)?;
 
     Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke, hype)))
 }
 
-pub(crate) fn parse_hype(input: &str) -> ParserResult<&str> {
+// The difference between hype suffix and hype prefix is which newline it consumes
+pub(crate) fn parse_hype_prefix(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Shame!\nHype Builds in ").parse(input)?;
+    let (input, stadium_name) = parse_terminated("!\n").parse(input)?;
+
+    Ok((input, stadium_name))
+}
+
+// The difference between hype suffix and hype prefix is which newline it consumes
+pub(crate) fn parse_hype_suffix(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("\nShame!\nHype Builds in ").parse(input)?;
     let (input, stadium_name) = parse_terminated("!").parse(input)?;
 
@@ -369,7 +382,9 @@ pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType, Option<&str>)> {
+    let (input, hype) = opt(parse_hype_prefix).parse(input)?;
+
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, home_run_type) = alt((
         tag("solo home run!").map(|_| HomeRunType::Solo),
@@ -378,7 +393,7 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
         tag("grand slam!").map(|_| HomeRunType::GrandSlam), // dunno what happens with a pentaslam...
     )).parse(input)?;
 
-    Ok((input, (batter_name, home_run_type)))
+    Ok((input, (batter_name, home_run_type, hype)))
 }
 
 pub(crate) fn parse_attract_player(input: &str) -> ParserResult<Option<(&str, &str)>> {

@@ -389,12 +389,14 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
                 eb.push_pitch(pitch);
                 eb.push_named_item_damages(damaged_items);
                 eb.push_magmatic(magmatic, &batter_name, batter_id);
+                eb.push_hype(hype, home_team_id); // Not sure about ordering yet
 
                 // HR itself
                 eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
@@ -413,12 +415,14 @@ impl FedEvent {
 
                 eb.build(EventType::HomeRun)
             }
-            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage, hype } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
+                eb.push_hype(hype, home_team_id);
                 eb.push_scores(scores, "advances on the sacrifice.");
                 // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
                 // definitely somewhere after scores. Rest of the order is not yet known
