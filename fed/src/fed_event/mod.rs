@@ -3888,6 +3888,10 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event associated with adding the mod
         sub_event: SubEvent,
+
+        /// List of subseasonal mods that changed on this Psychoacoustics event.
+        /// See HalfInningStart.subseasonal_mod_effects for details.
+        subseasonal_mod_effects: Vec<SubseasonalModChange>,
     },
 
     /// An Echo Echoed a Receiver and turned them into an Echo

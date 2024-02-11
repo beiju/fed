@@ -2664,36 +2664,27 @@ impl FedEvent {
 
                 eb.build(EventType::ConsumersAttack)
             }
-            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event } => {
+            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event, subseasonal_mod_effects } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                push_subseasonal_mod_changes(&mut eb, subseasonal_mod_effects, self.season);
+
                 let description = format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} {} the {team_nickname}.",
                                           if (self.season, self.day) < (15, 33) { "at" } else { "to" });
-                let child = EventBuilderChild::new(&sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedModFromOtherMod,
-                        category: EventCategory::Changes,
-                        description: description.clone(),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": mod_id,
-                        "source": "PSYCHOACOUSTICS",
-                        "type": 3,
-                    }));
+                if (self.season, self.day) > (15, 32) { // tgb did a whoopsie
+                    eb.push_description(&description);
+                }
 
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Psychoacoustics,
-                        category: EventCategory::Special,
-                        description: if (self.season, self.day) < (15, 33) {
-                            String::new() // tgb did a whoopsie
-                        } else {
-                            description
-                        },
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(&description);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_str("mod", mod_id);
+                    child_eb.push_metadata_str("source", "PSYCHOACOUSTICS");
+                    child_eb.push_metadata_i64("type", ModDuration::Game);
+                    child_eb.build(EventType::AddedModFromOtherMod)
+                });
+
+                eb.build(EventType::Psychoacoustics)
             }
             FedEventData::EchoReceiver { game, echoer_name, echoee_name, echoee_id, echoee_team_id, sub_event } => {
                 let description = format!("ECHO {echoer_name} ECHO {echoee_name} ECHO");

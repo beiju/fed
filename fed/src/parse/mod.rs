@@ -328,25 +328,7 @@ pub fn parse_next_event(
             // Starting in s16, subseasonal mods (mods that apply only during Earl/Mid/Lateseason)
             // sometimes announce when they start or end in the first HalfInning of the game. This
             // smells like a bug to me.
-            let subseasonal_mod_effects = event.next_parse(parse_subseasonal_mod_changes)?.into_iter()
-                .map(|(team_nickname, source_mod, is_active)| {
-                    let mut child = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
-                    let team_id = child.next_team_id()?;
-
-                    ParseOk(SubseasonalModChange {
-                        subject: ModChangeSubject::Team {
-                            team_id,
-                            team_nickname: Some(team_nickname.to_string()),
-                        },
-                        source_mod,
-                        active: child.event_type == EventType::AddedModFromOtherMod,
-                        sub_event: Some(child.as_sub_event()),
-                        // There's probably a way to get around the to_string here, but it's not
-                        // important enough to worry about
-                        dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
 
             let (top_of_inning, inning, team_name) = event.next_parse(parse_half_inning)?;
             assert!(is_known_team_name(team_name));
@@ -2954,6 +2936,9 @@ pub fn parse_next_event(
             return parse_next_event(event_iter, state);
         }
         EventType::Psychoacoustics => {
+            // Same probably-bug as on HalfInning events
+            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
+
             // For some reason the description on the main event is empty and the description is
             // only on the child event
             let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
@@ -2968,6 +2953,7 @@ pub fn parse_next_event(
                 mod_name: mod_name.to_string(),
                 mod_id: child.metadata_str("mod")?.to_string(),
                 sub_event: child.as_sub_event(),
+                subseasonal_mod_effects,
             }
         }
         EventType::EchoReciever => {

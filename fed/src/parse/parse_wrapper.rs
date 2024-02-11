@@ -7,7 +7,7 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::fed_event::*;
 use crate::FeedParseError;
-use crate::parse::{is_known_team_nickname, ParseOk};
+use crate::parse::{InterEventState, is_known_team_nickname, ParseOk};
 use crate::parse::parsers::*;
 
 #[derive(Debug, Copy, Clone)]
@@ -877,6 +877,28 @@ impl<'e> EventParseWrapper<'e> {
                 flip_negative_sub_event: negative_event.as_sub_event(),
             })
         }).transpose()
+    }
+
+    pub fn parse_subseasonal_mod_changes(&mut self, state: &InterEventState) -> Result<Vec<SubseasonalModChange>, FeedParseError> {
+        self.next_parse(parse_subseasonal_mod_changes)?.into_iter()
+            .map(|(team_nickname, source_mod, is_active)| {
+                let mut child = self.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+                let team_id = child.next_team_id()?;
+
+                ParseOk(SubseasonalModChange {
+                    subject: ModChangeSubject::Team {
+                        team_id,
+                        team_nickname: Some(team_nickname.to_string()),
+                    },
+                    source_mod,
+                    active: child.event_type == EventType::AddedModFromOtherMod,
+                    sub_event: Some(child.as_sub_event()),
+                    // There's probably a way to get around the to_string here, but it's not
+                    // important enough to worry about
+                    dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
