@@ -1664,8 +1664,13 @@ impl FedEvent {
                             }
                         }
                         ReturnFromElsewhereFlavor::Short { team_id, player_id, is_peanut, sub_event } => {
-                            let description = format!("{player_name} has {} from Elsewhere!",
-                                                      if is_peanut { "rolled back" } else { "returned" });
+                            let description = if self.season < 18 {
+                                format!("{player_name} has {} from Elsewhere!",
+                                        if is_peanut { "rolled back" } else { "returned" })
+                            } else {
+                                format!("{player_name} {} from Elsewhere.",
+                                        if is_peanut { "rolled back" } else { "returned" })
+                            };
                             eb.push_description(&description);
                             eb.push_child(sub_event, |mut child| {
                                 child.push_description(&description);

@@ -1085,6 +1085,8 @@ pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<Pars
 pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
     alt((
         parse_terminated(" has returned from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, false))),
+        // They got less excited in s19
+        parse_terminated(" returned from Elsewhere.").map(|n| ParsedReturnFromElsewhere::Short((n, false))),
         parse_terminated(" has rolled back from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, true))),
         parse_normal_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Normal(v)),
     )).parse(input)
