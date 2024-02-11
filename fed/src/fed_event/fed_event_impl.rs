@@ -1617,18 +1617,7 @@ impl FedEvent {
                         ReturnFromElsewhereFlavor::Full { team_id, player_id, is_peanut, sub_event, time_elsewhere, scattered, recongealed_differently } => {
                             let returned_text = if is_peanut { "rolled back" } else { "returned" };
                             let has = if self.season < 18 { "has " } else { "" };
-                            let description = match time_elsewhere {
-                                TimeElsewhere::Days(days) => {
-                                    let s = if days == 1 { "" } else { "s" };
-                                    format!("{player_name} {has}{returned_text} from Elsewhere after {days} day{s}!")
-                                }
-                                TimeElsewhere::Seasons(1) => {
-                                    format!("{player_name} {has}{returned_text} from Elsewhere after one season!")
-                                }
-                                TimeElsewhere::Seasons(seasons) => {
-                                    format!("{player_name} {has}{returned_text} from Elsewhere after {seasons} seasons!")
-                                }
-                            };
+                            let description = format!("{player_name} {has}{returned_text} from Elsewhere after {time_elsewhere}!");
                             eb.push_description(&description);
 
                             if let Some(Scattered { scattered_name, sub_event }) = scattered {
@@ -1683,6 +1672,20 @@ impl FedEvent {
                             let description = format!("{player_name} has {} from Elsewhere!",
                                                       if is_peanut { "rolled back" } else { "returned" });
                             eb.push_description(&description);
+                        }
+                        ReturnFromElsewhereFlavor::PulledBack { team_id, sought_player_id, seeker_player_id, seeker_player_name, sub_event, time_elsewhere } => {
+                            eb.push_description(&format!("{seeker_player_name} sought out Elsewhere teammate {player_name}..."));
+                            eb.push_player_tag(seeker_player_id);
+                            let description = format!("{player_name} was pulled back from Elsewhere after {time_elsewhere}!");
+                            eb.push_description(&description);
+                            eb.push_child(sub_event, |mut child| {
+                                child.push_description(&description);
+                                child.push_team_tag(team_id);
+                                child.push_player_tag(sought_player_id);
+                                child.push_metadata_str("mod", "ELSEWHERE");
+                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.build(EventType::RemovedMod)
+                            });
                         }
                     }
                 }
@@ -3360,6 +3363,13 @@ impl FedEvent {
                     child_eb.build(EventType::WeatherChange)
                 });
                 eb.build(EventType::PolarityShift)
+            }
+            FedEventData::DonatedShameApplied { game, team_nickname, unruns, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("Shame Donations are granted!");
+                eb.push_description(&format!("The {team_nickname} receive {unruns} Unruns."));
+                eb.build(EventType::ShameDonor)
             }
         };
 

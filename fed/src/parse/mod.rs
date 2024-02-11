@@ -1971,6 +1971,18 @@ pub fn parse_next_event(
                                 (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
                             }
                         }
+                        ParsedReturnFromElsewhere::Seeker((seeker_name, sought_name, time_elsewhere)) => {
+                            let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
+
+                            (sought_name, ReturnFromElsewhereFlavor::PulledBack {
+                                team_id: return_sub_event.next_team_id()?,
+                                sought_player_id: return_sub_event.next_player_id()?,
+                                seeker_player_id: event.next_player_id()?,
+                                sub_event: return_sub_event.as_sub_event(),
+                                time_elsewhere,
+                                seeker_player_name: seeker_name.to_string(),
+                            })
+                        }
                     };
 
                     ParseOk(ReturnFromElsewhere {
@@ -2284,7 +2296,16 @@ pub fn parse_next_event(
                 changes,
             }
         }
-        EventType::ShameDonor => { todo!() }
+        EventType::ShameDonor => {
+            let (team_nickname, unruns) = event.next_parse(parse_donated_shame)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            FedEventData::DonatedShameApplied {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                unruns,
+            }
+        }
         EventType::AddedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully

@@ -4,7 +4,7 @@ use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{fail, map_res, opt, recognize, verify};
 use nom::multi::{many0, separated_list1};
-use nom::number::complete::float;
+use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
@@ -1100,6 +1100,8 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
 pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Short((&'a str, bool)),
     Normal((&'a str, TimeElsewhere, bool)),
+    // For now, I don't support peanuts being pulled back, I'll add it if it ever happened
+    Seeker((&'a str, &'a str, TimeElsewhere))
 }
 
 pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
@@ -1113,6 +1115,7 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
         parse_terminated(" returned from Elsewhere.").map(|n| ParsedReturnFromElsewhere::Short((n, false))),
         parse_terminated(" has rolled back from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, true))),
         parse_normal_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Normal(v)),
+        parse_seeker_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Seeker(v)),
     )).parse(input)
 }
 
@@ -1125,14 +1128,28 @@ pub(crate) fn parse_normal_return_from_elsewhere(input: &str) -> ParserResult<(&
         parse_terminated(" rolled back ").map(|n| (n, true)),
     )).parse(input)?;
     let (input, _) = tag("from Elsewhere after ").parse(input)?;
-    let (input, after_days) = alt((
+    let (input, time_elsewhere) = parse_time_elsewhere.parse(input)?;
+
+    Ok((input, (player_name, time_elsewhere, is_peanut)))
+}
+
+fn parse_time_elsewhere(input: &str) -> ParserResult<TimeElsewhere> {
+    alt((
         tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
         terminated(parse_whole_number, tag(" seasons!")).map(|n| TimeElsewhere::Seasons(n)),
         tag("1 day!").map(|_| TimeElsewhere::Days(1)),
         terminated(parse_whole_number, tag(" days!")).map(|n| TimeElsewhere::Days(n)),
-    )).parse(input)?;
+    )).parse(input)
+}
 
-    Ok((input, (player_name, after_days, is_peanut)))
+pub(crate) fn parse_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str, TimeElsewhere)> {
+    let (input, seeker_name) = parse_terminated(" sought out Elsewhere teammate ").parse(input)?;
+    let (input, sought_name) = parse_terminated("...\n").parse(input)?;
+    let (input, _) = tag(sought_name).parse(input)?;
+    let (input, _) = tag(" was pulled back from Elsewhere after ").parse(input)?;
+    let (input, time_elsewhere) = parse_time_elsewhere.parse(input)?;
+
+    Ok((input, (seeker_name, sought_name, time_elsewhere)))
 }
 
 pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>)> {
@@ -2107,4 +2124,13 @@ pub(crate) fn parse_polarity(input: &str) -> ParserResult<NumbersGo> {
     )).parse(input)?;
 
     Ok((input, numbers_go))
+}
+
+pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<(&str, f64)> {
+    let (input, _) = tag("Shame Donations are granted!\nThe ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" receive ").parse(input)?;
+    let (input, unruns) = double.parse(input)?;
+    let (input, _) = tag(" Unruns.").parse(input)?;
+
+    Ok((input, (team_nickname, unruns)))
 }

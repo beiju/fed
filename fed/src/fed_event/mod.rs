@@ -859,6 +859,25 @@ pub enum TimeElsewhere {
     Seasons(i32),
 }
 
+impl Display for TimeElsewhere {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeElsewhere::Days(1) => {
+                write!(f, "1 day")
+            }
+            TimeElsewhere::Days(days) => {
+                write!(f, "{days} days")
+            }
+            TimeElsewhere::Seasons(1) => {
+                write!(f, "one season")
+            }
+            TimeElsewhere::Seasons(seasons) => {
+                write!(f, "{seasons} seasons")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReturnFromElsewhere {
@@ -922,6 +941,26 @@ pub enum ReturnFromElsewhereFlavor {
         /// True if the player is trapped in a giant peanut shell, false otherwise
         is_peanut: bool,
     },
+    /// Player was pulled back from elsewhere by a Seeker
+    PulledBack {
+        /// Team uuid of player who returned from Elsewhere (also the team of the Seeker)
+        team_id: Uuid,
+
+        /// Uuid of player who returned from Elsewhere
+        sought_player_id: Uuid,
+
+        /// Uuid of Seeker player who pulled the other player back
+        seeker_player_id: Uuid,
+
+        /// Name of Seeker player who pulled the other player back
+        seeker_player_name: String,
+
+        /// Metadata for sub-event associated with removing the Elsewhere mod
+        sub_event: SubEvent,
+
+        /// Number of days or seasons the player was Elsewhere
+        time_elsewhere: TimeElsewhere,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -4559,7 +4598,21 @@ pub enum FedEventData {
 
         /// Metadata for the WeatherChange sub event
         sub_event: SubEvent,
-    }
+    },
+
+    /// Donated shame, which the team received by being shamed by a team with Shame Donor, are
+    /// applied at the start of the next game
+    #[serde(rename_all = "camelCase")]
+    DonatedShameApplied {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of team who was shamed and is now receiving the shame unruns
+        team_nickname: String,
+
+        /// Number of unruns received
+        unruns: f64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4780,6 +4833,7 @@ impl FedEventData {
             FedEventData::ReplicaFadedToDust { .. } => { None }
             FedEventData::ABloodType { game, .. } => { Some(game) }
             FedEventData::PolarityShift { game, .. } => { Some(game) }
+            FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
         }
     }
 }
