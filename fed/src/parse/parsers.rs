@@ -1912,7 +1912,11 @@ pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(Pa
 }
 
 pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, player_name) = parse_terminated("'s mods caused by ").parse(input)?;
+    // This does possessives correctly, apparently
+    let (input, player_name) = alt((
+        parse_terminated("'s mods caused by "),
+        parse_terminated("' mods caused by "),
+    )).parse(input)?;
     let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
 
     Ok((input, (player_name, mod_name)))

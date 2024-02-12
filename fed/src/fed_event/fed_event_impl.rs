@@ -2142,8 +2142,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
 
-                // I'm guessing the first mod determines the event type?
-                let event_type = changes.first()
+                // I'm guessing the last mod determines the event type?
+                let event_type = changes.last()
                     .expect("SubseasonalModsChange should never have an empty changes vec")
                     .source_mod
                     .event_type();
@@ -3055,7 +3055,7 @@ impl FedEvent {
             }
             FedEventData::ModsFromAnotherModRemoved { team_id, player_id, player_name, mods_removed, source_mod_name, source_mod_id } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name}'s mods caused by {source_mod_name} were removed."));
+                eb.push_description(&format!("{} mods caused by {source_mod_name} were removed.", Possessive(&player_name)));
                 eb.push_player_tag(player_id);
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("source", source_mod_id);

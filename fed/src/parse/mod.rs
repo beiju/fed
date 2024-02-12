@@ -20,6 +20,7 @@ use crate::parse::error::FeedParseError;
 use crate::parse::parsers::*;
 use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::fed_event::*;
+use crate::parse::event_builder_new::Possessive;
 
 // pub use stream::expansion_era_events;
 
@@ -242,7 +243,7 @@ impl ModsFromAnotherModRemovedWithName {
                 format!("The {team_nickname}' mods caused by {} were removed.", self.source_mod_name)
             }
             TeamNicknameOrPlayerName::PlayerName(player_name) => {
-                format!("{player_name}'s mods caused by {} were removed.", self.source_mod_name)
+                format!("{} mods caused by {} were removed.", Possessive(player_name), self.source_mod_name)
             }
         }
     }
@@ -259,7 +260,7 @@ impl ModsFromAnotherModRemoved {
     }
 
     pub fn format_description_player(&self, player_name: &str) -> String {
-        format!("{player_name}'s mods caused by {} were removed.", self.source_mod_name)
+        format!("{} mods caused by {} were removed.", Possessive(player_name), self.source_mod_name)
     }
 
     pub fn format_description_team(&self, team_nickname: &str) -> String {
@@ -3122,7 +3123,10 @@ pub fn parse_next_event(
             }
         }
         EventType::Ambitious => {
-            let changes = event.next_parse(parse_ambitious)?.into_iter()
+            // Same probably-bug as in HalfInning events
+            let mut changes = event.parse_subseasonal_mod_changes(state)?;
+
+            let more_changes = event.next_parse(parse_ambitious)?.into_iter()
                 .map(|(player_name, active)| {
                     let mut sub_event = event.next_child(
                         if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
@@ -3141,7 +3145,11 @@ pub fn parse_next_event(
                         dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Middling.mod_id().to_string())),
                     })
                 })
-                .collect::<Result<_, _>>()?;
+                .collect::<Result<Vec<_>, _>>()?;
+
+            // I would like to extend with the iterator directly, but I don't see a way to do it
+            // that also propagates results
+            changes.extend(more_changes.into_iter());
 
             FedEventData::SubseasonalModsChange {
                 game: event.game(unscatter, attractor_secret_base)?,
