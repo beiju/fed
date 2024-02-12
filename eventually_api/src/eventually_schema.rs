@@ -346,6 +346,7 @@ pub enum EventType {
     Announcement = 201,
     Ratification = 203,
     HypeBuilds = 206,
+    Moderation = 208,
     RunsScored = 209,
     LeagueModificationAdded = 210,
     WinCollectedRegular = 214,

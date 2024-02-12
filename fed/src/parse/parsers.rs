@@ -2213,3 +2213,10 @@ pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<&str> {
 
     Ok((input, team_nickname))
 }
+
+pub(crate) fn parse_moderation(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" practice Moderation.").parse(input)?;
+
+    Ok((input, team_nickname))
+}

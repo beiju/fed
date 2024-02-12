@@ -4777,6 +4777,19 @@ pub enum FedEventData {
         /// Metadata for the team-earned-win sub-event
         win_sub_event: SubEvent,
     },
+
+    /// Team practices Moderation
+    #[serde(rename_all = "camelCase")]
+    Moderation {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of team who practiced Moderation
+        team_nickname: String,
+
+        /// Information about the score from Moderation
+        score_event: ScoreEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4999,6 +5012,7 @@ impl FedEventData {
             FedEventData::PolarityShift { game, .. } => { Some(game) }
             FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
             FedEventData::GameOver { game, .. } => { Some(game) }
+            FedEventData::Moderation { game, .. } => { Some(game) }
         }
     }
 }

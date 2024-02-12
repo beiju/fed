@@ -3439,6 +3439,13 @@ impl FedEvent {
 
                 eb.build(EventType::GameOver)
             }
+            FedEventData::Moderation { game, team_nickname, score_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("The {team_nickname} practice Moderation."));
+                eb.push_score_event(&score_event);
+                eb.build(EventType::Moderation)
+            }
         };
 
         vec![item]

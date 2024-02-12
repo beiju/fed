@@ -3342,6 +3342,22 @@ pub fn parse_next_event(
         EventType::Announcement => { todo!() }
         EventType::Ratification => { todo!() }
         EventType::HypeBuilds => { todo!() }
+        EventType::Moderation => {
+            let team_nickname = event.next_parse(parse_moderation)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let score_event = event.parse_score_event()?
+                .ok_or_else(|| FeedParseError::NotEnoughChildren {
+                    event_type: event.event_type,
+                    expected_at_least: 1,
+                })?;
+
+            FedEventData::Moderation {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                score_event,
+            }
+        }
         EventType::RunsScored => { todo!() }
         EventType::LeagueModificationAdded => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
