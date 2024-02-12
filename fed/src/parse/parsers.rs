@@ -2,13 +2,13 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{fail, map_res, opt, recognize, rest, verify};
+use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
-use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere};
+use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 
@@ -2219,4 +2219,47 @@ pub(crate) fn parse_moderation(input: &str) -> ParserResult<&str> {
     let (input, team_nickname) = parse_terminated(" practice Moderation.").parse(input)?;
 
     Ok((input, team_nickname))
+}
+
+pub(crate) enum ParsedLedgerLine<'a> {
+    NegativePolarity,
+    Underachiever,
+    Underhanded,
+    Subtractor,
+    Tired(&'a str),
+    Wired(&'a str),
+    AcidicPitch,
+}
+
+pub(crate) fn parse_score_ledger(input: &str) -> ParserResult<Option<(i64, Vec<ParsedLedgerLine>)>> {
+    alt((
+        eof.map(|_| None),
+        parse_nonempty_score_ledger.map(|val| Some(val)),
+    )).parse(input)
+}
+
+pub(crate) fn parse_nonempty_score_ledger(input: &str) -> ParserResult<(i64, Vec<ParsedLedgerLine>)> {
+    let (input, _) = tag("(").parse(input)?;
+    let (input, base_runs) = parse_whole_number.parse(input)?;
+    let (input, _) = tag(if base_runs == 1 {
+        " Run), "
+    } else {
+        " Runs), "
+    }).parse(input)?;
+
+    let (input, ledger_lines) = separated_list1(tag(" "), parse_ledger_line).parse(input)?;
+
+    Ok((input, (base_runs as i64, ledger_lines)))
+}
+
+pub(crate) fn parse_ledger_line(input: &str) -> ParserResult<ParsedLedgerLine> {
+    alt((
+        tag("Negative Polarity (x-1)").map(|_| ParsedLedgerLine::NegativePolarity),
+        tag("Underachiever (x-1)").map(|_| ParsedLedgerLine::Underachiever),
+        tag("Underhanded (x-1)").map(|_| ParsedLedgerLine::Underhanded),
+        tag("Subtractor (x-1)").map(|_| ParsedLedgerLine::Subtractor),
+        parse_terminated(" is Tired. (0.5 Unruns)").map(|name| ParsedLedgerLine::Tired(name)),
+        parse_terminated(" is Wired! (0.5 Runs)").map(|name| ParsedLedgerLine::Wired(name)),
+        tag("Acidic Pitch (0.1 Unruns)").map(|_| ParsedLedgerLine::AcidicPitch),
+    )).parse(input)
 }

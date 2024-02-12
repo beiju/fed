@@ -1828,6 +1828,53 @@ pub enum GameStartAnnouncement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum LedgerLine {
+    NegativePolarity,
+    Underachiever,
+    Underhanded,
+    Subtractor,
+    Tired(String),
+    Wired(String),
+    AcidicPitch,
+}
+
+impl Display for LedgerLine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LedgerLine::NegativePolarity => { write!(f, "Negative Polarity (x-1)") }
+            LedgerLine::Underachiever => { write!(f, "Underachiever (x-1)") }
+            LedgerLine::Underhanded => { write!(f, "Underhanded (x-1)") }
+            LedgerLine::Subtractor => { write!(f, "Subtractor (x-1)") }
+            LedgerLine::Tired(name) => { write!(f, "{name} is Tired. (0.5 Unruns)") }
+            LedgerLine::Wired(name) => { write!(f, "{name} is Wired! (0.5 Runs)") }
+            LedgerLine::AcidicPitch => { write!(f, "Acidic Pitch (0.1 Unruns)") }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Ledger {
+    pub base_runs: i64,
+    pub lines: Vec<LedgerLine>,
+}
+
+impl Display for Ledger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.base_runs == 1 {
+            write!(f, "(1 Run),")?;
+        } else {
+            write!(f, "({} Runs),", self.base_runs)?;
+        }
+
+        for line in &self.lines {
+            write!(f, " {line}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ScoreEvent {
     // TODO document fields
@@ -1836,6 +1883,7 @@ pub struct ScoreEvent {
     pub home_emoji: String,
     pub home_score: f64,
     pub runs_scored: f64, // negative for unruns
+    pub ledger: Option<Ledger>,
     pub team_id: Uuid,
     pub team_nickname: String,
     pub sub_event: SubEvent,

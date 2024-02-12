@@ -364,7 +364,11 @@ impl EventBuilder {
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
             child_eb.push_metadata_str("homeEmoji", &score.home_emoji);
             child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
-            child_eb.push_metadata_str("ledger", ""); // Is this ever nonempty?
+            if let Some(ledger) = &score.ledger {
+                child_eb.push_metadata_str("ledger", ledger.to_string());
+            } else {
+                child_eb.push_metadata_str("ledger", "");
+            }
             child_eb.push_metadata_str("update", if score.runs_scored == 1.0 {
                 "1 Run scored!".to_string()
             } else if score.runs_scored < 0.0 {

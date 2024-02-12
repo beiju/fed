@@ -575,7 +575,7 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_scores_with_scoring_players(
         &mut self,
         scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>,
-        attractions: Vec<(Uuid, String, String)>
+        attractions: Vec<(Uuid, String, String)>,
     ) -> Result<Scores, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores = scoring_players.into_iter()
@@ -616,7 +616,7 @@ impl<'e> EventParseWrapper<'e> {
                 };
 
                 let hype = hype_stadium_name.map(|n| self.parse_hype_from_stadium(n)).transpose()?;
-                
+
                 let score_event = self.parse_score_event()?;
 
                 ParseOk(ScoringPlayer {
@@ -644,7 +644,7 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_score_event(&mut self) -> Result<Option<ScoreEvent>, FeedParseError> {
         let Some(mut score_child) = self.next_child_opt(EventType::RunsScored)? else {
-            return Ok(None)
+            return Ok(None);
         };
 
         let team_nickname = score_child.next_parse(parse_team_scored)?;
@@ -655,13 +655,36 @@ impl<'e> EventParseWrapper<'e> {
                 event_type: score_child.event_type,
                 err: convert_error(score_update, e),
             })?;
-        
+
+        let score_ledger = score_child.metadata_str("ledger")?;
+        let (_, parsed_ledger) = parse_score_ledger.parse(score_ledger).finish()
+            .map_err(|e| FeedParseError::ScoreLedgerParseError {
+                event_type: score_child.event_type,
+                err: convert_error(score_ledger, e),
+            })?;
+
+        let ledger = parsed_ledger.map(|(base_runs, lines)| Ledger {
+            base_runs,
+            lines: lines.into_iter()
+                .map(|line| match line {
+                    ParsedLedgerLine::NegativePolarity => { LedgerLine::NegativePolarity }
+                    ParsedLedgerLine::Underachiever => { LedgerLine::Underachiever }
+                    ParsedLedgerLine::Underhanded => { LedgerLine::Underhanded }
+                    ParsedLedgerLine::Subtractor => { LedgerLine::Subtractor }
+                    ParsedLedgerLine::Tired(name) => { LedgerLine::Tired(name.to_string()) }
+                    ParsedLedgerLine::Wired(name) => { LedgerLine::Wired(name.to_string()) }
+                    ParsedLedgerLine::AcidicPitch => { LedgerLine::AcidicPitch }
+                })
+                .collect(),
+        });
+
         Ok(Some(ScoreEvent {
             away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
             away_score: score_child.metadata_f64("awayScore")?,
             home_emoji: score_child.metadata_str("homeEmoji")?.to_string(),
             home_score: score_child.metadata_f64("homeScore")?,
             runs_scored,
+            ledger,
             team_id: score_child.next_team_id()?,
             team_nickname: team_nickname.to_string(),
             sub_event: score_child.as_sub_event(),
@@ -866,7 +889,7 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_hype_from_stadium(&mut self, stadium_name: String) -> Result<Hype, FeedParseError> {
         let hype_child = self.next_child(EventType::HypeBuilds)?;
-        
+
         Ok(Hype {
             stadium_name,
             hype_before: hype_child.metadata_f64("before")?,
