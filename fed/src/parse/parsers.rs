@@ -1563,7 +1563,13 @@ pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<(
         let (input, mod_name) = if at {
             parse_terminated(" at the ").parse(input)?
         } else {
-            parse_terminated(" to the ").parse(input)?
+            // Special case for problematic mods (ones that have "to the", which is the terminator,
+            // in the mod name)
+            alt((
+                terminated(tag("Late to the Party"), tag(" to the ")),
+                terminated(tag("Early to the Party"), tag(" to the ")),
+                parse_terminated(" to the ")
+            )).parse(input)?
         };
         let (input, team_nickname) = parse_terminated(".").parse(input)?;
 
