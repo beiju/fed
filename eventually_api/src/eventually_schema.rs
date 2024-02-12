@@ -185,7 +185,7 @@ pub enum Weather {
 pub enum EventType {
     #[default]
     Undefined = -1,
-    LetsGo = 0,
+    GameStart = 0,
     PlayBall = 1,
     HalfInning = 2,
     PitcherChange = 3,

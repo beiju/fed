@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -170,24 +170,22 @@ impl FedEvent {
                     .metadata(json!({ "being": being_id }))
                     .build()
             }
-            FedEventData::LetsGo { game, weather, stadium_id } => {
-                let weather_id: i32 = weather.into();
-                let mut metadata = json!({
-                    "home": game.home_team,
-                    "away": game.away_team,
-                    "weather": weather_id,
-                });
-                if let Some(id) = stadium_id {
-                    metadata["stadium"] = json!(id);
+            FedEventData::GameStart { game, weather, stadium_id, announcement } => {
+                match announcement {
+                    GameStartAnnouncement::LetsGo => { eb.push_description("Let's Go!"); }
+                    GameStartAnnouncement::TeamNames { away, home } => {
+                        eb.push_description(&format!("{away} vs. {home}"));
+                    }
                 }
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::LetsGo,
-                        description: "Let's Go!".to_string(),
-                        ..Default::default()
-                    })
-                    .metadata(metadata)
-                    .build()
+                eb.push_metadata_uuid("home", game.home_team);
+                eb.push_metadata_uuid("away", game.away_team);
+                eb.set_game(game);
+                eb.push_metadata_i32("weather", weather);
+                if let Some(id) = stadium_id {
+                    eb.push_metadata_uuid("stadium", id);
+                }
+
+                eb.build(EventType::GameStart)
             }
             FedEventData::PlayBall { game } => {
                 event_builder.for_game(&game)

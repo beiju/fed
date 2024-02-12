@@ -1812,6 +1812,18 @@ pub enum RoamFromLocation {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum GameStartAnnouncement {
+    LetsGo,
+    TeamNames {
+        /// Away team name
+        away: String,
+
+        /// Home team name
+        home: String,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -1826,7 +1838,7 @@ pub enum FedEventData {
 
     /// This is always the first event of every game
     #[serde(rename_all = "camelCase")]
-    LetsGo {
+    GameStart {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -1835,6 +1847,10 @@ pub enum FedEventData {
 
         /// Uuid of the stadium this game is being played in, if any
         stadium_id: Option<Uuid>,
+
+        /// What the event type announces. Before season 20 it always announced "Let's Go!", but
+        /// starting in season 20 it started announcing the team names.
+        announcement: GameStartAnnouncement,
     },
 
     /// This is always the second of event of every game
@@ -4781,7 +4797,7 @@ impl FedEventData {
     pub fn game(&self) -> Option<&GameEvent> {
         match self {
             FedEventData::BeingSpeech { .. } => { None }
-            FedEventData::LetsGo { game, .. } => { Some(game) }
+            FedEventData::GameStart { game, .. } => { Some(game) }
             FedEventData::PlayBall { game, .. } => { Some(game) }
             FedEventData::HalfInningStart { game, .. } => { Some(game) }
             FedEventData::BatterUp { game, .. } => { Some(game) }

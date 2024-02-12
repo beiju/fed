@@ -2,7 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{fail, map_res, opt, recognize, verify};
+use nom::combinator::{fail, map_res, opt, recognize, rest, verify};
 use nom::multi::{many0, separated_list1};
 use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
@@ -44,6 +44,13 @@ pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<&str> {
         })?;
 
     Ok((input, replacement_name))
+}
+
+pub(crate) fn parse_game_start(input: &str) -> ParserResult<Option<(&str, &str)>> {
+    alt((
+        tag("Let's Go!").map(|_| None),
+        pair(parse_terminated(" vs. "), rest).map(|tup| Some(tup))
+    )).parse(input)
 }
 
 pub(crate) fn parse_half_inning(input: &str) -> ParserResult<(bool, i32, &str)> {

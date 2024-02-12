@@ -309,13 +309,25 @@ pub fn parse_next_event(
                 scales: event.metadata_i64("scales")?,
             }
         }
-        EventType::LetsGo => {
-            event.next_parse_tag("Let's Go!")?;
-            FedEventData::LetsGo {
+        EventType::GameStart => {
+            let team_names = event.next_parse(parse_game_start)?;
+            if let Some((away, home)) = team_names {
+                assert!(is_known_team_name(away));
+                assert!(is_known_team_name(home));
+            }
+
+            FedEventData::GameStart {
                 game: event.game(unscatter, attractor_secret_base)?,
                 weather: Weather::try_from(event.metadata_i64("weather")? as i32)
                     .map_err(|err| FeedParseError::UnknownWeather(err.number))?,
                 stadium_id: event.metadata_uuid("stadium").ok(),
+                announcement: match team_names {
+                    None => GameStartAnnouncement::LetsGo,
+                    Some((away, home)) => GameStartAnnouncement::TeamNames {
+                        away: away.to_string(),
+                        home: home.to_string(),
+                    }
+                },
             }
         }
         EventType::PlayBall => {
