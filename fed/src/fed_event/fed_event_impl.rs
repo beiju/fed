@@ -320,8 +320,10 @@ impl FedEvent {
                 let foul_ball_text = if pitch.double_strike.is_some() {
                     eb.set_category(EventCategory::Special);
                     "Foul Balls"
-                } else {
+                } else if self.season < 19 {
                     "Foul Ball"
+                } else {
+                    " Foul Ball" // Annoying extra space
                 };
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{foul_ball_text}. {balls}-{strikes}"));
