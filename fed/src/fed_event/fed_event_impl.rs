@@ -461,7 +461,7 @@ impl FedEvent {
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }
-            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype } => {
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_event } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.push_player_tag(runner_id);
@@ -477,6 +477,9 @@ impl FedEvent {
                 eb.push_free_refill(free_refill);
                 eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
+                if let Some(se) = &score_event {
+                    eb.push_score_event(se);
+                }
 
                 eb.build(EventType::StolenBase)
             }

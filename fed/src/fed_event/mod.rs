@@ -2363,6 +2363,10 @@ pub enum FedEventData {
 
         /// If this event built hype, the metadata about the hype event
         hype: Option<Hype>,
+
+        /// Score event, if applicable. This will be populated if the base stolen was home or if
+        /// blaserunning is true and the season is 20 or later, otherwise null.
+        score_event: Option<ScoreEvent>,
     },
 
     /// Caught stealing

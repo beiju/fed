@@ -378,6 +378,8 @@ pub fn parse_next_event(
 
                 let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
 
+                let score_event = event.parse_score_event()?;
+
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
                     runner_name: runner_name.to_string(),
@@ -396,6 +398,7 @@ pub fn parse_next_event(
                     runner_item_damage,
                     is_special: event.category == EventCategory::Special,
                     hype,
+                    score_event,
                 }
             } else {
                 FedEventData::CaughtStealing {
