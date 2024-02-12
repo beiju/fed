@@ -2198,7 +2198,9 @@ pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
     let (input, runs) = double.parse(input)?;
     let (input, negator) = alt((
         tag(" Runs").map(|_| 1.0),
+        tag(" Run").map(|_| 1.0),
         tag(" Unruns").map(|_| -1.0),
+        tag(" Unrun").map(|_| -1.0),
     )).parse(input)?;
     let (input, _) = tag(" scored!").parse(input)?;
 

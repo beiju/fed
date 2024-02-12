@@ -355,17 +355,19 @@ impl EventBuilder {
         self.push_free_refills(scores.free_refills);
     }
 
-    pub fn push_score_event(&mut self, score: ScoreEvent) {
+    pub fn push_score_event(&mut self, score: &ScoreEvent) {
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
             child_eb.push_description(&format!("The {} scored!", score.team_nickname));
-            child_eb.push_metadata_str("awayEmoji", score.away_emoji);
+            child_eb.push_metadata_str("awayEmoji", &score.away_emoji);
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
-            child_eb.push_metadata_str("homeEmoji", score.home_emoji);
+            child_eb.push_metadata_str("homeEmoji", &score.home_emoji);
             child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
             child_eb.push_metadata_str("ledger", ""); // Is this ever nonempty?
-            child_eb.push_metadata_str("update", if score.runs_scored < 0.0 {
+            child_eb.push_metadata_str("update", if score.runs_scored == 1.0 {
+                "1 Run scored!".to_string()
+            } else if score.runs_scored < 0.0 {
                 format!("{} Unruns scored!", -score.runs_scored)
             } else {
                 format!("{} Runs scored!", score.runs_scored)
@@ -435,6 +437,9 @@ impl EventBuilder {
                 self.push_item_damage(damage, &scorer.player_name);
             }
             self.push_description(&format!("{} {score_label}", scorer.player_name));
+            if let Some(score_event) = &scorer.score_event {
+                self.push_score_event(score_event);
+            }
         }
         // Attractions happen in a block after the scores block
         for scorer in &scorers {
@@ -625,6 +630,7 @@ impl EventBuilder {
             self.push_hype(h, home_team_id);
         }
     }
+
     pub fn push_hype(&mut self, hype: &Hype, home_team_id: Uuid) {
         self.push_description("Shame!");
         self.push_description(&format!("Hype Builds in {}!", hype.stadium_name));

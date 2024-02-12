@@ -3392,7 +3392,7 @@ impl FedEvent {
                 eb.push_description("Shame Donations are granted!");
                 eb.push_description(&format!("The {team_nickname} receive {unruns} Unruns."));
 
-                if let Some(score) = score_event {
+                if let Some(score) = &score_event {
                     eb.push_score_event(score);
                 }
 
