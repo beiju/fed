@@ -1046,11 +1046,23 @@ impl FedEvent {
                     .children(vec![child])
                     .build()
             }
-            FedEventData::AllergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after } => {
+            FedEventData::AllergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after, weather_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{player_name} swallowed a stray peanut and had an allergic reaction!"));
                 eb.push_player_tag(player_id);
+
+                if let Some(weather) = weather_event {
+                    eb.push_child(weather.sub_event, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description(&format!("{player_name} swallowed a stray peanut."));
+                        child_eb.push_team_tag(team_id);
+                        child_eb.push_player_tag(player_id);
+                        child_eb.push_metadata_str("effect", "Allergic Reaction");
+                        child_eb.push_metadata_i32("weather", Weather::Peanuts);
+                        child_eb.build(EventType::WeatherEvent)
+                    });
+                }
 
                 eb.push_child(sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);

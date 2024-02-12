@@ -1286,6 +1286,14 @@ pub fn parse_next_event(
         EventType::AllergicReaction => {
             let player_name = event.next_parse(parse_allergic_reaction)?;
             let player_id = event.next_player_id()?;
+
+            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+                .map(|child| {
+                    WeatherEvent {
+                        sub_event: child.as_sub_event(),
+                    }
+                });
+
             let mut sub_event = event.next_child(EventType::PlayerStatDecrease)?;
             assert_eq!(player_id, sub_event.next_player_id()?);
             FedEventData::AllergicReaction {
@@ -1296,6 +1304,7 @@ pub fn parse_next_event(
                 sub_event: sub_event.as_sub_event(),
                 rating_before: sub_event.metadata_f64("before")?,
                 rating_after: sub_event.metadata_f64("after")?,
+                weather_event
             }
         }
         EventType::ReverbBestowsReverberating => {
@@ -3335,6 +3344,7 @@ pub fn parse_next_event(
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }
         EventType::GameOver => { todo!() }
+        EventType::WeatherEvent => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {
