@@ -3346,7 +3346,21 @@ pub fn parse_next_event(
         EventType::LeagueModificationAdded => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }
-        EventType::GameOver => { todo!() }
+        EventType::GameOver => {
+            let _ = event.next_parse_tag("Game Over.")?;
+
+            let mut win_event = event.next_child(EventType::WinCollectedRegular)?;
+            let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
+            assert!(is_known_team_nickname(winning_team_nickname));
+
+            FedEventData::GameOver {
+                game: event.game(unscatter, attractor_secret_base)?,
+                winning_team_nickname: winning_team_nickname.to_string(),
+                winning_team_id: win_event.next_team_id()?,
+                wins_after: win_event.metadata_i64("after")?,
+                win_sub_event: win_event.as_sub_event(),
+            }
+        }
         EventType::WeatherEvent => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }

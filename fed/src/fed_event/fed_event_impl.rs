@@ -3416,6 +3416,29 @@ impl FedEvent {
 
                 eb.build(EventType::ShameDonor)
             }
+            FedEventData::GameOver { game, winning_team_nickname, winning_team_id, wins_after, win_sub_event } => {
+                eb.set_game(game);
+                eb.push_description("Game Over.");
+
+                eb.push_child(win_sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_description(&format!("The {winning_team_nickname} collected a Win."));
+                    child_eb.push_team_tag(winning_team_id);
+                    // There were decrees that would have increased amount but they never won a vote
+                    child_eb.push_metadata_i64("amount", 1);
+                    child_eb.push_metadata_i64("before", wins_after - 1);
+                    child_eb.push_metadata_i64("after", wins_after);
+                    // This won't be hard-coded forever, but I won't change it until I need to
+                    child_eb.push_metadata_str_vec("lines", vec![
+                        "Non-Loss: 1".to_string(),
+                        "Turntables: 1 * -1 = -1".to_string(),
+                        "Sun(Sun): -1 ^ 2 = 1".to_string(),
+                    ]);
+                    child_eb.build(EventType::WinCollectedRegular)
+                });
+
+                eb.build(EventType::GameOver)
+            }
         };
 
         vec![item]

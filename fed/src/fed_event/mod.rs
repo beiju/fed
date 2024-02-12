@@ -4757,6 +4757,26 @@ pub enum FedEventData {
         /// If after s20, the associated score event
         score_event: Option<ScoreEvent>,
     },
+
+    /// Game Over event which bestows the Win object on the winning team. This event did not exist
+    /// until s20
+    #[serde(rename_all = "camelCase")]
+    GameOver {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of winning team
+        winning_team_nickname: String,
+
+        /// Uuid of winning team
+        winning_team_id: Uuid,
+
+        /// Number of Wins the winning team has once the newly earned Win is added
+        wins_after: i64,
+
+        /// Metadata for the team-earned-win sub-event
+        win_sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -4978,6 +4998,7 @@ impl FedEventData {
             FedEventData::ABloodType { game, .. } => { Some(game) }
             FedEventData::PolarityShift { game, .. } => { Some(game) }
             FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
+            FedEventData::GameOver { game, .. } => { Some(game) }
         }
     }
 }
