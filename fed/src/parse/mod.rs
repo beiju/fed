@@ -533,9 +533,9 @@ pub fn parse_next_event(
             let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
+            let other_player_item_damage = event.parse_item_damage_and_name(true)?;
             let scores = event.parse_scores(" tags up and scores!")?;
             let batter_item_damage = event.parse_item_damage(batter_name)?;
-            let other_player_item_damage = event.parse_item_damage_and_name(true)?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
             let parasite = event.parse_parasite()?;
