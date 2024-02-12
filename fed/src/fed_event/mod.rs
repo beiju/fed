@@ -2319,6 +2319,10 @@ pub enum FedEventData {
 
         /// TODO Describe alley oops
         alley_oop: Option<(String, bool)>,
+
+        /// Starting in s20 there's a separate RunsScored sub-event. This contains that information,
+        /// if applicable
+        score_event: Option<ScoreEvent>,
     },
 
     /// Stolen base

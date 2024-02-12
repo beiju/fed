@@ -390,7 +390,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_event } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
@@ -430,6 +430,9 @@ impl FedEvent {
                 eb.push_free_refills(free_refills);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_attraction_with_player(attraction);
+                if let Some(se) = &score_event {
+                    eb.push_score_event(se);
+                }
 
                 eb.build(EventType::HomeRun)
             }

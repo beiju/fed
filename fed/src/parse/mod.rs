@@ -727,6 +727,9 @@ pub fn parse_next_event(
                 None
             };
 
+            // I have no idea where this needs to go in relation to the other sub-events
+            let score_event = event.parse_score_event()?;
+
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
@@ -745,6 +748,7 @@ pub fn parse_next_event(
                 hotel_motel_parties,
                 hype,
                 alley_oop: alley_oop.map(|(name, success)| (name.to_string(), success)),
+                score_event,
             }
         }
         EventType::Hit => {
