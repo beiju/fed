@@ -150,13 +150,11 @@ pub(crate) fn parse_count(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, (balls, strikes)))
 }
 
-pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str, Option<&str>)> {
+pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
-    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
-
-    Ok((input, (batter_name, fielder_name, hype_stadium_name)))
+    Ok((input, (batter_name, fielder_name)))
 }
 
 pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
@@ -181,7 +179,6 @@ pub(crate) enum ParsedGroundOut<'a> {
     FieldersChoice {
         runner_out_name: &'a str,
         base: Base,
-        hype_stadium_name: Option<&'a str>,
     },
     DoublePlay {
         batter_name: &'a str,
@@ -208,9 +205,7 @@ pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.").parse(input)?;
 
-    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
-
-    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, base, hype_stadium_name })))
+    Ok((input, (ParsedGroundOut::FieldersChoice { runner_out_name, base })))
 }
 
 pub(crate) fn parse_reaches_on_fielders_choice(input: &str) -> ParserResult<&str> {
@@ -233,7 +228,7 @@ pub(crate) enum ParsedHitType {
     Quadruple,
 }
 
-pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>, Option<&str>)> {
+pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Option<(&str, Option<bool>)>, Option<(&str, Option<bool>, &str)>)> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, batter_name, batter_item_broke, pitcher_item_broke) = if let Some((broken_item_name, broken_item_name_plural, player_name)) = broke {
         let (input, item_was_batters) = opt(tag(player_name)).parse(input)?;
@@ -258,9 +253,7 @@ pub(crate) fn parse_hit(input: &str) -> ParserResult<(&str, ParsedHitType, Optio
         tag("Quadruple!").map(|_| ParsedHitType::Quadruple),
     )).parse(input)?;
 
-    let (input, hype) = opt(parse_hype_suffix).parse(input)?;
-
-    Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke, hype)))
+    Ok((input, (batter_name, num_bases, batter_item_broke, pitcher_item_broke)))
 }
 
 // The difference between hype suffix and hype prefix is which newline it consumes
@@ -318,6 +311,7 @@ pub(crate) struct ParsedScore<'a> {
     pub(crate) damaged_item_name: Option<(&'a str, Option<bool>)>,
     pub(crate) player_name: &'a str,
     pub(crate) hotel_motel_party: bool,
+    pub(crate) hype_stadium_name: Option<&'a str>,
 }
 
 pub(crate) struct ParsedAttraction<'a> {
@@ -344,6 +338,7 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> 
 
 pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
+        let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
         let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
         let (input, _) = tag("\n").parse(input)?;
         let (input, (damaged_item_name, player_name)) = if let Some((item_name, item_name_plural, player_name)) = item {
@@ -360,6 +355,7 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl 
             damaged_item_name,
             player_name,
             hotel_motel_party: false, // Filled in later in a subsequent loop
+            hype_stadium_name,
         }))
     }
 }
@@ -388,9 +384,7 @@ pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType, Option<&str>)> {
-    let (input, hype) = opt(parse_hype_prefix).parse(input)?;
-
+pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, home_run_type) = alt((
         tag("solo home run!").map(|_| HomeRunType::Solo),
@@ -399,7 +393,7 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType, Option<&
         tag("grand slam!").map(|_| HomeRunType::GrandSlam), // dunno what happens with a pentaslam...
     )).parse(input)?;
 
-    Ok((input, (batter_name, home_run_type, hype)))
+    Ok((input, (batter_name, home_run_type)))
 }
 
 pub(crate) fn parse_attract_player(input: &str) -> ParserResult<Option<(&str, &str)>> {
@@ -414,16 +408,9 @@ pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &st
     Ok((input, (team_nickname, player_name)))
 }
 
-// Nested option is meaningful:
-// - None: no big buckets
-// - Some(None): big buckets, no hype
-// - Some(Some(..)): big buckets and hype
-pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<Option<Option<&str>>> {
-    let (input, big_buckets) = opt(preceded(
-        tag("\nThe ball lands in a Big Bucket. An extra Run scores!"),
-        opt(parse_hype_suffix),
-    )).parse(input)?;
-    Ok((input, big_buckets))
+pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
+    let (input, big_buckets) = opt(tag("\nThe ball lands in a Big Bucket. An extra Run scores!")).parse(input)?;
+    Ok((input, big_buckets.is_some()))
 }
 
 pub(crate) fn parse_hoops(input: &str) -> ParserResult<(&str, bool)> {

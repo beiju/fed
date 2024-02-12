@@ -135,12 +135,17 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     let progress = multi_progress.add(progress);
+    let mut displayed_day_season = None;
     while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())
         .with_context(|| format!("Parsing events: \n{}", event_iter.log().iter()
             .map(|event| format!("  - {}: {}", event.id, event.description)).format("\n")))? {
         check_parse(&parsed_event, event_iter.log())?;
         progress.inc(event_iter.log().len() as u64);
-        progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));
+        // This makes a huge difference in run speed
+        if displayed_day_season != Some((parsed_event.season + 1, parsed_event.day + 1)) {
+            progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));
+            displayed_day_season = Some((parsed_event.season + 1, parsed_event.day + 1));
+        }
         event_iter.take_log();
 
         let Some(ref sample_path) = args.sample_outputs else {

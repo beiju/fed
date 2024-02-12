@@ -363,7 +363,7 @@ pub fn parse_next_event(
             if is_successful {
                 let runner_id = event.next_player_id()?;
 
-                let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
+                let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
 
                 FedEventData::StolenBase {
                     game: event.game(unscatter, attractor_secret_base)?,
@@ -530,8 +530,7 @@ pub fn parse_next_event(
         EventType::FlyOut => {
             // Order matters
             let pitch = event.parse_pitch()?;
-            let (batter_name, fielder_name, hype_stadium_name) = event.next_parse(parse_flyout)?;
-            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
+            let (batter_name, fielder_name) = event.next_parse(parse_flyout)?;
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let scores = event.parse_scores(" tags up and scores!")?;
@@ -554,7 +553,6 @@ pub fn parse_next_event(
                 fielder_item_damage,
                 other_player_item_damage,
                 parasite,
-                hype,
             }
         }
         EventType::GroundOut => {
@@ -562,7 +560,6 @@ pub fn parse_next_event(
             match event.next_parse(parse_ground_out)? {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
-                    let hype = event.parse_hype()?;
                     // I can't think of a less ugly way to handle different ordering
                     let (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage) = if event.season < 18 {
                         let scores = event.parse_scores(" advances on the sacrifice.")?;
@@ -598,11 +595,9 @@ pub fn parse_next_event(
                         batter_item_damage,
                         pitcher_item_damage,
                         fielder_item_damage,
-                        hype,
                     }
                 }
-                ParsedGroundOut::FieldersChoice { runner_out_name, base, hype_stadium_name } => {
-                    let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
+                ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!")?;
@@ -621,7 +616,6 @@ pub fn parse_next_event(
                         cooled_off,
                         is_special: event.category == EventCategory::Special,
                         damaged_items,
-                        hype,
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
@@ -656,7 +650,8 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let (batter_name, home_run_type,  mut hype_stadium_name) = event.next_parse(parse_hr)?;
+            let home_run_hype = event.parse_prefixed_hype()?;
+            let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 
             // Parsed specially because AFAIK this is the only place an attraction happens and you
             // don't already know the player name
@@ -693,14 +688,31 @@ pub fn parse_next_event(
             let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             let big_bucket = event.next_parse(parse_big_bucket)?;
-            if let Some(Some(name)) = big_bucket {
-                assert!(hype_stadium_name.is_none());
-                hype_stadium_name = Some(name);
-            }
+            let big_bucket_hype = if big_bucket {
+                event.parse_hype()?
+            } else {
+                None
+            };
+
             let alley_oop = event.next_parse(opt(parse_hoops))?;
-            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
+            let alley_oop_hype = if alley_oop.is_some() {
+                event.parse_hype()?
+            } else {
+                None
+            };
+
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
+
+            let hype = if let Some(h) = home_run_hype {
+                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::HomeRun))
+            } else if let Some(h) = big_bucket_hype {
+                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Buckets))
+            }  else if let Some(h) = alley_oop_hype {
+                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Hoops))
+            } else {
+                None
+            };
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -714,7 +726,7 @@ pub fn parse_next_event(
                 free_refills,
                 spicy_status,
                 is_special: event.category == EventCategory::Special,
-                big_bucket: big_bucket.is_some(),
+                big_bucket,
                 attraction,
                 damaged_items,
                 hotel_motel_parties,
@@ -724,7 +736,7 @@ pub fn parse_next_event(
         }
         EventType::Hit => {
             let pitch = event.parse_pitch()?;
-            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke, hype_stadium_name) = event.next_parse(parse_hit)?;
+            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
             // resim research says pitcher goes first
             let pitcher_item_damage = pitcher_item_broke
                 .map(|(_item_name, item_name_plural, player_name)| {
@@ -754,8 +766,6 @@ pub fn parse_next_event(
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
-            let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n)).transpose()?;
-
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
@@ -769,7 +779,6 @@ pub fn parse_next_event(
                 pitcher_item_damage,
                 batter_item_damage,
                 other_player_item_damage,
-                hype,
             }
         }
         EventType::GameEnd => {

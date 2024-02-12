@@ -574,12 +574,12 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_scores_with_scoring_players(
         &mut self,
-        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool)>,
+        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>,
         attractions: Vec<(Uuid, String, String)>
     ) -> Result<Scores, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name, hotel_motel_party)| {
+            .map(|(player_id, item_name, player_name, hotel_motel_party, hype_stadium_name)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
@@ -614,12 +614,16 @@ impl<'e> EventParseWrapper<'e> {
                 } else {
                     None
                 };
+
+                let hype = hype_stadium_name.map(|n| self.parse_hype_from_stadium(n)).transpose()?;
+
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
                     item_damage,
                     attraction,
                     hotel_motel_party,
+                    hype,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -635,7 +639,7 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool)>, Vec<(Uuid, String, String)>), FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
         let (scorers, attractions) = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
         let scoring_players = scorers.into_iter()
             .map(|score| {
@@ -644,6 +648,7 @@ impl<'e> EventParseWrapper<'e> {
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
                     score.hotel_motel_party,
+                    score.hype_stadium_name.map(str::to_string),
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -830,20 +835,26 @@ impl<'e> EventParseWrapper<'e> {
         Ok(parties)
     }
 
-    pub fn parse_hype_from_stadium(&mut self, stadium_name: &str) -> Result<HypeBuilds, FeedParseError> {
+    pub fn parse_hype_from_stadium(&mut self, stadium_name: String) -> Result<Hype, FeedParseError> {
         let hype_child = self.next_child(EventType::HypeBuilds)?;
         
-        Ok(HypeBuilds {
-            stadium_name: stadium_name.to_string(),
+        Ok(Hype {
+            stadium_name,
             hype_before: hype_child.metadata_f64("before")?,
             hype_after: hype_child.metadata_f64("after")?,
             sub_event: hype_child.as_sub_event(),
         })
     }
 
-    pub fn parse_hype(&mut self) -> Result<Option<HypeBuilds>, FeedParseError> {
+    pub fn parse_hype(&mut self) -> Result<Option<Hype>, FeedParseError> {
         self.next_parse(opt(parse_hype_suffix))?
-            .map(|stadium| self.parse_hype_from_stadium(stadium))
+            .map(|stadium| self.parse_hype_from_stadium(stadium.to_string()))
+            .transpose()
+    }
+
+    pub fn parse_prefixed_hype(&mut self) -> Result<Option<Hype>, FeedParseError> {
+        self.next_parse(opt(parse_hype_prefix))?
+            .map(|stadium| self.parse_hype_from_stadium(stadium.to_string()))
             .transpose()
     }
 

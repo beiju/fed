@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -331,18 +331,17 @@ impl FedEvent {
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
             }
-            FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite, hype } => {
+            FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a flyout to {fielder_name}."));
-                eb.push_hype(hype.as_ref(), home_team_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
-                eb.push_scores(scores, "tags up and scores!");
+                eb.push_scores(scores, home_team_id, "tags up and scores!");
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_parasite(parasite);
@@ -366,7 +365,7 @@ impl FedEvent {
                 //     .named_item_damage_before_score(&other_player_item_damage)
                 //     .build()
             }
-            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage, hype } => {
+            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 let home_team_id = game.home_team; // Need this later
                 eb.set_game(game);
                 eb.push_pitch(pitch);
@@ -384,9 +383,8 @@ impl FedEvent {
                     }
                     _ => {}
                 }
-                eb.push_hype(hype.as_ref(), home_team_id);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
-                eb.push_scores(scores, "scores!");
+                eb.push_scores(scores, home_team_id, "scores!");
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
 
@@ -399,9 +397,8 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_magmatic(magmatic, &batter_name, batter_id);
-                if !big_bucket {
-                    // Apparently hype happens in a different place when there's big buckets
-                    eb.push_hype(hype.as_ref(), home_team_id);
+                if let Some(h) = &hype && h.source == HomeRunHypeSource::HomeRun {
+                    eb.push_hype(&h.hype, home_team_id);
                 }
 
                 // HR itself
@@ -412,7 +409,9 @@ impl FedEvent {
 
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
-                    eb.push_hype(hype.as_ref(), home_team_id);
+                    if let Some(h) = &hype && h.source == HomeRunHypeSource::Buckets {
+                        eb.push_hype(&h.hype, home_team_id);
+                    }
                 }
 
                 if let Some((ooper, success)) = alley_oop {
@@ -422,6 +421,9 @@ impl FedEvent {
                     } else {
                         "...but they can't connect."
                     });
+                    if let Some(h) = &hype && h.source == HomeRunHypeSource::Hoops {
+                        eb.push_hype(&h.hype, home_team_id);
+                    }
                 }
 
                 eb.push_stopped_inhabiting(stopped_inhabiting);
@@ -431,16 +433,15 @@ impl FedEvent {
 
                 eb.build(EventType::HomeRun)
             }
-            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage, hype } => {
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
-                eb.push_hype(hype.as_ref(), home_team_id);
                 if self.season < 18 {
-                    eb.push_scores(scores, "advances on the sacrifice.");
+                    eb.push_scores(scores, home_team_id, "advances on the sacrifice.");
                     // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
                     // definitely somewhere after scores. Rest of the order is not yet known
                     eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
@@ -451,7 +452,7 @@ impl FedEvent {
                     eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                     eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                     eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
-                    eb.push_scores(scores, "advances on the sacrifice.");
+                    eb.push_scores(scores, home_team_id, "advances on the sacrifice.");
                 }
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
@@ -472,7 +473,7 @@ impl FedEvent {
 
                 eb.push_free_refill(free_refill);
                 eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
-                eb.push_hype(hype.as_ref(), home_team_id);
+                eb.push_hype_opt(hype.as_ref(), home_team_id);
 
                 eb.build(EventType::StolenBase)
             }
@@ -499,6 +500,7 @@ impl FedEvent {
                 eb.build(EventType::Strikeout)
             }
             FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special));
                 eb.push_pitch(pitch);
@@ -508,7 +510,7 @@ impl FedEvent {
                 }
                 eb.push_player_tag(batter_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                eb.push_scores(scores, "scores!");
+                eb.push_scores(scores, home_team_id, "scores!");
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Walk)
             }
@@ -543,15 +545,14 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items, hype } => {
+            FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
-                eb.push_hype(hype.as_ref(), home_team_id);
                 eb.push_stopped_inhabiting(stopped_inhabiting);
-                eb.push_scorers(scores.scores, "scores!");
+                eb.push_scorers(scores.scores, home_team_id, "scores!");
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
                 eb.push_free_refills(scores.free_refills);
@@ -579,10 +580,11 @@ impl FedEvent {
                     .build()
             }
             FedEventData::DoublePlay { game, pitch, batter_name, scores, stopped_inhabiting, cooled_off } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit into a double play!"));
-                eb.push_scores(scores, "scores!");
+                eb.push_scores(scores, home_team_id, "scores!");
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
@@ -1002,6 +1004,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::CharmWalk { game, pitch, batter_name, batter_id, pitcher_name, batter_item_damage, pitcher_item_damage, scores } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
@@ -1011,7 +1014,7 @@ impl FedEvent {
                 eb.push_description(&format!("{batter_name} walks to first base."));
                 eb.push_player_tag(batter_id);
                 eb.push_player_tag(batter_id); // two of them
-                eb.push_scores(scores, "scores!");
+                eb.push_scores(scores, home_team_id, "scores!");
                 eb.build(EventType::Walk)
             }
             FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
@@ -3069,6 +3072,7 @@ impl FedEvent {
                 eb.build(EventType::ConsumersAttack)
             }
             FedEventData::MindTrickWalk { game, pitch, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
@@ -3078,7 +3082,7 @@ impl FedEvent {
                 if let Some(base) = base_instincts {
                     eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
                 }
-                eb.push_scores(scores, "scores!");
+                eb.push_scores(scores, home_team_id, "scores!");
                 eb.push_player_tag(batter_id);
                 eb.build(EventType::Walk)
             }

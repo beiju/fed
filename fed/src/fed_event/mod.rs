@@ -140,6 +140,9 @@ pub struct ScoringPlayer {
 
     /// Info about the Hotel Motel party on this score, if any
     pub hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+
+    /// Info about Hype building as a result of this score, if any
+    pub hype: Option<Hype>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1693,9 +1696,9 @@ pub struct GoodRiddanceParty {
     pub rating_after: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct HypeBuilds {
-    /// Name of stadium who built hype
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Hype {
+    /// Name of stadium which built hype
     pub stadium_name: String,
 
     /// Stadium hype before
@@ -1706,6 +1709,28 @@ pub struct HypeBuilds {
 
     /// Metadata for sub-event associated with hype change
     pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum HomeRunHypeSource {
+    HomeRun,
+    Buckets,
+    Hoops,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct HomeRunHype {
+    #[serde(flatten)]
+    pub hype: Hype,
+
+    /// Which part of this home run caused the hype
+    pub source: HomeRunHypeSource,
+}
+
+impl HomeRunHype {
+    pub fn from_hype_and_source(hype: Hype, source: HomeRunHypeSource) -> Self {
+        Self { hype, source }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
@@ -2026,9 +2051,6 @@ pub enum FedEventData {
         /// If there was a parasite blooddrain on this strikeout, contains information about it.
         /// Otherwise null.
         parasite: Option<Parasite>,
-
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<HypeBuilds>,
     },
 
     /// A simple ground out. This includes sacrifices but does not include fielder's choices or
@@ -2076,9 +2098,6 @@ pub enum FedEventData {
 
         /// Damage that the fielder's item took, if any
         fielder_item_damage: Option<ItemDamaged>,
-
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<HypeBuilds>,
     },
 
     /// Fielders choice event
@@ -2119,9 +2138,6 @@ pub enum FedEventData {
         /// Items that were damaged, if any. Like home runs there isn't enough information to 
         /// properly attribute the damage to pitchers, batters, fielders, and runners.
         damaged_items: Vec<(String, ItemDamaged)>,
-
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<HypeBuilds>,
     },
 
     /// Double play event
@@ -2191,9 +2207,6 @@ pub enum FedEventData {
         /// Damage that any non-batter player's item took, if any. It's not possible to know the
         /// role of the other player (pitcher, fielder, runner?) from the event alone.
         other_player_item_damage: Option<(String, ItemDamaged)>,
-
-        /// If Hype built on this event, this is the metadata
-        hype: Option<HypeBuilds>
     },
 
     /// Home run, including Grand Slam
@@ -2250,8 +2263,8 @@ pub enum FedEventData {
         /// If this was a Holiday Inning, contains the Hotel Motel parties
         hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
 
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<HypeBuilds>,
+        /// If the home run built hype, the metadata about the hype event
+        hype: Option<HomeRunHype>,
 
         /// TODO Describe alley oops
         alley_oop: Option<(String, bool)>,
@@ -2288,7 +2301,7 @@ pub enum FedEventData {
         is_special: bool,
 
         /// If this event built hype, the metadata about the hype event
-        hype: Option<HypeBuilds>,
+        hype: Option<Hype>,
     },
 
     /// Caught stealing

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, HypeBuilds, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -339,8 +339,8 @@ impl EventBuilder {
         self.push_free_refills(free_refills)
     }
 
-    pub fn push_scores(&mut self, scores: Scores, score_label: &str) {
-        self.push_scorers(scores.scores, score_label);
+    pub fn push_scores(&mut self, scores: Scores, home_team_id: Uuid, score_label: &str) {
+        self.push_scorers(scores.scores, home_team_id, score_label);
         self.push_free_refills(scores.free_refills);
     }
 
@@ -396,10 +396,11 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, score_label: &str) {
+    pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, home_team_id: Uuid, score_label: &str) {
         // Base scores
         for scorer in &scorers {
             self.push_player_tag(scorer.player_id);
+            self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
             if let Some(damage) = &scorer.item_damage {
                 self.push_item_damage(damage, &scorer.player_name);
             }
@@ -589,8 +590,12 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hype(&mut self, hype: Option<&HypeBuilds>, home_team_id: Uuid) {
-        let hype = if let Some(h) = hype { h } else { return; };
+    pub fn push_hype_opt(&mut self, hype: Option<&Hype>, home_team_id: Uuid) {
+        if let Some(h) = hype {
+            self.push_hype(h, home_team_id);
+        }
+    }
+    pub fn push_hype(&mut self, hype: &Hype, home_team_id: Uuid) {
         self.push_description("Shame!");
         self.push_description(&format!("Hype Builds in {}!", hype.stadium_name));
         self.push_child(hype.sub_event, |mut child_eb| {
