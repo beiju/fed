@@ -1984,17 +1984,19 @@ impl FedEvent {
                 hatch_eb.push_metadata_uuid("id", postseason_birth_id);
                 let hatch_event = hatch_eb.build(EventType::PlayerHatched);
 
-                let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
-                birth_eb.set_category(EventCategory::Changes);
-                birth_eb.push_description(&format!("The {team_nickname} earn a Postseason Birth!"));
-                birth_eb.push_player_tag(postseason_birth_id);
-                birth_eb.push_team_tag(team_id);
-                birth_eb.push_metadata_i64("location", postseason_birth_location);
-                birth_eb.push_metadata_uuid("playerId", postseason_birth_id);
-                birth_eb.push_metadata_str("playerName", &postseason_birth_name);
-                birth_eb.push_metadata_uuid("teamId", team_id);
-                birth_eb.push_metadata_str("teamName", &team_nickname);
-                let birth_event = birth_eb.build(EventType::PlayerAddedToTeam);
+                let birth_event = postseason_birth_event_metadata.map(|postseason_birth_event_metadata| {
+                    let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
+                    birth_eb.set_category(EventCategory::Changes);
+                    birth_eb.push_description(&format!("The {team_nickname} earn a Postseason Birth!"));
+                    birth_eb.push_player_tag(postseason_birth_id);
+                    birth_eb.push_team_tag(team_id);
+                    birth_eb.push_metadata_i64("location", postseason_birth_location);
+                    birth_eb.push_metadata_uuid("playerId", postseason_birth_id);
+                    birth_eb.push_metadata_str("playerName", &postseason_birth_name);
+                    birth_eb.push_metadata_uuid("teamId", team_id);
+                    birth_eb.push_metadata_str("teamName", &team_nickname);
+                    birth_eb.build(EventType::PlayerAddedToTeam)
+                });
 
                 let party_event = left_party_event_metadata.map(|left_party_time| {
                     let mut party_eb = eb.connected_event(left_party_time);
@@ -2023,9 +2025,9 @@ impl FedEvent {
                 let main_event = eb.build(EventType::EarnedPostseasonSlot);
 
                 return match order {
-                    None | Some(PostseasonBirthBoostEventOrder::AfterBirth) => [Some(hatch_event), Some(birth_event), shadow_event, party_event, Some(main_event)],
-                    Some(PostseasonBirthBoostEventOrder::AfterHatch) => [Some(hatch_event), shadow_event, Some(birth_event), party_event, Some(main_event)],
-                    Some(PostseasonBirthBoostEventOrder::AfterEarnedSlot) => [Some(hatch_event), Some(birth_event), party_event, Some(main_event), shadow_event],
+                    None | Some(PostseasonBirthBoostEventOrder::AfterBirth) => [Some(hatch_event), birth_event, shadow_event, party_event, Some(main_event)],
+                    Some(PostseasonBirthBoostEventOrder::AfterHatch) => [Some(hatch_event), shadow_event, birth_event, party_event, Some(main_event)],
+                    Some(PostseasonBirthBoostEventOrder::AfterEarnedSlot) => [Some(hatch_event), birth_event, party_event, Some(main_event), shadow_event],
                 }.into_iter().filter_map(|x| x).collect();
             }
             FedEventData::PostseasonAdvance { team_id, team_nickname, round, displayed_season: season } => {

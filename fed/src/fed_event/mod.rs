@@ -3436,8 +3436,10 @@ pub enum FedEventData {
         /// (shadow boosts began in Season 18 [TODO: fact check])
         shadow_boost: Option<(KnownPlayerStatChange, PostseasonBirthBoostEventOrder)>,
 
-        /// Metadata for the postseason birth's added-to-team event
-        postseason_birth_event_metadata: SubEvent,
+        /// Metadata for the postseason birth's added-to-team event. This is *almost* always
+        /// present, but for unknown reason the Lovers' postseason birth in season 19 was missing
+        /// this event. In that case, this will be null.
+        postseason_birth_event_metadata: Option<SubEvent>,
     },
 
     /// Team advanced to next round of the postseason

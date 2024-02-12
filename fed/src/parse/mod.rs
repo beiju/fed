@@ -2697,9 +2697,15 @@ pub fn parse_next_event(
             if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
             // let mut boost_event = boost_event.as_ref().map(EventParseWrapper::new).transpose()?;
 
-            let earned_birth_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, prev_type)?;
-            prev_type = earned_birth_event.r#type;
-            let mut earned_birth_event = EventParseWrapper::new(&earned_birth_event)?;
+            // This is *almost* always there, but the lovers in the s19 postseason were missing this
+            // event
+            let earned_birth_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, prev_type).ok();
+            if let Some(e) = &earned_birth_event { prev_type = e.r#type; }
+            let mut earned_birth_event = earned_birth_event.as_ref().map(EventParseWrapper::new).transpose()?;
+            if earned_birth_event.is_none() {
+                // Audit that this only happens the one time I expect it
+                assert_eq!(event.id, uuid!("8b074caf-a71c-42e4-9c4a-1904c24b814a"));
+            }
 
             let boost_event = if let Some(e) = boost_event { Some(e) } else {
                 event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
@@ -2714,6 +2720,9 @@ pub fn parse_next_event(
             let earned_spot_event = event_iter.next_expect_type(EventType::EarnedPostseasonSlot, prev_type)?;
             prev_type = earned_spot_event.r#type;
             let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
+            let (team_nickname, displayed_season_number) = earned_spot_event.next_parse(parse_earned_postseason_slot)?;
+            assert!(is_known_team_nickname(team_nickname));
+            assert_eq!(displayed_season_number, event.season + 1);
 
             let boost_event = if let Some(e) = boost_event { Some(e) } else {
                 event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
@@ -2725,12 +2734,17 @@ pub fn parse_next_event(
             let shadow_boost = boost_event.as_ref().map(|(w, o)| EventParseWrapper::as_known_player_boost(w).map(|e| (e, *o))).transpose()?;
             let data = FedEventData::EarnedPostseasonSlot {
                 team_id: earned_spot_event.next_team_id()?,
-                team_nickname: earned_birth_event.metadata_str("teamName")?.to_string(),
-                postseason_birth_name: earned_birth_event.metadata_str("playerName")?.to_string(),
-                postseason_birth_id: earned_birth_event.metadata_uuid("playerId")?,
-                postseason_birth_location: earned_birth_event.metadata_enum("location")?,
+                team_nickname: team_nickname.to_string(),
+                postseason_birth_name: player_name.to_string(),
+                postseason_birth_id: event.next_player_id()?,
+                // The only time this event was missing was after shadows were unified, so location
+                // will necessarily be Bench.
+                postseason_birth_location: earned_birth_event
+                    .map(|e| e.metadata_enum("location"))
+                    .transpose()?
+                    .unwrap_or(ShadowPositionType::Bench),
                 hatch_event_metadata: event.as_sub_event(),
-                postseason_birth_event_metadata: earned_birth_event.as_sub_event(),
+                postseason_birth_event_metadata: earned_birth_event.as_ref().map(EventParseWrapper::as_sub_event),
                 shadow_boost,
                 left_party_event_metadata: left_party_event.as_ref().map(EventParseWrapper::as_sub_event),
             };
