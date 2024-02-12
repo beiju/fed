@@ -2342,10 +2342,17 @@ pub fn parse_next_event(
             let (team_nickname, unruns) = event.next_parse(parse_donated_shame)?;
             assert!(is_known_team_nickname(team_nickname));
 
+            let score_event = if event.season >= 19 {
+                event.parse_score_event()?
+            } else {
+                None
+            };
+
             FedEventData::DonatedShameApplied {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
                 unruns,
+                score_event,
             }
         }
         EventType::AddedMod => {

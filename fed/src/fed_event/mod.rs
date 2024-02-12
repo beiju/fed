@@ -143,6 +143,10 @@ pub struct ScoringPlayer {
 
     /// Info about Hype building as a result of this score, if any
     pub hype: Option<Hype>,
+
+    /// Starting in season 20, there were child events for each score. This contains the information
+    /// from that event, if there was one.
+    pub score_event: Option<ScoreEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1822,6 +1826,19 @@ pub enum GameStartAnnouncement {
         /// Home team name
         home: String,
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ScoreEvent {
+    // TODO document fields
+    pub away_emoji: String,
+    pub away_score: f64,
+    pub home_emoji: String,
+    pub home_score: f64,
+    pub runs_scored: f64, // negative for unruns
+    pub team_id: Uuid,
+    pub team_nickname: String,
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -4718,6 +4735,9 @@ pub enum FedEventData {
 
         /// Number of unruns received
         unruns: f64,
+
+        /// If after s20, the associated score event
+        score_event: Option<ScoreEvent>,
     },
 }
 

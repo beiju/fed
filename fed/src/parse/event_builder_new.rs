@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreEvent, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -197,6 +197,17 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_metadata_i64_or_f64(&mut self, key: impl Into<String>, value: f64) {
+        // JS, or JSON, or Blaseball, or some layer in the stack does this annoying thing where
+        // int-valued floats are represented as ints, and my diffing cares about the difference
+        let value_int = value as i64;
+        if value == value_int as f64 {
+            self.push_metadata_i64(key, value_int)
+        } else {
+            self.push_metadata_f64_forced(key, value)
+        }
+    }
+
     pub fn push_metadata_f64_opt(&mut self, key: impl Into<String>, value: Option<f64>) {
         if let Some(n) = value {
             self.push_metadata_f64(key, n)
@@ -342,6 +353,25 @@ impl EventBuilder {
     pub fn push_scores(&mut self, scores: Scores, home_team_id: Uuid, score_label: &str) {
         self.push_scorers(scores.scores, home_team_id, score_label);
         self.push_free_refills(scores.free_refills);
+    }
+
+    pub fn push_score_event(&mut self, score: ScoreEvent) {
+        self.push_child(score.sub_event, |mut child_eb| {
+            child_eb.set_category(EventCategory::Game);
+            child_eb.push_team_tag(score.team_id);
+            child_eb.push_description(&format!("The {} scored!", score.team_nickname));
+            child_eb.push_metadata_str("awayEmoji", score.away_emoji);
+            child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
+            child_eb.push_metadata_str("homeEmoji", score.home_emoji);
+            child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
+            child_eb.push_metadata_str("ledger", ""); // Is this ever nonempty?
+            child_eb.push_metadata_str("update", if score.runs_scored < 0.0 {
+                format!("{} Unruns scored!", -score.runs_scored)
+            } else {
+                format!("{} Runs scored!", score.runs_scored)
+            });
+            child_eb.build(EventType::RunsScored)
+        });
     }
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {

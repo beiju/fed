@@ -19,6 +19,12 @@ pub enum FeedParseError {
         err: String,
     },
 
+    #[error("ScoreUpdate parse error for {event_type:?} event: {err}")]
+    ScoreUpdateParseError {
+        event_type: EventType,
+        err: String,
+    },
+
     #[error("Expected {tag_type} tag(s) to be non-null for {event_type:?} event")]
     MissingTags {
         event_type: EventType,

@@ -616,6 +616,8 @@ impl<'e> EventParseWrapper<'e> {
                 };
 
                 let hype = hype_stadium_name.map(|n| self.parse_hype_from_stadium(n)).transpose()?;
+                
+                let score_event = self.parse_score_event()?;
 
                 ParseOk(ScoringPlayer {
                     player_id,
@@ -624,6 +626,7 @@ impl<'e> EventParseWrapper<'e> {
                     attraction,
                     hotel_motel_party,
                     hype,
+                    score_event,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -637,6 +640,32 @@ impl<'e> EventParseWrapper<'e> {
             scores,
             free_refills,
         })
+    }
+
+    pub fn parse_score_event(&mut self) -> Result<Option<ScoreEvent>, FeedParseError> {
+        let Some(mut score_child) = self.next_child_opt(EventType::RunsScored)? else {
+            return Ok(None)
+        };
+
+        let team_nickname = score_child.next_parse(parse_team_scored)?;
+
+        let score_update = score_child.metadata_str("update")?;
+        let (_, runs_scored) = parse_score_update.parse(score_update).finish()
+            .map_err(|e| FeedParseError::ScoreUpdateParseError {
+                event_type: score_child.event_type,
+                err: convert_error(score_update, e),
+            })?;
+        
+        Ok(Some(ScoreEvent {
+            away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
+            away_score: score_child.metadata_f64("awayScore")?,
+            home_emoji: score_child.metadata_str("homeEmoji")?.to_string(),
+            home_score: score_child.metadata_f64("homeScore")?,
+            runs_scored,
+            team_id: score_child.next_team_id()?,
+            team_nickname: team_nickname.to_string(),
+            sub_event: score_child.as_sub_event(),
+        }))
     }
 
     pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {

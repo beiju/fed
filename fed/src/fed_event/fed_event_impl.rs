@@ -3384,11 +3384,16 @@ impl FedEvent {
                 });
                 eb.build(EventType::PolarityShift)
             }
-            FedEventData::DonatedShameApplied { game, team_nickname, unruns, } => {
+            FedEventData::DonatedShameApplied { game, team_nickname, unruns, score_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Shame Donations are granted!");
                 eb.push_description(&format!("The {team_nickname} receive {unruns} Unruns."));
+
+                if let Some(score) = score_event {
+                    eb.push_score_event(score);
+                }
+
                 eb.build(EventType::ShameDonor)
             }
         };

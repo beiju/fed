@@ -121,6 +121,8 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
 
 pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32)> {
     move |input| {
+        // Starting in s20 there's an extra space. unfortunately
+        let (input, _) = opt(tag(" ")).parse(input)?;
         // Plural is for a double strike
         let (input, _) = tag(if double_strike { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
         let (input, count) = parse_count(input)?;
@@ -2183,4 +2185,22 @@ pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<(&str, f64)> {
     let (input, _) = tag(" Unruns.").parse(input)?;
 
     Ok((input, (team_nickname, unruns)))
+}
+
+pub(crate) fn parse_team_scored(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" scored!").parse(input)?;
+
+    Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
+    let (input, runs) = double.parse(input)?;
+    let (input, negator) = alt((
+        tag(" Runs").map(|_| 1.0),
+        tag(" Unruns").map(|_| -1.0),
+    )).parse(input)?;
+    let (input, _) = tag(" scored!").parse(input)?;
+
+    Ok((input, runs * negator))
 }
