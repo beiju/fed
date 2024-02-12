@@ -1794,6 +1794,24 @@ pub struct StadiumModAdded {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum RoamFromLocation {
+    Team {
+        /// Uuid of player's previous team
+        previous_team_id: Uuid,
+
+        /// Nickname of player's previous team
+        previous_team_nickname: String,
+
+        /// Parties as a result of the Good Riddance mod
+        good_riddance_parties: Vec<GoodRiddanceParty>
+    },
+    HallOfFlame {
+        /// Metadata for the player-left-hall-of-flame sub-event
+        sub_event: SubEvent,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -4193,14 +4211,9 @@ pub enum FedEventData {
         /// Name of player who roamed
         player_name: String,
 
-        /// Location of player within the teams
+        /// Location of player on the new team. If the player roamed from the team, this is also
+        /// the location on their old team
         location: PositionType,
-
-        /// Uuid of player's previous team
-        previous_team_id: Uuid,
-
-        /// Nickname of player's previous team
-        previous_team_nickname: String,
 
         /// Uuid of player's new team
         new_team_id: Uuid,
@@ -4208,8 +4221,8 @@ pub enum FedEventData {
         /// Nickname of player's new team
         new_team_nickname: String,
 
-        /// Parties as a result of the Good Riddance mod
-        good_riddance_parties: Vec<GoodRiddanceParty>
+        /// Where the player roamed from, either another team or the Hall of Flame
+        roam_from: RoamFromLocation,
     },
 
     /// A shimmering Crate descends during Glitter weather

@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -3014,7 +3014,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Roam { player_id, player_name, location, previous_team_id, previous_team_nickname, new_team_id, new_team_nickname, good_riddance_parties } => {
+            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname, good_riddance_parties } } => {
                 let mut events = Vec::with_capacity(good_riddance_parties.len() + 1);
 
                 for party in good_riddance_parties {
@@ -3046,6 +3046,26 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::PlayerMoved));
 
                 return events;
+            }
+            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event } } => {
+                let mut team_eb = eb.connected_event(sub_event);
+                team_eb.set_category(EventCategory::Changes);
+                team_eb.push_description(&format!("{player_name} roamed to The {new_team_nickname}."));
+                team_eb.push_player_tag(player_id);
+                team_eb.push_team_tag(new_team_id);
+                team_eb.push_metadata_i64("location", location);
+                team_eb.push_metadata_uuid("playerId", player_id);
+                team_eb.push_metadata_str("playerName", &player_name);
+                team_eb.push_metadata_uuid("teamId", new_team_id);
+                team_eb.push_metadata_str("teamName", new_team_nickname);
+                let added_to_team_event = team_eb.build(EventType::PlayerAddedToTeam);
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name} roamed out of the Hall of Flame."));
+                eb.push_player_tag(player_id);
+                let left_hall_event = eb.build(EventType::ExitHallOfFlame);
+
+                return vec![left_hall_event, added_to_team_event];
             }
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);

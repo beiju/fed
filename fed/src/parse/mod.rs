@@ -2545,11 +2545,13 @@ pub fn parse_next_event(
                         player_id: event.metadata_uuid("playerId")?,
                         player_name: player_name.to_string(),
                         location: event.metadata_enum("location")?,
-                        previous_team_id: event.metadata_uuid("sendTeamId")?,
-                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
                         new_team_id: event.metadata_uuid("receiveTeamId")?,
                         new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
-                        good_riddance_parties,
+                        roam_from: RoamFromLocation::Team {
+                            previous_team_id: event.metadata_uuid("sendTeamId")?,
+                            previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                            good_riddance_parties,
+                        }
                     }
                 }
             }
@@ -2593,7 +2595,22 @@ pub fn parse_next_event(
                 player_name: player_name.to_string(),
             }
         }
-        EventType::ExitHallOfFlame => { todo!() }
+        EventType::ExitHallOfFlame => {
+            // So far the only instance of this at the top level is Roamers roaming out of the Hall
+            let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
+            let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
+            
+            FedEventData::Roam {
+                player_id: add_to_team_event.metadata_uuid("playerId")?,
+                player_name: add_to_team_event.metadata_str("playerName")?.to_string(),
+                location: add_to_team_event.metadata_enum("location")?,
+                roam_from: RoamFromLocation::HallOfFlame {
+                    sub_event: add_to_team_event.as_sub_event(),
+                },
+                new_team_id: add_to_team_event.metadata_uuid("teamId")?,
+                new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
+            }
+        }
         EventType::PlayerGainedItem => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 // Then it's a tarot event and we can forget parsing. Thankfully
@@ -3291,6 +3308,7 @@ pub fn parse_next_event(
         EventType::Ratification => { todo!() }
         EventType::HypeBuilds => { todo!() }
         EventType::RunsScored => { todo!() }
+        EventType::LeagueModificationAdded => { todo!() }
         EventType::WinCollectedRegular => { todo!() }
         EventType::WinCollectedPostseason => { todo!() }
         EventType::GameOver => { todo!() }
