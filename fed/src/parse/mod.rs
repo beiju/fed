@@ -3367,6 +3367,11 @@ pub fn parse_next_event(
             let team_nickname = event.next_parse(parse_moderation)?;
             assert!(is_known_team_nickname(team_nickname));
 
+            // Exactly one time, Moderation accidentally took too many runs and caused the Moist
+            // Talkers to lose. They happened to be away at the time so it caused Hype for the
+            // opposing team (the Shoe Thieves).
+            let hype = event.parse_hype()?;
+
             let score_event = event.parse_score_event()?
                 .ok_or_else(|| FeedParseError::NotEnoughChildren {
                     event_type: event.event_type,
@@ -3376,6 +3381,7 @@ pub fn parse_next_event(
             FedEventData::Moderation {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
+                hype,
                 score_event,
             }
         }

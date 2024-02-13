@@ -4860,6 +4860,10 @@ pub enum FedEventData {
         /// Nickname of team who practiced Moderation
         team_nickname: String,
 
+        /// Once, due to a bug, Moderation accidentally took too many runs and caused the opposing
+        /// team to win. Since this was at the end of the game it counted as Shame and built Hype.
+        hype: Option<Hype>,
+
         /// Information about the score from Moderation
         score_event: ScoreEvent,
     },

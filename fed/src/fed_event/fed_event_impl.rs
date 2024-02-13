@@ -3464,10 +3464,12 @@ impl FedEvent {
 
                 eb.build(EventType::GameOver)
             }
-            FedEventData::Moderation { game, team_nickname, score_event } => {
+            FedEventData::Moderation { game, team_nickname, hype, score_event } => {
+                let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("The {team_nickname} practice Moderation."));
+                eb.push_hype_opt(hype.as_ref(), home_team_id);
                 eb.push_score_event(&score_event);
                 eb.build(EventType::Moderation)
             }
