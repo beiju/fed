@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -963,34 +963,49 @@ impl FedEvent {
                 }
 
                 if let Some(carc_full) = carcinization {
-                    let carc = carc_full.mv; // convenience
-                    let carc_description = format!("The {} steal {} for the remainder of the game.",
-                                                   carc_full.new_team_name, carc.player_name);
-                    let mod_add_description = format!("{} was temporarily stolen.", carc.player_name);
-                    eb.push_description(&carc_description);
-                    eb.push_child(carc.sub_event, |mut child| {
-                        child.push_description(&carc_description);
-                        child.push_player_tag(carc.player_id);
-                        child.push_team_tag(carc.previous_team_id);
-                        child.push_team_tag(carc.new_team_id);
-                        child.push_metadata_i64("location", carc.location);
-                        child.push_metadata_uuid("playerId", carc.player_id);
-                        child.push_metadata_str("playerName", carc.player_name);
-                        child.push_metadata_i64("receiveLocation", carc.location);
-                        child.push_metadata_uuid("receiveTeamId", carc.new_team_id);
-                        child.push_metadata_str("receiveTeamName", carc.new_team_nickname);
-                        child.push_metadata_uuid("sendTeamId", carc.previous_team_id);
-                        child.push_metadata_str("sendTeamName", carc.previous_team_nickname);
-                        child.build(EventType::PlayerMoved)
-                    });
-                    eb.push_child(carc_full.mod_added_sub_event, |mut child| {
-                        child.push_description(&mod_add_description);
-                        child.push_player_tag(carc.player_id);
-                        child.push_team_tag(carc.new_team_id);
-                        child.push_metadata_str("mod", "TEMP_STOLEN");
-                        child.push_metadata_i64("type", ModDuration::Game as i64);
-                        child.build(EventType::AddedMod)
-                    });
+                    match carc_full.player_moved {
+                        PlayerMaybeCarcinized::Successful { move_event: carc, mod_added_sub_event } => {
+                            let carc_description = format!("The {} steal {} for the remainder of the game.",
+                                                           carc_full.new_team_name, carc.player_name);
+                            let mod_add_description = format!("{} was temporarily stolen.", carc.player_name);
+                            eb.push_description(&carc_description);
+                            eb.push_child(carc.sub_event, |mut child| {
+                                child.push_description(&carc_description);
+                                child.push_player_tag(carc.player_id);
+                                child.push_team_tag(carc.previous_team_id);
+                                child.push_team_tag(carc.new_team_id);
+                                child.push_metadata_i64("location", carc.location);
+                                child.push_metadata_uuid("playerId", carc.player_id);
+                                child.push_metadata_str("playerName", carc.player_name);
+                                child.push_metadata_i64("receiveLocation", carc.location);
+                                child.push_metadata_uuid("receiveTeamId", carc.new_team_id);
+                                child.push_metadata_str("receiveTeamName", carc.new_team_nickname);
+                                child.push_metadata_uuid("sendTeamId", carc.previous_team_id);
+                                child.push_metadata_str("sendTeamName", carc.previous_team_nickname);
+                                child.build(EventType::PlayerMoved)
+                            });
+                            eb.push_child(mod_added_sub_event, |mut child| {
+                                child.push_description(&mod_add_description);
+                                child.push_player_tag(carc.player_id);
+                                child.push_team_tag(carc.new_team_id);
+                                child.push_metadata_str("mod", "TEMP_STOLEN");
+                                child.push_metadata_i64("type", ModDuration::Game as i64);
+                                child.build(EventType::AddedMod)
+                            });
+                        }
+                        PlayerMaybeCarcinized::FailedByForce(force) => {
+                            let description = format!("The {} steal {} for the remainder of the game.",
+                                                 carc_full.new_team_name, force.player_name);
+                            eb.push_description(&description);
+                            eb.push_description("Steal failed.");
+                            eb.push_description(&format!("{} was gripped by Force.", force.player_name));
+                            eb.push_child(force.sub_event, |mut child_eb| {
+                                child_eb.push_description(&description);
+                                child_eb.push_player_tag(force.player_id);
+                                child_eb.build(EventType::PlayerMoveFailedForce)
+                            });
+                        }
+                    }
                 }
 
                 if let Some(gamma) = compressed_by_gamma {

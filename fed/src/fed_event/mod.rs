@@ -1399,15 +1399,44 @@ pub struct PlayerMovedTeams {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerGrippedByForce {
+    /// Uuid of player who was gripped by Force
+    pub player_id: Uuid,
+
+    /// Name of player who was gripped by Force
+    pub player_name: String,
+
+    /// Sub-event associated with the player not moving
+    pub sub_event: SubEvent,
+}
+
+// I would love to be able to tag this with `"success": true/false`, but the PR to allow that was
+// rejected for developer bandwidth reasons: https://github.com/serde-rs/serde/pull/2056
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(tag = "success")]
+pub enum PlayerMaybeCarcinized {
+    Successful {
+        #[serde(flatten)]
+        move_event: PlayerMovedTeams,
+
+        /// Metadata for sub-event associated with adding the TEMP_STOLEN mod
+        mod_added_sub_event: SubEvent,
+    },
+    FailedByForce(PlayerGrippedByForce),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Carcinization {
     #[serde(flatten)]
-    pub mv: PlayerMovedTeams,
+
+    /// This usually contains the information about the player moving. However, for unknown reasons
+    /// (possibly the unpassed decree Force Fields triggering when it shouldn't) the steal failed
+    /// once. The child event's description still implied that the player was moved, but it was a
+    /// different event type and the Stolen mod was not added.
+    pub player_moved: PlayerMaybeCarcinized,
 
     /// Full name of player's new team
     pub new_team_name: String,
-
-    /// Metadata for sub-event associated with adding the TEMP_STOLEN mod
-    pub mod_added_sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]

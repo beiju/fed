@@ -1058,24 +1058,39 @@ pub fn parse_next_event(
             let win_event = event.parse_win_event()?;
 
             let carcinization = event.next_parse_opt(parse_carcinization)
-                .map(|(team_name, _player_name)| {
+                .map(|(team_name, player_name, success)| {
                     assert!(is_known_team_name(team_name));
-                    let child = event.next_child(EventType::PlayerMoved)?;
-                    let mod_add_child = event.next_child(EventType::AddedMod)?;
-                    Ok::<_, FeedParseError>(Carcinization {
-                        mv: PlayerMovedTeams {
-                            player_id: child.metadata_uuid("playerId")?,
-                            player_name: child.metadata_str("playerName")?.to_string(),
-                            location: child.metadata_enum("location")?,
-                            previous_team_id: child.metadata_uuid("sendTeamId")?,
-                            previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
-                            new_team_id: child.metadata_uuid("receiveTeamId")?,
-                            new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
-                            sub_event: child.as_sub_event(),
-                        },
-                        new_team_name: team_name.to_string(),
-                        mod_added_sub_event: mod_add_child.as_sub_event(),
-                    })
+                    if success {
+                        let child = event.next_child(EventType::PlayerMoved)?;
+                        let mod_add_child = event.next_child(EventType::AddedMod)?;
+                        ParseOk(Carcinization {
+                            player_moved: PlayerMaybeCarcinized::Successful { 
+                                move_event: PlayerMovedTeams {
+                                    player_id: child.metadata_uuid("playerId")?,
+                                    player_name: player_name.to_string(),
+                                    location: child.metadata_enum("location")?,
+                                    previous_team_id: child.metadata_uuid("sendTeamId")?,
+                                    previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
+                                    new_team_id: child.metadata_uuid("receiveTeamId")?,
+                                    new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
+                                    sub_event: child.as_sub_event(),
+                                },
+                                mod_added_sub_event: mod_add_child.as_sub_event(),
+                            },
+                            new_team_name: team_name.to_string(),
+                        })
+                    } else {
+                        let mut child = event.next_child(EventType::PlayerMoveFailedForce)?;
+                        ParseOk(Carcinization {
+                            player_moved: PlayerMaybeCarcinized::FailedByForce(PlayerGrippedByForce {
+                                player_id: child.next_player_id()?,
+                                player_name: player_name.to_string(),
+                                sub_event: child.as_sub_event(),
+                            }),
+                            new_team_name: team_name.to_string(),
+                        })
+
+                    }
                 })
                 .transpose()?;
 

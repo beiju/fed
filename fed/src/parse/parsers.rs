@@ -1935,14 +1935,26 @@ pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str, bool
     Ok((input, (player_name, item_name, restored)))
 }
 
-pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str, bool)> {
     let (input, _) = tag("\nThe ").parse(input)?;
     let (input, team_name) = parse_terminated(" steal ").parse(input)?;
     let (input, player_name) = parse_terminated(" for the remainder of the game.").parse(input)?;
 
-    Ok((input, (team_name, player_name)))
+    let (input, steal_failed) = opt(parse_steal_failed(player_name)).parse(input)?;
+
+    // steal_failed records whether it failed but we return whether it succeeded
+    Ok((input, (team_name, player_name, steal_failed.is_none())))
 }
 
+pub(crate) fn parse_steal_failed<'a>(player_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
+    move |input| {
+        let (input, _) = tag("\nSteal failed.\n").parse(input)?;
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag(" was gripped by Force.").parse(input)?;
+
+        Ok((input, ()))
+    }
+}
 pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("\nThe Black Hole burps!\n").parse(input)?;
     let (input, player_name) = parse_terminated(" is compressed by gamma!").parse(input)?;
