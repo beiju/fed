@@ -495,7 +495,7 @@ impl FedEvent {
                 if let Some(se) = &score_event { eb.push_score_event(se); }
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite } => {
+            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite, score_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
@@ -504,6 +504,7 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
+                if let Some(se) = &score_event { eb.push_score_event(se); }
                 eb.build(EventType::Strikeout)
             }
             FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {

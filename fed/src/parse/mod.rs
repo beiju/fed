@@ -507,6 +507,7 @@ pub fn parse_next_event(
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
                     let parasite = event.parse_parasite()?;
+                    let score_event = event.parse_score_event()?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -516,6 +517,7 @@ pub fn parse_next_event(
                         free_refill,
                         is_special: event.category == EventCategory::Special,
                         parasite,
+                        score_event,
                     }
                 }
                 ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
