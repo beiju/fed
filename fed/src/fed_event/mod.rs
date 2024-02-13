@@ -1902,12 +1902,6 @@ pub struct ScoreEvent {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct WeatherEvent {
-    // TODO document fields
-    pub sub_event: SubEvent,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3056,7 +3050,7 @@ pub enum FedEventData {
 
         /// Starting in s20, there's an additional child event for the weather proc. This is the
         /// information in that event, if applicable.
-        weather_event: Option<WeatherEvent>
+        weather_event: Option<SubEvent>
     },
 
     /// Player suffered a Superallergic reaction
@@ -3113,6 +3107,10 @@ pub enum FedEventData {
 
         /// Metadata for the `PlayerTraded` sub-event
         sub_event: SubEvent,
+
+        /// Starting in s20, there's an additional child event for the weather proc. This is the
+        /// information in that event, if applicable.
+        weather_event: Option<SubEvent>
     },
 
     /// Reverb bestows the Reverberating mod

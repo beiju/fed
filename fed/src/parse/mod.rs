@@ -1246,6 +1246,10 @@ pub fn parse_next_event(
         }
         EventType::FeedbackSwap => {
             let (player1_name, player2_name, lcd_soundsystem, position) = event.next_parse(parse_feedback)?;
+
+            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+                .map(|child| child.as_sub_event());
+
             let lcd_soundsystem = lcd_soundsystem
                 .map(|team_nickname| {
                     assert!(is_known_team_nickname(team_nickname));
@@ -1285,6 +1289,7 @@ pub fn parse_next_event(
                 lcd_soundsystem,
                 position_type: position,
                 sub_event: sub_event.as_sub_event(),
+                weather_event,
             }
         }
         EventType::SuperallergicReaction => {
@@ -1307,11 +1312,7 @@ pub fn parse_next_event(
             let player_id = event.next_player_id()?;
 
             let weather_event = event.next_child_opt(EventType::WeatherEvent)?
-                .map(|child| {
-                    WeatherEvent {
-                        sub_event: child.as_sub_event(),
-                    }
-                });
+                .map(|child| child.as_sub_event());
 
             let mut sub_event = event.next_child(EventType::PlayerStatDecrease)?;
             assert_eq!(player_id, sub_event.next_player_id()?);

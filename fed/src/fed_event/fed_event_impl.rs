@@ -1080,7 +1080,7 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
 
                 if let Some(weather) = weather_event {
-                    eb.push_child(weather.sub_event, |mut child_eb| {
+                    eb.push_child(weather, |mut child_eb| {
                         child_eb.set_category(EventCategory::Special);
                         child_eb.push_description(&format!("{player_name} swallowed a stray peanut."));
                         child_eb.push_team_tag(team_id);
@@ -1196,7 +1196,7 @@ impl FedEvent {
 
                 eb.build(if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain })
             }
-            FedEventData::Feedback { game, players: (player_a, player_b), lcd_soundsystem, position_type, sub_event } => {
+            FedEventData::Feedback { game, players: (player_a, player_b), lcd_soundsystem, position_type, sub_event, weather_event } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -1204,6 +1204,20 @@ impl FedEvent {
                 eb.push_description(&format!("{} and {} switch teams in the feedback!", player_a.player_name, player_b.player_name));
                 eb.push_player_tag(player_a.player_id);
                 eb.push_player_tag(player_b.player_id);
+
+                if let Some(weather) = weather_event {
+                    eb.push_child(weather, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description("Reality flickered in the Feedback...");
+                        child_eb.push_player_tag(player_a.player_id);
+                        child_eb.push_player_tag(player_b.player_id);
+                        child_eb.push_team_tag(player_a.team_id);
+                        child_eb.push_team_tag(player_b.team_id);
+                        child_eb.push_metadata_str("effect", "Feedback Swap");
+                        child_eb.push_metadata_i32("weather", Weather::Feedback);
+                        child_eb.build(EventType::WeatherEvent)
+                    });
+                }
 
                 if let Some((lcd_a, lcd_b)) = lcd_soundsystem {
                     let team_nickname = if player_a.team_id == home_team_id {
@@ -1225,7 +1239,11 @@ impl FedEvent {
 
                 eb.push_description(&format!("{} is now {}.", player_b.player_name, position_type.role()));
                 eb.push_child(sub_event, |mut child| {
-                    child.push_description("Reality flickered in the Feedback.");
+                    if self.season < 19 {
+                        child.push_description("Reality flickered in the Feedback.");
+                    } else {
+                        child.push_description(&format!("{} and {} were swapped in Feedback.", player_a.player_name, player_b.player_name));
+                    }
                     child.push_player_tag(player_a.player_id);
                     child.push_player_tag(player_b.player_id);
                     child.push_team_tag(player_a.team_id);
