@@ -320,13 +320,13 @@ impl FedEvent {
                 let foul_ball_text = if pitch.double_strike.is_some() {
                     eb.set_category(EventCategory::Special);
                     "Foul Balls"
-                } else if self.season < 19 {
-                    "Foul Ball"
                 } else {
-                    " Foul Ball" // Annoying extra space
+                    "Foul Ball"
                 };
+                let extra_space = if self.season < 19 { "" } else { " " }; // Presumably a bug
+
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{foul_ball_text}. {balls}-{strikes}"));
+                eb.push_description(&format!("{extra_space}{foul_ball_text}. {balls}-{strikes}"));
                 eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
