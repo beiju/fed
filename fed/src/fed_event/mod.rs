@@ -4014,6 +4014,13 @@ pub enum FedEventData {
         game: GameEvent,
     },
 
+    /// The Event Horizon awaits at the beginning of a game
+    #[serde(rename_all = "camelCase")]
+    EventHorizonAwaits {
+        #[serde(flatten)]
+        game: GameEvent,
+    },
+
     /// Players Echoed into Static
     #[serde(rename_all = "camelCase")]
     EchoIntoStatic {
@@ -5076,6 +5083,7 @@ impl FedEventData {
             FedEventData::PlayerLocalized { .. } => { None }
             FedEventData::Echo { game, .. } => { Some(game) }
             FedEventData::SolarPanelsAwait { game, .. } => { Some(game) }
+            FedEventData::EventHorizonAwaits { game, .. } => { Some(game) }
             FedEventData::EchoIntoStatic { game, .. } => { Some(game) }
             FedEventData::Psychoacoustics { game, .. } => { Some(game) }
             FedEventData::EchoReceiver { game, .. } => { Some(game) }

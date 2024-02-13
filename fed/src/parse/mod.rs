@@ -1983,7 +1983,12 @@ pub fn parse_next_event(
             }
         }
         EventType::EventHorizonActivation => { todo!() }
-        EventType::EventHorizonAwaits => { todo!() }
+        EventType::EventHorizonAwaits => {
+            let _ = event.next_parse_tag("The Event Horizon awaits.")?;
+            FedEventData::EventHorizonAwaits {
+                game: event.game(unscatter, attractor_secret_base)?,
+            }
+        }
         EventType::SolarPanelsAwait => {
             let _ = event.next_parse_tag("The Solar Panels are angled toward Sun 2.")?;
             FedEventData::SolarPanelsAwait {

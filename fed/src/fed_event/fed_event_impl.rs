@@ -2641,14 +2641,16 @@ impl FedEvent {
                     .build()
             }
             FedEventData::SolarPanelsAwait { game } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::SolarPanelsAwait,
-                        category: EventCategory::Special,
-                        description: "The Solar Panels are angled toward Sun 2.".to_string(),
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Solar Panels are angled toward Sun 2.");
+                eb.build(EventType::SolarPanelsAwait)
+            }
+            FedEventData::EventHorizonAwaits { game } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Event Horizon awaits.");
+                eb.build(EventType::EventHorizonAwaits)
             }
             FedEventData::EchoIntoStatic { game, echoer, echoee } => {
                 let description = format!("ECHO {} STATIC\nECHO {} STATIC", echoer.player_name, echoee.player_name);
