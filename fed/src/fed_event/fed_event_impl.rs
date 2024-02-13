@@ -1617,7 +1617,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps } => {
+            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A surge of Immateria rushes up from Under!");
@@ -1651,6 +1651,8 @@ impl FedEvent {
                 }
 
                 eb.push_free_refills(free_refills);
+                if let Some(se) = &score_event { eb.push_score_event(se); }
+
                 eb.build(EventType::FloodingSwept)
             }
             FedEventData::ReturnFromElsewhere { game, returns } => {

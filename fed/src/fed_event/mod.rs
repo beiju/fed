@@ -3392,6 +3392,10 @@ pub enum FedEventData {
 
         /// Whether the Flood Pumps activated
         flood_pumps: bool,
+
+        /// If at least one person scored on this event (with Flippers), and it's s20 or later,
+        /// contains information about the scoring event
+        score_event: Option<ScoreEvent>,
     },
 
     /// Player(s) returned from Elsewhere

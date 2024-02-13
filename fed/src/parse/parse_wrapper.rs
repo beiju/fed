@@ -936,8 +936,15 @@ impl<'e> EventParseWrapper<'e> {
             let mut undertaker_elsewhere_event = self.next_child(EventType::AddedMod)?;
             let mut negative_event = self.next_child(EventType::AddedMod)?;
 
+            // The player tag on negative_event is for the person who got flipped and the
+            // flipper id is on the parent event. Dunno why.
+            let undertaker_player_id = self.next_player_id()?;
+            // Schlorp the flippee's player id too. We don't need it in here, and when we do need it
+            // we get it from a sub-event, but we need to get rid of it so future calls to
+            // next_player_id get the right id.
+            let _ = self.next_player_id()?;
             ParseOk(FlipNegative {
-                undertaker_player_id: undertaker_elsewhere_event.next_player_id()?,
+                undertaker_player_id,
                 undertaker_player_name: flipper_name.to_string(),
                 undertaker_elsewhere_sub_event: undertaker_elsewhere_event.as_sub_event(),
                 flip_negative_sub_event: negative_event.as_sub_event(),

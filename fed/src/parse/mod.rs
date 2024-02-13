@@ -1708,12 +1708,14 @@ pub fn parse_next_event(
                         ParsedFloodingEffect::Elsewhere((player_name, undertaker_name)) => {
                             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
+                            // Must be before getting player_id
+                            let flipped_negative = event.parse_flipped_negative(undertaker_name)?;
                             FloodingSweptEffect::Elsewhere(PlayerSentElsewhere {
                                 team_id: sub_event.next_team_id()?,
                                 player_id: sub_event.next_player_id()?,
                                 player_name: player_name.to_string(),
                                 sub_event: sub_event.as_sub_event(),
-                                flipped_negative: event.parse_flipped_negative(undertaker_name)?,
+                                flipped_negative,
                             })
                         }
                         ParsedFloodingEffect::Flippers(player_name) => {
@@ -1733,12 +1735,14 @@ pub fn parse_next_event(
                 .collect::<Result<Vec<_>, _>>()?;
 
             let free_refills = event.parse_free_refills()?;
+            let score_event = event.parse_score_event()?;
 
             FedEventData::FloodingSwept {
                 game: event.game(unscatter, attractor_secret_base)?,
                 effects,
                 free_refills,
                 flood_pumps,
+                score_event,
             }
         }
         EventType::SalmonSwim => {
@@ -1752,12 +1756,15 @@ pub fn parse_next_event(
             let player_expelled = event.next_parse_opt(parse_caught_in_the_bind)
                 .map(|(caught_player_name, undertaker_name)| {
                     let mut sub_event = event.next_child(EventType::AddedMod)?;
+                    // Order is important
+                    let player_id = event.next_player_id()?;
+                    let flipped_negative = event.parse_flipped_negative(undertaker_name)?;
                     ParseOk(PlayerSentElsewhere {
                         team_id: sub_event.next_team_id()?,
-                        player_id: sub_event.next_player_id()?,
+                        player_id,
                         player_name: caught_player_name.to_string(),
                         sub_event: sub_event.as_sub_event(),
-                        flipped_negative: event.parse_flipped_negative(undertaker_name)?,
+                        flipped_negative,
                     })
                 })
                 .transpose()?;
