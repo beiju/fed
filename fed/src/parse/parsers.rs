@@ -1747,10 +1747,10 @@ pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
     Ok((input, (num_runs, team_nickname)))
 }
 
-pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f32, bool)> {
+pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bool)> {
     let (input, _) = tag("Runs are Overflowing!\n").parse(input)?;
     let (input, team_nickname) = parse_terminated(" gain ").parse(input)?;
-    let (input, num_runs) = float.parse(input)?;
+    let (input, num_runs) = double.parse(input)?;
     let (input, unruns) = alt((
         tag(" Run").map(|_| false),
         tag(" Unrun").map(|_| true),

@@ -925,10 +925,14 @@ pub fn parse_next_event(
         EventType::RunsOverflowing => {
             let (team_nickname, num_runs, unruns) = event.next_parse(parse_runs_overflowing)?;
             assert!(is_known_team_nickname(team_nickname));
+
+            let score_event = event.parse_score_event()?;
+
             FedEventData::RunsOverflowing {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
                 num_runs: if unruns { -num_runs } else { num_runs },
+                score_event,
             }
         }
         EventType::HomeFieldAdvantage => {

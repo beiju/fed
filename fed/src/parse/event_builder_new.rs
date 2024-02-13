@@ -21,6 +21,22 @@ impl Display for Possessive<'_> {
     }
 }
 
+// Newtype that formats runs and unruns
+pub struct Runs(pub f64);
+
+impl Display for Runs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0 == -1.0 {
+            write!(f, "1 Unrun")
+        } else if self.0 == 1.0 {
+            write!(f, "1 Run")
+        } else if self.0 < 0.0 {
+            write!(f, "{} Unruns", -self.0)
+        } else {
+            write!(f, "{} Runs", self.0)
+        }
+    }
+}
 
 impl EventBuilder {
     pub fn new(id: Uuid, created: DateTime<Utc>, sim: String, day: i32, season: i32, tournament: i32, phase: i32, nuts: i32) -> Self {

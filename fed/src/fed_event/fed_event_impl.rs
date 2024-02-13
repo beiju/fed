@@ -5,7 +5,7 @@ use std::fmt::Write;
 use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
-use crate::parse::event_builder_new::{EventBuilder, Possessive};
+use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
 use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement};
 
 #[deprecated = "This is part of the old event builder"]
@@ -896,6 +896,8 @@ impl FedEvent {
                 if let Some(win_event) = win_event {
                     eb.push_description(&format!("The {scoring_team_nickname} collected 10!"));
                     eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
+                    // Two of them
+                    eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
                         child_eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
@@ -916,9 +918,6 @@ impl FedEvent {
                 }
 
                 if let Some(rays) = caught_some_rays {
-                    if self.season >= 19 {
-                        eb.push_description("Sun 2 smiled at the Tacos.");
-                    }
                     eb.push_description(&format!("{} catches some rays.", rays.player_name));
                     eb.push_player_tag(rays.player_id);
                     eb.push_child(rays.sub_event, |mut child| {
@@ -2917,24 +2916,12 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::RunsOverflowing { game, team_nickname, num_runs } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::RunsOverflowing,
-                        category: EventCategory::Special,
-                        description: format!("Runs are Overflowing!\n{team_nickname} gain {}.",
-                                             if num_runs == -1. {
-                                                 format!("1 Unrun")
-                                             } else if num_runs == 1. {
-                                                 format!("1 Run")
-                                             } else if num_runs < 0. {
-                                                 format!("{} Unruns", -num_runs)
-                                             } else {
-                                                 format!("{num_runs} Runs")
-                                             }),
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::RunsOverflowing { game, team_nickname, num_runs, score_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("Runs are Overflowing!\n{team_nickname} gain {}.", Runs(num_runs)));
+                if let Some(se) = &score_event { eb.push_score_event(se); }
+                eb.build(EventType::RunsOverflowing)
             }
             FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, enter_crime_scene_sub_event: crime_scene_sub_event, enter_shadows_sub_event } => {
                 let crime_child = EventBuilderChild::new(&crime_scene_sub_event)

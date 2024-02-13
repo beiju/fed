@@ -4222,7 +4222,11 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// Number of Runs (positive) or Unruns (negative) gained
-        num_runs: f32,
+        num_runs: f64,
+
+        /// The RunsScored event associated with this score, if one exists. One should exist iff
+        /// it's season 20 or later
+        score_event: Option<ScoreEvent>
     },
 
     /// Detective enters a Crime Scene
