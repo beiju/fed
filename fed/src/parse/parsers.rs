@@ -522,6 +522,7 @@ pub(crate) enum ParsedWalk<'s> {
     Ordinary((&'s str, Option<Base>)),
     Charm((Option<(ActivePositionType, &'s str, Option<bool>)>, &'s str, &'s str)),
     MindTrickStrikeoutIntoWalk((&'s str, StrikeoutType)),
+    MindTrickCharmStrikeoutIntoWalk((&'s str, &'s str, i32)),
     MindTrickWalkIntoStrikeout((&'s str, &'s str)),
 }
 
@@ -531,6 +532,7 @@ pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
         parse_walk_type_mind_trick_strikeout.map(|res| ParsedWalk::MindTrickWalkIntoStrikeout(res)),
         parse_mind_trick_walk.map(|res| ParsedWalk::MindTrickStrikeoutIntoWalk(res)),
         parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
+        parse_charmed_mind_trick_walk.map(|res| ParsedWalk::MindTrickCharmStrikeoutIntoWalk(res)),
         parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
     )).parse(input)
 }
@@ -585,6 +587,19 @@ pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePosit
     let (input, _) = tag(" walks to first base.").parse(input)?;
 
     Ok((input, (broken_item, batter_name, pitcher_name)))
+}
+
+pub(crate) fn parse_charmed_mind_trick_walk(input: &str) -> ParserResult<(&str, &str, i32)> {
+    let (input, charmer_name) = parse_terminated(" charmed ").parse(input)?;
+    let (input, charmed_name) = parse_terminated("!\n").parse(input)?;
+    let (input, _) = tag(charmed_name).parse(input)?;
+    let (input, _) = tag(" swings ").parse(input)?;
+    let (input, num_swings) = parse_whole_number(input)?;
+    let (input, _) = tag(" times to strike out willingly!\n").parse(input)?;
+    let (input, _) = tag(charmed_name).parse(input)?;
+    let (input, _) = tag(" uses a Mind Trick!\nThe umpire sends them to first base.").parse(input)?;
+
+    Ok((input, (charmer_name, charmed_name, num_swings)))
 }
 
 pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<(&str, StrikeoutType)> {

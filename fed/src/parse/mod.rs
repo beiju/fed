@@ -470,6 +470,21 @@ pub fn parse_next_event(
                         scores,
                     }
                 }
+                ParsedWalk::MindTrickCharmStrikeoutIntoWalk((charmer_name, charmed_name, num_swings)) => {
+                    let pitcher_id = event.next_player_id()?;
+                    let _ = event.next_player_id()?; // Charmer id is there twice
+                    let batter_id = event.next_player_id()?;
+                    let scores = event.parse_scores(" scores!")?;
+                    FedEventData::CharmedMindTrickWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
+                        pitcher_id,
+                        pitcher_name: charmer_name.to_string(),
+                        batter_id,
+                        batter_name: charmed_name.to_string(),
+                        scores,
+                    }
+                }
                 ParsedWalk::MindTrickWalkIntoStrikeout((batter_name, pitcher_name)) => {
                     FedEventData::MindTrickStrikeout {
                         game: event.game(unscatter, attractor_secret_base)?,

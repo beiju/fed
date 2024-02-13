@@ -3170,6 +3170,23 @@ impl FedEvent {
                 eb.push_player_tag(batter_id);
                 eb.build(EventType::Walk)
             }
+            FedEventData::CharmedMindTrickWalk { game, pitch, pitcher_id, pitcher_name, batter_id, batter_name, scores } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{pitcher_name} charmed {batter_name}!"));
+                eb.push_description(&format!("{batter_name} swings 3 times to strike out willingly!"));
+                eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
+                eb.push_description("The umpire sends them to first base.");
+                // There sure are a lot of redundant player ids in this event
+                eb.push_player_tag(pitcher_id);
+                eb.push_player_tag(pitcher_id);
+                eb.push_player_tag(batter_id);
+                eb.push_player_tag(batter_id);
+                eb.push_scores(scores, home_team_id, "scores!");
+                eb.build(EventType::Walk)
+            }
             FedEventData::MindTrickStrikeout { game, pitch, batter_id, batter_name, pitcher_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);

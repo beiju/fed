@@ -4422,10 +4422,39 @@ pub enum FedEventData {
         base_instincts: Option<Base>,
 
         // /// Meta about the pitcher's item breaking, if it broke, otherwise null.
+        // TODO is this needed?
         // pitcher_item_damage: Option<ItemDamaged>,
         //
         // /// Meta about the batter's item breaking, if it broke, otherwise null.
+        // TODO is this needed?
         // batter_item_damage: Option<ItemDamaged>,
+
+        #[serde(flatten)]
+        scores: Scores,
+    },
+
+    /// Walk as a result of a Mind Trick which overrode a Charm strikeout
+    #[serde(rename_all = "camelCase")]
+    CharmedMindTrickWalk {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
+
+        /// Uuid of the pitcher that did the charm
+        pitcher_id: Uuid,
+
+        /// Name of the pitcher that did the charm
+        pitcher_name: String,
+
+        /// Uuid of the batter that did the mind trick
+        batter_id: Uuid,
+
+        /// Name of the batter that did the mind trick
+        batter_name: String,
+
+        // Item damages would go here but I haven't encountered one yet so I haven't put it in
 
         #[serde(flatten)]
         scores: Scores,
@@ -5070,6 +5099,7 @@ impl FedEventData {
             FedEventData::ModsFromAnotherModRemoved { .. } => { None }
             FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
             FedEventData::MindTrickWalk { game, .. } => { Some(game) }
+            FedEventData::CharmedMindTrickWalk { game, .. } => { Some(game) }
             FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }
             FedEventData::BlooddrainBlocked { game, .. } => { Some(game) }
             FedEventData::TarotReadingAddedOrRemovedItem { .. } => { None }
