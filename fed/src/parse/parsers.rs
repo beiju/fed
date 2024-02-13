@@ -864,9 +864,20 @@ pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
 }
 
 pub(crate) fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {
+    alt((parse_basic_black_hole, parse_black_hole_after_sunsun)).parse(input)
+}
+pub(crate) fn parse_basic_black_hole(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, scoring_team) = parse_terminated(" collect 10!\nThe Black Hole swallows the Runs and a ").parse(input)?;
     let (input, victim_team) = parse_terminated(" Win.").parse(input)?;
+
+    Ok((input, (scoring_team, victim_team)))
+}
+
+pub(crate) fn parse_black_hole_after_sunsun(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, scoring_team) = parse_terminated(" collect 10!\nThe Black Hole swallowed the Runs and burped at the ").parse(input)?;
+    let (input, victim_team) = parse_until_period_eof.parse(input)?;
 
     Ok((input, (scoring_team, victim_team)))
 }

@@ -104,6 +104,19 @@ impl PartialEq for SubEvent {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct WinSubEvent {
+    /// Uuid of the team that gains the Win
+    pub team_id: Uuid,
+
+    /// Number of Wins the winning team has once the newly earned Win is added
+    pub wins_after: i64,
+
+    #[serde(flatten)]
+    pub sub_event: SubEvent,
+}
+
 // TODO Consolidate with ModChangeSubEventWithNamedPlayer
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -2906,6 +2919,10 @@ pub enum FedEventData {
         /// If a player was compressed by gamma on this event, contains details about the stat
         /// change. Otherwise null.
         compressed_by_gamma: Option<PlayerStatChange>,
+
+        /// Starting in s20, wins had a SubEvent associated with them. This is the metadata for that
+        /// sub
+        win_event: Option<WinSubEvent>,
     },
 
     /// Team shamed another team

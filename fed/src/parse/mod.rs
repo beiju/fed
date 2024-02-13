@@ -724,7 +724,7 @@ pub fn parse_next_event(
                 Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::HomeRun))
             } else if let Some(h) = big_bucket_hype {
                 Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Buckets))
-            }  else if let Some(h) = alley_oop_hype {
+            } else if let Some(h) = alley_oop_hype {
                 Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Hoops))
             } else {
                 None
@@ -1027,6 +1027,17 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(scoring_team));
             assert!(is_known_team_nickname(victim_team));
 
+            let mut win_child = event.next_child_opt(EventType::WinCollectedRegular)?;
+            // Win event exists iff it's season 20 or later
+            assert_eq!(win_child.is_some(), event.season >= 19);
+            let win_event = win_child
+                .map(|mut child| ParseOk(WinSubEvent {
+                    team_id: child.next_team_id()?,
+                    wins_after: child.metadata_i64("after")?,
+                    sub_event: child.as_sub_event(),
+                }))
+                .transpose()?;
+
             let carcinization = event.next_parse_opt(parse_carcinization)
                 .map(|(team_name, _player_name)| {
                     assert!(is_known_team_name(team_name));
@@ -1069,6 +1080,7 @@ pub fn parse_next_event(
                 victim_team_nickname: victim_team.to_string(),
                 carcinization,
                 compressed_by_gamma,
+                win_event,
             }
         }
         EventType::Sun2 => {
@@ -1307,7 +1319,7 @@ pub fn parse_next_event(
                 sub_event: sub_event.as_sub_event(),
                 rating_before: sub_event.metadata_f64("before")?,
                 rating_after: sub_event.metadata_f64("after")?,
-                weather_event
+                weather_event,
             }
         }
         EventType::ReverbBestowsReverberating => {
@@ -1644,7 +1656,7 @@ pub fn parse_next_event(
                 } else {
                     RenovationVotes::Normal(event.metadata_i64("votes")?)
                 },
-                mod_add_event
+                mod_add_event,
             }
         }
         EventType::LightSwitchToggled => { todo!() }
@@ -2586,7 +2598,7 @@ pub fn parse_next_event(
                             previous_team_id: event.metadata_uuid("sendTeamId")?,
                             previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
                             good_riddance_parties,
-                        }
+                        },
                     }
                 }
             }
@@ -2634,7 +2646,7 @@ pub fn parse_next_event(
             // So far the only instance of this at the top level is Roamers roaming out of the Hall
             let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
             let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
-            
+
             FedEventData::Roam {
                 player_id: add_to_team_event.metadata_uuid("playerId")?,
                 player_name: add_to_team_event.metadata_str("playerName")?.to_string(),
