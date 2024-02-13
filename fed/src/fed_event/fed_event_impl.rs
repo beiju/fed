@@ -1763,7 +1763,11 @@ impl FedEvent {
                         ReturnFromElsewhereFlavor::PulledBack { team_id, sought_player_id, seeker_player_id, seeker_player_name, sub_event, time_elsewhere } => {
                             eb.push_description(&format!("{seeker_player_name} sought out Elsewhere teammate {player_name}..."));
                             eb.push_player_tag(seeker_player_id);
-                            let description = format!("{player_name} was pulled back from Elsewhere after {time_elsewhere}!");
+                            let description = if let Some(time) = time_elsewhere {
+                                format!("{player_name} was pulled back from Elsewhere after {time}!")
+                            } else {
+                                format!("{player_name} was pulled back from Elsewhere.")
+                            };
                             eb.push_description(&description);
                             eb.push_child(sub_event, |mut child| {
                                 child.push_description(&description);

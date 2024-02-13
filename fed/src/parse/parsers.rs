@@ -1175,7 +1175,8 @@ pub(crate) enum ParsedReturnFromElsewhere<'a> {
     Short((&'a str, bool)),
     Normal((&'a str, TimeElsewhere, bool)),
     // For now, I don't support peanuts being pulled back, I'll add it if it ever happened
-    Seeker((&'a str, &'a str, TimeElsewhere)),
+    ShortSeeker((&'a str, &'a str)),
+    NormalSeeker((&'a str, &'a str, TimeElsewhere)),
 }
 
 pub(crate) fn parse_returns_from_elsewhere(input: &str) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
@@ -1189,7 +1190,8 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
         parse_terminated(" returned from Elsewhere.").map(|n| ParsedReturnFromElsewhere::Short((n, false))),
         parse_terminated(" has rolled back from Elsewhere!").map(|n| ParsedReturnFromElsewhere::Short((n, true))),
         parse_normal_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Normal(v)),
-        parse_seeker_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::Seeker(v)),
+        parse_short_seeker_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::ShortSeeker(v)),
+        parse_normal_seeker_return_from_elsewhere.map(|v| ParsedReturnFromElsewhere::NormalSeeker(v)),
     )).parse(input)
 }
 
@@ -1216,14 +1218,27 @@ fn parse_time_elsewhere(input: &str) -> ParserResult<TimeElsewhere> {
     )).parse(input)
 }
 
-pub(crate) fn parse_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str, TimeElsewhere)> {
-    let (input, seeker_name) = parse_terminated(" sought out Elsewhere teammate ").parse(input)?;
-    let (input, sought_name) = parse_terminated("...\n").parse(input)?;
-    let (input, _) = tag(sought_name).parse(input)?;
+pub(crate) fn parse_normal_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str, TimeElsewhere)> {
+    let (input, (seeker_name, sought_name)) = parse_common_seeker_return_from_elsewhere.parse(input)?;
     let (input, _) = tag(" was pulled back from Elsewhere after ").parse(input)?;
     let (input, time_elsewhere) = parse_time_elsewhere.parse(input)?;
 
     Ok((input, (seeker_name, sought_name, time_elsewhere)))
+}
+
+fn parse_common_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, seeker_name) = parse_terminated(" sought out Elsewhere teammate ").parse(input)?;
+    let (input, sought_name) = parse_terminated("...\n").parse(input)?;
+    let (input, _) = tag(sought_name).parse(input)?;
+
+    Ok((input, (seeker_name, sought_name)))
+}
+
+pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, (seeker_name, sought_name)) = parse_common_seeker_return_from_elsewhere.parse(input)?;
+    let (input, _) = tag(" was pulled back from Elsewhere.").parse(input)?;
+
+    Ok((input, (seeker_name, sought_name)))
 }
 
 pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>)> {

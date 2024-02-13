@@ -2091,7 +2091,7 @@ pub fn parse_next_event(
                                 (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
                             }
                         }
-                        ParsedReturnFromElsewhere::Seeker((seeker_name, sought_name, time_elsewhere)) => {
+                        ParsedReturnFromElsewhere::ShortSeeker((seeker_name, sought_name)) => {
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
                             (sought_name, ReturnFromElsewhereFlavor::PulledBack {
@@ -2099,7 +2099,19 @@ pub fn parse_next_event(
                                 sought_player_id: return_sub_event.next_player_id()?,
                                 seeker_player_id: event.next_player_id()?,
                                 sub_event: return_sub_event.as_sub_event(),
-                                time_elsewhere,
+                                time_elsewhere: None,
+                                seeker_player_name: seeker_name.to_string(),
+                            })
+                        }
+                        ParsedReturnFromElsewhere::NormalSeeker((seeker_name, sought_name, time_elsewhere)) => {
+                            let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
+
+                            (sought_name, ReturnFromElsewhereFlavor::PulledBack {
+                                team_id: return_sub_event.next_team_id()?,
+                                sought_player_id: return_sub_event.next_player_id()?,
+                                seeker_player_id: event.next_player_id()?,
+                                sub_event: return_sub_event.as_sub_event(),
+                                time_elsewhere: Some(time_elsewhere),
                                 seeker_player_name: seeker_name.to_string(),
                             })
                         }

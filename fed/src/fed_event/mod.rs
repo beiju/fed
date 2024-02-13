@@ -1013,8 +1013,9 @@ pub enum ReturnFromElsewhereFlavor {
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 
-        /// Number of days or seasons the player was Elsewhere
-        time_elsewhere: TimeElsewhere,
+        /// Number of days or seasons the player was Elsewhere, if present. Not all elsewhere
+        /// returns say the amount of time the player was Elsewhere.
+        time_elsewhere: Option<TimeElsewhere>,
     }
 }
 
