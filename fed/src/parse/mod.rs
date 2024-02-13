@@ -1046,16 +1046,7 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(scoring_team));
             assert!(is_known_team_nickname(victim_team));
 
-            let mut win_child = event.next_child_opt(EventType::WinCollectedRegular)?;
-            // Win event exists iff it's season 20 or later
-            assert_eq!(win_child.is_some(), event.season >= 19);
-            let win_event = win_child
-                .map(|mut child| ParseOk(WinSubEvent {
-                    team_id: child.next_team_id()?,
-                    wins_after: child.metadata_i64("after")?,
-                    sub_event: child.as_sub_event(),
-                }))
-                .transpose()?;
+            let win_event = event.parse_win_event()?;
 
             let carcinization = event.next_parse_opt(parse_carcinization)
                 .map(|(team_name, _player_name)| {
@@ -1106,6 +1097,8 @@ pub fn parse_next_event(
             let (scoring_team, rays_player) = event.next_parse(parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
 
+            let win_event = event.parse_win_event()?;
+
             let caught_some_rays = if let Some(player_name) = rays_player {
                 let mut child = event.next_child(EventType::PlayerStatIncrease)?;
                 Some(PlayerStatChange {
@@ -1122,8 +1115,9 @@ pub fn parse_next_event(
 
             FedEventData::Sun2 {
                 game: event.game(unscatter, attractor_secret_base)?,
-                team_nickname: scoring_team.to_string(),
+                scoring_team_nickname: scoring_team.to_string(),
                 caught_some_rays,
+                win_event,
             }
         }
         EventType::BirdsCircle => {

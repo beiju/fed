@@ -974,6 +974,19 @@ impl<'e> EventParseWrapper<'e> {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    pub fn parse_win_event(&mut self) -> Result<Option<WinSubEvent>, FeedParseError> {
+        let mut win_child = self.next_child_opt(EventType::WinCollectedRegular)?;
+        // This function shall be called when event exists iff it's season 20 or later
+        assert_eq!(win_child.is_some(), self.season >= 19);
+        win_child
+            .map(|mut child| ParseOk(WinSubEvent {
+                team_id: child.next_team_id()?,
+                wins_after: child.metadata_i64("after")?,
+                sub_event: child.as_sub_event(),
+            }))
+            .transpose()
+    }
+
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 

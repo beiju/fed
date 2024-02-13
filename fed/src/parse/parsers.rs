@@ -870,7 +870,20 @@ pub(crate) fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, _) = tag("The ").parse(input)?;
-    let (input, scoring_team) = parse_terminated(" collect 10! Sun 2 smiles.\nSun 2 set a Win upon the ").parse(input)?;
+    let (input, (scoring_team, smiled)) = alt((
+        // This is before Sun(Sun)
+        parse_terminated(" collect 10! Sun 2 smiles.\nSun 2 set a Win upon the ").map(|t| (t, false)),
+        // This is after Sun(Sun)
+        parse_terminated(" collected 10!\nSun 2 smiled at the ").map(|t| (t, true)),
+    )).parse(input)?;
+    let input = if smiled {
+        // Under Sun(Sun), it smiles twice. No idea whether that's intentional.
+        let (input, _) = tag(scoring_team).parse(input)?;
+        let (input, _) = tag(".\nSun 2 smiled at the ").parse(input)?;
+        input
+    } else {
+        input
+    };
     let (input, _) = tag(scoring_team).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
     let (input, rays_player) = opt(preceded(tag("\n"), parse_terminated(" catches some rays."))).parse(input)?;

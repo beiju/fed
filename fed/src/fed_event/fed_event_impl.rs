@@ -887,46 +887,50 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Sun2 { game, team_nickname, caught_some_rays } => {
-                let suffix = if let Some(rays) = &caught_some_rays {
-                    format!("\n{} catches some rays.", rays.player_name)
-                } else {
-                    String::new()
-                };
+            FedEventData::Sun2 { game, scoring_team_nickname, caught_some_rays, win_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
 
-                let child = if let Some(rays) = &caught_some_rays {
-                    Some(EventBuilderChild::new(&rays.sub_event)
-                        .update(EventBuilderUpdate {
-                            r#type: EventType::PlayerStatIncrease,
-                            category: EventCategory::Changes,
-                            description: format!("{} caught some rays.", rays.player_name),
-                            team_tags: vec![rays.team_id],
-                            player_tags: vec![rays.player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                        "type": 4, // ?
-                        "before": rays.rating_before,
-                        "after": rays.rating_after,
-                    })))
+                // The presence of win_event is not causally connected to the burp message, but I'm
+                // using it as a signal for now. iirc this will have to be changed later
+                if let Some(win_event) = win_event {
+                    eb.push_description(&format!("The {scoring_team_nickname} collected 10!"));
+                    eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
+                    eb.push_child(win_event.sub_event, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Outcomes);
+                        child_eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
+                        child_eb.push_team_tag(win_event.team_id);
+                        child_eb.push_metadata_i64("amount", 1);
+                        child_eb.push_metadata_i64("before", win_event.wins_after - 1);
+                        child_eb.push_metadata_i64("after", win_event.wins_after);
+                        // This won't be hard-coded forever, but I won't change it until I need to
+                        child_eb.push_metadata_str_vec("lines", vec![
+                            "Sun 2: 1".to_string(),
+                            "Sun(Sun): 1 ^ 2 = 1".to_string(),
+                        ]);
+                        child_eb.build(EventType::WinCollectedRegular)
+                    });
                 } else {
-                    None
-                };
+                    eb.push_description(&format!("The {scoring_team_nickname} collect 10! Sun 2 smiles."));
+                    eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
+                }
 
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Sun2,
-                        category: EventCategory::Special,
-                        description: format!("The {team_nickname} collect 10! Sun 2 smiles.\nSun 2 set a Win upon the {team_nickname}.{suffix}"),
-                        player_tags: if let Some(rays) = &caught_some_rays {
-                            vec![rays.player_id]
-                        } else {
-                            Vec::new()
-                        },
-                        ..Default::default()
+                if let Some(rays) = caught_some_rays {
+                    eb.push_description("Sun 2 smiled at the Tacos.");
+                    eb.push_description(&format!("{} catches some rays.", rays.player_name));
+                    eb.push_player_tag(rays.player_id);
+                    eb.push_child(rays.sub_event, |mut child| {
+                        child.push_description(&format!("{} caught some rays.", rays.player_name));
+                        child.push_player_tag(rays.player_id);
+                        child.push_team_tag(rays.team_id);
+                        child.push_metadata_f64("before", rays.rating_before);
+                        child.push_metadata_f64("after", rays.rating_after);
+                        child.push_metadata_i64("type", 4);
+                        child.build(EventType::PlayerStatIncrease)
                     })
-                    .children(child)
-                    .build()
+                }
+
+                eb.build(EventType::Sun2)
             }
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname, carcinization, compressed_by_gamma, win_event } => {
                 eb.set_game(game);

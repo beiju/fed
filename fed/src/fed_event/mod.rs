@@ -2889,16 +2889,21 @@ pub enum FedEventData {
 
     /// Sun2 set a Win. This version of the event shows up in the game log and is separate from the
     /// version that shows up in the Outcomes section.
+    // TODO Unify the two sun2 events?
     #[serde(rename_all = "camelCase")]
     Sun2 {
         #[serde(flatten)]
         game: GameEvent,
 
         /// Nickname of team who earned the Win
-        team_nickname: String,
+        scoring_team_nickname: String,
 
         /// If a player caught some rays, info about the player's attribute increase, otherwise null
         caught_some_rays: Option<PlayerStatChange>,
+
+        /// Starting in s20, wins had a SubEvent associated with them. This is the metadata for that
+        /// sub
+        win_event: Option<WinSubEvent>,
     },
 
     /// Black hole swallowed a win. This version of the event shows up in the game log and is
