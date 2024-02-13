@@ -2479,6 +2479,10 @@ pub enum FedEventData {
         /// If there was a parasite blooddrain on this strikeout, contains information about it.
         /// Otherwise null.
         parasite: Option<Parasite>,
+
+        /// ScoreEvent data if applicable, otherwise null. Scoring can happen on strikeouts thanks
+        /// to Triple Threat, but the RunsScored event didn't exist until s20.
+        score_event: Option<ScoreEvent>,
     },
 
     /// Strikeout looking
