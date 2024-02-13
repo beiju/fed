@@ -801,9 +801,14 @@ pub fn parse_next_event(
                 }
                 ParsedHitType::Quadruple => { HitType::Quadruple }
             };
-            let scores = event.parse_scores(" scores!")?;
+            let mut scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
+            // parse_scores gets the score event, but sometimes the spicy event is in the way. Can't
+            // fix this by reordering the calls because it's in the opposite order in the event text
+            if scores.score_event.is_none() {
+                scores.score_event = event.parse_score_event()?;
+            }
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,

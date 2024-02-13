@@ -341,8 +341,8 @@ impl EventBuilder {
         })
     }
 
-    pub fn push_free_refills(&mut self, free_refills: impl IntoIterator<Item=FreeRefill>) {
-        for fr in free_refills.into_iter() {
+    pub fn push_free_refills(&mut self, free_refills: &[FreeRefill]) {
+        for fr in free_refills {
             let common_description = format!("{} used their Free Refill.", fr.player_name);
             self.push_description(&common_description);
             self.push_description(&format!("{} Refills the In!", fr.player_name));
@@ -363,12 +363,16 @@ impl EventBuilder {
     // This function only exists to make a more sensible name for the user. Option implements
     // IntoIterator so you could just call the plural form with an option.
     pub fn push_free_refill(&mut self, free_refills: Option<FreeRefill>) {
-        self.push_free_refills(free_refills)
+        self.push_free_refills(free_refills.as_slice())
     }
 
-    pub fn push_scores(&mut self, scores: Scores, home_team_id: Uuid, score_label: &str) {
-        self.push_scorers(scores.scores, home_team_id, score_label);
-        self.push_free_refills(scores.free_refills);
+    pub fn push_scores_without_event(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str) {
+        self.push_scorers(&scores.scores, home_team_id, score_label);
+        self.push_free_refills(&scores.free_refills);
+    }
+
+    pub fn push_scores(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str) {
+        self.push_scores_without_event(scores, home_team_id, score_label);
         if let Some(score_event) = &scores.score_event {
             self.push_score_event(score_event);
         }
@@ -451,9 +455,9 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_scorers(&mut self, scorers: Vec<ScoringPlayer>, home_team_id: Uuid, score_label: &str) {
+    pub fn push_scorers(&mut self, scorers: &[ScoringPlayer], home_team_id: Uuid, score_label: &str) {
         // Base scores
-        for scorer in &scorers {
+        for scorer in scorers {
             self.push_player_tag(scorer.player_id);
             self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
             if let Some(damage) = &scorer.item_damage {
@@ -462,14 +466,14 @@ impl EventBuilder {
             self.push_description(&format!("{} {score_label}", scorer.player_name));
         }
         // Attractions happen in a block after the scores block
-        for scorer in &scorers {
+        for scorer in scorers {
             if let Some(attraction) = &scorer.attraction {
                 self.push_attraction(attraction, &scorer.player_name, scorer.player_id);
             }
         }
         // Hotel motel parties happen in a block after the scores block (not sure of order w/r/t
         // attractions)
-        for scorer in &scorers {
+        for scorer in scorers {
             if let Some(party) = &scorer.hotel_motel_party {
                 self.push_hotel_motel_party(party, &scorer.player_name, scorer.player_id)
             }
