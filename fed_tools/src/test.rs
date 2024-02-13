@@ -136,11 +136,16 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     let progress = multi_progress.add(progress);
     let mut displayed_day_season = None;
+    let mut local_progress_inc: u64 = 0;
     while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())
         .with_context(|| format!("Parsing events: \n{}", event_iter.log().iter()
             .map(|event| format!("  - {}: {}", event.id, event.description)).format("\n")))? {
         check_parse(&parsed_event, event_iter.log())?;
-        progress.inc(event_iter.log().len() as u64);
+        local_progress_inc += event_iter.log().len() as u64;
+        if local_progress_inc > 100 {
+            progress.inc(local_progress_inc);
+            local_progress_inc = 0;
+        }
         // This makes a huge difference in run speed
         if displayed_day_season != Some((parsed_event.season + 1, parsed_event.day + 1)) {
             progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));
