@@ -562,6 +562,7 @@ impl FedEvent {
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
                 eb.push_free_refills(scores.free_refills);
+                if let Some(se) = &scores.score_event { eb.push_score_event(se); }
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }

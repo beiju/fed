@@ -353,6 +353,9 @@ impl EventBuilder {
     pub fn push_scores(&mut self, scores: Scores, home_team_id: Uuid, score_label: &str) {
         self.push_scorers(scores.scores, home_team_id, score_label);
         self.push_free_refills(scores.free_refills);
+        if let Some(score_event) = &scores.score_event {
+            self.push_score_event(score_event);
+        }
     }
 
     pub fn push_score_event(&mut self, score: &ScoreEvent) {
@@ -441,9 +444,6 @@ impl EventBuilder {
                 self.push_item_damage(damage, &scorer.player_name);
             }
             self.push_description(&format!("{} {score_label}", scorer.player_name));
-            if let Some(score_event) = &scorer.score_event {
-                self.push_score_event(score_event);
-            }
         }
         // Attractions happen in a block after the scores block
         for scorer in &scorers {

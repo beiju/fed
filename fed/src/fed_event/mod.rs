@@ -156,10 +156,6 @@ pub struct ScoringPlayer {
 
     /// Info about Hype building as a result of this score, if any
     pub hype: Option<Hype>,
-
-    /// Starting in season 20, there were child events for each score. This contains the information
-    /// from that event, if there was one.
-    pub score_event: Option<ScoreEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -191,6 +187,10 @@ pub struct Scores {
     /// It's almost possible to attribute each one to the specific score that caused it, but not
     /// quite because FlyOut events don't have pitcher and batter uuids.
     pub free_refills: Vec<FreeRefill>,
+
+    /// Starting in season 20, there was a child event on each game event that scored any Runs.
+    /// This field contains the information from that event, if there was one.
+    pub score_event: Option<ScoreEvent>,
 }
 
 impl Scores {

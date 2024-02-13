@@ -578,7 +578,7 @@ impl<'e> EventParseWrapper<'e> {
         attractions: Vec<(Uuid, String, String)>,
     ) -> Result<Scores, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
-        let scores = scoring_players.into_iter()
+        let scores: Vec<_> = scoring_players.into_iter()
             .map(|(player_id, item_name, player_name, hotel_motel_party, hype_stadium_name)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
@@ -617,8 +617,6 @@ impl<'e> EventParseWrapper<'e> {
 
                 let hype = hype_stadium_name.map(|n| self.parse_hype_from_stadium(n)).transpose()?;
 
-                let score_event = self.parse_score_event()?;
-
                 ParseOk(ScoringPlayer {
                     player_id,
                     player_name,
@@ -626,7 +624,6 @@ impl<'e> EventParseWrapper<'e> {
                     attraction,
                     hotel_motel_party,
                     hype,
-                    score_event,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -636,9 +633,15 @@ impl<'e> EventParseWrapper<'e> {
 
         let free_refills = self.parse_free_refills()?;
 
+        let score_event = self.parse_score_event()?;
+        // Every score post s19 should have a ScoreEvent
+        // Commented out because it's actually easier to diagnose if it fails later
+        // assert_eq!(score_event.is_some(), self.season >= 19 && !scores.is_empty());
+
         Ok(Scores {
             scores,
             free_refills,
+            score_event,
         })
     }
 
