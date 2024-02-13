@@ -2627,6 +2627,17 @@ pub fn parse_next_event(
                         },
                     }
                 }
+                ParsedPlayerMoved::SuperRoamin(player_name) => {
+                    FedEventData::SuperRoam {
+                        player_id: event.metadata_uuid("playerId")?,
+                        player_name: player_name.to_string(),
+                        location: event.metadata_enum("location")?,
+                        new_team_id: event.metadata_uuid("receiveTeamId")?,
+                        new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
+                        previous_team_id: event.metadata_uuid("sendTeamId")?,
+                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                    }
+                }
             }
         }
         EventType::PlayerBornFromIncineration => { todo!() }

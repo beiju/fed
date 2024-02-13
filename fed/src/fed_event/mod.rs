@@ -4363,6 +4363,30 @@ pub enum FedEventData {
         roam_from: RoamFromLocation,
     },
 
+    /// Player Roamed at the end of the Week
+    #[serde(rename_all = "camelCase")]
+    SuperRoam {
+        /// Uuid of player who roamed
+        player_id: Uuid,
+
+        /// Name of player who roamed
+        player_name: String,
+
+        /// Location of player on the new team. If the player roamed from the team, this is also
+        /// the location on their old team
+        location: PositionType,
+
+        /// Uuid of player's new team
+        new_team_id: Uuid,
+
+        /// Nickname of player's new team
+        new_team_nickname: String,
+
+        // TODO document these
+        previous_team_id: Uuid,
+        previous_team_nickname: String,
+    },
+
     /// A shimmering Crate descends during Glitter weather
     #[serde(rename_all = "camelCase")]
     GlitterCrate {
@@ -5108,6 +5132,7 @@ impl FedEventData {
             FedEventData::ExitSecretBase { game, .. } => { Some(game) }
             FedEventData::EchoChamber { game, .. } => { Some(game) }
             FedEventData::Roam { .. } => { None }
+            FedEventData::SuperRoam { .. } => { None }
             FedEventData::GlitterCrate { game, .. } => { Some(game) }
             FedEventData::ModsFromAnotherModRemoved { .. } => { None }
             FedEventData::ConsumerExpelled { game, .. } => { Some(game) }

@@ -916,7 +916,9 @@ impl FedEvent {
                 }
 
                 if let Some(rays) = caught_some_rays {
-                    eb.push_description("Sun 2 smiled at the Tacos.");
+                    if self.season >= 19 {
+                        eb.push_description("Sun 2 smiled at the Tacos.");
+                    }
                     eb.push_description(&format!("{} catches some rays.", rays.player_name));
                     eb.push_player_tag(rays.player_id);
                     eb.push_child(rays.sub_event, |mut child| {
@@ -3134,6 +3136,22 @@ impl FedEvent {
                 let left_hall_event = eb.build(EventType::ExitHallOfFlame);
 
                 return vec![left_hall_event, added_to_team_event];
+            }
+            FedEventData::SuperRoam { player_id, player_name, location, new_team_id, new_team_nickname, previous_team_id, previous_team_nickname } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{player_name} super roamed to a new team."));
+                eb.push_player_tag(player_id);
+                eb.push_team_tag(previous_team_id);
+                eb.push_team_tag(new_team_id);
+                eb.push_metadata_i64("location", location);
+                eb.push_metadata_uuid("playerId", player_id);
+                eb.push_metadata_str("playerName", player_name);
+                eb.push_metadata_i64("receiveLocation", location);
+                eb.push_metadata_uuid("receiveTeamId", new_team_id);
+                eb.push_metadata_str("receiveTeamName", new_team_nickname);
+                eb.push_metadata_uuid("sendTeamId", previous_team_id);
+                eb.push_metadata_str("sendTeamName", previous_team_nickname);
+                eb.build(EventType::PlayerMoved)
             }
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);

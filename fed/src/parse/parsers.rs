@@ -1800,11 +1800,14 @@ pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)>
 pub(crate) enum ParsedPlayerMoved<'a> {
     ReturnFromInvestigation((&'a str, bool)),
     Roamin(&'a str),
+    SuperRoamin(&'a str),
 }
 
 pub(crate) fn parse_player_moved(input: &str) -> ParserResult<ParsedPlayerMoved> {
     alt((
         parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)),
+        // Super roam must be before roam or it won't match
+        parse_terminated(" super roamed to a new team.").map(|n| ParsedPlayerMoved::SuperRoamin(n)),
         // It was "wandered" up through season 17, then it changed to "roamed"
         parse_terminated(" wandered to a new team.").map(|n| ParsedPlayerMoved::Roamin(n)),
         parse_terminated(" roamed to a new team.").map(|n| ParsedPlayerMoved::Roamin(n)),
