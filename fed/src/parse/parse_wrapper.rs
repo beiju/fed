@@ -877,10 +877,10 @@ impl<'e> EventParseWrapper<'e> {
         while let Some(player_name) = self.next_parse_opt(parse_hotel_motel_party) {
             let mut child = self.next_child(EventType::PlayerStatIncrease)?;
             parties.push(HotelMotelScoringPlayer {
-                team_id: child.next_team_id()?,
                 player_id: child.next_player_id()?,
                 player_name: player_name.to_string(),
-                boost: PlayerBoostSubEvent {
+                boost: PlayerBoostSubEventWithTeam {
+                    team_id: child.next_team_id()?,
                     rating_before: child.metadata_f64("before")?,
                     rating_after: child.metadata_f64("after")?,
                     sub_event: child.as_sub_event(),

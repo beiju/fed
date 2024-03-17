@@ -1064,7 +1064,7 @@ pub fn parse_next_event(
                         let child = event.next_child(EventType::PlayerMoved)?;
                         let mod_add_child = event.next_child(EventType::AddedMod)?;
                         ParseOk(Carcinization {
-                            player_moved: PlayerMaybeCarcinized::Successful { 
+                            player_moved: PlayerMaybeCarcinized::Successful {
                                 move_event: PlayerMovedTeams {
                                     player_id: child.metadata_uuid("playerId")?,
                                     player_name: player_name.to_string(),
@@ -1089,7 +1089,6 @@ pub fn parse_next_event(
                             }),
                             new_team_name: team_name.to_string(),
                         })
-
                     }
                 })
                 .transpose()?;
@@ -1754,11 +1753,17 @@ pub fn parse_next_event(
                                 flipped_negative,
                             })
                         }
-                        ParsedFloodingEffect::Flippers(player_name) => {
-                            FloodingSweptEffect::Flippers(PlayerNameId {
+                        ParsedFloodingEffect::Flippers(player_name, had_hotel_motel_party) => {
+                            let hotel_motel_party = if had_hotel_motel_party {
+                                Some(event.next_boost_child_with_team()?)
+                            } else {
+                                None
+                            };
+                            FloodingSweptEffect::Flippers {
                                 player_id: event.next_player_id()?,
                                 player_name: player_name.to_string(),
-                            })
+                                hotel_motel_party,
+                            }
                         }
                         ParsedFloodingEffect::Ego(player_name) => {
                             FloodingSweptEffect::Ego(PlayerNameId {

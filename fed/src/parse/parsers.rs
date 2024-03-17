@@ -1122,15 +1122,23 @@ pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<ParsedPlay
 
 pub(crate) enum ParsedFloodingEffect<'a> {
     Elsewhere((&'a str, Option<&'a str>)),
-    Flippers(&'a str),
+    Flippers(&'a str, bool /* hotel motel party */),
     Ego(&'a str),
 }
 
 pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, bool)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!").parse(input)?;
-    let (input, effects) = many0(parse_flooding_swept_effect).parse(input)?;
+    let (input, mut effects) = many0(parse_flooding_swept_effect).parse(input)?;
 
-    let (input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
+    let (mut input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
+
+    for effect in &mut effects {
+        if let ParsedFloodingEffect::Flippers(player_name, is_party) = effect {
+            let (input_, party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
+            *is_party = party.is_some();
+            input = input_; // not sure if there's a more natural way to do this
+        }
+    }
 
     Ok((input, (effects, flumps.is_some())))
 }
@@ -1139,7 +1147,8 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
     alt((
         parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
         preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
-            .map(|n| ParsedFloodingEffect::Flippers(n)),
+            // hotel motel party must be filled in later because of order-of-effects
+            .map(|n| ParsedFloodingEffect::Flippers(n, false)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
     )).parse(input)

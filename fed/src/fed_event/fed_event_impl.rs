@@ -1664,7 +1664,7 @@ impl FedEvent {
                 eb.push_description("A surge of Immateria rushes up from Under!");
                 eb.push_description("Baserunners are swept from play!");
 
-                for effect in effects {
+                for effect in &effects {
                     match effect {
                         FloodingSweptEffect::Elsewhere(sent_elsewhere) => {
                             // This form uses the same text for inner and outer description
@@ -1673,22 +1673,29 @@ impl FedEvent {
                                                       if self.season < 18 { "is" } else { "was" });
                             eb.push_sent_elsewhere(sent_elsewhere, &description, &description);
                         }
-                        FloodingSweptEffect::Flippers(PlayerNameId { player_name, player_id }) => {
+                        FloodingSweptEffect::Flippers { player_name, player_id, .. } => {
                             // There's a danger that this could end a game and therefore have hype
                             // and whatever else comes with it, but I'll deal with that if and when
                             // it actually occurs
                             eb.push_description(&format!("{player_name} uses their Flippers to slingshot home!"));
-                            eb.push_player_tag(player_id);
+                            eb.push_player_tag(*player_id);
                         }
                         FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
                             eb.push_description(&format!("{player_name}'s Ego keeps them on base!"));
-                            eb.push_player_tag(player_id);
+                            eb.push_player_tag(*player_id);
                         }
                     }
                 }
 
                 if flood_pumps {
                     eb.push_description("The Flood Pumps activate!");
+                }
+
+                // Hotel motel parties from Flippers appear after flumps, so another loop is needed
+                for effect in &effects {
+                    if let FloodingSweptEffect::Flippers { player_name, player_id, hotel_motel_party: Some(boost) } = effect {
+                        eb.push_hotel_motel_party(boost, player_name, *player_id);
+                    }
                 }
 
                 eb.push_free_refills(&free_refills);
@@ -2895,7 +2902,7 @@ impl FedEvent {
                     eb.push_player_tag(sent_elsewhere.player_id);
                     let outer_description = format!("{} is caught in the bind!", sent_elsewhere.player_name);
                     let inner_description = format!("Salmon Cannons expelled {} Elsewhere.", sent_elsewhere.player_name);
-                    eb.push_sent_elsewhere(sent_elsewhere, &outer_description, &inner_description);
+                    eb.push_sent_elsewhere(&sent_elsewhere, &outer_description, &inner_description);
                 }
 
                 eb.build(EventType::SalmonSwim)

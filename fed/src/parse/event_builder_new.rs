@@ -618,15 +618,7 @@ impl EventBuilder {
 
     pub fn push_hotel_motel(&mut self, parties: &[HotelMotelScoringPlayer]) {
         for party in parties {
-            let description = format!("{} is Partying!", party.player_name);
-            self.push_description(&description);
-            self.push_player_tag(party.player_id);
-            self.push_child(party.boost.sub_event, |mut child| {
-                child.push_description(&description);
-                child.push_player_tag(party.player_id);
-                child.push_team_tag(party.team_id);
-                child.build_boost(&party.boost)
-            });
+            self.push_hotel_motel_party(&party.boost, &party.player_name, party.player_id);
         }
     }
 
@@ -670,7 +662,7 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_sent_elsewhere(&mut self, sent_elsewhere: PlayerSentElsewhere, outer_description: &str, inner_description: &str) {
+    pub fn push_sent_elsewhere(&mut self, sent_elsewhere: &PlayerSentElsewhere, outer_description: &str, inner_description: &str) {
         self.push_description(outer_description);
         self.push_child(sent_elsewhere.sub_event, |mut child_self| {
             child_self.push_description(inner_description);
@@ -681,7 +673,7 @@ impl EventBuilder {
             child_self.build(EventType::AddedMod)
         });
 
-        if let Some(flip) = sent_elsewhere.flipped_negative {
+        if let Some(flip) = &sent_elsewhere.flipped_negative {
             // First, undertaker also goes Elsewhere
             let undertaker_description = format!("{} dove in after {}.", flip.undertaker_player_name, sent_elsewhere.player_name);
             self.push_description(&undertaker_description);

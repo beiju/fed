@@ -161,10 +161,6 @@ pub struct ScoringPlayer {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HotelMotelScoringPlayer {
-    // TODO This is always the same. Store it separately.
-    /// Team uuid
-    pub team_id: Uuid,
-
     /// Player uuid
     pub player_id: Uuid,
 
@@ -172,7 +168,7 @@ pub struct HotelMotelScoringPlayer {
     pub player_name: String,
 
     #[serde(flatten)]
-    pub boost: PlayerBoostSubEvent,
+    pub boost: PlayerBoostSubEventWithTeam,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -845,7 +841,16 @@ pub struct PlayerSentElsewhere {
 #[serde(rename_all = "camelCase")]
 pub enum FloodingSweptEffect {
     Elsewhere(PlayerSentElsewhere),
-    Flippers(PlayerNameId),
+    Flippers {
+        /// Uuid of player who scored with Flippers
+        player_id: Uuid,
+
+        /// Name of player who scored with Flippers
+        player_name: String,
+
+        /// Info about the Hotel Motel party on this score, if any
+        hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+    },
     Ego(PlayerNameId),
 }
 
