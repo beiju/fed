@@ -1797,7 +1797,7 @@ impl FedEvent {
 
                 eb.build(EventType::ReturnFromElsewhere)
             }
-            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush } => {
+            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush, pressure_built } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
 
                 eb.set_game(game);
@@ -1817,7 +1817,14 @@ impl FedEvent {
                     child_eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(team_id);
-                    child_eb.build(EventType::Incineration)
+                    if self.season < 19 {
+                        child_eb.build(EventType::Incineration)
+                    } else {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_metadata_str("effect", "Incineration");
+                        child_eb.push_metadata_i32("weather", Weather::SolarEclipse);
+                        child_eb.build(EventType::WeatherEvent)
+                    }
                 });
 
                 eb.push_child(enter_hall_child, |mut child_eb| {
@@ -1825,6 +1832,16 @@ impl FedEvent {
                     child_eb.push_player_tag(victim_id);
                     child_eb.build(EventType::EnterHallOfFlame)
                 });
+
+                if let Some(pressure_built) = pressure_built {
+                    eb.push_child(pressure_built.sub_event, |mut child_eb| {
+                        child_eb.push_description("Sun(Sun)'s Pressure built...");
+                        child_eb.push_metadata_f64("current", pressure_built.current);
+                        child_eb.push_metadata_i64("maximum", 99999);
+                        child_eb.push_metadata_i64("recharge", 26244);
+                        child_eb.build(EventType::SunSunPressure)
+                    });
+                }
 
                 eb.push_child(hatch_child, |mut child_eb| {
                     child_eb.push_description(&format!("{replacement_name} has been hatched from the field of eggs."));

@@ -1939,6 +1939,14 @@ pub struct ScoreEvent {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PressureBuilt {
+    // TODO document fields
+    pub current: f64,
+    // Probably going to add more here
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -3498,7 +3506,11 @@ pub enum FedEventData {
         sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
 
         /// If a player was Ambushed, information about the ambush. Otherwise null.
-        ambush: Option<Ambush>
+        ambush: Option<Ambush>,
+
+        /// In season 20, incinerations started building Sun(Sun)'s Pressure. This holds the
+        /// metadata for the pressure building sub-event, if applicable
+        pressure_built: Option<PressureBuilt>
     },
 
     /// Pitcher change event. This happens automatically when something incapacitates the active

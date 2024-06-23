@@ -1592,8 +1592,12 @@ pub fn parse_next_event(
         }
         EventType::Incineration => {
             let (victim_name, replacement_name, unstable_chain_name, ambush) = event.next_parse(parse_incineration)?;
-            let mut incin_child = event.next_child(EventType::Incineration)?;
+
+            // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
+            // Incineration sub-event instead of adding a new event type.
+            let mut incin_child = event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
             let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
+            let mut pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
             let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
             let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
 
@@ -1610,6 +1614,15 @@ pub fn parse_next_event(
                 .transpose()?;
 
             let ambush = ambush.map(|(p, t)| event.parse_ambush(p, t)).transpose()?;
+
+            let pressure_built = pressure_built_event
+                .map(|mut pressure_built_event| {
+                    ParseOk(PressureBuilt {
+                        current: pressure_built_event.metadata_f64("current")?,
+                        sub_event: pressure_built_event.as_sub_event(),
+                    })
+                })
+                .transpose()?;
 
             let team_nickname = replace_child.metadata_str("teamName")?;
             assert!(is_known_team_nickname(team_nickname));
@@ -1630,6 +1643,7 @@ pub fn parse_next_event(
                     replace_child.as_sub_event(),
                 ),
                 ambush,
+                pressure_built,
             }
         }
         EventType::IncinerationBlocked => {
@@ -3490,6 +3504,7 @@ pub fn parse_next_event(
                 win_sub_event: win_event.as_sub_event(),
             }
         }
+        EventType::SunSunPressure => { todo!() }
         EventType::WeatherEvent => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
