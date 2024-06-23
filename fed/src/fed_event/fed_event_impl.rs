@@ -3555,6 +3555,40 @@ impl FedEvent {
                 eb.push_score_event(&score_event);
                 eb.build(EventType::Moderation)
             }
+            FedEventData::PlacedFifthBase { game, player_id, player_name, player_team_id, player_item_rating_before, player_item_rating_after, player_rating, stadium_name, player_lost_item_event, stadium_gained_mod_event } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.push_description(&format!("{player_name} placed and stole to The Fifth Base!"));
+                eb.push_player_tag(player_id);
+
+                eb.push_child(player_lost_item_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{player_name} placed The Fifth Base in {stadium_name}."));
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_team_tag(player_team_id);
+                    // Decided to hard-code the fifth base uuid under the "anything that can be
+                    // easily deduced should not be stored" principle.
+                    child_eb.push_metadata_uuid("itemId", uuid::uuid!("eecc9bf3-96b5-4ea9-9a4a-05f0a0d586f0"));
+                    child_eb.push_metadata_str("itemName", "The Fifth Base");
+                    child_eb.push_metadata_str_vec("mods", vec!["SUPERWANDERER".to_string()]);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", player_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", player_rating);
+
+                    child_eb.build(EventType::PlayerLostItem)
+                });
+
+                eb.push_child(stadium_gained_mod_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{player_name} placed The Fifth Base in {stadium_name}."));
+                    // Base is always placed in the home team's stadium
+                    child_eb.push_team_tag(home_team_id);
+                    child_eb.push_metadata_str("mod", "EXTRA_BASE");
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                    child_eb.build(EventType::AddedMod)
+                });
+
+                eb.build(EventType::StolenBase)
+            }
         };
 
         vec![item]

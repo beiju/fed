@@ -4980,6 +4980,41 @@ pub enum FedEventData {
         /// Information about the score from Moderation
         score_event: ScoreEvent,
     },
+
+    /// Player placed and stole to The Fifth Base
+    #[serde(rename_all = "camelCase")]
+    PlacedFifthBase {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of player who placed and stole to The Fifth Base
+        player_id: Uuid,
+
+        /// Name of player who placed and stole to The Fifth Base
+        player_name: String,
+
+        /// Team uuid of player who placed and stole to The Fifth Base
+        player_team_id: Uuid,
+
+        /// Name of stadium the player put The Fifth Base down in
+        stadium_name: String,
+
+        /// The increase or decrease that all the wielding player's items caused to their star rating
+        /// before putting down The Fifth Base
+        player_item_rating_before: f64,
+
+        /// The increase or decrease that all the wielding player's items now cause to their star rating
+        player_item_rating_after: f64,
+
+        /// TODO: Is this the player's rating before or after putting down the Base?
+        player_rating: f64,
+
+        /// Metadata for the player-lost-item sub-event
+        player_lost_item_event: SubEvent,
+
+        /// Metadata for the stadium-gained-mod sub-event
+        stadium_gained_mod_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5206,6 +5241,7 @@ impl FedEventData {
             FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
             FedEventData::GameOver { game, .. } => { Some(game) }
             FedEventData::Moderation { game, .. } => { Some(game) }
+            FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
         }
     }
 }

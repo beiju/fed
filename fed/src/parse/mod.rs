@@ -367,45 +367,66 @@ pub fn parse_next_event(
             }
         }
         EventType::StolenBase => {
-            let (runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name) = event.next_parse(parse_stolen_base)?;
+            let parsed = event.next_parse(parse_stolen_base)?;
 
-            // TODO Right now each of these is in one branch and both should be in both
-            let runner_item_damage = event.parse_item_damage(runner_name)?;
-            let fielder_item_damage = event.parse_item_damage_and_name(true)?;
+            match parsed {
+                ParsedStolenBase::Normal { runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name } => {
+                    // TODO Right now each of these is in one branch and both should be in both
+                    let runner_item_damage = event.parse_item_damage(runner_name)?;
+                    let fielder_item_damage = event.parse_item_damage_and_name(true)?;
 
-            if is_successful {
-                let runner_id = event.next_player_id()?;
+                    if is_successful {
+                        let runner_id = event.next_player_id()?;
 
-                let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
+                        let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
 
-                let score_event = event.parse_score_event()?;
+                        let score_event = event.parse_score_event()?;
 
-                FedEventData::StolenBase {
-                    game: event.game(unscatter, attractor_secret_base)?,
-                    runner_name: runner_name.to_string(),
-                    runner_id,
-                    base_stolen,
-                    blaserunning,
-                    free_refill: free_refiller.map(|refiller_name| {
-                        let mut sub_event = event.next_child(EventType::RemovedMod)?;
-                        ParseOk(FreeRefill {
-                            sub_event: sub_event.as_sub_event(),
-                            player_name: refiller_name.to_string(),
-                            player_id: sub_event.next_player_id()?,
-                            team_id: sub_event.next_team_id_opt()?,
-                        })
-                    }).transpose()?,
-                    runner_item_damage,
-                    is_special: event.category == EventCategory::Special,
-                    hype,
-                    score_event,
+                        FedEventData::StolenBase {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            runner_name: runner_name.to_string(),
+                            runner_id,
+                            base_stolen,
+                            blaserunning,
+                            free_refill: free_refiller.map(|refiller_name| {
+                                let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                                ParseOk(FreeRefill {
+                                    sub_event: sub_event.as_sub_event(),
+                                    player_name: refiller_name.to_string(),
+                                    player_id: sub_event.next_player_id()?,
+                                    team_id: sub_event.next_team_id_opt()?,
+                                })
+                            }).transpose()?,
+                            runner_item_damage,
+                            is_special: event.category == EventCategory::Special,
+                            hype,
+                            score_event,
+                        }
+                    } else {
+                        FedEventData::CaughtStealing {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            runner_name: runner_name.to_string(),
+                            base_stolen,
+                            fielder_item_damage,
+                        }
+                    }
                 }
-            } else {
-                FedEventData::CaughtStealing {
-                    game: event.game(unscatter, attractor_secret_base)?,
-                    runner_name: runner_name.to_string(),
-                    base_stolen,
-                    fielder_item_damage,
+                ParsedStolenBase::Fifth { runner_name } => {
+                    let mut player_lost_item_event = event.next_child(EventType::PlayerLostItem)?;
+                    let stadium_name = player_lost_item_event.next_parse(parse_placed_fifth_base_in_stadium(runner_name))?;
+                    let mut stadium_gained_mod_event = event.next_child(EventType::AddedMod)?;
+                    FedEventData::PlacedFifthBase {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        player_id: player_lost_item_event.next_player_id()?,
+                        player_name: runner_name.to_string(),
+                        player_team_id: player_lost_item_event.next_team_id()?,
+                        stadium_name: stadium_name.to_string(),
+                        player_item_rating_before: player_lost_item_event.metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_after: player_lost_item_event.metadata_f64("playerItemRatingAfter")?,
+                        player_rating: player_lost_item_event.metadata_f64("playerRating")?,
+                        player_lost_item_event: player_lost_item_event.as_sub_event(),
+                        stadium_gained_mod_event: stadium_gained_mod_event.as_sub_event(),
+                    }
                 }
             }
         }

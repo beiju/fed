@@ -435,7 +435,30 @@ pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
     many0(parse_free_refill).parse(input)
 }
 
-pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<&str>)> {
+pub(crate) enum ParsedStolenBase<'a> {
+    Normal {
+        runner_name: &'a str,
+        base_stolen: Base,
+        is_successful: bool,
+        blaserunning: bool,
+        free_refiller: Option<&'a str>,
+        hype_stadium_name: Option<&'a str>,
+    },
+    Fifth {
+        runner_name: &'a str,
+    }
+}
+
+pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
+    alt((
+        parse_normal_stolen_base
+            .map(|(runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name)|
+                ParsedStolenBase::Normal { runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name }),
+        parse_stolen_fifth_base.map(|runner_name| ParsedStolenBase::Fifth { runner_name })
+    )).parse(input)
+}
+
+pub(crate) fn parse_normal_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<&str>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -452,6 +475,20 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<(&str, Base, bool, 
     let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
 
     Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill, hype_stadium_name)))
+}
+
+pub(crate) fn parse_stolen_fifth_base(input: &str) -> ParserResult<&str> {
+    let (input, runner_name) = parse_terminated(" placed and stole to The Fifth Base!").parse(input)?;
+
+    Ok((input, runner_name))
+}
+
+pub(crate) fn parse_placed_fifth_base_in_stadium(player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+    move |input| {
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag(" placed The Fifth Base in ").parse(input)?;
+        parse_terminated(".").parse(input)
+    }
 }
 
 pub(crate) fn parse_named_base(input: &str) -> ParserResult<Base> {
