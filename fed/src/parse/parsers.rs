@@ -399,6 +399,7 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
         tag("solo home run!").map(|_| HomeRunType::Solo),
         tag("2-run home run!").map(|_| HomeRunType::TwoRun),
         tag("3-run home run!").map(|_| HomeRunType::ThreeRun),
+        tag("4-run home run!").map(|_| HomeRunType::FourRun),
         tag("grand slam!").map(|_| HomeRunType::GrandSlam), // dunno what happens with a pentaslam...
     )).parse(input)?;
 

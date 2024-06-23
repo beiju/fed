@@ -1549,6 +1549,7 @@ pub enum HomeRunType {
     Solo,
     TwoRun,
     ThreeRun,
+    FourRun, // Only applies with The Fifth Base, otherwise a 4-run HR is a Grand Slam
     GrandSlam,
 }
 
@@ -1558,6 +1559,7 @@ impl Display for HomeRunType {
             HomeRunType::Solo => { write!(f, "solo home run") }
             HomeRunType::TwoRun => { write!(f, "2-run home run") }
             HomeRunType::ThreeRun => { write!(f, "3-run home run") }
+            HomeRunType::FourRun => { write!(f, "4-run home run") }
             HomeRunType::GrandSlam => { write!(f, "grand slam") }
         }
     }
