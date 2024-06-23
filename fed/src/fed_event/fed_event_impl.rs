@@ -633,23 +633,18 @@ impl FedEvent {
                     .children(child)
                     .build()
             }
-            FedEventData::MildPitch { ref game, pitcher_id, ref pitcher_name, balls, strikes, runners_advance, ref scores } => {
-                let runners_advance_str = if runners_advance {
-                    "\nRunners advance on the pathetic play!"
-                } else {
-                    ""
-                };
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::MildPitch,
-                        category: EventCategory::Special,
-                        description: format!("{pitcher_name} throws a Mild pitch!\nBall, {balls}-{strikes}.{runners_advance_str}"),
-                        player_tags: vec![pitcher_id],
-                        ..Default::default()
-                    })
-                    .scores(scores, " scores!")
-                    .build()
+            FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes, runners_advance, scores } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{pitcher_name} throws a Mild pitch!"));
+                eb.push_description(&format!("Ball, {balls}-{strikes}."));
+                if runners_advance {
+                    eb.push_description("Runners advance on the pathetic play!");
+                }
+                eb.push_player_tag(pitcher_id);
+                eb.push_scores(&scores, home_team_id, "scores!");
+                eb.build(EventType::MildPitch)
             }
             FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, gained_mod, ref sub_event, team_id, ref previous } => {
                 let change_str = match (gained_mod, which_mod) {
