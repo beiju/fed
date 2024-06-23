@@ -3093,7 +3093,7 @@ pub enum FedEventData {
 
         /// Starting in s20, there's an additional child event for the weather proc. This is the
         /// information in that event, if applicable.
-        weather_event: Option<SubEvent>
+        weather_event: Option<SubEvent>,
     },
 
     /// Player suffered a Superallergic reaction
@@ -3194,6 +3194,10 @@ pub enum FedEventData {
 
         /// Players who were kept in place with Gravity
         gravity_players: Vec<PlayerNameId>,
+
+        /// Starting in s20, there's an additional child event for the weather proc. This is the
+        /// information in that event, if applicable.
+        weather_event: Option<SubEvent>,
     },
 
     /// Tarot readings

@@ -984,42 +984,64 @@ pub(crate) enum ParsedReverbType {
     SeveralPlayers,
 }
 
-pub(crate) fn parse_roster_shuffle(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
-    alt((
-        parse_roster_shuffle_high,
-        parse_roster_shuffle_unsafe,
-        parse_roster_shuffle_dangerous,
-    )).parse(input)
+pub(crate) fn parse_roster_shuffle(season: i32) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    // This takes a season because in season 20 the text was slightly changed,
+    // from "Reverberations are at..." to "Reverberations hit..."
+    move |input| {
+        alt((
+            parse_roster_shuffle_high(season),
+            parse_roster_shuffle_unsafe(season),
+            parse_roster_shuffle_dangerous(season),
+        )).parse(input)
+    }
 }
 
-pub(crate) fn parse_roster_shuffle_high(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
-    let (input, _) = tag("Reverberations are at high levels!\nThe ").parse(input)?;
-    let (input, team_name) = parse_terminated(" had several players shuffled in the Reverb!").parse(input)?;
+pub(crate) fn parse_roster_shuffle_high(season: i32) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    move |input| {
+        let (input, _) = if season < 19 {
+            tag("Reverberations are at high levels!\nThe ")
+        } else {
+            tag("Reverberations hit high levels!\nThe ")
+        }.parse(input)?;
+        let (input, team_name) = parse_terminated(" had several players shuffled in the Reverb!").parse(input)?;
 
-    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
+        let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
 
-    Ok((input, (team_name, ParsedReverbType::SeveralPlayers, gravity_players)))
+        Ok((input, (team_name, ParsedReverbType::SeveralPlayers, gravity_players)))
+    }
 }
 
-pub(crate) fn parse_roster_shuffle_unsafe(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
-    let (input, _) = tag("Reverberations are at unsafe levels!\nThe ").parse(input)?;
-    let (input, (team_name, reverb_type)) = alt((
-        parse_terminated(" had their rotation shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Rotation)),
-        parse_terminated(" had their lineup shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Lineup)),
-    )).parse(input)?;
+pub(crate) fn parse_roster_shuffle_unsafe(season: i32) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    move |input| {
+        let (input, _) = if season < 19 {
+            tag("Reverberations are at unsafe levels!\nThe ")
+        } else {
+            tag("Reverberations hit unsafe levels!\nThe ")
+        }.parse(input)?;
+        let (input, (team_name, reverb_type)) = alt((
+            parse_terminated(" had their rotation shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Rotation)),
+            parse_terminated(" had their lineup shuffled in the Reverb!").map(|n| (n, ParsedReverbType::Lineup)),
+        )).parse(input)?;
 
-    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
+        let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
 
-    Ok((input, (team_name, reverb_type, gravity_players)))
+        Ok((input, (team_name, reverb_type, gravity_players)))
+    }
 }
 
-pub(crate) fn parse_roster_shuffle_dangerous(input: &str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
-    let (input, _) = tag("Reverberations are at dangerous levels!\nThe ").parse(input)?;
-    let (input, team_name) = parse_terminated(" were shuffled in the Reverb!").parse(input)?;
+pub(crate) fn parse_roster_shuffle_dangerous(season: i32) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+    move |input| {
+        let (input, _) = if season < 19 {
+            tag("Reverberations are at dangerous levels!\nThe ")
+        } else {
+            tag("Reverberations hit dangerous levels!\nThe ")
+        }.parse(input)?;
+        let (input, team_name) = parse_terminated(" were shuffled in the Reverb!").parse(input)?;
 
-    let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
+        let (input, gravity_players) = many0(preceded(tag("\n"), parse_terminated("'s Gravity kept them in place!"))).parse(input)?;
 
-    Ok((input, (team_name, ParsedReverbType::Full, gravity_players)))
+        Ok((input, (team_name, ParsedReverbType::Full, gravity_players)))
+    }
 }
 
 pub(crate) fn parse_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {

@@ -1300,32 +1300,38 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Reverb { game, team_id, team_nickname, reverb_type, gravity_players } => {
+            FedEventData::Reverb { game, team_id, team_nickname, reverb_type, gravity_players, weather_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                // let get_child = |sub_event, event_type, shuffle_location| {
-                //     EventBuilderChild::new(sub_event)
-                //         .update(EventBuilderUpdate {
-                //             r#type: event_type,
-                //             category: EventCategory::Changes,
-                //             description: format!("The {team_nickname} {shuffle_location}"),
-                //             team_tags: vec![team_id],
-                //             ..Default::default()
-                //         })
-                //         .metadata(json!({ "parent": self.id }))
-                // };
-                //
-                // let gravity_suffix = gravity_players.iter()
-                //     .map(|player| format!("\n{}'s Gravity kept them in place!", player.player_name))
-                //     .join("");
-                //
-                // let mut player_tags = gravity_players.iter()
-                //     .map(|player| player.player_id)
-                //     .collect();
+
+                if let Some(weather) = weather_event {
+                    eb.push_child(weather, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description(match &reverb_type {
+                            ReverbType::Rotation(_) => { "Reverberations hit unsafe levels!" }
+                            ReverbType::Lineup(_) => { "Reverberations hit unsafe levels!" }
+                            ReverbType::Full(_) => { "Reverberations hit dangerous levels!" }
+                            ReverbType::SeveralPlayers(_) => { "Reverberations hit high levels!" }
+                        });
+                        child_eb.push_team_tag(team_id);
+                        child_eb.push_metadata_str("effect", match &reverb_type {
+                            ReverbType::Rotation(_) => { "TODO Rotation" }
+                            ReverbType::Lineup(_) => { "TODO Lineup" }
+                            ReverbType::Full(_) => { "Roster Shuffle" }
+                            ReverbType::SeveralPlayers(_) => { "Player Shuffle" }
+                        });
+                        child_eb.push_metadata_i32("weather", Weather::Reverb);
+                        child_eb.build(EventType::WeatherEvent)
+                    });
+                }
 
                 match reverb_type {
                     ReverbType::Lineup(sub_event) => {
-                        eb.push_description("Reverberations are at unsafe levels!");
+                        eb.push_description(if self.season < 19 {
+                            "Reverberations are at unsafe levels!"
+                        } else {
+                            "Reverberations hit unsafe levels!"
+                        });
                         eb.push_description(&format!("The {team_nickname} had their lineup shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
                             child.push_description(&format!("The {team_nickname} had their lineup shuffled."));
@@ -1336,7 +1342,11 @@ impl FedEvent {
                         eb.build(EventType::ReverbRosterShuffle)
                     }
                     ReverbType::Rotation(sub_event) => {
-                        eb.push_description("Reverberations are at unsafe levels!");
+                        eb.push_description(if self.season < 19 {
+                            "Reverberations are at unsafe levels!"
+                        } else {
+                            "Reverberations hit unsafe levels!"
+                        });
                         eb.push_description(&format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
                             child.push_description(&format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
@@ -1347,7 +1357,11 @@ impl FedEvent {
                         eb.build(EventType::ReverbRosterShuffle)
                     }
                     ReverbType::Full(sub_event) => {
-                        eb.push_description("Reverberations are at dangerous levels!");
+                        eb.push_description(if self.season < 19 {
+                            "Reverberations are at dangerous levels!"
+                        } else {
+                            "Reverberations hit dangerous levels!"
+                        });
                         eb.push_description(&format!("The {team_nickname} were shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
                             child.push_description(&format!("The {team_nickname} were shuffled in the Reverb!"));
@@ -1358,7 +1372,11 @@ impl FedEvent {
                         eb.build(EventType::ReverbRosterShuffle)
                     }
                     ReverbType::SeveralPlayers(player_reverbs) => {
-                        eb.push_description("Reverberations are at high levels!");
+                        eb.push_description(if self.season < 19 {
+                            "Reverberations are at high levels!"
+                        } else {
+                            "Reverberations hit high levels!"
+                        });
                         eb.push_description(&format!("The {team_nickname} had several players shuffled in the Reverb!"));
                         let common_description = format!("The {team_nickname} had several players shuffled in the Reverb!");
                         for player_reverb in player_reverbs {

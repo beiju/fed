@@ -1361,7 +1361,11 @@ pub fn parse_next_event(
             }
         }
         EventType::ReverbRosterShuffle => {
-            let (team_nickname, reverb_type, gravity_player_names) = event.next_parse(parse_roster_shuffle)?;
+            let (team_nickname, reverb_type, gravity_player_names) = event.next_parse(parse_roster_shuffle(event.season))?;
+
+            // Not sure where this falls relative to gravity
+            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+                .map(|child| child.as_sub_event());
 
             let gravity_players = gravity_player_names.into_iter()
                 .map(|player_name| {
@@ -1381,6 +1385,7 @@ pub fn parse_next_event(
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Rotation(sub_event.as_sub_event()),
                         gravity_players,
+                        weather_event,
                     }
                 }
                 ParsedReverbType::Lineup => {
@@ -1391,6 +1396,7 @@ pub fn parse_next_event(
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Lineup(sub_event.as_sub_event()),
                         gravity_players,
+                        weather_event,
                     }
                 }
                 ParsedReverbType::Full => {
@@ -1401,6 +1407,7 @@ pub fn parse_next_event(
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::Full(sub_event.as_sub_event()),
                         gravity_players,
+                        weather_event,
                     }
                 }
                 ParsedReverbType::SeveralPlayers => {
@@ -1437,6 +1444,7 @@ pub fn parse_next_event(
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::SeveralPlayers(reverbs),
                         gravity_players,
+                        weather_event,
                     }
                 }
             }
