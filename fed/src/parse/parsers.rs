@@ -2316,6 +2316,13 @@ pub(crate) fn parse_polarity(input: &str) -> ParserResult<NumbersGo> {
     Ok((input, numbers_go))
 }
 
+pub(crate) fn parse_exit_secret_base(input: &str) -> ParserResult<(&str, bool)> {
+    alt((
+        parse_terminated(" exits the Secret Base to Second Base!").map(|n| (n, false)),
+        parse_terminated(" exits the Secret Base to the Fifth Base!").map(|n| (n, true)),
+    )).parse(input)
+}
+
 pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<(&str, f64)> {
     let (input, _) = tag("Shame Donations are granted!\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" receive ").parse(input)?;

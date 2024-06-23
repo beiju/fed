@@ -3064,16 +3064,13 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::ExitSecretBase { game, player_id, player_name } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::ExitSecretBase,
-                        category: EventCategory::Special,
-                        description: format!("{player_name} exits the Secret Base to Second Base!"),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::ExitSecretBase { game, player_id, player_name, to_fifth } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{player_name} exits the Secret Base to {} Base!",
+                                             if to_fifth { "the Fifth" } else { "Second" }));
+                eb.push_player_tag(player_id);
+                eb.build(EventType::ExitSecretBase)
             }
             FedEventData::EchoChamber { game, team_id, player_id, player_name, which_mod, sub_event } => {
                 let mod_id = match which_mod {

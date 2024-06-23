@@ -1865,12 +1865,13 @@ pub fn parse_next_event(
             }
         }
         EventType::ExitSecretBase => {
-            let player_name = event.next_parse(parse_terminated(" exits the Secret Base to Second Base!"))?;
+            let (player_name, to_fifth) = event.next_parse(parse_exit_secret_base)?;
 
             FedEventData::ExitSecretBase {
                 game: event.game(unscatter, attractor_secret_base)?,
                 player_id: event.next_player_id()?,
                 player_name: player_name.to_string(),
+                to_fifth,
             }
         }
         EventType::ConsumersAttack => {

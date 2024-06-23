@@ -4363,6 +4363,11 @@ pub enum FedEventData {
 
         /// Name of the player who exited the Secret Base
         player_name: String,
+
+        /// Whether the player exited directly to The Fifth Base. This is only possible if the
+        /// stadium currently has The Fifth Base. If this is false, the player exited to second
+        /// base.
+        to_fifth: bool,
     },
 
     /// Echo Chamber makes a player temporarily Repeating
