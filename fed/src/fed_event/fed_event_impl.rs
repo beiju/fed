@@ -450,10 +450,10 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_opt_item_damage(fielder_item_damage_from_advance.as_ref(), &fielder_name);
+                eb.push_stopped_inhabiting(stopped_inhabiting);
                 if let Some(score_event) = &scores.score_event {
                     eb.push_score_event(score_event);
                 }
-                eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }

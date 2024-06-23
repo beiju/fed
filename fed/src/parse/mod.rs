@@ -600,9 +600,8 @@ pub fn parse_next_event(
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
-                    // This line is after at least one of the item_damage lines but I'm not sure if it's after all of them
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
