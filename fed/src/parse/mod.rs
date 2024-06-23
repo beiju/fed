@@ -595,26 +595,13 @@ pub fn parse_next_event(
             match event.next_parse(parse_ground_out)? {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
-                    // I can't think of a less ugly way to handle different ordering
-                    let (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage) = if event.season < 18 {
-                        let scores = event.parse_scores(" advances on the sacrifice.")?;
-                        // Damages definitely belong after scores and in this order but not sure if any
-                        // other events come in between
-                        let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
-                        let batter_item_damage = event.parse_item_damage(batter_name)?;
-                        let fielder_item_damage = event.parse_item_damage(fielder_name)?;
-
-                        (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage)
-                    } else {
-                        // It seems like this was reordered in s19 so damage is before scores
-                        let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
-                        let batter_item_damage = event.parse_item_damage(batter_name)?;
-                        let fielder_item_damage = event.parse_item_damage(fielder_name)?;
-
-                        let scores = event.parse_scores(" advances on the sacrifice.")?;
-
-                        (scores, pitcher_item_damage, batter_item_damage, fielder_item_damage)
-                    };
+                    let fielder_item_damage_from_out = event.parse_item_damage(fielder_name)?;
+                    let (scoring_players, attractions) = event.parse_scoring_players(" advances on the sacrifice.")?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
+                    let batter_item_damage = event.parse_item_damage(batter_name)?;
+                    let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
+                    // This line is after at least one of the item_damage lines but I'm not sure if it's after all of them
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
@@ -629,7 +616,8 @@ pub fn parse_next_event(
                         batter_debt,
                         batter_item_damage,
                         pitcher_item_damage,
-                        fielder_item_damage,
+                        fielder_item_damage_from_out,
+                        fielder_item_damage_from_advance, // TODO this should be part of scores, no?
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {

@@ -438,26 +438,20 @@ impl FedEvent {
 
                 eb.build(EventType::HomeRun)
             }
-            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage } => {
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage_from_out, fielder_item_damage_from_advance } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
-                if self.season < 18 {
-                    eb.push_scores(&scores, home_team_id, "advances on the sacrifice.");
-                    // Per resim, it's definitely pitcher-batter-fielder in that order. It's also
-                    // definitely somewhere after scores. Rest of the order is not yet known
-                    eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
-                    eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                    eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
-                } else {
-                    // Seems like order was changed in s19
-                    eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
-                    eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                    eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
-                    eb.push_scores(&scores, home_team_id, "advances on the sacrifice.");
+                eb.push_opt_item_damage(fielder_item_damage_from_out.as_ref(), &fielder_name);
+                eb.push_scores_without_event(&scores, home_team_id, "advances on the sacrifice.");
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                eb.push_opt_item_damage(fielder_item_damage_from_advance.as_ref(), &fielder_name);
+                if let Some(score_event) = &scores.score_event {
+                    eb.push_score_event(score_event);
                 }
                 eb.push_stopped_inhabiting(stopped_inhabiting);
                 eb.push_cooled_off(cooled_off, &batter_name);
