@@ -232,7 +232,7 @@ pub enum EventType {
     IncinerationBlocked = 55,
     FlagPlanted = 56,
     RenovationBuilt = 57,
-    LightSwitchToggled = 58,
+    LightSwitchFlipped = 58,
     DecreePassed = 59,
     BlessingOrGiftWon = 60,
     WillRecieved = 61,

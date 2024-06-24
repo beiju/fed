@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -2352,7 +2352,7 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes, mod_add_event } => {
+            FedEventData::RenovationBuilt { team_id, description, renovation_id, renovation_title, votes, effect } => {
                 eb.set_category(EventCategory::Changes);
                 eb.set_description(description);
                 eb.push_team_tag(team_id);
@@ -2363,16 +2363,29 @@ impl FedEvent {
                     RenovationVotes::Manual(v) => { eb.push_metadata_str("votes", v) }
                 }
 
-                if let Some(mod_add) = mod_add_event {
-                    eb.push_child(mod_add.sub_event, |mut child_eb| {
-                        child_eb.set_description(mod_add.description);
-                        child_eb.push_team_tag(team_id);
-                        child_eb.push_metadata_str("mod", mod_add.mod_id);
-                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                        // Grumble grumble inconsistency
-                        child_eb.clear_sub_play();
-                        child_eb.build(EventType::AddedMod)
-                    });
+                match effect {
+                    RenovationBuiltEffect::None => {}
+                    RenovationBuiltEffect::ModAdded { description, mod_id, sub_event } => {
+                        eb.push_child(sub_event, |mut child_eb| {
+                            child_eb.set_description(description);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_metadata_str("mod", mod_id);
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            // Grumble grumble inconsistency
+                            child_eb.clear_sub_play();
+                            child_eb.build(EventType::AddedMod)
+                        });
+                    }
+                    RenovationBuiltEffect::LightSwitchFlipped { stadium_name, is_on, sub_event } => {
+                        eb.push_child(sub_event, |mut child_eb| {
+                            child_eb.push_description(&format!("{stadium_name}'s Light Switch is now {}.",
+                                                              if is_on { "ON" } else { "OFF" }));
+                            child_eb.push_team_tag(team_id);
+                            // Grumble grumble inconsistency
+                            child_eb.clear_sub_play();
+                            child_eb.build(EventType::LightSwitchFlipped)
+                        });
+                    }
                 }
 
                 eb.build(EventType::RenovationBuilt)

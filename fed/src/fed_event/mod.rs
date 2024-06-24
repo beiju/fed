@@ -1835,19 +1835,6 @@ pub struct Ambush {
     pub player_rating_after: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct StadiumModAdded {
-    /// Description for the AddedMod sub-event. This description is not currently parsed but
-    /// contributions are welcome.
-    pub description: String,
-
-    /// Internal ID of the mod that was added
-    pub mod_id: String,
-
-    /// Metadata for the AddedMod sub-event
-    pub sub_event: SubEvent,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum RoamFromLocation {
     Team {
@@ -1945,6 +1932,32 @@ pub struct PressureBuilt {
     pub current: f64,
     // Probably going to add more here
     pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+pub enum RenovationBuiltEffect {
+    None,
+    ModAdded {
+        /// Description for the AddedMod sub-event. This description is not currently parsed but
+        /// contributions are welcome.
+        description: String,
+
+        /// Internal ID of the mod that was added
+        mod_id: String,
+
+        /// Metadata for the AddedMod sub-event
+        sub_event: SubEvent,
+    },
+    LightSwitchFlipped {
+        /// Name of the stadium that flipped its light switch
+        stadium_name: String,
+
+        /// True if the light switch is now on, false otherwise
+        is_on: bool,
+
+        /// Metadata for the LightSwitchFlipped sub-event
+        sub_event: SubEvent,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -3862,9 +3875,10 @@ pub enum FedEventData {
         // TODO Verify that this serializes without any intermediate structure
         votes: RenovationVotes,
 
-        /// Starting in s19, there's a ModAdded child when a stadium mod is added. This is metadata
-        /// for that event, if applicable. Otherwise null.
-        mod_add_event: Option<StadiumModAdded>
+        /// TODO Document
+        effect: RenovationBuiltEffect,
+
+
     },
 
     /// The peanut mister activates and cures a player's peanut allergy

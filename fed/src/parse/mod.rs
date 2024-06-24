@@ -1703,15 +1703,22 @@ pub fn parse_next_event(
                 })?
                 .is_string();
 
-            let mod_add_event = event.next_child_opt(EventType::AddedMod)?
-                .map(|mod_add_child| {
-                    ParseOk(StadiumModAdded {
-                        description: mod_add_child.description().to_string(),
-                        mod_id: mod_add_child.metadata_str("mod")?.to_string(),
-                        sub_event: mod_add_child.as_sub_event(),
-                    })
-                })
-                .transpose()?;
+            let effect = if let Some(mod_add_child) = event.next_child_opt(EventType::AddedMod)? {
+                RenovationBuiltEffect::ModAdded {
+                    description: mod_add_child.description().to_string(),
+                    mod_id: mod_add_child.metadata_str("mod")?.to_string(),
+                    sub_event: mod_add_child.as_sub_event(),
+                }
+            } else if let Some(mut switch_flipped_child) = event.next_child_opt(EventType::LightSwitchFlipped)? {
+                let (stadium_name, is_on) = switch_flipped_child.next_parse(parse_light_switch_flipped)?;
+                RenovationBuiltEffect::LightSwitchFlipped {
+                    stadium_name: stadium_name.to_string(),
+                    is_on,
+                    sub_event: switch_flipped_child.as_sub_event(),
+                }
+            } else {
+                RenovationBuiltEffect::None
+            };
 
             // It may be valuable to parse which reno is built, but there isn't one unified syntax
             // so I'm not going to put in the work now. Contributions welcome.
@@ -1725,10 +1732,10 @@ pub fn parse_next_event(
                 } else {
                     RenovationVotes::Normal(event.metadata_i64("votes")?)
                 },
-                mod_add_event,
+                effect,
             }
         }
-        EventType::LightSwitchToggled => { todo!() }
+        EventType::LightSwitchFlipped => { todo!() }
         EventType::DecreePassed => {
             let decree_title = event.next_parse(parse_decree_passed)?;
 

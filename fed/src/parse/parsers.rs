@@ -2430,3 +2430,14 @@ pub(crate) fn parse_ledger_line(input: &str) -> ParserResult<ParsedLedgerLine> {
         tag("Acidic Pitch (0.1 Unruns)").map(|_| ParsedLedgerLine::AcidicPitch),
     )).parse(input)
 }
+
+
+pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, stadium_name) = parse_terminated("'s Light Switch is now ").parse(input)?;
+    let (input, is_on) = alt((
+        tag("OFF.").map(|_| false),
+        tag("ON.").map(|_| true),
+    )).parse(input)?;
+
+    Ok((input, (stadium_name, is_on)))
+}
