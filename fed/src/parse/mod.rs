@@ -3357,8 +3357,12 @@ pub fn parse_next_event(
             }
         }
         EventType::Coasting => {
+            // Sometimes other subseasonal mods get tacked on to Coasting. This seems like a bug.
+            // TODO Unify subseasonal_mod_effects and changes
+            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
+
             let (is_now_coasting, coasters) = event.next_parse(parse_coasting)?;
-            let changes = coasters.into_iter()
+            let changes: Vec<_> = coasters.into_iter()
                 .map(|player_name| {
                     let mut sub_event = event.next_child(if is_now_coasting {
                         EventType::AddedModFromOtherMod
@@ -3384,7 +3388,7 @@ pub fn parse_next_event(
 
             FedEventData::SubseasonalModsChange {
                 game: event.game(unscatter, attractor_secret_base)?,
-                changes,
+                changes: Vec::from_iter(subseasonal_mod_effects.into_iter().chain(changes)),
             }
         }
         EventType::ItemBreaks => { todo!() }
