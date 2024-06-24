@@ -1418,6 +1418,7 @@ pub(crate) fn parse_final_standings(input: &str) -> ParserResult<(&str, i32, &st
 pub(crate) enum ParsedRemovedMod<'s> {
     TeamRemovedFromPartyTimeForPostseason(&'s str),
     TeamUsedFreeWill(&'s str),
+    TeamUsedFreeGift(&'s str),
     PlayerLostMod((&'s str, &'s str)),
     InvestigationConcluded(&'s str),
 }
@@ -1428,6 +1429,8 @@ pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
             .map(|n| ParsedRemovedMod::TeamRemovedFromPartyTimeForPostseason(n)),
         preceded(tag("The "), parse_terminated(" used their Free Will."))
             .map(|n| ParsedRemovedMod::TeamUsedFreeWill(n)),
+        preceded(tag("The "), parse_terminated(" used their Free Gift."))
+            .map(|n| ParsedRemovedMod::TeamUsedFreeGift(n)),
         pair(parse_terminated(" lost the "), parse_terminated(" mod."))
             .map(|nm| ParsedRemovedMod::PlayerLostMod(nm)),
         preceded(tag("The Crime Scene Investigation at "), parse_terminated(" has concluded."))

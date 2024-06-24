@@ -2537,19 +2537,20 @@ impl FedEvent {
                     .build()
             }
             FedEventData::TeamUsedFreeWill { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::RemovedMod,
-                        category: EventCategory::Changes,
-                        description: format!("The {team_nickname} used their Free Will."),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "FREE_WILL",
-                        "type": 0, // ?
-                    }))
-                    .build()
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("The {team_nickname} used their Free Will."));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", "FREE_WILL");
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+                eb.build(EventType::RemovedMod)
+            }
+            FedEventData::TeamUsedFreeGift { team_id, team_nickname } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("The {team_nickname} used their Free Gift."));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", "FREE_GIFT");
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+                eb.build(EventType::RemovedMod)
             }
             FedEventData::PlayerLostMod { team_id, player_id, player_name, r#mod, mod_name } => {
                 event_builder

@@ -3986,6 +3986,17 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
+    /// Team used their Free Gift
+    // TODO: Combine with TeamUsedFreeWill?
+    #[serde(rename_all = "camelCase")]
+    TeamUsedFreeGift {
+        /// Uuid of team who used their Free Gift
+        team_id: Uuid,
+
+        /// Name of team who used their Free Gift
+        team_nickname: String,
+    },
+
     /// Player lost a mod
     // TODO: Can this be more specific?
     #[serde(rename_all = "camelCase")]
@@ -5242,6 +5253,7 @@ impl FedEventData {
             FedEventData::ReplaceReturnedPlayerFromShadows { .. } => { None }
             FedEventData::PlayerCalledBackToHall { .. } => { None }
             FedEventData::TeamUsedFreeWill { .. } => { None }
+            FedEventData::TeamUsedFreeGift { .. } => { None }
             FedEventData::PlayerLostMod { .. } => { None }
             FedEventData::InvestigationMessage { .. } => { None }
             FedEventData::HighPressure { game, .. } => { Some(game) }

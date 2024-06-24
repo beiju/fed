@@ -2559,6 +2559,13 @@ pub fn parse_next_event(
                             team_nickname: team_nickname.to_string(),
                         }
                     }
+                    ParsedRemovedMod::TeamUsedFreeGift(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::TeamUsedFreeGift {
+                            team_id: event.next_team_id()?,
+                            team_nickname: team_nickname.to_string(),
+                        }
+                    }
                     ParsedRemovedMod::PlayerLostMod((player_name, mod_name)) => {
                         FedEventData::PlayerLostMod {
                             team_id: event.next_team_id()?,
