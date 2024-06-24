@@ -3629,6 +3629,28 @@ impl FedEvent {
                 eb.push_description(&format!("It generates {num_unruns} Unruns for the {away_team_nickname}'s next game."));
                 eb.build(EventType::EventHorizonActivation)
             }
+            FedEventData::RenovationRatified { renovation_name, renovation_id, mod_id, mod_removals } => {
+                let mut events = Vec::new();
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("{renovation_name} was Ratified into Non-Physical Law."));
+                eb.push_metadata_str("id", renovation_id);
+                eb.push_metadata_str("mod", &mod_id);
+                eb.push_metadata_str("title", renovation_name);
+
+                for mod_removal in mod_removals {
+                    let mut child_eb = eb.connected_event(mod_removal.sub_event);
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.set_description(mod_removal.description);
+                    child_eb.push_team_tag(mod_removal.team_id);
+                    child_eb.push_metadata_str("mod", &mod_id);
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                    events.push(child_eb.build(EventType::RemovedMod));
+                }
+
+                events.insert(0, eb.build(EventType::Ratification));
+                return events;
+            }
         };
 
         vec![item]

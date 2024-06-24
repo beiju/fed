@@ -70,6 +70,7 @@ impl EventBuilder {
             id: sub_event.id,
             created: sub_event.created,
             nuts: sub_event.nuts,
+            metadata: self.0.metadata.connected_event_metadata(),
             ..self.0.clone()
         })
     }

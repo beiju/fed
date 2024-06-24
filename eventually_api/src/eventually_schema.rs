@@ -42,7 +42,7 @@ fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 #[serde(rename_all = "camelCase")]
 pub struct EventMetadata {
     // In addition to collecting useful metadata, this should collect any metadata that isn't used
-    // in game update' lastUpdateFull field
+    // in game update's lastUpdateFull field
     #[serde(default)]
     #[schemars(skip)]
     pub children: Vec<EventuallyEvent>,
@@ -62,6 +62,22 @@ pub struct EventMetadata {
 
     #[serde(flatten)]
     pub other: Value,
+}
+
+impl EventMetadata {
+    pub fn connected_event_metadata(&self) -> Self {
+        Self {
+            children: vec![],
+            siblings: vec![],
+            ingest_time: self.ingest_time,
+            ingest_source: self.ingest_source.clone(),
+            play: None,
+            sub_play: None,
+            sibling_ids: None,
+            parent: None,
+            other: serde_json::json!({}),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]

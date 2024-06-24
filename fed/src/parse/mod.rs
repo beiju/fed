@@ -3487,7 +3487,40 @@ pub fn parse_next_event(
         }
         EventType::PlayerSoulIncrease => { todo!() }
         EventType::Announcement => { todo!() }
-        EventType::Ratification => { todo!() }
+        EventType::Ratification => {
+            let renovation_name = event.next_parse(parse_terminated(" was Ratified into Non-Physical Law."))?;
+            let mod_id = event.metadata_str("mod")?;
+
+            let mut mod_removals = Vec::new();
+
+            // Gather all the (detached) RemovedMod events caused by this ratification
+            loop {
+                // Stop if we run out of events
+                let Some(next_event) = event_iter.peek() else { break };
+                // Stop if we hit an event that isn't a RemovedMod event
+                if next_event.r#type != EventType::RemovedMod { break }
+                // Stop if we hit a RemovedMod event that removes a different mod
+                if EventParseWrapper::new(next_event)?.metadata_str("mod")? != mod_id { break }
+
+                // By this point we're pretty sure this event is connected with this ratification
+                let mod_removed_event = event_iter.next()
+                    .expect("This code is only hit after we successfully peek the iterator");
+                let mut mod_removed_event = EventParseWrapper::new(&mod_removed_event)?;
+
+                mod_removals.push(ModRemovedFromRatification {
+                    description: mod_removed_event.consume_description().to_string(),
+                    team_id: mod_removed_event.next_team_id()?,
+                    sub_event: mod_removed_event.as_sub_event(),
+                });
+            }
+
+            FedEventData::RenovationRatified {
+                renovation_name: renovation_name.to_string(),
+                renovation_id: event.metadata_str("id")?.to_string(),
+                mod_id: mod_id.to_string(),
+                mod_removals,
+            }
+        }
         EventType::HypeBuilds => { todo!() }
         EventType::Moderation => {
             let team_nickname = event.next_parse(parse_moderation)?;

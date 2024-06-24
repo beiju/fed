@@ -1960,6 +1960,19 @@ pub enum RenovationBuiltEffect {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ModRemovedFromRatification {
+    /// Description of the mod being removed from the stadium. Usually contains the stadium name and
+    /// team nickname, but in an inconsistent format so we don't parse it.
+    pub description: String,
+
+    /// Uuid of the team whose stadium this is
+    pub team_id: Uuid,
+
+    /// Metadata for the RemovedMod sub-event
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -5068,7 +5081,6 @@ pub enum FedEventData {
         stadium_gained_mod_event: SubEvent,
     },
 
-
     /// Event Horizon activates, stops the Black Hole from swallowing the runs, and converts them to
     /// Unruns for the away team's next game
     #[serde(rename_all = "camelCase")]
@@ -5081,6 +5093,22 @@ pub enum FedEventData {
 
         /// Nickname of the team who will receive the unruns (always the away team)
         away_team_nickname: String,
+    },
+
+    /// A Renovation was Ratified
+    #[serde(rename_all = "camelCase")]
+    RenovationRatified {
+        /// Name of the renovation that was Ratified
+        renovation_name: String,
+
+        /// Internal ID of the renovation that was ratified. These are in lower snake case.
+        renovation_id: String,
+
+        /// Internal ID of the mod granted by the renovation that was ratified. These are in upper
+        /// snake case.
+        mod_id: String,
+
+        mod_removals: Vec<ModRemovedFromRatification>,
     },
 }
 
@@ -5311,6 +5339,7 @@ impl FedEventData {
             FedEventData::Moderation { game, .. } => { Some(game) }
             FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
             FedEventData::EventHorizonActivates { game, .. } => { Some(game) }
+            FedEventData::RenovationRatified { .. } => { None }
         }
     }
 }
