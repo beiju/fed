@@ -5134,6 +5134,52 @@ pub enum FedEventData {
 
         mod_removals: Vec<ModRemovedFromRatification>,
     },
+
+    /// A player stole a Run from their opponent using the Stadium's Tunnels
+    #[serde(rename_all = "camelCase")]
+    RunStolenThroughTunnels {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who stole the run
+        thieving_player_id: Uuid,
+
+        /// Name of the player who stole the run
+        thieving_player_name: String,
+
+        /// Uuid of the team whose player stole the run
+        thieving_team_id: Uuid,
+
+        /// Name of the team whose player stole the run
+        thieving_team_nickname: String,
+
+        /// Uuid of the team who had their run stolen
+        victim_team_id: Uuid,
+
+        /// Nickname of the team who had their run stolen
+        victim_team_nickname: String,
+
+        // TODO document fields
+        away_emoji: String,
+        away_score: f64,
+        home_emoji: String,
+        home_score: f64,
+
+        /// Metadata for the RunsScored event for the team who gained a run
+        run_gained_sub_event: SubEvent,
+
+        /// Metadata for the RunsScored event for the team who lost a run
+        run_lost_sub_event: SubEvent,
+
+        /// I can't figure out what determines which team's sub-event goes first, so I have to store
+        /// it. If you can see the pattern please let me know.
+        // TODO Try to deduce this from data
+        victim_event_first: bool,
+
+        /// If balloons were inflated on this run theft, contains the name of the stadium. This will
+        /// always be the home stadium. Also, this will always be exactly 1 balloon.
+        balloons: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5364,6 +5410,7 @@ impl FedEventData {
             FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
             FedEventData::EventHorizonActivates { game, .. } => { Some(game) }
             FedEventData::RenovationRatified { .. } => { None }
+            FedEventData::RunStolenThroughTunnels { game, .. } => { Some(game) }
         }
     }
 }

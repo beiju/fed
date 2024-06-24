@@ -2002,7 +2002,44 @@ pub fn parse_next_event(
                 },
             }
         }
-        EventType::TunnelsUsed => { todo!() }
+        EventType::TunnelsUsed => {
+            let (thief_name, victim_team_nickname) = event.next_parse(parse_tunnels)?;
+            assert!(is_known_team_nickname(victim_team_nickname));
+
+            let mut runs_scored_a = event.next_child(EventType::RunsScored)?;
+            let mut runs_scored_b = event.next_child(EventType::RunsScored)?;
+
+            let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+            assert!(is_known_team_nickname(team_nickname_a));
+            let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
+            assert!(is_known_team_nickname(team_nickname_b));
+
+            let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
+                if team_nickname_a == victim_team_nickname {
+                    (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                } else {
+                    assert_eq!(team_nickname_b, victim_team_nickname);
+                    (runs_scored_a, runs_scored_b, team_nickname_a, false)
+                };
+
+            FedEventData::RunStolenThroughTunnels {
+                game: event.game(unscatter, attractor_secret_base)?,
+                thieving_player_id: event.next_player_id()?,
+                thieving_player_name: thief_name.to_string(),
+                thieving_team_id: run_gained_event.next_team_id()?,
+                thieving_team_nickname: thieving_team_nickname.to_string(),
+                victim_team_id: run_lost_event.next_team_id()?,
+                victim_team_nickname: victim_team_nickname.to_string(),
+                away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
+                away_score: run_gained_event.metadata_f64("awayScore")?,
+                home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
+                home_score: run_gained_event.metadata_f64("homeScore")?,
+                run_gained_sub_event: run_gained_event.as_sub_event(),
+                run_lost_sub_event: run_lost_event.as_sub_event(),
+                victim_event_first,
+                balloons: event.parse_balloons(1.0)?,
+            }
+        }
         EventType::PeanutMister => {
             let (player_name, cured_superallergy) = event.next_parse(parse_peanut_mister)?;
 
