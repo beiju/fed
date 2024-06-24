@@ -1315,8 +1315,8 @@ impl FedEvent {
                         });
                         child_eb.push_team_tag(team_id);
                         child_eb.push_metadata_str("effect", match &reverb_type {
-                            ReverbType::Rotation(_) => { "TODO Rotation" }
-                            ReverbType::Lineup(_) => { "TODO Lineup" }
+                            ReverbType::Rotation(_) => { "Rotation Shuffle" }
+                            ReverbType::Lineup(_) => { "Lineup Shuffle" }
                             ReverbType::Full(_) => { "Roster Shuffle" }
                             ReverbType::SeveralPlayers(_) => { "Player Shuffle" }
                         });
