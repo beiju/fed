@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreEvent, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -361,6 +361,12 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: f64) {
+        if let Some(stadium_name) = balloons {
+            self.push_description(&format!("{stadium_name} inflated {runs_scored} Balloons!"));
+        }
+    }
+
     // This function only exists to make a more sensible name for the user. Option implements
     // IntoIterator so you could just call the plural form with an option.
     pub fn push_free_refill(&mut self, free_refills: Option<FreeRefill>) {
@@ -374,12 +380,20 @@ impl EventBuilder {
 
     pub fn push_scores(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str) {
         self.push_scores_without_event(scores, home_team_id, score_label);
-        if let Some(score_event) = &scores.score_event {
-            self.push_score_event(score_event);
+        self.push_score_summary(scores);
+    }
+
+    pub fn push_score_summary(&mut self, scores: &Scores) {
+        self.push_opt_direct_score_summary(scores.score_summary.as_ref())
+    }
+
+    pub fn push_opt_direct_score_summary(&mut self, score_summary: Option<&ScoreSummary>) {
+        if let Some(ss) = score_summary {
+            self.push_direct_score_summary(ss)
         }
     }
 
-    pub fn push_score_event(&mut self, score: &ScoreEvent) {
+    pub fn push_direct_score_summary(&mut self, score: &ScoreSummary) {
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
@@ -402,6 +416,10 @@ impl EventBuilder {
             });
             child_eb.build(EventType::RunsScored)
         });
+
+        if let Some(stadium_name) = &score.balloons {
+            self.push_description(&format!("{stadium_name} inflated {} Balloons!", score.runs_scored));
+        }
     }
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {

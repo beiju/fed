@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
 use nom::combinator::opt;
 use nom::error::convert_error;
+use nom::sequence::preceded;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::fed_event::*;
@@ -633,19 +634,19 @@ impl<'e> EventParseWrapper<'e> {
 
         let free_refills = self.parse_free_refills()?;
 
-        let score_event = self.parse_score_event()?;
-        // Every score post s19 should have a ScoreEvent
+        let score_summary = self.parse_score_summary()?;
+        // Every score post s19 should have a ScoreSummary
         // Commented out because it's actually easier to diagnose if it fails later
-        // assert_eq!(score_event.is_some(), self.season >= 19 && !scores.is_empty());
+        // assert_eq!(score_summary.is_some(), self.season >= 19 && !scores.is_empty());
 
         Ok(Scores {
             scores,
             free_refills,
-            score_event,
+            score_summary,
         })
     }
 
-    pub fn parse_score_event(&mut self) -> Result<Option<ScoreEvent>, FeedParseError> {
+    pub fn parse_score_summary(&mut self) -> Result<Option<ScoreSummary>, FeedParseError> {
         let Some(mut score_child) = self.next_child_opt(EventType::RunsScored)? else {
             return Ok(None);
         };
@@ -681,7 +682,9 @@ impl<'e> EventParseWrapper<'e> {
                 .collect(),
         });
 
-        Ok(Some(ScoreEvent {
+        let balloons = self.parse_balloons(runs_scored)?;
+
+        Ok(Some(ScoreSummary {
             away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
             away_score: score_child.metadata_f64("awayScore")?,
             home_emoji: score_child.metadata_str("homeEmoji")?.to_string(),
@@ -691,7 +694,14 @@ impl<'e> EventParseWrapper<'e> {
             team_id: score_child.next_team_id()?,
             team_nickname: team_nickname.to_string(),
             sub_event: score_child.as_sub_event(),
+            balloons,
         }))
+    }
+
+    pub fn parse_balloons(&mut self, runs_scored: f64) -> Result<Option<String>, FeedParseError> {
+        let stadium_name = self.next_parse(opt(parse_balloons(runs_scored)))?;
+
+        Ok((stadium_name.map(str::to_string)))
     }
 
     pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {

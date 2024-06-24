@@ -345,6 +345,18 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> 
     }
 }
 
+pub(crate) fn parse_balloons(runs_scored: f64) -> impl Fn(&str) -> ParserResult<&str> {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, stadium_name) = parse_terminated(" inflated ").parse(input)?;
+        let runs_scored_str = runs_scored.to_string();
+        let (input, _) = tag(&*runs_scored_str).parse(input)?;
+        let (input, _) = tag(" Balloons!").parse(input)?;
+
+        Ok((input, stadium_name))
+    }
+}
+
 pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
         let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;

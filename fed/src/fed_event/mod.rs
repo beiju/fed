@@ -184,9 +184,9 @@ pub struct Scores {
     /// quite because FlyOut events don't have pitcher and batter uuids.
     pub free_refills: Vec<FreeRefill>,
 
-    /// Starting in season 20, there was a child event on each game event that scored any Runs.
-    /// This field contains the information from that event, if there was one.
-    pub score_event: Option<ScoreEvent>,
+    /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
+    /// attaching effects (such as Balloons) to the score summary. This contains that information.
+    pub score_summary: Option<ScoreSummary>,
 }
 
 impl Scores {
@@ -1926,7 +1926,7 @@ impl Display for Ledger {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct ScoreEvent {
+pub struct ScoreSummary {
     // TODO document fields
     pub away_emoji: String,
     pub away_score: f64,
@@ -1937,6 +1937,11 @@ pub struct ScoreEvent {
     pub team_id: Uuid,
     pub team_nickname: String,
     pub sub_event: SubEvent,
+
+    /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons were
+    /// inflated. Otherwise null.
+    // This may need to be extended to support number of balloons.
+    pub balloons: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -2469,8 +2474,9 @@ pub enum FedEventData {
         alley_oop: Option<(String, bool)>,
 
         /// Starting in s20 there's a separate RunsScored sub-event. This contains that information,
-        /// if applicable
-        score_event: Option<ScoreEvent>,
+        /// if applicable. There are also effects attached to scoring in general, rather than each
+        /// individual Run scored, and those also appear here.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Stolen base
@@ -2506,9 +2512,9 @@ pub enum FedEventData {
         /// If this event built hype, the metadata about the hype event
         hype: Option<Hype>,
 
-        /// Score event, if applicable. This will be populated if the base stolen was home or if
-        /// blaserunning is true and the season is 20 or later, otherwise null.
-        score_event: Option<ScoreEvent>,
+        /// Score summary effects, if applicable. This will be populated if the season is 20 or
+        /// later and either the base stolen was home or if blaserunning is true, otherwise null.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Caught stealing
@@ -2561,9 +2567,10 @@ pub enum FedEventData {
         /// Otherwise null.
         parasite: Option<Parasite>,
 
-        /// ScoreEvent data if applicable, otherwise null. Scoring can happen on strikeouts thanks
-        /// to Triple Threat, but the RunsScored event didn't exist until s20.
-        score_event: Option<ScoreEvent>,
+        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
+        /// attaching effects (such as Balloons) to the score summary. This contains that
+        /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Strikeout looking
@@ -2599,9 +2606,10 @@ pub enum FedEventData {
         /// Otherwise null.
         parasite: Option<Parasite>,
 
-        /// ScoreEvent data if applicable, otherwise null. Scoring can happen on strikeouts thanks
-        /// to Triple Threat, but the RunsScored event didn't exist until s20.
-        score_event: Option<ScoreEvent>,
+        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
+        /// attaching effects (such as Balloons) to the score summary. This contains that
+        /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Player drew a walk
@@ -3491,9 +3499,10 @@ pub enum FedEventData {
         /// Whether the Flood Pumps activated
         flood_pumps: bool,
 
-        /// If at least one person scored on this event (with Flippers), and it's s20 or later,
-        /// contains information about the scoring event
-        score_event: Option<ScoreEvent>,
+        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
+        /// attaching effects (such as Balloons) to the score summary. This contains that
+        /// information. Runs can be scored on Flooding events thanks to Flippers.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Player(s) returned from Elsewhere
@@ -4339,9 +4348,10 @@ pub enum FedEventData {
         /// True if the run objects were gained, flase if they were lost
         gained: bool,
 
-        /// The RunsScored event associated with this score, if one exists. One should exist iff
-        /// it's season 20 or later
-        score_event: Option<ScoreEvent>
+        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
+        /// attaching effects (such as Balloons) to the score summary. This contains that
+        /// information.
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Detective enters a Crime Scene
@@ -5018,8 +5028,8 @@ pub enum FedEventData {
         /// Number of unruns received
         unruns: f64,
 
-        /// If after s20, the associated score event
-        score_event: Option<ScoreEvent>,
+        /// If after s20, the associated score summary
+        score_summary: Option<ScoreSummary>,
     },
 
     /// Game Over event which bestows the Win object on the winning team. This event did not exist
@@ -5055,8 +5065,9 @@ pub enum FedEventData {
         /// team to win. Since this was at the end of the game it counted as Shame and built Hype.
         hype: Option<Hype>,
 
-        /// Information about the score from Moderation
-        score_event: ScoreEvent,
+        /// The associated score summary. Unlike most cases this always exists because Moderation
+        /// was added after score summaries.
+        score_summary: ScoreSummary,
     },
 
     /// Player placed and stole to The Fifth Base
