@@ -1841,9 +1841,21 @@ pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
     Ok((input, (num_runs, team_nickname)))
 }
 
-pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bool)> {
+pub(crate) fn parse_event_horizon(input: &str) -> ParserResult<(f32, &str)> {
+    let (input, _) = tag("The Event Horizon activates!\nIt generates ").parse(input)?;
+    let (input, num_runs) = float.parse(input)?;
+    let (input, _) = tag(" Unruns for the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated("'s next game.").parse(input)?;
+
+    Ok((input, (num_runs, team_nickname)))
+}
+
+pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bool, bool)> {
     let (input, _) = tag("Runs are Overflowing!\n").parse(input)?;
-    let (input, team_nickname) = parse_terminated(" gain ").parse(input)?;
+    let (input, (team_nickname, gained)) = alt((
+         parse_terminated(" gain ").map(|n| (n, true)),
+         parse_terminated(" lose ").map(|n| (n, false)),
+    )).parse(input)?;
     let (input, num_runs) = double.parse(input)?;
     let (input, unruns) = alt((
         tag(" Run").map(|_| false),
@@ -1852,7 +1864,7 @@ pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bo
     let (input, _) = opt(tag("s")).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
 
-    Ok((input, (team_nickname, num_runs, unruns)))
+    Ok((input, (team_nickname, num_runs, unruns, gained)))
 }
 
 pub(crate) enum ParsedMiddling<'a> {

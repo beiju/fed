@@ -4274,11 +4274,19 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Nickname of team who gained the (Un)runs
+        /// Nickname of team who gained or lost the (Un)runs
         team_nickname: String,
 
-        /// Number of Runs (positive) or Unruns (negative) gained
+        /// Number of Runs or Unruns gained/lost. This can be negative or positive independently of
+        /// whether they are runs or unruns, and also of whether they are gained or lost. This means
+        /// there can be a triple negative.
         num_runs: f64,
+
+        /// True if the run objects gained/lost were Unruns, false if they were Runs
+        unruns: bool,
+
+        /// True if the run objects were gained, flase if they were lost
+        gained: bool,
 
         /// The RunsScored event associated with this score, if one exists. One should exist iff
         /// it's season 20 or later
@@ -5034,6 +5042,21 @@ pub enum FedEventData {
         /// Metadata for the stadium-gained-mod sub-event
         stadium_gained_mod_event: SubEvent,
     },
+
+
+    /// Event Horizon activates, stops the Black Hole from swallowing the runs, and converts them to
+    /// Unruns for the away team's next game
+    #[serde(rename_all = "camelCase")]
+    EventHorizonActivates {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Number of unruns saved for the victim team's next game
+        num_unruns: f32,
+
+        /// Nickname of the team who will receive the unruns (always the away team)
+        away_team_nickname: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5261,6 +5284,7 @@ impl FedEventData {
             FedEventData::GameOver { game, .. } => { Some(game) }
             FedEventData::Moderation { game, .. } => { Some(game) }
             FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
+            FedEventData::EventHorizonActivates { game, .. } => { Some(game) }
         }
     }
 }

@@ -2963,19 +2963,20 @@ impl FedEvent {
                     .build()
             }
             FedEventData::SolarPanelsActivate { game, num_runs, team_nickname } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::SolarPanelsActivation,
-                        category: EventCategory::Special,
-                        description: format!("The Solar Panels absorb Sun 2's energy!\n{num_runs} Runs are collected and saved for the {team_nickname}'s next game."),
-                        ..Default::default()
-                    })
-                    .build()
-            }
-            FedEventData::RunsOverflowing { game, team_nickname, num_runs, score_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("Runs are Overflowing!\n{team_nickname} gain {}.", Runs(num_runs)));
+                eb.push_description("The Solar Panels absorb Sun 2's energy!");
+                eb.push_description(&format!("{num_runs} Runs are collected and saved for the {team_nickname}'s next game."));
+                eb.build(EventType::SolarPanelsActivation)
+            }
+            FedEventData::RunsOverflowing { game, team_nickname, num_runs, unruns, gained, score_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("Runs are Overflowing!");
+                eb.push_description(&format!("{team_nickname} {} {num_runs} {}{}.",
+                                                    if gained { "gain" } else { "lose" },
+                                                    if unruns { "Unrun" } else { "Run" },
+                                                    if num_runs.abs() == 1.0 { "" } else { "s" }));
                 if let Some(se) = &score_event { eb.push_score_event(se); }
                 eb.build(EventType::RunsOverflowing)
             }
@@ -3606,6 +3607,13 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::StolenBase)
+            }
+            FedEventData::EventHorizonActivates { game, num_unruns, away_team_nickname, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Event Horizon activates!");
+                eb.push_description(&format!("It generates {num_unruns} Unruns for the {away_team_nickname}'s next game."));
+                eb.build(EventType::EventHorizonActivation)
             }
         };
 

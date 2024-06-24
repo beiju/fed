@@ -936,7 +936,7 @@ pub fn parse_next_event(
             }
         }
         EventType::RunsOverflowing => {
-            let (team_nickname, num_runs, unruns) = event.next_parse(parse_runs_overflowing)?;
+            let (team_nickname, num_runs, unruns, gained) = event.next_parse(parse_runs_overflowing)?;
             assert!(is_known_team_nickname(team_nickname));
 
             let score_event = event.parse_score_event()?;
@@ -944,7 +944,9 @@ pub fn parse_next_event(
             FedEventData::RunsOverflowing {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
-                num_runs: if unruns { -num_runs } else { num_runs },
+                num_runs,
+                unruns,
+                gained,
                 score_event,
             }
         }
@@ -2036,7 +2038,17 @@ pub fn parse_next_event(
                 sub_event: sub_event.as_sub_event(),
             }
         }
-        EventType::EventHorizonActivation => { todo!() }
+        EventType::EventHorizonActivation => {
+            let (num_unruns, team_nickname) = event.next_parse(parse_event_horizon)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            FedEventData::EventHorizonActivates {
+                game: event.game(unscatter, attractor_secret_base)?,
+                num_unruns,
+                away_team_nickname: team_nickname.to_string(),
+            }
+
+        }
         EventType::EventHorizonAwaits => {
             let _ = event.next_parse_tag("The Event Horizon awaits.")?;
             FedEventData::EventHorizonAwaits {
