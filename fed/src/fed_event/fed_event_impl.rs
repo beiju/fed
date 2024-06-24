@@ -2756,7 +2756,7 @@ impl FedEvent {
                                           EventType::ModChange))
                     .build()
             }
-            FedEventData::ConsumerAttack { game, team_id, player_id, player_name_all_caps: player_name, effect, sensed_something_fishy, scattered } => {
+            FedEventData::ConsumerAttack { game, team_id, player_id, player_name_all_caps, effect, sensed_something_fishy, scattered } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_player_tag(player_id);
@@ -2767,7 +2767,7 @@ impl FedEvent {
 
                 match effect {
                     ConsumerAttackEffect::Chomp { rating_before, rating_after, sub_event } => {
-                        eb.push_description(&player_name);
+                        eb.push_description(&player_name_all_caps);
                         let description = eb.description().to_string();
                         eb.push_child(sub_event, |mut child| {
                             child.push_player_tag(player_id);
@@ -2778,10 +2778,14 @@ impl FedEvent {
                     }
                     ConsumerAttackEffect::DefendedWithItem(damage) => {
                         // Sticking the extra \n here arbitrarily. There are two in a row.
-                        eb.push_description(&format!("{player_name} DEFENDS\n"));
-                        eb.push_description(&format!("{} {}",
-                                                     damage.item_name.to_ascii_uppercase(),
-                                                     if damage.health > 0 { "DAMAGED" } else if damage.item_name.ends_with('s') { "BREAK" } else { "BREAKS" }));
+                        eb.push_description(&format!("{player_name_all_caps} DEFENDS\n"));
+                        if damage.health > 0 {
+                            eb.push_description(&format!("{} DAMAGED", damage.item_name.to_ascii_uppercase()));
+                        } else if damage.item_name_plural.expect("When item health > 0, whether its name is plural should be known") {
+                            eb.push_description(&format!("{} BREAK", damage.item_name.to_ascii_uppercase()));
+                        } else {
+                            eb.push_description(&format!("{} BREAKS", damage.item_name.to_ascii_uppercase()));
+                        }
                         let description = eb.description().to_string();
                         eb.push_child(damage.sub_event, |mut child| {
                             child.set_description(description);

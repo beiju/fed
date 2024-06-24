@@ -1719,7 +1719,7 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 }
 
 pub(crate) enum ParsedConsumerAttack<'a> {
-    Normal((&'a str, Option<&'a str>, bool)),
+    Normal((&'a str, Option<(&'a str, Option<bool>)>, bool)),
     ConsumerExpelled,
 }
 
@@ -1730,7 +1730,7 @@ pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerA
     )).parse(input)
 }
 
-pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
+pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, Option<(&str, Option<bool>)>, bool)> {
     let (input, _) = tag("CONSUMERS ATTACK\n").parse(input)?;
     let (input, scattered) = opt(tag("SCATTERED\n")).parse(input)?;
     let (input, (victim_name, defended)) = alt((
@@ -1740,12 +1740,22 @@ pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, O
     )).parse(input)?;
     let (input, item_breaks) = if defended {
         // TODO unwrap this horrible expression
-        opt(preceded(tag("\n\n"), alt((parse_terminated(" BREAKS"), parse_terminated(" BREAK"), parse_terminated(" DAMAGED"))))).parse(input)?
+        opt(parse_consumer_attack_item_break).parse(input)?
     } else {
         (input, None)
     };
 
     Ok((input, (victim_name, item_breaks, scattered.is_some())))
+}
+
+pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<(&str, Option<bool>)> {
+    let (input, _) = tag("\n\n").parse(input)?;
+
+    alt((
+        parse_terminated(" DAMAGED").map(|n| (n, None)),
+        parse_terminated(" BREAKS").map(|n| (n, Some(false))),
+        parse_terminated(" BREAK").map(|n| (n, Some(true))),
+    )).parse(input)
 }
 
 pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<()> {
