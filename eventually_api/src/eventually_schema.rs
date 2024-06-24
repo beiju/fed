@@ -279,6 +279,9 @@ pub enum EventType {
     Perk = 93,
     Earlbird = 96,
     LateToTheParty = 97,
+    // This never appeared in the data, but I need to have an event type for EarlyToTheParty because
+    // of architectural decisions and I'm deducing that it was probably number 98 in TGB's code
+    EarlyToTheParty = 98,
     ShameDonor = 99,
     AddedMod = 106,
     RemovedMod = 107,

@@ -2114,6 +2114,7 @@ pub(crate) fn parse_subseasonal_mod(input: &str) -> ParserResult<(&str, Subseaso
     )).parse(input)?;
     let (input, which_mod) = alt((
         tag("Middling").map(|_| SubseasonalMod::Middling),
+        tag("Early to the Party").map(|_| SubseasonalMod::EarlyToTheParty),
         tag("Late to the Party").map(|_| SubseasonalMod::LateToTheParty),
     )).parse(input)?;
     let (input, _) = tag(".\n").parse(input)?;

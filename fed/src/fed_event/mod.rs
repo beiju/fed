@@ -512,10 +512,15 @@ pub enum ModChangeSubject {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SubseasonalMod {
+    // Earlseason
     Earlbirds,
-    LateToTheParty,
+    // Midseason
     Middling,
     Coasting,
+    // Lateseason
+    EarlyToTheParty,
+    LateToTheParty,
+    // Postseason
     Ambitious,
 }
 
@@ -523,9 +528,12 @@ impl SubseasonalMod {
     pub fn performing_mod_id(&self) -> &'static str {
         match self {
             SubseasonalMod::Earlbirds => { "OVERPERFORMING" }
-            SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
             SubseasonalMod::Middling => { "OVERPERFORMING" }
             SubseasonalMod::Coasting => { "UNDERPERFORMING" }
+            // Pretty sure this is supposed to be UNDERPERFORMING but in the event metadata I see
+            // OVERPERFORMING
+            SubseasonalMod::EarlyToTheParty => { "OVERPERFORMING" }
+            SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
             SubseasonalMod::Ambitious => { "OVERPERFORMING" }
         }
     }
@@ -533,9 +541,10 @@ impl SubseasonalMod {
     pub fn mod_id(&self) -> &'static str {
         match self {
             SubseasonalMod::Earlbirds => { "EARLBIRDS" }
-            SubseasonalMod::LateToTheParty => { "LATE_TO_PARTY" }
             SubseasonalMod::Middling => { "MIDDLING" }
             SubseasonalMod::Coasting => { "COASTING" }
+            SubseasonalMod::EarlyToTheParty => { "EARLY_TO_PARTY" }
+            SubseasonalMod::LateToTheParty => { "LATE_TO_PARTY" }
             SubseasonalMod::Ambitious => { "AMBITIOUS" }
         }
     }
@@ -543,9 +552,10 @@ impl SubseasonalMod {
     pub fn label_for_teams(&self) -> &'static str {
         match self {
             SubseasonalMod::Earlbirds => { "Earlbirds" }
-            SubseasonalMod::LateToTheParty => { "Late to the Party" }
             SubseasonalMod::Middling => { "Middling" }
             SubseasonalMod::Coasting => { "Coasting" }
+            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
+            SubseasonalMod::LateToTheParty => { "Late to the Party" }
             SubseasonalMod::Ambitious => { "Ambitious" }
         }
     }
@@ -553,9 +563,10 @@ impl SubseasonalMod {
     pub fn label_for_players(&self) -> &'static str {
         match self {
             SubseasonalMod::Earlbirds => { "an Earlbird" }
-            SubseasonalMod::LateToTheParty => { "Late to the Party" }
             SubseasonalMod::Middling => { "Middling" }
             SubseasonalMod::Coasting => { "Coasting" }
+            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
+            SubseasonalMod::LateToTheParty => { "Late to the Party" }
             // The 2/3 ellipsis is a little hack. The "period" after the label will complete it.
             SubseasonalMod::Ambitious => { "feeling Ambitious.." }
         }
@@ -564,9 +575,10 @@ impl SubseasonalMod {
     pub fn prefix(&self) -> Option<&'static str> {
         match self {
             SubseasonalMod::Earlbirds => { Some("Happy Earlseason!") }
-            SubseasonalMod::LateToTheParty => { Some("Late to the Party!") }
             SubseasonalMod::Middling => { Some("Happy Midseason!") }
             SubseasonalMod::Coasting => { None }
+            SubseasonalMod::EarlyToTheParty => { Some("Early to the Party!") }
+            SubseasonalMod::LateToTheParty => { Some("Late to the Party!") }
             SubseasonalMod::Ambitious => { None }
         }
     }
@@ -574,9 +586,10 @@ impl SubseasonalMod {
     pub fn event_type(&self) -> EventType {
         match self {
             SubseasonalMod::Earlbirds => { EventType::Earlbird }
-            SubseasonalMod::LateToTheParty => { EventType::LateToTheParty }
             SubseasonalMod::Middling => { EventType::Middling }
             SubseasonalMod::Coasting => { EventType::Coasting }
+            SubseasonalMod::EarlyToTheParty => { EventType::EarlyToTheParty }
+            SubseasonalMod::LateToTheParty => { EventType::LateToTheParty }
             SubseasonalMod::Ambitious => { EventType::Ambitious }
         }
     }

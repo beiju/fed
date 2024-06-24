@@ -2483,6 +2483,7 @@ pub fn parse_next_event(
                 changes,
             }
         }
+        EventType::EarlyToTheParty => { todo!() }
         EventType::ShameDonor => {
             let (team_nickname, unruns) = event.next_parse(parse_donated_shame)?;
             assert!(is_known_team_nickname(team_nickname));
