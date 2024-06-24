@@ -470,10 +470,10 @@ pub(crate) fn parse_normal_stolen_base(input: &str) -> ParserResult<(&str, Base,
     // Decide whether to be excited
     let (input, _) = tag(if is_successful { " base!" } else { " base." }).parse(input)?;
 
+    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+
     let (input, blaserunning) = opt(preceded(tag("\n"), preceded(tag(runner_name), tag(" scores with Blaserunning!")))).parse(input)?;
     let (input, free_refill) = opt(parse_free_refill).parse(input)?;
-
-    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
 
     Ok((input, (runner_name, num_runs, is_successful, blaserunning.is_some(), free_refill, hype_stadium_name)))
 }

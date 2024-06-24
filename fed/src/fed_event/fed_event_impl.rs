@@ -463,6 +463,7 @@ impl FedEvent {
                 eb.push_player_tag(runner_id);
                 eb.set_category(EventCategory::special_if(blaserunning || free_refill.is_some() || is_special));
                 eb.push_description(&format!("{runner_name} steals {base_stolen} base!"));
+                eb.push_hype_opt(hype.as_ref(), home_team_id);
 
                 if blaserunning {
                     eb.push_description(&format!("{} scores with Blaserunning!", runner_name));
@@ -472,7 +473,6 @@ impl FedEvent {
 
                 eb.push_free_refill(free_refill);
                 eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
-                eb.push_hype_opt(hype.as_ref(), home_team_id);
                 if let Some(se) = &score_event {
                     eb.push_score_event(se);
                 }
