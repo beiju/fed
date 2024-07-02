@@ -1991,6 +1991,21 @@ pub struct ModRemovedFromRatification {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct EarnedWin {
+    /// Nickname of winning team
+    pub winning_team_nickname: String,
+
+    /// Uuid of winning team
+    pub winning_team_id: Uuid,
+
+    /// Number of Wins the winning team has once the newly earned Win is added
+    pub wins_after: i64,
+
+    /// Metadata for the team-earned-win sub-event
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -5039,17 +5054,25 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Nickname of winning team
-        winning_team_nickname: String,
+        /// The Earned Win event data. After s20 this data always exists somewhere, but it may be
+        /// attached to different events.
+        earned_win: Option<EarnedWin>,
+    },
 
-        /// Uuid of winning team
-        winning_team_id: Uuid,
+    /// "<Team> inflated 10 Balloons!" event that occurs when the home team wins a game and their
+    /// stadium has the Balloons modifier.
+    #[serde(rename_all = "camelCase")]
+    BalloonsCollectedFromWin {
+        #[serde(flatten)]
+        game: GameEvent,
 
-        /// Number of Wins the winning team has once the newly earned Win is added
-        wins_after: i64,
+        /// Name of the stadium that inflated the balloons. This will be the winning team's stadium
+        /// and the home team's stadium (this event only occurs when the home team wins).
+        stadium_name: String,
 
-        /// Metadata for the team-earned-win sub-event
-        win_sub_event: SubEvent,
+        /// The Earned Win event data. This field is always populated on this event. It "steals" the
+        /// value from the following GameOver event.
+        earned_win: EarnedWin,
     },
 
     /// Team practices Moderation
@@ -5406,6 +5429,7 @@ impl FedEventData {
             FedEventData::PolarityShift { game, .. } => { Some(game) }
             FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
             FedEventData::GameOver { game, .. } => { Some(game) }
+            FedEventData::BalloonsCollectedFromWin { game, .. } => { Some(game) }
             FedEventData::Moderation { game, .. } => { Some(game) }
             FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
             FedEventData::EventHorizonActivates { game, .. } => { Some(game) }

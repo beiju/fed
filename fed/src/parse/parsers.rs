@@ -2459,7 +2459,6 @@ pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, boo
 }
 
 
-
 pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, &str)> {
     let (input, thief_name) = parse_terminated(" entered the Tunnels...\n").parse(input)?;
     let (input, _) = tag(thief_name).parse(input)?;
@@ -2467,4 +2466,9 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, &str)> {
     let (input, victim_team_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (thief_name, victim_team_name)))
+}
+
+
+pub(crate) fn parse_balloon_inflated_from_win(input: &str) -> ParserResult<&str> {
+    parse_terminated(" inflated 10 Balloons!").parse(input)
 }

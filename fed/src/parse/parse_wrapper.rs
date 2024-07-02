@@ -997,6 +997,27 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
+    pub fn parse_earned_win(&mut self) -> Result<EarnedWin, FeedParseError> {
+        Self::make_earned_win(self.next_child(EventType::WinCollectedRegular)?)
+    }
+
+    pub fn parse_earned_win_opt(&mut self) -> Result<Option<EarnedWin>, FeedParseError> {
+        self.next_child_opt(EventType::WinCollectedRegular)?
+            .map(Self::make_earned_win)
+            .transpose()
+    }
+
+    fn make_earned_win(mut win_event: EventParseWrapper) -> Result<EarnedWin, FeedParseError> {
+        let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
+        assert!(is_known_team_nickname(winning_team_nickname));
+        Ok(EarnedWin {
+            winning_team_nickname: winning_team_nickname.to_string(),
+            winning_team_id: win_event.next_team_id()?,
+            wins_after: win_event.metadata_i64("after")?,
+            sub_event: win_event.as_sub_event(),
+        })
+    }
+
     pub fn game(&mut self, unscatter: Option<ModChangeSubEventWithNamedPlayer>, attractor_secret_base: Option<PlayerNameId>) -> Result<GameEvent, FeedParseError> {
         let game_id = self.next_game_id()?;
 

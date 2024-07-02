@@ -368,6 +368,7 @@ pub enum EventType {
     Moderation = 208,
     RunsScored = 209,
     LeagueModificationAdded = 210,
+    BalloonsInflatedFromWin = 213,
     WinCollectedRegular = 214,
     WinCollectedPostseason = 215,
     GameOver = 216,
