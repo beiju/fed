@@ -406,7 +406,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_summary } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_summary, balloons_popped } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
@@ -440,6 +440,12 @@ impl FedEvent {
                     if let Some(h) = &hype && h.source == HomeRunHypeSource::Hoops {
                         eb.push_hype(&h.hype, home_team_id);
                     }
+                }
+
+                // Not sure of the ordering here
+                if let Some(stadium_name) = balloons_popped {
+                    eb.push_description(&format!("One of {stadium_name}'s Balloons was struck and popped!"));
+                    eb.push_description("5 Birds were scared away!");
                 }
 
                 eb.push_stopped_inhabiting(stopped_inhabiting);

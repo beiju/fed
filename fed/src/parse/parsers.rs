@@ -2472,3 +2472,10 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, &str)> {
 pub(crate) fn parse_balloon_inflated_from_win(input: &str) -> ParserResult<&str> {
     parse_terminated(" inflated 10 Balloons!").parse(input)
 }
+
+
+pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\nOne of ").parse(input)?;
+    let (input, stadium_name) = parse_terminated("'s Balloons was struck and popped!\n5 Birds were scared away!").parse(input)?;
+    return Ok((input, stadium_name))
+}

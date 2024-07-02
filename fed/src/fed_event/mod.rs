@@ -2490,6 +2490,11 @@ pub enum FedEventData {
         /// if applicable. There are also effects attached to scoring in general, rather than each
         /// individual Run scored, and those also appear here.
         score_summary: Option<ScoreSummary>,
+
+        /// If this home run popped some Balloons, this is the name of the stadium whose balloons
+        /// were popped
+        // This have to change to store more info
+        balloons_popped: Option<String>,
     },
 
     /// Stolen base
