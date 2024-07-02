@@ -530,9 +530,7 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { "OVERPERFORMING" }
             SubseasonalMod::Middling => { "OVERPERFORMING" }
             SubseasonalMod::Coasting => { "UNDERPERFORMING" }
-            // Pretty sure this is supposed to be UNDERPERFORMING but in the event metadata I see
-            // OVERPERFORMING
-            SubseasonalMod::EarlyToTheParty => { "OVERPERFORMING" }
+            SubseasonalMod::EarlyToTheParty => { "UNDERPERFORMING" }
             SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
             SubseasonalMod::Ambitious => { "OVERPERFORMING" }
         }
