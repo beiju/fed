@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
 use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
@@ -85,7 +85,28 @@ fn main() -> anyhow::Result<()> {
             let capture_progress = capture_progress.clone();
             let capture_args = args.clone();
             std::thread::spawn(move || {
-                let result = run_test_on_season(sim, season, count, &capture_progress, capture_args);
+                let result = run_test_on_season(
+                    sim,
+                    season,
+                    count,
+                    &capture_progress,
+                    || {
+                        // This is called a lot so we don't want to wait on a lock if we don't have
+                        // to. And if the option is Some, every thread that acquires it from now on
+                        // will exit soon, so we'll never be starved for long. (If the option is
+                        // None it's fine if we're starved because we'll be returning false either
+                        // way.)
+                        let lock = capture_err.try_lock();
+                        match lock {
+                            Ok(e) => e.is_some(),
+                            Err(TryLockError::WouldBlock) => false,
+                            Err(other) => {
+                                panic!("Lock error: {other}");
+                            }
+                        }
+                    },
+                    capture_args,
+                );
                 if let Err(e) = result {
                     let mut err_lock = capture_err.lock().unwrap();
                     *err_lock = Some(e);
@@ -107,7 +128,7 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, args: Args) -> anyhow::Result<()> {
+fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, stop_signal: impl Fn() -> bool, args: Args) -> anyhow::Result<()> {
     // If these files don't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
@@ -161,6 +182,10 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
             displayed_day_season = Some((parsed_event.season + 1, parsed_event.day + 1));
         }
         event_iter.take_log();
+
+        if stop_signal() {
+            return Ok(());
+        }
 
         let Some(ref sample_path) = args.sample_outputs else {
             continue;
