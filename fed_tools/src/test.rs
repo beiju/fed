@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
-use par_iter_sync::IntoParallelIteratorAsync;
+use std::sync::{Arc, Mutex};
 use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
 use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
@@ -69,33 +69,42 @@ struct Args {
 }
 
 fn main() -> anyhow::Result<()> {
-    run_test(Args::parse())
-        .map_err(|err| {
-            // Wait until the other threads hopefully clear
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            err
-        })
-}
-
-fn run_test(args: Args) -> anyhow::Result<()> {
+    let args = Args::parse();
     println!("Test starting...");
+
+    let err = Arc::new(Mutex::new(None));
 
     let progress = MultiProgress::new();
     progress.set_move_cursor(true);
 
+    let capture_err = err.clone();
     let capture_progress = progress.clone();
-    let iter = SEASONS
-        .into_par_iter_async(move |(sim, season, count)| {
-            Ok(run_test_on_season(sim, season, count, &capture_progress, args.clone()))
+    let threads = SEASONS
+        .map(move |(sim, season, count)| {
+            let capture_err = capture_err.clone();
+            let capture_progress = capture_progress.clone();
+            let capture_args = args.clone();
+            std::thread::spawn(move || {
+                let result = run_test_on_season(sim, season, count, &capture_progress, capture_args);
+                if let Err(e) = result {
+                    let mut err_lock = capture_err.lock().unwrap();
+                    *err_lock = Some(e);
+                }
+            })
         });
 
-    for value in iter {
-        value?;
+    for thread in threads {
+        thread.join()
+            .expect("Worker thread panicked");
     }
 
-    println!("Done");
-
-    Ok(())
+    let mut err_lock = err.lock().unwrap();
+    if let Some(e) = err_lock.take() {
+        Err(e)
+    } else {
+        println!("Done");
+        Ok(())
+    }
 }
 
 fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, args: Args) -> anyhow::Result<()> {
