@@ -2008,6 +2008,15 @@ pub struct EarnedWin {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct BalloonsPopped {
+    /// Name of the stadium in which the balloons were popped
+    pub stadium_name: String,
+
+    /// Number of Birds that were scared away
+    pub birds_scared_away: i32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2498,10 +2507,9 @@ pub enum FedEventData {
         /// individual Run scored, and those also appear here.
         score_summary: Option<ScoreSummary>,
 
-        /// If this home run popped some Balloons, this is the name of the stadium whose balloons
-        /// were popped
-        // This have to change to store more info
-        balloons_popped: Option<String>,
+        /// If this home run popped some Balloons, this contains the name of the stadium whose
+        /// balloons were popped and the number of birds that were scared away.
+        balloons_popped: Option<BalloonsPopped>,
     },
 
     /// Stolen base

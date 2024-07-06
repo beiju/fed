@@ -2534,9 +2534,11 @@ pub(crate) fn parse_balloon_inflated_from_win(input: &str) -> ParserResult<&str>
 }
 
 
-pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag("\nOne of ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive(input)?;
-    let (input, _) = tag("Balloons was struck and popped!\n5 Birds were scared away!").parse(input)?;
-    return Ok((input, stadium_name))
+    let (input, _) = tag("Balloons was struck and popped!\n").parse(input)?;
+    let (input, num_birds_scared) = parse_whole_number(input)?;
+    let (input, _) = tag(" Birds were scared away!").parse(input)?;
+    return Ok((input, (stadium_name, num_birds_scared)))
 }

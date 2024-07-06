@@ -782,7 +782,9 @@ pub fn parse_next_event(
                 hype,
                 alley_oop: alley_oop.map(|(name, success)| (name.to_string(), success)),
                 score_summary,
-                balloons_popped: balloons_popped.map(str::to_string),
+                balloons_popped: balloons_popped.map(|(stadium_name, birds_scared_away)| {
+                    BalloonsPopped { stadium_name: stadium_name.to_string(), birds_scared_away }
+                }),
             }
         }
         EventType::Hit => {

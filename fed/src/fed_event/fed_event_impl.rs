@@ -446,9 +446,9 @@ impl FedEvent {
                 }
 
                 // Not sure of the ordering here
-                if let Some(stadium_name) = balloons_popped {
-                    eb.push_description(&format!("One of {} Balloons was struck and popped!", Possessive(&stadium_name)));
-                    eb.push_description("5 Birds were scared away!");
+                if let Some(pop) = balloons_popped {
+                    eb.push_description(&format!("One of {} Balloons was struck and popped!", Possessive(&pop.stadium_name)));
+                    eb.push_description(&format!("{} Birds were scared away!", pop.birds_scared_away));
                 }
 
                 eb.push_stopped_inhabiting(stopped_inhabiting);
