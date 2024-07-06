@@ -2458,14 +2458,52 @@ pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, boo
     Ok((input, (stadium_name, is_on)))
 }
 
+pub(crate) enum ParsedTunnels<'a> {
+    StoleRun {
+        victim_team_nickname: &'a str,
+    },
+    CaughtStealingItem {
+        victim_name: &'a str,
+        item_name: &'a str,
+    }
+}
 
-pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, &str)> {
+
+pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, ParsedTunnels)> {
     let (input, thief_name) = parse_terminated(" entered the Tunnels...\n").parse(input)?;
-    let (input, _) = tag(thief_name).parse(input)?;
-    let (input, _) = tag(" stole a Run from the ").parse(input)?;
-    let (input, victim_team_name) = parse_terminated("!").parse(input)?;
+    let (input, tunnels) = alt((
+        parse_tunnels_stole_run(thief_name).map(|victim_team_nickname| {
+            ParsedTunnels::StoleRun { victim_team_nickname }
+        }),
+        parse_tunnels_caught_stealing_item(thief_name).map(|(victim_name, item_name)| {
+            ParsedTunnels::CaughtStealingItem { victim_name, item_name }
+        }),
+    )).parse(input)?;
 
-    Ok((input, (thief_name, victim_team_name)))
+    Ok((input, (thief_name, tunnels)))
+}
+
+
+pub(crate) fn parse_tunnels_stole_run(thief_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+    move |input| {
+        let (input, _) = tag(thief_name).parse(input)?;
+        let (input, _) = tag(" stole a Run from the ").parse(input)?;
+        let (input, victim_team_name) = parse_terminated("!").parse(input)?;
+
+        Ok((input, victim_team_name))
+    }
+}
+
+
+pub(crate) fn parse_tunnels_caught_stealing_item(thief_name: &str) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
+    move |input| {
+        let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+        let (input, item_name) = parse_terminated(" caught their eye...\n...but they were caught!\n").parse(input)?;
+        let (input, _) = tag(thief_name).parse(input)?;
+        let (input, _) = tag(" fled Elsewhere to escape.").parse(input)?;
+
+        Ok((input, (victim_name, item_name)))
+    }
 }
 
 

@@ -3694,6 +3694,37 @@ impl FedEvent {
                 }
 
                 eb.build(EventType::TunnelsUsed)
+            },
+            FedEventData::CaughtStealingItemWithTunnels { game, thief_id, thief_name, thief_team_id, victim_id, victim_name, item_name, caught_stealing_item_sub_event, fled_elsewhere_sub_event, flipped_negative } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
+                eb.push_description(&format!("{victim_name}'s {item_name} caught their eye..."));
+                eb.push_description("...but they were caught!");
+                eb.push_description(&format!("{thief_name} fled Elsewhere to escape."));
+                eb.push_player_tag(thief_id);
+
+                let description = eb.description().to_string();
+                eb.push_child(caught_stealing_item_sub_event, move |mut child_eb| {
+                    child_eb.set_description(description);
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_player_tag(thief_id);
+                    child_eb.push_player_tag(victim_id);
+                    child_eb.build(EventType::CaughtStealingItemFromTunnels)
+                });
+
+                eb.push_child(fled_elsewhere_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{thief_name} fled Elsewhere to escape being caught in a Grand Heist."));
+                    child_eb.push_team_tag(thief_team_id);
+                    child_eb.push_player_tag(thief_id);
+                    child_eb.push_metadata_str("mod", "ELSEWHERE");
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                    child_eb.build(EventType::AddedMod)
+                });
+
+                eb.push_flipped_negative_opt(flipped_negative.as_ref(), &thief_name, thief_id, thief_team_id);
+
+                eb.build(EventType::TunnelsUsed)
             }
         };
 

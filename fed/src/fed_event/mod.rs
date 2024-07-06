@@ -5206,6 +5206,42 @@ pub enum FedEventData {
         /// always be the home stadium. Also, this will always be exactly 1 balloon.
         balloons: Option<String>,
     },
+
+    /// A player tried to steal an item from an opponent player using the Stadium's Tunnels, but
+    /// was caught and fled Elsewhere.
+    #[serde(rename_all = "camelCase")]
+    CaughtStealingItemWithTunnels {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who was caught stealing and fled Elsewhere
+        thief_id: Uuid,
+
+        /// Name of the player who was caught stealing and fled Elsewhere
+        thief_name: String,
+
+        /// Uuid of the team whose player who was caught stealing and fled Elsewhere
+        thief_team_id: Uuid,
+
+        /// Uuid of the player whose item the thief wanted to steal
+        victim_id: Uuid,
+
+        /// Name of the player whose item the thief wanted to steal
+        victim_name: String,
+
+        /// Name of the item the thief wanted to steal
+        item_name: String,
+
+        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
+        /// CaughtStealingItemFromTunnels event type
+        caught_stealing_item_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with adding the Elsewhere mod
+        fled_elsewhere_sub_event: SubEvent,
+
+        /// If the player was flipped negative, this is information about that
+        flipped_negative: Option<FlipNegative>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5438,6 +5474,7 @@ impl FedEventData {
             FedEventData::EventHorizonActivates { game, .. } => { Some(game) }
             FedEventData::RenovationRatified { .. } => { None }
             FedEventData::RunStolenThroughTunnels { game, .. } => { Some(game) }
+            FedEventData::CaughtStealingItemWithTunnels { game, .. } => { Some(game) }
         }
     }
 }
