@@ -2505,7 +2505,7 @@ pub(crate) fn parse_tunnels_stole_run(thief_name: &str) -> impl Fn(&str) -> Pars
 
 pub(crate) fn parse_tunnels_caught_stealing_item(thief_name: &str) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
     move |input| {
-        let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+        let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         let (input, item_name) = parse_terminated(" caught their eye...\n...but they were caught!\n").parse(input)?;
         let (input, _) = tag(thief_name).parse(input)?;
         let (input, _) = tag(" fled Elsewhere to escape.").parse(input)?;
@@ -2517,7 +2517,7 @@ pub(crate) fn parse_tunnels_caught_stealing_item(thief_name: &str) -> impl Fn(&s
 
 pub(crate) fn parse_tunnels_stole_item(thief_name: &str) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
     move |input| {
-        let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+        let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         let (input, item_name) = parse_terminated(" caught their eye...\n").parse(input)?;
         let (input, _) = tag(thief_name).parse(input)?;
         let (input, _) = tag(" stole ").parse(input)?;
@@ -2536,7 +2536,7 @@ pub(crate) fn parse_balloon_inflated_from_win(input: &str) -> ParserResult<&str>
 
 pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag("\nOne of ").parse(input)?;
-    let (input, stadium_name) = parse_terminated_by_possessive(input)?;
+    let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, _) = tag("Balloons was struck and popped!\n").parse(input)?;
     let (input, num_birds_scared) = parse_whole_number(input)?;
     let (input, _) = tag(" Birds were scared away!").parse(input)?;

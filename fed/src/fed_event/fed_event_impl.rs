@@ -3709,7 +3709,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thief_name} entered the Tunnels..."));
-                eb.push_description(&format!("{victim_name}'s {item_name} caught their eye..."));
+                eb.push_description(&format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
                 eb.push_description("...but they were caught!");
                 eb.push_description(&format!("{thief_name} fled Elsewhere to escape."));
                 eb.push_player_tag(thief_id);
@@ -3749,8 +3749,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thief_name} entered the Tunnels..."));
-                eb.push_description(&format!("{victim_name}'s {item_name} caught their eye..."));
-                eb.push_description(&format!("{thief_name} stole Clutch Wooden Rock Ring!"));
+                eb.push_description(&format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
+                eb.push_description(&format!("{thief_name} stole {item_name}!"));
                 eb.push_player_tag(thief_id);
 
                 let description = eb.description().to_string();
@@ -3764,7 +3764,7 @@ impl FedEvent {
                 });
 
                 eb.push_child(item_lost_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{victim_name}'s {item_name} was stolen by {thief_name}!"));
+                    child_eb.push_description(&format!("{} {item_name} was stolen by {thief_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(away_team);
 
@@ -3796,7 +3796,7 @@ impl FedEvent {
                 }
 
                 eb.push_child(item_gained_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{thief_name} stole {victim_name}'s {item_name}!"));
+                    child_eb.push_description(&format!("{thief_name} stole {} {item_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(thief_id);
                     child_eb.push_team_tag(home_team);
 
