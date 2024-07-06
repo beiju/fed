@@ -104,7 +104,7 @@ impl PartialEq for SubEvent {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct WinSubEvent {
     /// Uuid of the team that gains the Win
@@ -115,6 +115,10 @@ pub struct WinSubEvent {
 
     #[serde(flatten)]
     pub sub_event: SubEvent,
+
+    /// If the stadium inflated some Balloons from this Win, the name of the stadium that inflated
+    /// the Balloons. Otherwise null.
+    pub balloons: Option<String>,
 }
 
 // TODO Consolidate with ModChangeSubEventWithNamedPlayer

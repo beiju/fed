@@ -1002,11 +1002,15 @@ impl<'e> EventParseWrapper<'e> {
         // This function shall be called when event exists iff it's season 20 or later
         assert_eq!(win_child.is_some(), self.season >= 19);
         win_child
-            .map(|mut child| ParseOk(WinSubEvent {
-                team_id: child.next_team_id()?,
-                wins_after: child.metadata_i64("after")?,
-                sub_event: child.as_sub_event(),
-            }))
+            .map(|mut child| {
+                let balloons = self.next_parse_opt(parse_balloons(10.));
+                ParseOk(WinSubEvent {
+                    team_id: child.next_team_id()?,
+                    wins_after: child.metadata_i64("after")?,
+                    sub_event: child.as_sub_event(),
+                    balloons: balloons.map(str::to_string),
+                })
+            })
             .transpose()
     }
 
