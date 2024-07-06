@@ -925,8 +925,7 @@ pub fn parse_next_event(
         }
         EventType::FoulBall => {
             let pitch = event.parse_pitch()?;
-            // Eventually this will need very foul support, but I'll get to that when it comes up
-            let (balls, strikes) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
+            let (balls, strikes, very_foul) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
             let batter_item_damage = event.parse_item_damage_and_name(true)?;
             let birds = event.parse_birds();
 
@@ -937,6 +936,7 @@ pub fn parse_next_event(
                 strikes,
                 batter_item_damage,
                 birds,
+                very_foul,
             }
         }
         EventType::RunsOverflowing => {

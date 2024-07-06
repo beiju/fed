@@ -119,15 +119,16 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, count))
 }
 
-pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32)> {
+pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32, bool)> {
     move |input| {
+        let (input, very_foul) = opt(tag("Very ")).parse(input)?;
         // Starting in s20 there's an extra space. unfortunately
         let (input, _) = opt(tag(" ")).parse(input)?;
         // Plural is for a double strike
         let (input, _) = tag(if double_strike { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
-        let (input, count) = parse_count(input)?;
+        let (input, (balls, strikes)) = parse_count(input)?;
 
-        Ok((input, count))
+        Ok((input, (balls, strikes, very_foul.is_some())))
     }
 }
 

@@ -2156,6 +2156,9 @@ pub enum FedEventData {
 
         /// If a new bird found a birdhouse, the total number of birds. Otherwise null.
         birds: Option<i32>,
+
+        /// True if this was a Very foul ball (or balls), false otherwise.
+        very_foul: bool,
     },
 
     /// Strike, swinging

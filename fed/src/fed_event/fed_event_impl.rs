@@ -329,18 +329,21 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
-            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds } => {
+            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds, very_foul } => {
                 eb.set_game(game);
+                let very = if very_foul { "Very" } else { "" };
                 let foul_ball_text = if pitch.double_strike.is_some() {
                     eb.set_category(EventCategory::Special);
                     "Foul Balls"
                 } else {
                     "Foul Ball"
                 };
-                let extra_space = if self.season < 19 { "" } else { " " }; // Presumably a bug
+                // Presumably a bug and presumably related to how they did string interpolation for
+                // very foul balls (something like `${very_foul ? "Very" : ""} Foul Ball`)
+                let extra_space = if self.season < 19 { "" } else { " " };
 
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{extra_space}{foul_ball_text}. {balls}-{strikes}"));
+                eb.push_description(&format!("{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
                 eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
