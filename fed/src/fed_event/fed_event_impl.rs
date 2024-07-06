@@ -3695,7 +3695,8 @@ impl FedEvent {
 
                 eb.build(EventType::TunnelsUsed)
             },
-            FedEventData::CaughtStealingItemWithTunnels { game, thief_id, thief_name, thief_team_id, victim_id, victim_name, item_name, caught_stealing_item_sub_event, fled_elsewhere_sub_event, flipped_negative } => {
+            FedEventData::CaughtStealingItemWithTunnels { game, thief_id, thief_name, victim_id, victim_name, item_name, caught_stealing_item_sub_event, fled_elsewhere_sub_event, flipped_negative } => {
+                let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thief_name} entered the Tunnels..."));
@@ -3713,20 +3714,29 @@ impl FedEvent {
                     child_eb.build(EventType::CaughtStealingItemFromTunnels)
                 });
 
-                eb.push_child(fled_elsewhere_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{thief_name} fled Elsewhere to escape being caught in a Grand Heist."));
-                    child_eb.push_team_tag(thief_team_id);
-                    child_eb.push_player_tag(thief_id);
-                    child_eb.push_metadata_str("mod", "ELSEWHERE");
-                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                    child_eb.build(EventType::AddedMod)
-                });
+                if let Some(sub_event) = fled_elsewhere_sub_event {
+                    // TODO Figure out what causes this to sometimes not exist and document it.
+                    //   Maybe players can steal from elsewhere and when that happens there's no
+                    //   event for sending them elsewhere because they're already there?
+                    //   Discord diving suggests this is the case. Not sure if that's enough for me
+                    //   to put it in the documentation though.
+                    eb.push_child(sub_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{thief_name} fled Elsewhere to escape being caught in a Grand Heist."));
+                        child_eb.push_team_tag(home_team);
+                        child_eb.push_player_tag(thief_id);
+                        child_eb.push_metadata_str("mod", "ELSEWHERE");
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        child_eb.build(EventType::AddedMod)
+                    });
+                }
 
-                eb.push_flipped_negative_opt(flipped_negative.as_ref(), &thief_name, thief_id, thief_team_id);
+                eb.push_flipped_negative_opt(flipped_negative.as_ref(), &thief_name, thief_id, home_team);
 
                 eb.build(EventType::TunnelsUsed)
             },
-            FedEventData::StoleItemWithTunnels { game, thief_id, thief_name, thief_team_id, victim_id, victim_name, victim_team_id, item_id, item_name, item_mods, thief_item_rating_before, thief_item_rating_after, thief_rating, victim_item_rating_before, victim_item_rating_after, victim_rating, stole_item_sub_event, item_lost_sub_event, thief_item_dropped, item_gained_sub_event } => {
+            FedEventData::StoleItemWithTunnels { game, thief_id, thief_name, victim_id, victim_name, item_id, item_name, item_mods, thief_item_rating_before, thief_item_rating_after, thief_rating, victim_item_rating_before, victim_item_rating_after, victim_rating, stole_item_sub_event, item_lost_sub_event, thief_item_dropped, item_gained_sub_event } => {
+                let home_team = game.home_team;
+                let away_team = game.away_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thief_name} entered the Tunnels..."));
@@ -3747,7 +3757,7 @@ impl FedEvent {
                 eb.push_child(item_lost_sub_event, |mut child_eb| {
                     child_eb.push_description(&format!("{victim_name}'s {item_name} was stolen by {thief_name}!"));
                     child_eb.push_player_tag(victim_id);
-                    child_eb.push_team_tag(victim_team_id);
+                    child_eb.push_team_tag(away_team);
 
                     child_eb.push_metadata_uuid("itemId", item_id);
                     child_eb.push_metadata_str("itemName", item_name.clone());
@@ -3763,7 +3773,7 @@ impl FedEvent {
                     eb.push_child(item_dropped.sub_event, |mut child_eb| {
                         child_eb.push_description(&format!("{thief_name} dropped {}.", item_dropped.item_name));
                         child_eb.push_player_tag(thief_id);
-                        child_eb.push_team_tag(thief_team_id);
+                        child_eb.push_team_tag(home_team);
 
                         child_eb.push_metadata_uuid("itemId", item_dropped.item_id);
                         child_eb.push_metadata_str("itemName", item_dropped.item_name.clone());
@@ -3779,7 +3789,7 @@ impl FedEvent {
                 eb.push_child(item_gained_sub_event, |mut child_eb| {
                     child_eb.push_description(&format!("{thief_name} stole {victim_name}'s {item_name}!"));
                     child_eb.push_player_tag(thief_id);
-                    child_eb.push_team_tag(thief_team_id);
+                    child_eb.push_team_tag(home_team);
 
                     child_eb.push_metadata_uuid("itemId", item_id);
                     child_eb.push_metadata_str("itemName", item_name);

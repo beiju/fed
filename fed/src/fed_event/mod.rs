@@ -5214,19 +5214,20 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the player who was caught stealing and fled Elsewhere
+        /// Uuid of the player who was caught stealing and fled Elsewhere. This player is always on
+        /// the home team.
         thief_id: Uuid,
 
-        /// Name of the player who was caught stealing and fled Elsewhere
+        /// Name of the player who was caught stealing and fled Elsewhere. This player is always on
+        /// the home team.
         thief_name: String,
 
-        /// Uuid of the team whose player was caught stealing and fled Elsewhere
-        thief_team_id: Uuid,
-
-        /// Uuid of the player whose item the thief wanted to steal
+        /// Uuid of the player whose item the thief wanted to steal. This player is always on the
+        /// away team.
         victim_id: Uuid,
 
-        /// Name of the player whose item the thief wanted to steal
+        /// Name of the player whose item the thief wanted to steal. This player is always on the
+        /// away team.
         victim_name: String,
 
         /// Name of the item the thief wanted to steal
@@ -5236,10 +5237,13 @@ pub enum FedEventData {
         /// CaughtStealingItemFromTunnels event type
         caught_stealing_item_sub_event: SubEvent,
 
-        /// Metadata for the sub-event associated with adding the Elsewhere mod
-        fled_elsewhere_sub_event: SubEvent,
+        /// Metadata for the sub-event associated with adding the Elsewhere mod, if applicable.
+        /// Sometimes this didn't exist and I don't know why.
+        fled_elsewhere_sub_event: Option<SubEvent>,
 
         /// If the player was flipped negative, this is information about that
+        // TODO: This should be inside fled_elsewhere_sub_event, because you can't have this without
+        //   that
         flipped_negative: Option<FlipNegative>,
     },
 
@@ -5249,23 +5253,17 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the player who stole the item
+        /// Uuid of the player who stole the item. This player is always on the home team.
         thief_id: Uuid,
 
-        /// Name of the player who stole the item
+        /// Name of the player who stole the item. This player is always on the home team.
         thief_name: String,
 
-        /// Uuid of the team whose player stole the item
-        thief_team_id: Uuid,
-
-        /// Uuid of the player whose item was stolen
+        /// Uuid of the player whose item was stolen. This player is always on the away team.
         victim_id: Uuid,
 
-        /// Name of the player whose item was stolen
+        /// Name of the player whose item was stolen. This player is always on the away team.
         victim_name: String,
-
-        /// Uuid of the team whose player's item was stolen
-        victim_team_id: Uuid,
         
         /// Uuid of the item that was stolen
         item_id: Uuid,

@@ -2048,7 +2048,7 @@ pub fn parse_next_event(
                 }
                 ParsedTunnels::CaughtStealingItem { victim_name, item_name } => {
                     let mut caught_stealing_item_event = event.next_child(EventType::CaughtStealingItemFromTunnels)?;
-                    let mut fled_elsewhere_event = event.next_child(EventType::AddedMod)?;
+                    let mut fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
 
                     let thief_id = caught_stealing_item_event.next_player_id()?;
                     let victim_id = caught_stealing_item_event.next_player_id()?;
@@ -2056,12 +2056,11 @@ pub fn parse_next_event(
                         game: event.game(unscatter, attractor_secret_base)?,
                         thief_id,
                         thief_name: thief_name.to_string(),
-                        thief_team_id: fled_elsewhere_event.next_team_id()?,
                         victim_id,
                         victim_name: victim_name.to_string(),
                         item_name: item_name.to_string(),
                         caught_stealing_item_sub_event: caught_stealing_item_event.as_sub_event(),
-                        fled_elsewhere_sub_event: fled_elsewhere_event.as_sub_event(),
+                        fled_elsewhere_sub_event: fled_elsewhere_event.map(|e| e.as_sub_event()),
                         flipped_negative: None, // TODO
                     }
                 }
@@ -2084,10 +2083,8 @@ pub fn parse_next_event(
                         game: event.game(unscatter, attractor_secret_base)?,
                         thief_id,
                         thief_name: thief_name.to_string(),
-                        thief_team_id: item_gained_event.next_team_id()?,
                         victim_id,
                         victim_name: victim_name.to_string(),
-                        victim_team_id: item_lost_event.next_team_id()?,
                         item_id: item_lost_event.metadata_uuid("itemId")?,
                         item_name: item_name.to_string(),
                         item_mods: item_lost_event.metadata_str_vec("mods")?
