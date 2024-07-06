@@ -2465,7 +2465,11 @@ pub(crate) enum ParsedTunnels<'a> {
     CaughtStealingItem {
         victim_name: &'a str,
         item_name: &'a str,
-    }
+    },
+    StoleItem {
+        victim_name: &'a str,
+        item_name: &'a str,
+    },
 }
 
 
@@ -2477,6 +2481,9 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, ParsedTunnels)> 
         }),
         parse_tunnels_caught_stealing_item(thief_name).map(|(victim_name, item_name)| {
             ParsedTunnels::CaughtStealingItem { victim_name, item_name }
+        }),
+        parse_tunnels_stole_item(thief_name).map(|(victim_name, item_name)| {
+            ParsedTunnels::StoleItem { victim_name, item_name }
         }),
     )).parse(input)?;
 
@@ -2501,6 +2508,20 @@ pub(crate) fn parse_tunnels_caught_stealing_item(thief_name: &str) -> impl Fn(&s
         let (input, item_name) = parse_terminated(" caught their eye...\n...but they were caught!\n").parse(input)?;
         let (input, _) = tag(thief_name).parse(input)?;
         let (input, _) = tag(" fled Elsewhere to escape.").parse(input)?;
+
+        Ok((input, (victim_name, item_name)))
+    }
+}
+
+
+pub(crate) fn parse_tunnels_stole_item(thief_name: &str) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
+    move |input| {
+        let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+        let (input, item_name) = parse_terminated(" caught their eye...\n").parse(input)?;
+        let (input, _) = tag(thief_name).parse(input)?;
+        let (input, _) = tag(" stole ").parse(input)?;
+        let (input, _) = tag(item_name).parse(input)?;
+        let (input, _) = tag("!").parse(input)?;
 
         Ok((input, (victim_name, item_name)))
     }

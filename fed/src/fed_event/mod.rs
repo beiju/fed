@@ -5220,7 +5220,7 @@ pub enum FedEventData {
         /// Name of the player who was caught stealing and fled Elsewhere
         thief_name: String,
 
-        /// Uuid of the team whose player who was caught stealing and fled Elsewhere
+        /// Uuid of the team whose player was caught stealing and fled Elsewhere
         thief_team_id: Uuid,
 
         /// Uuid of the player whose item the thief wanted to steal
@@ -5241,6 +5241,73 @@ pub enum FedEventData {
 
         /// If the player was flipped negative, this is information about that
         flipped_negative: Option<FlipNegative>,
+    },
+
+    /// A player stole an item from an opponent player using the Stadium's Tunnels
+    #[serde(rename_all = "camelCase")]
+    StoleItemWithTunnels {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who stole the item
+        thief_id: Uuid,
+
+        /// Name of the player who stole the item
+        thief_name: String,
+
+        /// Uuid of the team whose player stole the item
+        thief_team_id: Uuid,
+
+        /// Uuid of the player whose item was stolen
+        victim_id: Uuid,
+
+        /// Name of the player whose item was stolen
+        victim_name: String,
+
+        /// Uuid of the team whose player's item was stolen
+        victim_team_id: Uuid,
+        
+        /// Uuid of the item that was stolen
+        item_id: Uuid,
+        
+        /// Name of the item that was stolen
+        item_name: String,
+        
+        /// List of mods that this item grants. Each element is the internal id of a mod.
+        item_mods: Vec<String>,
+
+        /// The increase/decrease that all the thief's items caused to their star rating before 
+        /// gaining this item
+        thief_item_rating_before: f64,
+
+        /// The increase/decrease that all the thief's items now cause to their star rating
+        thief_item_rating_after: f64,
+
+        /// The thief's star rating. TODO: Is this with or without items?
+        thief_rating: f64,
+
+        /// The increase/decrease that all the victim's items caused to their star rating before 
+        /// gaining this item
+        victim_item_rating_before: f64,
+
+        /// The increase/decrease that all the victim's items now cause to their star rating
+        victim_item_rating_after: f64,
+
+        /// The victim's star rating. TODO: Is this with or without items?
+        victim_rating: f64,
+
+        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
+        /// StoleItemFromTunnels event type
+        stole_item_sub_event: SubEvent,
+
+        /// Metadata for the victim losing the item
+        item_lost_sub_event: SubEvent,
+
+        /// Metadata for the thief dropping the item they previously had, if applicable
+        thief_item_dropped: Option<ItemDroppedForNewItem>,
+
+        /// Metadata for the thief gaining the item
+        item_gained_sub_event: SubEvent,
     },
 }
 
@@ -5475,6 +5542,7 @@ impl FedEventData {
             FedEventData::RenovationRatified { .. } => { None }
             FedEventData::RunStolenThroughTunnels { game, .. } => { Some(game) }
             FedEventData::CaughtStealingItemWithTunnels { game, .. } => { Some(game) }
+            FedEventData::StoleItemWithTunnels { game, .. } => { Some(game) }
         }
     }
 }

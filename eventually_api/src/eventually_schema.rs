@@ -374,6 +374,7 @@ pub enum EventType {
     GameOver = 216,
     SunSunPressure = 217,
     CaughtStealingItemFromTunnels = 219,
+    StoleItemFromTunnels = 220,
     WeatherEvent = 223,
     StormWarning = 263,
     Snowflakes = 264,

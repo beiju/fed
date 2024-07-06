@@ -3725,6 +3725,73 @@ impl FedEvent {
                 eb.push_flipped_negative_opt(flipped_negative.as_ref(), &thief_name, thief_id, thief_team_id);
 
                 eb.build(EventType::TunnelsUsed)
+            },
+            FedEventData::StoleItemWithTunnels { game, thief_id, thief_name, thief_team_id, victim_id, victim_name, victim_team_id, item_id, item_name, item_mods, thief_item_rating_before, thief_item_rating_after, thief_rating, victim_item_rating_before, victim_item_rating_after, victim_rating, stole_item_sub_event, item_lost_sub_event, thief_item_dropped, item_gained_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
+                eb.push_description(&format!("{victim_name}'s {item_name} caught their eye..."));
+                eb.push_description(&format!("{thief_name} stole Clutch Wooden Rock Ring!"));
+                eb.push_player_tag(thief_id);
+
+                let description = eb.description().to_string();
+                eb.push_child(stole_item_sub_event, |mut child_eb| {
+                    child_eb.set_description(description);
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_player_tag(thief_id);
+                    child_eb.push_player_tag(victim_id);
+
+                    child_eb.build(EventType::StoleItemFromTunnels)
+                });
+
+                eb.push_child(item_lost_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{victim_name}'s {item_name} was stolen by {thief_name}!"));
+                    child_eb.push_player_tag(victim_id);
+                    child_eb.push_team_tag(victim_team_id);
+
+                    child_eb.push_metadata_uuid("itemId", item_id);
+                    child_eb.push_metadata_str("itemName", item_name.clone());
+                    child_eb.push_metadata_str_vec("mods", item_mods.clone());
+                    child_eb.push_metadata_f64("playerItemRatingAfter", victim_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", victim_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", victim_rating);
+                    
+                    child_eb.build(EventType::PlayerLostItem)
+                });
+
+                if let Some(item_dropped) = thief_item_dropped {
+                    eb.push_child(item_dropped.sub_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{thief_name} dropped {}.", item_dropped.item_name));
+                        child_eb.push_player_tag(thief_id);
+                        child_eb.push_team_tag(thief_team_id);
+
+                        child_eb.push_metadata_uuid("itemId", item_dropped.item_id);
+                        child_eb.push_metadata_str("itemName", item_dropped.item_name.clone());
+                        child_eb.push_metadata_str_vec("mods", item_dropped.item_mods.clone());
+                        child_eb.push_metadata_f64("playerItemRatingAfter", item_dropped.player_item_rating_after);
+                        child_eb.push_metadata_f64("playerItemRatingBefore", item_dropped.player_item_rating_before);
+                        child_eb.push_metadata_f64("playerRating", thief_rating);
+
+                        child_eb.build(EventType::PlayerLostItem)
+                    });
+                }
+
+                eb.push_child(item_gained_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{thief_name} stole {victim_name}'s {item_name}!"));
+                    child_eb.push_player_tag(thief_id);
+                    child_eb.push_team_tag(thief_team_id);
+
+                    child_eb.push_metadata_uuid("itemId", item_id);
+                    child_eb.push_metadata_str("itemName", item_name);
+                    child_eb.push_metadata_str_vec("mods", item_mods);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", thief_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", thief_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", thief_rating);
+                    
+                    child_eb.build(EventType::PlayerGainedItem)
+                });
+
+                eb.build(EventType::TunnelsUsed)
             }
         };
 

@@ -2065,6 +2065,45 @@ pub fn parse_next_event(
                         flipped_negative: None, // TODO
                     }
                 }
+                ParsedTunnels::StoleItem { victim_name, item_name } => {
+                    let mut stole_item_event = event.next_child(EventType::StoleItemFromTunnels)?;
+                    let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
+                    let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
+                    let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
+
+                    let thief_id = stole_item_event.next_player_id()?;
+                    let victim_id = stole_item_event.next_player_id()?;
+
+                    let thief_item_dropped = item_dropped_event
+                        // TODO If this `false` is still hardcoded when tunnels is finished, find
+                        //   some way to remove it
+                        .map(|e| e.as_item_dropped(false))
+                        .transpose()?;
+
+                    FedEventData::StoleItemWithTunnels {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        thief_id,
+                        thief_name: thief_name.to_string(),
+                        thief_team_id: item_gained_event.next_team_id()?,
+                        victim_id,
+                        victim_name: victim_name.to_string(),
+                        victim_team_id: item_lost_event.next_team_id()?,
+                        item_id: item_lost_event.metadata_uuid("itemId")?,
+                        item_name: item_name.to_string(),
+                        item_mods: item_lost_event.metadata_str_vec("mods")?
+                            .into_iter().map(str::to_string).collect(),
+                        thief_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
+                        thief_item_rating_after: item_gained_event.metadata_f64("playerItemRatingAfter")?,
+                        thief_rating: item_gained_event.metadata_f64("playerRating")?,
+                        victim_item_rating_before: item_lost_event.metadata_f64("playerItemRatingBefore")?,
+                        victim_item_rating_after: item_lost_event.metadata_f64("playerItemRatingAfter")?,
+                        victim_rating: item_lost_event.metadata_f64("playerRating")?,
+                        stole_item_sub_event: stole_item_event.as_sub_event(),
+                        item_lost_sub_event: item_lost_event.as_sub_event(),
+                        thief_item_dropped,
+                        item_gained_sub_event: item_gained_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::PeanutMister => {
@@ -3280,15 +3319,7 @@ pub fn parse_next_event(
             let dropped_item = lost_item_name
                 .map(|(_name, item_was_broken)| {
                     let drop_event = event.next_child(EventType::PlayerLostItem)?;
-                    Ok::<_, FeedParseError>(ItemDroppedForNewItem {
-                        item_id: drop_event.metadata_uuid("itemId")?,
-                        item_name: drop_event.metadata_str("itemName")?.to_string(),
-                        item_mods: drop_event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
-                        player_item_rating_before: drop_event.metadata_f64("playerItemRatingBefore")?,
-                        player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
-                        item_was_broken,
-                        sub_event: drop_event.as_sub_event(),
-                    })
+                    drop_event.as_item_dropped(item_was_broken)
                 })
                 .transpose()?;
 
@@ -3637,6 +3668,7 @@ pub fn parse_next_event(
         }
         EventType::SunSunPressure => { todo!() }
         EventType::CaughtStealingItemFromTunnels => { todo!() }
+        EventType::StoleItemFromTunnels => { todo!() }
         EventType::WeatherEvent => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
