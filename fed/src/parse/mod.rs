@@ -803,7 +803,14 @@ pub fn parse_next_event(
                 .transpose()?;
 
             let batter_id = event.next_player_id()?;
-            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
+
+            // Double-nested option: outer layer means whether we've looked for stopped inhabiting
+            // yet, inner layer means whether we found one if we did look
+            let stopped_inhabiting = if event.season < 19 {
+                Some(event.parse_stopped_inhabiting(Some(batter_id))?)
+            } else {
+                None
+            };
 
             let hit_type = match hit_type {
                 ParsedHitType::Single => { HitType::Single }
@@ -818,6 +825,14 @@ pub fn parse_next_event(
             let mut scores = event.parse_scores(" scores!")?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
+
+            // This should fire iff season >= 20
+            let stopped_inhabiting = if let Some(si) = stopped_inhabiting {
+                si
+            } else {
+                event.parse_stopped_inhabiting(Some(batter_id))?
+            };
+
             // parse_scores gets the score event, but sometimes the spicy event is in the way. Can't
             // fix this by reordering the calls because it's in the opposite order in the event text
             if scores.score_summary.is_none() {
@@ -890,7 +905,7 @@ pub fn parse_next_event(
                     let inhabited_player_id = event.next_player_id()?;
 
                     ParseOk(Inhabiting {
-                        sub_event: child.map(|c| c.as_sub_event()),
+                        sub_event: child.as_ref().map(|c| c.as_sub_event()),
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
                         inhabited_player_id,
@@ -3043,7 +3058,7 @@ pub fn parse_next_event(
                 postseason_birth_id: event.next_player_id()?,
                 // The only time this event was missing was after shadows were unified, so location
                 // will necessarily be Bench.
-                postseason_birth_location: earned_birth_event
+                postseason_birth_location: earned_birth_event.as_ref()
                     .map(|e| e.metadata_enum("location"))
                     .transpose()?
                     .unwrap_or(ShadowPositionType::Bench),

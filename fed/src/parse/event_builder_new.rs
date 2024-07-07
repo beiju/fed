@@ -328,7 +328,7 @@ impl EventBuilder {
         })
     }
 
-    pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<StoppedInhabiting>) {
+    pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<&StoppedInhabiting>) {
         let Some(si) = stopped_inhabiting else { return; };
         self.push_child(si.sub_event, |mut child| {
             child.push_description(&format!("{} stopped Inhabiting.", si.inhabiting_player_name));

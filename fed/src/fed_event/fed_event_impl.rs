@@ -359,7 +359,7 @@ impl FedEvent {
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_scores(&scores, home_team_id, "tags up and scores!");
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_parasite(parasite);
                 eb.build(EventType::FlyOut)
@@ -400,11 +400,12 @@ impl FedEvent {
                     }
                     _ => {}
                 }
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                if self.season < 19 { eb.push_stopped_inhabiting(stopped_inhabiting.as_ref()); }
                 // `scorers` is before spicy, but `score_event` is after
                 eb.push_scores_without_event(&scores, home_team_id, "scores!");
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
+                if self.season >= 19 { eb.push_stopped_inhabiting(stopped_inhabiting.as_ref()); }
                 eb.push_score_summary(&scores);
 
                 eb.build(EventType::Hit)
@@ -451,7 +452,7 @@ impl FedEvent {
                     eb.push_description(&format!("{} Birds were scared away!", pop.birds_scared_away));
                 }
 
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refills(&free_refills);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_attraction_with_player(attraction);
@@ -471,7 +472,7 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_opt_item_damage(fielder_item_damage_from_advance.as_ref(), &fielder_name);
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_score_summary(&scores);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
@@ -502,7 +503,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out swinging.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
@@ -514,7 +515,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{} strikes out looking.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
@@ -532,7 +533,7 @@ impl FedEvent {
                 eb.push_player_tag(batter_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_scores(&scores, home_team_id, "scores!");
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.build(EventType::Walk)
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen, fielder_item_damage } => {
@@ -563,7 +564,7 @@ impl FedEvent {
                 eb.push_player_tag(charmer_id);
                 eb.push_player_tag(charmer_id);
                 eb.push_player_tag(charmed_id);
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.build(EventType::Strikeout)
             }
             FedEventData::FieldersChoice { game, pitch, batter_name, runner_out_name, out_at_base, scores, stopped_inhabiting, cooled_off, is_special, damaged_items } => {
@@ -572,7 +573,7 @@ impl FedEvent {
                 if is_special { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_scorers(&scores.scores, home_team_id, "scores!");
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
@@ -607,7 +608,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{batter_name} hit into a double play!"));
                 eb.push_scores(&scores, home_team_id, "scores!");
-                eb.push_stopped_inhabiting(stopped_inhabiting);
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }
