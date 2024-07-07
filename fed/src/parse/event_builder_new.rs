@@ -418,7 +418,8 @@ impl EventBuilder {
         });
 
         if let Some(stadium_name) = &score.balloons {
-            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored));
+            let runs_scored = score.ledger.as_ref().map_or(score.runs_scored, |l| l.base_runs);
+            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), runs_scored));
         }
     }
 

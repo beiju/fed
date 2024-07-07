@@ -695,7 +695,8 @@ impl<'e> EventParseWrapper<'e> {
                 .collect(),
         });
 
-        let balloons = self.parse_balloons(runs_scored)?;
+        // Not sure if this is base runs, or rounded final runs, or what
+        let balloons = self.parse_balloons(ledger.as_ref().map_or(runs_scored, |l| l.base_runs))?;
 
         Ok(Some(ScoreSummary {
             away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
