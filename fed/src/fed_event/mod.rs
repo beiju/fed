@@ -1907,13 +1907,13 @@ impl Display for LedgerLine {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Ledger {
-    pub base_runs: i64,
+    pub base_runs: f64,
     pub lines: Vec<LedgerLine>,
 }
 
 impl Display for Ledger {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.base_runs == 1 {
+        if self.base_runs == 1. {
             write!(f, "(1 Run),")?;
         } else {
             write!(f, "({} Runs),", self.base_runs)?;

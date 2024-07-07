@@ -2416,17 +2416,17 @@ pub(crate) enum ParsedLedgerLine<'a> {
     AcidicPitch,
 }
 
-pub(crate) fn parse_score_ledger(input: &str) -> ParserResult<Option<(i64, Vec<ParsedLedgerLine>)>> {
+pub(crate) fn parse_score_ledger(input: &str) -> ParserResult<Option<(f64, Vec<ParsedLedgerLine>)>> {
     alt((
         eof.map(|_| None),
         parse_nonempty_score_ledger.map(|val| Some(val)),
     )).parse(input)
 }
 
-pub(crate) fn parse_nonempty_score_ledger(input: &str) -> ParserResult<(i64, Vec<ParsedLedgerLine>)> {
+pub(crate) fn parse_nonempty_score_ledger(input: &str) -> ParserResult<(f64, Vec<ParsedLedgerLine>)> {
     let (input, _) = tag("(").parse(input)?;
-    let (input, base_runs) = parse_whole_number.parse(input)?;
-    let (input, _) = tag(if base_runs == 1 {
+    let (input, base_runs) = double.parse(input)?;
+    let (input, _) = tag(if base_runs == 1. {
         " Run), "
     } else {
         " Runs), "
@@ -2434,7 +2434,7 @@ pub(crate) fn parse_nonempty_score_ledger(input: &str) -> ParserResult<(i64, Vec
 
     let (input, ledger_lines) = separated_list1(tag(" "), parse_ledger_line).parse(input)?;
 
-    Ok((input, (base_runs as i64, ledger_lines)))
+    Ok((input, (base_runs, ledger_lines)))
 }
 
 pub(crate) fn parse_ledger_line(input: &str) -> ParserResult<ParsedLedgerLine> {
