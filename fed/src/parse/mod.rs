@@ -2123,6 +2123,16 @@ pub fn parse_next_event(
                         item_gained_sub_event: item_gained_event.as_sub_event(),
                     }
                 }
+                ParsedTunnels::NothingInteresting => {
+                    let mut nothing_interesting_event = event.next_child(EventType::FoundNothingInterestingInTunnels)?;
+
+                    FedEventData::NothingInterestingInTunnels {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        thief_id: nothing_interesting_event.next_player_id()?,
+                        thief_name: thief_name.to_string(),
+                        sub_event: nothing_interesting_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::PeanutMister => {
@@ -3687,6 +3697,7 @@ pub fn parse_next_event(
             }
         }
         EventType::SunSunPressure => { todo!() }
+        EventType::FoundNothingInterestingInTunnels => { todo!() }
         EventType::CaughtStealingItemFromTunnels => { todo!() }
         EventType::StoleItemFromTunnels => { todo!() }
         EventType::WeatherEvent => { todo!() }

@@ -5332,6 +5332,23 @@ pub enum FedEventData {
         /// Metadata for the thief gaining the item
         item_gained_sub_event: SubEvent,
     },
+
+    /// A player entered the Tunnels but didn't find anything interesting
+    #[serde(rename_all = "camelCase")]
+    NothingInterestingInTunnels {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the player who stole the item. This player is always on the home team.
+        thief_id: Uuid,
+
+        /// Name of the player who stole the item. This player is always on the home team.
+        thief_name: String,
+
+        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
+        /// FoundNothingInterestingInTunnels event type
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5566,6 +5583,7 @@ impl FedEventData {
             FedEventData::RunStolenThroughTunnels { game, .. } => { Some(game) }
             FedEventData::CaughtStealingItemWithTunnels { game, .. } => { Some(game) }
             FedEventData::StoleItemWithTunnels { game, .. } => { Some(game) }
+            FedEventData::NothingInterestingInTunnels { game, .. } => { Some(game) }
         }
     }
 }

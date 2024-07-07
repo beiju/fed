@@ -3810,6 +3810,24 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::TunnelsUsed)
+            },
+            FedEventData::NothingInterestingInTunnels { game, thief_id, thief_name, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
+                eb.push_description("...but didn't find anything interesting.");
+                eb.push_player_tag(thief_id);
+
+                let description = eb.description().to_string();
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_description(description);
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_player_tag(thief_id);
+
+                    child_eb.build(EventType::FoundNothingInterestingInTunnels)
+                });
+
+                eb.build(EventType::TunnelsUsed)
             }
         };
 

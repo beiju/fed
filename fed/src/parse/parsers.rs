@@ -2476,6 +2476,7 @@ pub(crate) enum ParsedTunnels<'a> {
         victim_name: &'a str,
         item_name: &'a str,
     },
+    NothingInteresting,
 }
 
 
@@ -2490,6 +2491,9 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, ParsedTunnels)> 
         }),
         parse_tunnels_stole_item(thief_name).map(|(victim_name, item_name)| {
             ParsedTunnels::StoleItem { victim_name, item_name }
+        }),
+        tag("...but didn't find anything interesting.").map(|_| {
+            ParsedTunnels::NothingInteresting
         }),
     )).parse(input)?;
 

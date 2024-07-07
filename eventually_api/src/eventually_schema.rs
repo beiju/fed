@@ -373,6 +373,7 @@ pub enum EventType {
     WinCollectedPostseason = 215,
     GameOver = 216,
     SunSunPressure = 217,
+    FoundNothingInterestingInTunnels = 218,
     CaughtStealingItemFromTunnels = 219,
     StoleItemFromTunnels = 220,
     WeatherEvent = 223,
