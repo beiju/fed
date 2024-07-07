@@ -1051,7 +1051,11 @@ pub struct TeamRunsLost {
 
 impl Display for TeamRunsLost {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} of the {}'s Runs are lost!", self.runs_lost, self.team_name)
+        write!(f, "{} of the {}'s {} are lost!", self.runs_lost, self.team_name, if self.runs_lost < 0. {
+            "Unruns"
+        } else {
+            "Runs"
+        })
     }
 }
 

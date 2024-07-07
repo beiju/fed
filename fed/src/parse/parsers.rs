@@ -1835,7 +1835,11 @@ pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLo
     let (input, _) = tag("\n").parse(input)?;
     let (input, runs) = float.parse(input)?;
     let (input, _) = tag(" of the ").parse(input)?;
-    let (input, name) = parse_terminated("'s Runs are lost!").parse(input)?;
+    let (input, name) = parse_terminated(if runs < 0. {
+        "'s Unruns are lost!"
+    } else {
+        "'s Runs are lost!"
+    }).parse(input)?;
 
     Ok((input, ParsedTeamRunsLost { runs, name }))
 }
