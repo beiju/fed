@@ -3663,12 +3663,13 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::Ratification));
                 return events;
             }
-            FedEventData::RunStolenThroughTunnels { game, thieving_player_id, thieving_player_name, thieving_team_id, thieving_team_nickname, victim_team_id, victim_team_nickname, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first, balloons } => {
+            FedEventData::RunStolenThroughTunnels { game, thieving_player_id, thieving_player_name, thieving_team_id, thieving_team_nickname, victim_team_id, victim_team_nickname, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first, balloons, hype } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thieving_player_name} entered the Tunnels..."));
                 eb.push_description(&format!("{thieving_player_name} stole a Run from the {victim_team_nickname}!"));
+                eb.push_hype_opt(hype.as_ref(), home_team_id);
                 eb.push_balloons(balloons.as_deref(), 1.0);
                 eb.push_player_tag(thieving_player_id);
 

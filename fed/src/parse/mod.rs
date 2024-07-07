@@ -2029,6 +2029,8 @@ pub fn parse_next_event(
                 ParsedTunnels::StoleRun { victim_team_nickname } => {
                     assert!(is_known_team_nickname(victim_team_nickname));
 
+                    let hype = event.parse_hype()?;
+
                     let mut runs_scored_a = event.next_child(EventType::RunsScored)?;
                     let mut runs_scored_b = event.next_child(EventType::RunsScored)?;
 
@@ -2061,6 +2063,7 @@ pub fn parse_next_event(
                         run_lost_sub_event: run_lost_event.as_sub_event(),
                         victim_event_first,
                         balloons: event.parse_balloons(1.0)?,
+                        hype,
                     }
                 }
                 ParsedTunnels::CaughtStealingItem { victim_name, item_name } => {

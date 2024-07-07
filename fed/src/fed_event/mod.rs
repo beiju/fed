@@ -5220,6 +5220,9 @@ pub enum FedEventData {
         /// If balloons were inflated on this run theft, contains the name of the stadium. This will
         /// always be the home stadium. Also, this will always be exactly 1 balloon.
         balloons: Option<String>,
+
+        /// If this run activated Hype, information about the hype. Ohterwise null.
+        hype: Option<Hype>,
     },
 
     /// A player tried to steal an item from an opponent player using the Stadium's Tunnels, but
