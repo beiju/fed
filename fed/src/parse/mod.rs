@@ -617,10 +617,11 @@ pub fn parse_next_event(
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage_from_out = event.parse_item_damage(fielder_name)?;
+                    let pitcher_item_damage_from_out = event.parse_item_damage_and_name(true)?;
                     let (scoring_players, attractions) = event.parse_scoring_players(" advances on the sacrifice.")?;
-                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
+                    let pitcher_item_damage_from_advance = event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
@@ -635,7 +636,8 @@ pub fn parse_next_event(
                         is_special: event.category == EventCategory::Special,
                         batter_debt,
                         batter_item_damage,
-                        pitcher_item_damage,
+                        pitcher_item_damage_from_out,
+                        pitcher_item_damage_from_advance,
                         fielder_item_damage_from_out,
                         fielder_item_damage_from_advance, // TODO this should be part of scores, no?
                     }

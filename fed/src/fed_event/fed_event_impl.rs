@@ -460,7 +460,7 @@ impl FedEvent {
 
                 eb.build(EventType::HomeRun)
             }
-            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage, fielder_item_damage_from_out, fielder_item_damage_from_advance } => {
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage_from_out, pitcher_item_damage_from_advance, fielder_item_damage_from_out, fielder_item_damage_from_advance } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
@@ -468,10 +468,11 @@ impl FedEvent {
                 eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_opt_item_damage(fielder_item_damage_from_out.as_ref(), &fielder_name);
+                eb.push_named_item_damage(pitcher_item_damage_from_out.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_scores_without_event(&scores, home_team_id, "advances on the sacrifice.");
-                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_opt_item_damage(fielder_item_damage_from_advance.as_ref(), &fielder_name);
+                eb.push_named_item_damage(pitcher_item_damage_from_advance.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_score_summary(&scores);
                 eb.push_cooled_off(cooled_off, &batter_name);

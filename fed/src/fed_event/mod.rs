@@ -2323,8 +2323,11 @@ pub enum FedEventData {
         /// Damage that the batter's item took, if any
         batter_item_damage: Option<ItemDamaged>,
 
-        /// Damage that the pitcher's item took, if any
-        pitcher_item_damage: Option<(String, ItemDamaged)>,
+        /// Damage that the pitcher's item took from catching the out, if any
+        pitcher_item_damage_from_out: Option<(String, ItemDamaged)>,
+
+        /// Damage that the pitcher's item took from the runner advancing, if any
+        pitcher_item_damage_from_advance: Option<(String, ItemDamaged)>,
 
         /// Damage that the fielder's item took from catching the out, if any
         fielder_item_damage_from_out: Option<ItemDamaged>,
