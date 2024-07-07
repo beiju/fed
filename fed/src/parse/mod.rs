@@ -757,11 +757,11 @@ pub fn parse_next_event(
                 None
             };
 
-            // I have no idea where this needs to go in relation to the other sub-events
-            let score_summary = event.parse_score_summary()?;
-
             // Not sure of ordering relative to other things
             let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
+
+            // I have no idea where this needs to go in relation to the other sub-events
+            let score_summary = event.parse_score_summary()?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
