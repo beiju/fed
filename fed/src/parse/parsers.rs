@@ -346,10 +346,11 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> 
     }
 }
 
-pub(crate) fn parse_balloons(runs_scored: f64) -> impl Fn(&str) -> ParserResult<&str> {
+pub(crate) fn parse_balloons(runs_scored: f64, before_s20d81: bool) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
-        let (input, stadium_name) = parse_terminated(" inflated ").parse(input)?;
+        // They changed from "inflates" to "inflated" on s20d72
+        let (input, stadium_name) = parse_terminated(if before_s20d81 { " inflated " } else { " inflates " }).parse(input)?;
         let runs_scored_str = runs_scored.to_string();
         let (input, _) = tag(&*runs_scored_str).parse(input)?;
         let (input, _) = tag(" Balloons!").parse(input)?;
@@ -2529,8 +2530,13 @@ pub(crate) fn parse_tunnels_stole_item(thief_name: &str) -> impl Fn(&str) -> Par
 }
 
 
-pub(crate) fn parse_balloon_inflated_from_win(input: &str) -> ParserResult<&str> {
-    parse_terminated(" inflated 10 Balloons!").parse(input)
+pub(crate) fn parse_balloon_inflated_from_win(before_s20d81: bool) -> impl Fn(&str) -> ParserResult<&str> {
+    move |input| {
+        let (input, stadium_name) = parse_terminated(if before_s20d81 { " inflated "} else { " inflates " }).parse(input)?;
+        let (input, _) = tag("10 Balloons!").parse(input)?;
+
+        Ok((input, stadium_name))
+    }
 }
 
 

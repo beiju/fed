@@ -363,7 +363,7 @@ impl EventBuilder {
 
     pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: f64) {
         if let Some(stadium_name) = balloons {
-            self.push_description(&format!("{stadium_name} inflated {runs_scored} Balloons!"));
+            self.push_description(&format!("{stadium_name} {} {runs_scored} Balloons!", self.inflated_or_inflates()));
         }
     }
 
@@ -418,8 +418,12 @@ impl EventBuilder {
         });
 
         if let Some(stadium_name) = &score.balloons {
-            self.push_description(&format!("{stadium_name} inflated {} Balloons!", score.runs_scored));
+            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored));
         }
+    }
+
+    pub fn inflated_or_inflates(&self) -> &'static str {
+        if (self.0.season, self.0.day) < (19, 80) { "inflated" } else { "inflates" }
     }
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {

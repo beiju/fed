@@ -712,7 +712,8 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_balloons(&mut self, runs_scored: f64) -> Result<Option<String>, FeedParseError> {
-        let stadium_name = self.next_parse(opt(parse_balloons(runs_scored)))?;
+        let before_s20d81 = (self.season, self.day) < (19, 80);
+        let stadium_name = self.next_parse(opt(parse_balloons(runs_scored, before_s20d81)))?;
 
         Ok((stadium_name.map(str::to_string)))
     }
@@ -1003,7 +1004,8 @@ impl<'e> EventParseWrapper<'e> {
         assert_eq!(win_child.is_some(), self.season >= 19);
         win_child
             .map(|mut child| {
-                let balloons = self.next_parse_opt(parse_balloons(10.));
+                let before_s20d81 = (self.season, self.day) < (19, 80);
+                let balloons = self.next_parse_opt(parse_balloons(10., before_s20d81));
                 ParseOk(WinSubEvent {
                     team_id: child.next_team_id()?,
                     wins_after: child.metadata_i64("after")?,

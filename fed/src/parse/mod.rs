@@ -3647,7 +3647,8 @@ pub fn parse_next_event(
         EventType::RunsScored => { todo!() }
         EventType::LeagueModificationAdded => { todo!() }
         EventType::BalloonsInflatedFromWin => {
-            let stadium_name = event.next_parse(parse_balloon_inflated_from_win)?;
+            let before_s20d81 = (event.season, event.day) < (19, 80);
+            let stadium_name = event.next_parse(parse_balloon_inflated_from_win(before_s20d81))?;
 
             FedEventData::BalloonsCollectedFromWin {
                 game: event.game(unscatter, attractor_secret_base)?,

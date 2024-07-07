@@ -906,9 +906,7 @@ impl FedEvent {
                     eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
                     // Two of them
                     eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
-                    if let Some(stadium_name) = win_event.balloons {
-                        eb.push_description(&format!("{stadium_name} inflated 10 Balloons!"));
-                    }
+                    eb.push_balloons(win_event.balloons.as_deref(), 10.);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
                         child_eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
@@ -953,9 +951,7 @@ impl FedEvent {
                 // using it as a signal for now. iirc this will have to be changed later
                 if let Some(win_event) = win_event {
                     eb.push_description(&format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
-                    if let Some(stadium_name) = win_event.balloons {
-                        eb.push_description(&format!("{stadium_name} inflated 10 Balloons!"));
-                    }
+                    eb.push_balloons(win_event.balloons.as_deref(), 10.);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
                         child_eb.push_description(&format!("The Black Hole burped a Win at the {victim_team_nickname}."));
@@ -3589,7 +3585,7 @@ impl FedEvent {
             }
             FedEventData::BalloonsCollectedFromWin { game, stadium_name, earned_win } => {
                 eb.set_game(game);
-                eb.push_description(&format!("{stadium_name} inflated 10 Balloons!"));
+                eb.push_description(&format!("{stadium_name} {} 10 Balloons!", eb.inflated_or_inflates()));
                 eb.push_earned_win(earned_win);
 
                 eb.build(EventType::BalloonsInflatedFromWin)
