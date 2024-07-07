@@ -921,7 +921,7 @@ impl FedEvent {
                             "Sun 2: 1".to_string(),
                             "Sun(Sun): 1 ^ 2 = 1".to_string(),
                         ]);
-                        child_eb.build(EventType::WinCollectedRegular)
+                        child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                     });
                 } else {
                     eb.push_description(&format!("The {scoring_team_nickname} collect 10! Sun 2 smiles."));
@@ -966,7 +966,7 @@ impl FedEvent {
                             "Black Hole: -1".to_string(),
                             "Sun(Sun): -1 ^ 2 = 1".to_string(),
                         ]);
-                        child_eb.build(EventType::WinCollectedRegular)
+                        child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                     });
                 } else {
                     eb.push_description(&format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));

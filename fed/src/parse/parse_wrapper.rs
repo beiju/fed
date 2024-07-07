@@ -1000,7 +1000,9 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_win_event(&mut self) -> Result<Option<WinSubEvent>, FeedParseError> {
-        let mut win_child = self.next_child_opt(EventType::WinCollectedRegular)?;
+        let mut win_child = self.next_child_any_opt(
+            &[EventType::WinCollectedRegular, EventType::WinCollectedPostseason],
+        )?;
         // This function shall be called when event exists iff it's season 20 or later
         assert_eq!(win_child.is_some(), self.season >= 19);
         win_child
@@ -1018,11 +1020,13 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_earned_win(&mut self) -> Result<EarnedWin, FeedParseError> {
-        Self::make_earned_win(self.next_child(EventType::WinCollectedRegular)?)
+        Self::make_earned_win(self.next_child_any(
+            &[EventType::WinCollectedRegular, EventType::WinCollectedPostseason],
+        )?)
     }
 
     pub fn parse_earned_win_opt(&mut self) -> Result<Option<EarnedWin>, FeedParseError> {
-        self.next_child_opt(EventType::WinCollectedRegular)?
+        self.next_child_any_opt(&[EventType::WinCollectedRegular, EventType::WinCollectedPostseason])?
             .map(Self::make_earned_win)
             .transpose()
     }
@@ -1030,11 +1034,26 @@ impl<'e> EventParseWrapper<'e> {
     fn make_earned_win(mut win_event: EventParseWrapper) -> Result<EarnedWin, FeedParseError> {
         let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
         assert!(is_known_team_nickname(winning_team_nickname));
+
+        let lines = win_event.metadata_str_vec("lines")?;
+        let bracket_type = if lines.len() == 2 {
+            if lines[0] == "Loss: -1" {
+                Some(BracketType::Underbracket)
+            } else if lines[0] == "Non-Loss: 1" {
+                Some(BracketType::Overbracket)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Ok(EarnedWin {
             winning_team_nickname: winning_team_nickname.to_string(),
             winning_team_id: win_event.next_team_id()?,
             wins_after: win_event.metadata_i64("after")?,
             sub_event: win_event.as_sub_event(),
+            bracket_type,
         })
     }
 

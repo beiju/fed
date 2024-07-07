@@ -1997,6 +1997,12 @@ pub struct ModRemovedFromRatification {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+pub enum BracketType {
+    Overbracket,
+    Underbracket,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct EarnedWin {
     /// Nickname of winning team
@@ -2010,6 +2016,10 @@ pub struct EarnedWin {
 
     /// Metadata for the team-earned-win sub-event
     pub sub_event: SubEvent,
+
+    /// If this is a postseason event, whether it's an overbracket or underbracket game. Otherwise
+    /// null
+    pub bracket_type: Option<BracketType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -731,6 +731,7 @@ impl EventBuilder {
     }
 
     pub fn push_earned_win(&mut self, win: EarnedWin) {
+        let day = self.0.day;
         self.push_child(win.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Outcomes);
             child_eb.push_description(&format!("The {} collected a Win.", win.winning_team_nickname));
@@ -740,12 +741,31 @@ impl EventBuilder {
             child_eb.push_metadata_i64("before", win.wins_after - 1);
             child_eb.push_metadata_i64("after", win.wins_after);
             // This won't be hard-coded forever, but I won't change it until I need to
-            child_eb.push_metadata_str_vec("lines", vec![
-                "Non-Loss: 1".to_string(),
-                "Turntables: 1 * -1 = -1".to_string(),
-                "Sun(Sun): -1 ^ 2 = 1".to_string(),
-            ]);
-            child_eb.build(EventType::WinCollectedRegular)
+            child_eb.push_metadata_str_vec("lines", if let Some(BracketType::Underbracket) = win.bracket_type {
+                // Postseason underbracket. You win by losing. God knows why it's negative.
+                vec![
+                    "Loss: -1".to_string(),
+                    "Sun(Sun): -1 ^ 2 = 1".to_string(),
+                ]
+            } else if let Some(BracketType::Overbracket) = win.bracket_type {
+                // Postseason underbracket. You win by winning.
+                vec![
+                    "Non-Loss: 1".to_string(),
+                    "Sun(Sun): 1 ^ 2 = 1".to_string(),
+                ]
+            } else {
+                // Regular season. You win by winning, and there's turntables.
+                vec![
+                    "Non-Loss: 1".to_string(),
+                    "Turntables: 1 * -1 = -1".to_string(),
+                    "Sun(Sun): -1 ^ 2 = 1".to_string(),
+                ]
+            });
+            child_eb.build(if day < 99 {
+                EventType::WinCollectedRegular
+            } else {
+                EventType::WinCollectedPostseason
+            })
         });
     }
 
