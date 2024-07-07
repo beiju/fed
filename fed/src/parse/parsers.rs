@@ -1504,13 +1504,19 @@ pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<(&str, i
     Ok((input, (team_nickname, season_num)))
 }
 
-pub(crate) fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i32)> {
+pub(crate) fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i32, Option<bool>)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" have been eliminated from the Season ").parse(input)?;
     let (input, season_num) = parse_whole_number(input)?;
     let (input, _) = tag(" Postseason.").parse(input)?;
 
-    Ok((input, (team_nickname, season_num)))
+    let (input, overbracket) = alt((
+        tag(" Overbracket").map(|_| Some(true)),
+        tag(" Underbracket").map(|_| Some(false)),
+        eof.map(|_| None),
+    )).parse(input)?;
+
+    Ok((input, (team_nickname, season_num, overbracket)))
 }
 
 pub(crate) enum ParsedPlayerStatIncrease<'a> {

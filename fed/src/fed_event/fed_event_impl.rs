@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -2195,16 +2195,20 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::PostseasonEliminated { team_id, team_nickname, displayed_season: season } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::PostseasonEliminated,
-                        category: EventCategory::Outcomes,
-                        description: format!("The {team_nickname} have been eliminated from the Season {season} Postseason."),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::PostseasonEliminated { team_id, team_nickname, displayed_season, bracket } => {
+                eb.set_category(EventCategory::Outcomes);
+                let description = format!("The {team_nickname} have been eliminated from the Season {displayed_season} Postseason.");
+                let description = if let Some(BracketType::Overbracket) = bracket {
+                    format!("{description} Overbracket {displayed_season}")
+                } else if let Some(BracketType::Underbracket) = bracket {
+                    format!("{description} Underbracket {displayed_season}")
+                } else {
+                    description
+                };
+
+                eb.set_description(description);
+                eb.push_team_tag(team_id);
+                eb.build(EventType::PostseasonEliminated)
             }
             FedEventData::PlayerBoosted { team_id, player_id, player_name, rating_before, rating_after } => {
                 event_builder

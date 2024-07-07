@@ -3772,6 +3772,10 @@ pub enum FedEventData {
 
         /// One-indexed season number
         displayed_season: i32,
+
+        /// In seasons with an overbracket and underbracket, indicates which bracket this event came
+        /// from. Otherwise null.
+        bracket: Option<BracketType>,
     },
 
     /// Player was boosted during election

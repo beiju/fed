@@ -3758,12 +3758,13 @@ pub fn parse_next_event(
         }
         EventType::NutButton => { todo!() }
         EventType::PostseasonEliminated => {
-            let (team_nickname, season_num) = event.next_parse(parse_postseason_eliminated)?;
+            let (team_nickname, season_num, overbracket) = event.next_parse(parse_postseason_eliminated)?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::PostseasonEliminated {
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
                 displayed_season: season_num,
+                bracket: overbracket.map(|o| if o { BracketType::Overbracket } else { BracketType::Underbracket }),
             }
         }
     };
