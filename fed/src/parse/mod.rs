@@ -380,6 +380,18 @@ pub fn parse_next_event(
 
                         let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
 
+                        let free_refill = free_refiller
+                            .map(|refiller_name| {
+                                let mut sub_event = event.next_child(EventType::RemovedMod)?;
+                                ParseOk(FreeRefill {
+                                    sub_event: sub_event.as_sub_event(),
+                                    player_name: refiller_name.to_string(),
+                                    player_id: sub_event.next_player_id()?,
+                                    team_id: sub_event.next_team_id_opt()?,
+                                })
+                            })
+                            .transpose()?;
+
                         let score_summary = event.parse_score_summary()?;
 
                         FedEventData::StolenBase {
@@ -388,15 +400,7 @@ pub fn parse_next_event(
                             runner_id,
                             base_stolen,
                             blaserunning,
-                            free_refill: free_refiller.map(|refiller_name| {
-                                let mut sub_event = event.next_child(EventType::RemovedMod)?;
-                                ParseOk(FreeRefill {
-                                    sub_event: sub_event.as_sub_event(),
-                                    player_name: refiller_name.to_string(),
-                                    player_id: sub_event.next_player_id()?,
-                                    team_id: sub_event.next_team_id_opt()?,
-                                })
-                            }).transpose()?,
+                            free_refill,
                             runner_item_damage,
                             is_special: event.category == EventCategory::Special,
                             hype,
