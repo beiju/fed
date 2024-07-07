@@ -1393,6 +1393,7 @@ pub(crate) enum ParsedPlayerAddedToTeam<'a> {
 pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<ParsedPlayerAddedToTeam> {
     let (input, team_nickname) = alt((
         preceded(tag("The "), parse_terminated(" earn a Postseason Birth!")).map(|s| ParsedPlayerAddedToTeam::PostseasonBirth(s)),
+        preceded(tag("The "), parse_terminated(" earned a Postseason Birth!")).map(|s| ParsedPlayerAddedToTeam::PostseasonBirth(s)),
         parse_player_localized_to_team,
     )).parse(input)?;
 
@@ -1489,7 +1490,16 @@ pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<(&str, i
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" earned a spot in the Season ").parse(input)?;
     let (input, season_num) = parse_whole_number(input)?;
-    let (input, _) = tag(" Postseason.").parse(input)?;
+    let input = if season_num < 20 {
+        let (input, _) = tag(" Postseason.").parse(input)?;
+        input
+    } else {
+        let (input, _) = tag(" Postseason Overbracket ").parse(input)?;
+        let (input, overbracket_num) = parse_whole_number(input)?;
+        assert_eq!(season_num, overbracket_num);
+        let (input, _) = tag(".").parse(input)?;
+        input
+    };
 
     Ok((input, (team_nickname, season_num)))
 }

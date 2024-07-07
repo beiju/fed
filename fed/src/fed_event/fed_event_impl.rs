@@ -2068,7 +2068,7 @@ impl FedEvent {
                     .fill(EventBuilderUpdate {
                         r#type: EventType::PlayerAddedToTeam,
                         category: EventCategory::Changes,
-                        description: format!("The {team_nickname} earn a Postseason Birth!"),
+                        description: format!("The {team_nickname} {} a Postseason Birth!", if self.season < 19 { "earn" } else { "earned" }),
                         player_tags: vec![player_id],
                         team_tags: vec![team_id],
                         ..Default::default()
@@ -2127,7 +2127,7 @@ impl FedEvent {
                 let birth_event = postseason_birth_event_metadata.map(|postseason_birth_event_metadata| {
                     let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
                     birth_eb.set_category(EventCategory::Changes);
-                    birth_eb.push_description(&format!("The {team_nickname} earn a Postseason Birth!"));
+                    birth_eb.push_description(&format!("The {team_nickname} {} a Postseason Birth!", if self.season < 19 { "earn" } else { "earned" }));
                     birth_eb.push_player_tag(postseason_birth_id);
                     birth_eb.push_team_tag(team_id);
                     birth_eb.push_metadata_i64("location", postseason_birth_location);
@@ -2141,7 +2141,11 @@ impl FedEvent {
                 let party_event = left_party_event_metadata.map(|left_party_time| {
                     let mut party_eb = eb.connected_event(left_party_time);
                     party_eb.set_category(EventCategory::Changes);
-                    party_eb.push_description(&format!("The {team_nickname} have been removed from Party Time to join the Postseason!"));
+                    party_eb.push_description(&format!("The {team_nickname} {} removed from Party Time to join the Postseason!", if self.season < 19 {
+                        "have been"
+                    } else {
+                        "were"
+                    }));
                     party_eb.push_team_tag(team_id);
                     party_eb.push_metadata_str("mod", "PARTY_TIME");
                     party_eb.push_metadata_i64("type", ModDuration::Seasonal);
@@ -2160,7 +2164,12 @@ impl FedEvent {
                 });
 
                 eb.set_category(EventCategory::Outcomes);
-                eb.push_description(&format!("The {team_nickname} earned a spot in the Season {} Postseason.", self.season + 1));
+                let overbracket_fmt = format!("Postseason Overbracket {}", self.season + 1); // wasted work but eh
+                eb.push_description(&format!("The {team_nickname} earned a spot in the Season {} {}.", self.season + 1, if self.season < 19 {
+                    "Postseason"
+                } else {
+                    &overbracket_fmt
+                }));
                 eb.push_team_tag(team_id);
                 let main_event = eb.build(EventType::EarnedPostseasonSlot);
 
