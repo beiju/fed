@@ -8,7 +8,7 @@ use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
-use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere};
+use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere, BracketType};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 
@@ -1544,13 +1544,20 @@ pub(crate) fn parse_bottom_dweller(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_team_won_internet_series(input: &str) -> ParserResult<(&str, i32)> {
-    let (input, _) = tag("The ").parse(input)?;
-    let (input, team_nickname) = parse_terminated(" won the Season ").parse(input)?;
-    let (input, season_num) = parse_whole_number(input)?;
-    let (input, _) = tag(" Internet Series!").parse(input)?;
+pub(crate) fn parse_team_won_internet_series(displayed_season_num: i32) -> impl Fn(&str) -> ParserResult<(&str, Option<BracketType>)> {
+    move |input| {
+        let displayed_season_num_str = format!("{displayed_season_num}");
+        let (input, _) = tag("The ").parse(input)?;
+        let (input, team_nickname) = parse_terminated(" won the Season ").parse(input)?;
+        let (input, _) = tag(&*displayed_season_num_str).parse(input)?;
+        let (input, bracket_type) = alt((
+                pair(pair(tag(" Overbracket "), tag(&*displayed_season_num_str)), tag(" Internet Series")).map(|_| Some(BracketType::Overbracket)),
+                pair(pair(tag(" Internet Series Underbracket "), tag(&*displayed_season_num_str)), tag("!")).map(|_| Some(BracketType::Underbracket)),
+                tag(" Internet Series").map(|_| None),
+            )).parse(input)?;
 
-    Ok((input, (team_nickname, season_num)))
+        Ok((input, (team_nickname, bracket_type)))
+    }
 }
 
 pub(crate) fn parse_will_received(input: &str) -> ParserResult<&str> {

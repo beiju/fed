@@ -2953,13 +2953,13 @@ pub fn parse_next_event(
             }
         }
         EventType::TeamWonInternetSeries => {
-            let (team_nickname, season_num) = event.next_parse(parse_team_won_internet_series)?;
+            let (team_nickname, bracket_type) = event.next_parse(parse_team_won_internet_series(event.season + 1))?;
             assert!(is_known_team_nickname(team_nickname));
-            assert_eq!(season_num, event.season + 1);
 
             FedEventData::TeamWonInternetSeries {
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
+                bracket_type,
                 championships: event.metadata_i64("championships")?,
             }
         }

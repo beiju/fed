@@ -2158,19 +2158,27 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::TeamWonInternetSeries { team_id, team_nickname, championships } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::TeamWonInternetSeries,
-                        category: EventCategory::Outcomes,
-                        description: format!("The {team_nickname} won the Season {} Internet Series!", self.season + 1),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "championships": championships
-                    }))
-                    .build()
+            FedEventData::TeamWonInternetSeries { team_id, team_nickname, bracket_type, championships } => {
+                let description = match bracket_type {
+                    Some(BracketType::Underbracket) => {
+                        format!("The {team_nickname} won the Season {season} Internet Series Underbracket {season}!", season=self.season + 1)
+                    }
+                    Some(BracketType::Overbracket) => {
+                        format!("The {team_nickname} won the Season {season} Overbracket {season} Internet Series!", season=self.season + 1)
+                    }
+                    None => {
+                        format!("The {team_nickname} won the Season {} Internet Series!", self.season + 1)
+                    }
+                };
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(&description);
+                eb.push_team_tag(team_id);
+                eb.push_metadata_i64("championships", championships);
+                if let Some(bracket) = bracket_type {
+                    eb.push_metadata_i64("bracket", bracket);
+                }
+
+                eb.build(EventType::TeamWonInternetSeries)
             }
             FedEventData::BottomDwellers { team_id, team_nickname, rating_before, rating_after } => {
                 event_builder

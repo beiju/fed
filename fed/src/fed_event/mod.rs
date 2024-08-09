@@ -2008,10 +2008,11 @@ pub struct ModRemovedFromRatification {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, IntoPrimitive, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[repr(i64)]
 pub enum BracketType {
-    Overbracket,
-    Underbracket,
+    Overbracket = 0,
+    Underbracket = 1,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -3817,6 +3818,11 @@ pub enum FedEventData {
 
         /// Name of team who won the series
         team_nickname: String,
+
+        /// Indicates whether this win was for the Overbracket or Underbracket, or if it was earned
+        /// before there was a distinction (indicated by a null value, and equivalent to an
+        /// Overbracket win).
+        bracket_type: Option<BracketType>,
 
         /// Number of championships the team now has
         championships: i64,
