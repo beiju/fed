@@ -1548,6 +1548,7 @@ pub fn parse_next_event(
             match action {
                 None => {
                     let mut sipped_event = event.next_child(EventType::PlayerStatDecrease)?;
+                    let maintenance_mode = event.parse_maintenance_mode_opt()?;
                     let mut sipper_event = event.next_child(EventType::PlayerStatIncrease)?;
                     let sipper_id = event.next_player_id()?;
                     let sipped_id = event.next_player_id()?;
@@ -1563,9 +1564,7 @@ pub fn parse_next_event(
                             rating_after: sipper_event.metadata_f64("after")?,
                             sub_event: sipper_event.as_sub_event(),
                         },
-                        // Maintenance mode is possible in this situation, but I need to see an
-                        // actual instance of it to know how to parse it.
-                        maintenance_mode: None,
+                        maintenance_mode,
                         sipped: PlayerStatChange {
                             team_id: sipped_event.next_team_id()?,
                             player_id: sipped_id,

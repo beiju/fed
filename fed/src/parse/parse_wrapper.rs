@@ -850,17 +850,7 @@ impl<'e> EventParseWrapper<'e> {
                 // Both events have to be both increase and decrease because of negative attributes
                 // (unless I want to check against sipped_attribute_name, which I don't)
                 let mut batter_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
-                let maintenance_mode = self.next_child_opt(EventType::AddedMod)?
-                    .map(|mut mm_event| {
-                        // Make sure this is a maintenance mode event by verifying the description
-                        mm_event.next_parse_tag("Impairment Detected. Entering Maintenance Mode.")?;
-
-                        ParseOk(MaintenanceMode {
-                            sub_event: mm_event.as_sub_event(),
-                            team_id: mm_event.next_team_id()?,
-                        })
-                    })
-                    .transpose()?;
+                let maintenance_mode = self.parse_maintenance_mode_opt()?;
 
                 let mut pitcher_event = self.next_child_any(&[EventType::PlayerAttributeDecrease, EventType::PlayerAttributeIncrease])?;
                 ParseOk(Parasite {
@@ -879,6 +869,20 @@ impl<'e> EventParseWrapper<'e> {
                     pitcher_rating_before: pitcher_event.metadata_f64("before")?,
                     pitcher_rating_after: pitcher_event.metadata_f64("after")?,
                     pitcher_sub_event: pitcher_event.as_sub_event(),
+                })
+            })
+            .transpose()
+    }
+
+    pub fn parse_maintenance_mode_opt(&mut self) -> Result<Option<MaintenanceMode>, FeedParseError> {
+        self.next_child_opt(EventType::AddedMod)?
+            .map(|mut mm_event| {
+                // Make sure this is a maintenance mode event by verifying the description
+                mm_event.next_parse_tag("Impairment Detected. Entering Maintenance Mode.")?;
+
+                ParseOk(MaintenanceMode {
+                    sub_event: mm_event.as_sub_event(),
+                    team_id: mm_event.next_team_id()?,
                 })
             })
             .transpose()
