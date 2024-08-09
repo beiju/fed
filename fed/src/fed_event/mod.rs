@@ -490,27 +490,29 @@ pub enum SpicyStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub enum ModChangeSubject {
-    Player {
-        /// Uuid of the team whose player's mod changed
-        team_id: Uuid,
+pub struct PlayerModChangeSubject {
+    /// Uuid of the team whose player's mod changed
+    pub team_id: Uuid,
 
-        /// Uuid of the player whose mod changed
-        player_id: Uuid,
+    /// Uuid of the player whose mod changed
+    pub player_id: Uuid,
 
-        /// Name of the player whose mod changed
-        player_name: String,
-    },
-    Team {
-        /// Uuid of the team whose mod changed
-        team_id: Uuid,
+    /// Name of the player whose mod changed
+    pub player_name: String,
+}
 
-        /// Nickname of the team whose mod changed. There is (at least?) one instance where the
-        /// team's name was not shown and \[object Object] was in its place. For those events, this
-        /// field will be null (to try to encourage clients to handle this edge case). If you want
-        /// to replicate the displayed event, replace nulls with "\[object Object]".
-        team_nickname: Option<String>,
-    },
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamModChangeSubject {
+    /// Uuid of the team whose mod changed
+    pub team_id: Uuid,
+
+    /// Nickname of the team whose mod changed. There is (at least?) one instance where the
+    /// team's name was not shown and \[object Object] was in its place. For those events, this
+    /// field will be null (to try to encourage clients to handle this edge case). If you want
+    /// to replicate the displayed event, replace nulls with "\[object Object]".
+    pub team_nickname: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -522,10 +524,11 @@ pub enum SubseasonalMod {
     Middling,
     Coasting,
     // Lateseason
-    EarlyToTheParty,
     LateToTheParty,
+    EarlyToTheParty,
     // Postseason
     Ambitious,
+    Unambitious,
 }
 
 impl SubseasonalMod {
@@ -534,9 +537,10 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { "OVERPERFORMING" }
             SubseasonalMod::Middling => { "OVERPERFORMING" }
             SubseasonalMod::Coasting => { "UNDERPERFORMING" }
-            SubseasonalMod::EarlyToTheParty => { "UNDERPERFORMING" }
             SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
+            SubseasonalMod::EarlyToTheParty => { "UNDERPERFORMING" }
             SubseasonalMod::Ambitious => { "OVERPERFORMING" }
+            SubseasonalMod::Unambitious => { "UNDERPERFORMING" }
         }
     }
 
@@ -545,9 +549,10 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { "EARLBIRDS" }
             SubseasonalMod::Middling => { "MIDDLING" }
             SubseasonalMod::Coasting => { "COASTING" }
-            SubseasonalMod::EarlyToTheParty => { "EARLY_TO_PARTY" }
             SubseasonalMod::LateToTheParty => { "LATE_TO_PARTY" }
+            SubseasonalMod::EarlyToTheParty => { "EARLY_TO_PARTY" }
             SubseasonalMod::Ambitious => { "AMBITIOUS" }
+            SubseasonalMod::Unambitious => { "UNAMBITIOUS" }
         }
     }
 
@@ -556,9 +561,10 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { "Earlbirds" }
             SubseasonalMod::Middling => { "Middling" }
             SubseasonalMod::Coasting => { "Coasting" }
-            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
             SubseasonalMod::LateToTheParty => { "Late to the Party" }
+            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
             SubseasonalMod::Ambitious => { "Ambitious" }
+            SubseasonalMod::Unambitious => { "Unambitious" }
         }
     }
 
@@ -567,10 +573,11 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { "an Earlbird" }
             SubseasonalMod::Middling => { "Middling" }
             SubseasonalMod::Coasting => { "Coasting" }
-            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
             SubseasonalMod::LateToTheParty => { "Late to the Party" }
+            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
             // The 2/3 ellipsis is a little hack. The "period" after the label will complete it.
             SubseasonalMod::Ambitious => { "feeling Ambitious.." }
+            SubseasonalMod::Unambitious => { "feeling Unambitious.." }
         }
     }
 
@@ -579,9 +586,10 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { Some("Happy Earlseason!") }
             SubseasonalMod::Middling => { Some("Happy Midseason!") }
             SubseasonalMod::Coasting => { None }
-            SubseasonalMod::EarlyToTheParty => { Some("Early to the Party!") }
             SubseasonalMod::LateToTheParty => { Some("Late to the Party!") }
+            SubseasonalMod::EarlyToTheParty => { Some("Early to the Party!") }
             SubseasonalMod::Ambitious => { None }
+            SubseasonalMod::Unambitious => { None }
         }
     }
 
@@ -590,18 +598,19 @@ impl SubseasonalMod {
             SubseasonalMod::Earlbirds => { EventType::Earlbird }
             SubseasonalMod::Middling => { EventType::Middling }
             SubseasonalMod::Coasting => { EventType::Coasting }
-            SubseasonalMod::EarlyToTheParty => { EventType::EarlyToTheParty }
             SubseasonalMod::LateToTheParty => { EventType::LateToTheParty }
+            SubseasonalMod::EarlyToTheParty => { EventType::EarlyToTheParty }
             SubseasonalMod::Ambitious => { EventType::Ambitious }
+            SubseasonalMod::Unambitious => { EventType::Unambitious }
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SubseasonalModChange {
+pub struct SubseasonalModChange<SubjectType> {
     /// Team or player whose subseasonal mod (de)activated
-    pub subject: ModChangeSubject,
+    pub subject: SubjectType,
 
     /// Mod which caused the addition or removal. Whether over/underperforming was added or removed
     /// is not stored, but is inferred from this ID.
@@ -2082,17 +2091,18 @@ pub enum FedEventData {
         /// Full name of the team at bat
         batting_team_name: String,
 
-        /// List of subseasonal mods that came into effect on this HalfInning. All of
-        /// these mods add either Overperforming or Underperforming for the subseason.
+        /// List of subseasonal mods that came into effect this game. All of these mods add either
+        /// Overperforming or Underperforming for the subseason.
         ///
         /// This array is only populated on the first HalfInning event of a game on the first game a
         /// team plays in a given subseason (Earlseason, Midseason, Lateseason, or Postseason). Most
         /// of the time this is the first day of the subseason, but the wildcard rounds in the
         /// Postseason mean that some teams don't have their first game on the first day.
         ///
-        /// This is an apparent bug that only started in season 16. Ordinarily these changes have
-        /// their own separate event.
-        subseasonal_mod_effects: Vec<SubseasonalModChange>,
+        /// This is an apparent bug that only started in season 16. Player mod changes get their own
+        /// events, and team event changes get reported on the player mod change event, HalfInning
+        /// event, or Psycoachoustics event. This list may not be exhaustive.
+        team_subseasonal_mod_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
     },
 
     /// Marks a new batter stepping up to the plate
@@ -3858,16 +3868,38 @@ pub enum FedEventData {
         metadata: EventMetadata,
     },
 
-    /// Subseasonal mods are added or removed. Multiple adds/removes can happen in the same event.
-    /// It can also be a mixture of add and remove, e.g. earlseason mods being removed in the same
-    /// event that midseason mods are added.
+    /// Subseasonal mods are added or removed from a single team.
+    ///
+    /// Not all subseasonal mod changes cause this event. Due to what seems to be a bug, in Season
+    /// 16 team mod changes stopped being their own event and started being attached to the next
+    /// event. This could be a PlayerSubseasonalModsChange event, a HalfInningStart event, a
+    /// Psychoacoustics event, and possibly others.
     #[serde(rename_all = "camelCase")]
-    SubseasonalModsChange {
+    TeamSubseasonalModsChange {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Individual changes to the subseasonal mods
-        changes: Vec<SubseasonalModChange>,
+        /// The team subseasonal mod that changed
+        #[serde(flatten)]
+        change: SubseasonalModChange<TeamModChangeSubject>,
+    },
+
+    /// Subseasonal mods are added or removed from a single player (and, due to an apparent bug,
+    /// possibly multiple teams).
+    ///
+    /// See the description of TeamSubseasonalModsChange
+    #[serde(rename_all = "camelCase")]
+    PlayerSubseasonalModsChange {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Changes to the team subseasonal mods. Due to what I assume is a bug, multiple of these
+        /// may get collected in front of a single player mod change. If there is no player mod
+        /// change, the team mod changes will instead get collected on the HalfInning event
+        team_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
+
+        /// The player subseasonal mod change that triggered this event
+        player_change: SubseasonalModChange<PlayerModChangeSubject>,
     },
 
     /// Decree passed. This event is currently minimally parsed, with metadata simply included
@@ -4233,9 +4265,9 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with adding the mod
         sub_event: SubEvent,
 
-        /// List of subseasonal mods that changed on this Psychoacoustics event.
-        /// See HalfInningStart.subseasonal_mod_effects for details.
-        subseasonal_mod_effects: Vec<SubseasonalModChange>,
+        /// List of team subseasonal mods that changed on this Psychoacoustics event.
+        /// See HalfInningStart.subseasonal_mod_changes for details.
+        team_subseasonal_mod_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
     },
 
     /// An Echo Echoed a Receiver and turned them into an Echo
@@ -5574,7 +5606,8 @@ impl FedEventData {
             FedEventData::CommunityChestOpens { .. } => { None }
             FedEventData::PlayerDropsItem { .. } => { None }
             FedEventData::CommunityChestGameMessage { game, .. } => { Some(game) }
-            FedEventData::SubseasonalModsChange { game, .. } => { Some(game) }
+            FedEventData::TeamSubseasonalModsChange { game, .. } => { Some(game) }
+            FedEventData::PlayerSubseasonalModsChange { game, .. } => { Some(game) }
             FedEventData::Fax { game, .. } => { Some(game) }
             FedEventData::Redacted { .. } => { None }
             FedEventData::Smithy { game, .. } => { Some(game) }

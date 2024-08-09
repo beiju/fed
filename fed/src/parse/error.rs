@@ -147,5 +147,10 @@ pub enum FeedParseError {
         preceding_type: EventType,
         illegal_type: EventType,
     },
+
+    #[error("Found a compound {event_type:?} where a simple {event_type:?} was expected")]
+    UnexpectedCompoundEvent {
+        event_type: EventType,
+    },
 }
 

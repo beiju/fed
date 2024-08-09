@@ -341,7 +341,8 @@ pub fn parse_next_event(
             // Starting in s16, subseasonal mods (mods that apply only during Earl/Mid/Lateseason)
             // sometimes announce when they start or end in the first HalfInning of the game. This
             // smells like a bug to me.
-            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
+            let (team_subseasonal_mod_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
+            assert!(!is_terminal);
 
             let (top_of_inning, inning, team_name) = event.next_parse(parse_half_inning)?;
             assert!(is_known_team_name(team_name));
@@ -351,7 +352,7 @@ pub fn parse_next_event(
                 top_of_inning,
                 inning,
                 batting_team_name: team_name.to_string(),
-                subseasonal_mod_effects,
+                team_subseasonal_mod_changes,
             }
         }
         EventType::PitcherChange => {
@@ -2440,184 +2441,10 @@ pub fn parse_next_event(
             }
         }
         EventType::Earlbird => {
-            let changes = event.next_parse(parse_earlbird)?.into_iter()
-                .map(|change| {
-                    ParseOk(match change {
-                        EarlbirdsChange::AddedToTeam(team_nickname) => {
-                            assert!(is_known_team_nickname(team_nickname));
-
-                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                            let team_id = sub_event.next_team_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Team {
-                                    team_id,
-                                    team_nickname: Some(team_nickname.to_string()),
-                                },
-                                source_mod: SubseasonalMod::Earlbirds,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: true,
-                                // There's probably a way to get around the to_string here, but it's not
-                                // important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
-                            }
-                        }
-                        EarlbirdsChange::RemovedFromTeam => {
-                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                            let team_id = sub_event.next_team_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Team {
-                                    team_id,
-                                    team_nickname: None,
-                                },
-                                source_mod: SubseasonalMod::Earlbirds,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: false,
-                                // There's probably a way to get around the to_string here, but it's not
-                                // important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
-                            }
-                        }
-                        EarlbirdsChange::AddedToPlayer(player_name) => {
-                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                            let player_id = sub_event.next_player_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Player {
-                                    team_id: sub_event.next_team_id()?,
-                                    player_id,
-                                    player_name: player_name.to_string(),
-                                },
-                                source_mod: SubseasonalMod::Earlbirds,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: true,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
-
-                            }
-                        }
-                        EarlbirdsChange::RemovedFromPlayer(player_name) => {
-                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                            let player_id = sub_event.next_player_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Player {
-                                    team_id: sub_event.next_team_id()?,
-                                    player_id,
-                                    player_name: player_name.to_string(),
-                                },
-                                source_mod: SubseasonalMod::Earlbirds,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: false,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Earlbirds.mod_id().to_string())),
-                            }
-                        }
-                    })
-                })
-                .collect::<Result<_, _>>()?;
-
-            FedEventData::SubseasonalModsChange {
-                game: event.game(unscatter, attractor_secret_base)?,
-                changes,
-            }
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Earlbirds, event.game(unscatter, attractor_secret_base)?)?
         }
         EventType::LateToTheParty => {
-            let changes = event.next_parse(parse_late_to_the_party)?.into_iter()
-                .map(|change| {
-                    ParseOk(match change {
-                        LateToThePartyChange::AddedToTeam(team_nickname) => {
-                            assert!(is_known_team_nickname(team_nickname));
-
-                            // In s13 there wasn't always a child
-                            let mut sub_event = event.next_child_opt(EventType::AddedModFromOtherMod)?;
-                            let team_id = if let Some(se) = &mut sub_event {
-                                se.next_team_id()?
-                            } else {
-                                // This only ever happened to the firefighters, so...
-                                assert_eq!(team_nickname, "Firefighters");
-                                uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
-                            };
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Team {
-                                    team_id,
-                                    team_nickname: Some(team_nickname.to_string()),
-                                },
-                                source_mod: SubseasonalMod::LateToTheParty,
-                                sub_event: sub_event.map(|s| s.as_sub_event()),
-                                active: true,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
-
-                            }
-                        }
-                        LateToThePartyChange::RemovedFromTeam(team_nickname) => {
-                            assert!(is_known_team_nickname(team_nickname));
-
-                            // In s13 there wasn't always a child
-                            let mut sub_event = event.next_child_opt(EventType::RemovedModFromOtherMod)?;
-                            let team_id = if let Some(se) = &mut sub_event {
-                                se.next_team_id()?
-                            } else {
-                                // This only ever happened to the firefighters, so...
-                                assert_eq!(team_nickname, "Firefighters");
-                                uuid!("ca3f1c8c-c025-4d8e-8eef-5be6accbeb16")
-                            };
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Team {
-                                    team_id,
-                                    team_nickname: Some(team_nickname.to_string()),
-                                },
-                                source_mod: SubseasonalMod::LateToTheParty,
-                                sub_event: sub_event.map(|s| s.as_sub_event()),
-                                active: false,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
-                            }
-                        }
-                        LateToThePartyChange::AddedToPlayer(player_name) => {
-                            let mut sub_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                            let player_id = sub_event.next_player_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Player {
-                                    team_id: sub_event.next_team_id()?,
-                                    player_id,
-                                    player_name: player_name.to_string(),
-                                },
-                                source_mod: SubseasonalMod::LateToTheParty,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: true,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
-                            }
-                        }
-                        LateToThePartyChange::RemovedFromPlayer(player_name) => {
-                            let mut sub_event = event.next_child(EventType::RemovedModFromOtherMod)?;
-                            let player_id = sub_event.next_player_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Player {
-                                    team_id: sub_event.next_team_id()?,
-                                    player_id,
-                                    player_name: player_name.to_string(),
-                                },
-                                source_mod: SubseasonalMod::LateToTheParty,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active: false,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::LateToTheParty.mod_id().to_string())),
-                            }
-                        }
-                    })
-                })
-                .collect::<Result<_, _>>()?;
-
-            FedEventData::SubseasonalModsChange {
-                game: event.game(unscatter, attractor_secret_base)?,
-                changes,
-            }
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::LateToTheParty, event.game(unscatter, attractor_secret_base)?)?
         }
         EventType::EarlyToTheParty => { todo!() }
         EventType::ShameDonor => {
@@ -3300,7 +3127,8 @@ pub fn parse_next_event(
         }
         EventType::Psychoacoustics => {
             // Same probably-bug as on HalfInning events
-            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
+            let (team_subseasonal_mod_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
+            assert!(!is_terminal);
 
             // For some reason the description on the main event is empty and the description is
             // only on the child event
@@ -3316,7 +3144,7 @@ pub fn parse_next_event(
                 mod_name: mod_name.to_string(),
                 mod_id: child.metadata_str("mod")?.to_string(),
                 sub_event: child.as_sub_event(),
-                subseasonal_mod_effects,
+                team_subseasonal_mod_changes,
             }
         }
         EventType::EchoReciever => {
@@ -3377,55 +3205,7 @@ pub fn parse_next_event(
             }
         }
         EventType::Middling => {
-            let changes = event.next_parse(parse_middling)?.into_iter()
-                .map(|change| {
-                    ParseOk(match change {
-                        ParsedMiddling::Team((team_nickname, active)) => {
-                            assert!(is_known_team_nickname(team_nickname));
-
-                            let mut sub_event = event.next_child(
-                                if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
-                            let team_id = sub_event.next_team_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Team {
-                                    team_id,
-                                    team_nickname: Some(team_nickname.to_string()),
-                                },
-                                source_mod: SubseasonalMod::Middling,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(team_id, SubseasonalMod::Middling.mod_id().to_string())),
-
-                            }
-                        }
-                        ParsedMiddling::Player((player_name, active)) => {
-                            let mut sub_event = event.next_child(
-                                if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
-                            let player_id = sub_event.next_player_id()?;
-                            SubseasonalModChange {
-                                subject: ModChangeSubject::Player {
-                                    team_id: sub_event.next_team_id()?,
-                                    player_id,
-                                    player_name: player_name.to_string(),
-                                },
-                                source_mod: SubseasonalMod::Middling,
-                                sub_event: Some(sub_event.as_sub_event()),
-                                active,
-                                // There's probably a way to get around the to_string here, but it's
-                                // not important enough to worry about
-                                dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Middling.mod_id().to_string())),
-                            }
-                        }
-                    })
-                })
-                .collect::<Result<_, _>>()?;
-
-            FedEventData::SubseasonalModsChange {
-                game: event.game(unscatter, attractor_secret_base)?,
-                changes,
-            }
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Middling, event.game(unscatter, attractor_secret_base)?)?
         }
         EventType::PlayerAttributeIncrease => { todo!() }
         EventType::PlayerAttributeDecrease => { todo!() }
@@ -3452,73 +3232,13 @@ pub fn parse_next_event(
             }
         }
         EventType::Ambitious => {
-            // Same probably-bug as in HalfInning events
-            let mut changes = event.parse_subseasonal_mod_changes(state)?;
-
-            let more_changes = event.next_parse(parse_ambitious)?.into_iter()
-                .map(|(player_name, active)| {
-                    let mut sub_event = event.next_child(
-                        if active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
-                    let player_id = sub_event.next_player_id()?;
-                    ParseOk(SubseasonalModChange {
-                        subject: ModChangeSubject::Player {
-                            team_id: sub_event.next_team_id()?,
-                            player_id,
-                            player_name: player_name.to_string(),
-                        },
-                        source_mod: SubseasonalMod::Ambitious,
-                        sub_event: Some(sub_event.as_sub_event()),
-                        active,
-                        // There's probably a way to get around the to_string here, but it's
-                        // not important enough to worry about
-                        dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Middling.mod_id().to_string())),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            // I would like to extend with the iterator directly, but I don't see a way to do it
-            // that also propagates results
-            changes.extend(more_changes.into_iter());
-
-            FedEventData::SubseasonalModsChange {
-                game: event.game(unscatter, attractor_secret_base)?,
-                changes,
-            }
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Ambitious, event.game(unscatter, attractor_secret_base)?)?
+        }
+        EventType::Unambitious => {
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Unambitious, event.game(unscatter, attractor_secret_base)?)?
         }
         EventType::Coasting => {
-            // Sometimes other subseasonal mods get tacked on to Coasting. This seems like a bug.
-            // TODO Unify subseasonal_mod_effects and changes
-            let subseasonal_mod_effects = event.parse_subseasonal_mod_changes(state)?;
-
-            let (is_now_coasting, coasters) = event.next_parse(parse_coasting)?;
-            let changes: Vec<_> = coasters.into_iter()
-                .map(|player_name| {
-                    let mut sub_event = event.next_child(if is_now_coasting {
-                        EventType::AddedModFromOtherMod
-                    } else {
-                        EventType::RemovedModFromOtherMod
-                    })?;
-                    let player_id = sub_event.next_player_id()?;
-                    ParseOk(SubseasonalModChange {
-                        subject: ModChangeSubject::Player {
-                            team_id: sub_event.next_team_id()?,
-                            player_id,
-                            player_name: player_name.to_string(),
-                        },
-                        source_mod: SubseasonalMod::Coasting,
-                        sub_event: Some(sub_event.as_sub_event()),
-                        active: is_now_coasting,
-                        // There's probably a way to get around the to_string here, but it's
-                        // not important enough to worry about
-                        dependent_mod_change: state.extract_dependent_mod(&(player_id, SubseasonalMod::Coasting.mod_id().to_string())),
-                    })
-                })
-                .collect::<Result<_, _>>()?;
-
-            FedEventData::SubseasonalModsChange {
-                game: event.game(unscatter, attractor_secret_base)?,
-                changes: Vec::from_iter(subseasonal_mod_effects.into_iter().chain(changes)),
-            }
+            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Coasting, event.game(unscatter, attractor_secret_base)?)?
         }
         EventType::ItemBreaks => { todo!() }
         EventType::ItemDamaged => { todo!() }
@@ -3666,9 +3386,11 @@ pub fn parse_next_event(
             let hype = event.parse_hype()?;
 
             let score_summary = event.parse_score_summary()?
-                .ok_or_else(|| FeedParseError::NotEnoughChildren {
-                    event_type: event.event_type,
-                    expected_at_least: 1,
+                .ok_or_else(|| {
+                    FeedParseError::NotEnoughChildren {
+                        event_type: event.event_type,
+                        expected_at_least: 1,
+                    }
                 })?;
 
             FedEventData::Moderation {
@@ -3770,6 +3492,30 @@ pub fn parse_next_event(
     };
 
     Ok(Some(event.to_fed(data)?))
+}
+
+fn parse_subseasonal_mod_change_event(state: &InterEventState, mut event: EventParseWrapper, which_mod: SubseasonalMod, game: GameEvent) -> Result<FedEventData, FeedParseError> {
+    let (team_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
+
+    Ok(if is_terminal {
+        FedEventData::TeamSubseasonalModsChange {
+            game,
+            change: team_changes
+                .into_iter()
+                .exactly_one()
+                .map_err(|err| FeedParseError::UnexpectedCompoundEvent {
+                    event_type: event.event_type,
+                })?
+        }
+    } else {
+        let player_change = event.parse_player_subseasonal_mod_change(state, which_mod)?;
+
+        FedEventData::PlayerSubseasonalModsChange {
+            game,
+            team_changes,
+            player_change,
+        }
+    })
 }
 
 fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool, mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>) -> Result<FedEventData, FeedParseError> {

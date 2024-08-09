@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -35,6 +35,14 @@ impl Display for Runs {
         } else {
             write!(f, "{} Runs", self.0)
         }
+    }
+}
+
+fn reverse_performing(input: &str) -> &'static str {
+    if input == "OVERPERFORMING" {
+        "UNDERPERFORMING"
+    } else {
+        "OVERPERFORMING"
     }
 }
 
@@ -768,6 +776,84 @@ impl EventBuilder {
             })
         });
     }
+
+    pub fn push_team_subseasonal_mod_changes(&mut self, changes: impl IntoIterator<Item=SubseasonalModChange<TeamModChangeSubject>>, season: i32, day: i32) {
+        for change in changes {
+            self.push_team_subseasonal_mod_change(change, season, day);
+        }
+    }
+
+    pub fn push_team_subseasonal_mod_change(&mut self, change: SubseasonalModChange<TeamModChangeSubject>, season: i32, day: i32) {
+        let display_team_nickname = change.subject.team_nickname.unwrap_or_else(|| "[object Object]".to_string());
+        let description = if season < 15 {
+            if let Some(prefix) = change.source_mod.prefix() {
+                self.push_description(prefix);
+            }
+            if change.active {
+                format!("The {} are {}!", display_team_nickname, change.source_mod.label_for_teams())
+            } else {
+                format!("{} wears off for the {}.", change.source_mod.label_for_teams(), display_team_nickname)
+            }
+        } else {
+            if change.active {
+                format!("The {} are {}.", display_team_nickname, change.source_mod.label_for_teams())
+            } else {
+                format!("{} are no longer {}.", display_team_nickname, change.source_mod.label_for_teams())
+            }
+        };
+
+        self.push_description(&description);
+        if let Some(sub_event) = change.sub_event {
+            self.push_child(sub_event, |mut child| {
+                child.push_description(&description);
+                child.push_team_tag(change.subject.team_id);
+                // On s19d72, EarlyToTheParty added the wrong Performing. This was fixed on day 73.
+                let performing_mod_id = if change.source_mod == SubseasonalMod::EarlyToTheParty && season == 19 && day == 72 {
+                    reverse_performing(change.source_mod.performing_mod_id())
+                } else {
+                    change.source_mod.performing_mod_id()
+                };
+                child.push_metadata_str("mod", performing_mod_id);
+                child.push_metadata_str("source", change.source_mod.mod_id());
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(if change.active {
+                    EventType::AddedModFromOtherMod
+                } else {
+                    EventType::RemovedModFromOtherMod
+                })
+            })
+        }
+    }
+
+    pub fn push_player_subseasonal_mod_change(&mut self, change: SubseasonalModChange<PlayerModChangeSubject>) {
+        let description = match (change.active, change.source_mod) {
+            // Specific language for specific mods
+            (false, SubseasonalMod::Ambitious) => format!("{} loses their Ambition.", change.subject.player_name),
+            (false, SubseasonalMod::Coasting) => format!("{} stops Coasting.", change.subject.player_name),
+            // General cases
+            (true, m) => format!("{} is {}.", change.subject.player_name, m.label_for_players()),
+            (false, m) => format!("{} is no longer {}.", change.subject.player_name, m.label_for_players()),
+        };
+
+        self.push_description(&description);
+        self.push_player_tag(change.subject.player_id);
+        if let Some(sub_event) = change.sub_event {
+            self.push_child(sub_event, |mut child| {
+                child.push_description(&description);
+                child.push_team_tag(change.subject.team_id);
+                child.push_player_tag(change.subject.player_id);
+                child.push_metadata_str("mod", change.source_mod.performing_mod_id());
+                child.push_metadata_str("source", change.source_mod.mod_id());
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(if change.active {
+                    EventType::AddedModFromOtherMod
+                } else {
+                    EventType::RemovedModFromOtherMod
+                })
+            })
+        }
+    }
+
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);

@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, ModChangeSubject, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -43,90 +43,6 @@ fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mo
                 "to": mod_name,
                 "type": 0, // ?
             }))
-    }
-}
-
-fn push_subseasonal_mod_changes(eb: &mut EventBuilder, effects: Vec<SubseasonalModChange>, season: i32, day: i32) {
-    for effect in effects {
-        match effect.subject {
-            ModChangeSubject::Player { team_id, player_id, player_name } => {
-                let description = match (effect.active, effect.source_mod) {
-                    // Specific language for specific mods
-                    (false, SubseasonalMod::Ambitious) => format!("{} loses their Ambition.", player_name),
-                    (false, SubseasonalMod::Coasting) => format!("{} stops Coasting.", player_name),
-                    // General cases
-                    (true, m) => format!("{} is {}.", player_name, m.label_for_players()),
-                    (false, m) => format!("{} is no longer {}.", player_name, m.label_for_players()),
-                };
-
-                eb.push_description(&description);
-                eb.push_player_tag(player_id);
-                if let Some(sub_event) = effect.sub_event {
-                    eb.push_child(sub_event, |mut child| {
-                        child.push_description(&description);
-                        child.push_team_tag(team_id);
-                        child.push_player_tag(player_id);
-                        child.push_metadata_str("mod", effect.source_mod.performing_mod_id());
-                        child.push_metadata_str("source", effect.source_mod.mod_id());
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(if effect.active {
-                            EventType::AddedModFromOtherMod
-                        } else {
-                            EventType::RemovedModFromOtherMod
-                        })
-                    })
-                }
-            }
-            ModChangeSubject::Team { team_id, team_nickname } => {
-                let display_team_nickname = team_nickname.unwrap_or_else(|| "[object Object]".to_string());
-                let description = if season < 15 {
-                    if let Some(prefix) = effect.source_mod.prefix() {
-                        eb.push_description(prefix);
-                    }
-                    if effect.active {
-                        format!("The {} are {}!", display_team_nickname, effect.source_mod.label_for_teams())
-                    } else {
-                        format!("{} wears off for the {}.", effect.source_mod.label_for_teams(), display_team_nickname)
-                    }
-                } else {
-                    if effect.active {
-                        format!("The {} are {}.", display_team_nickname, effect.source_mod.label_for_teams())
-                    } else {
-                        format!("{} are no longer {}.", display_team_nickname, effect.source_mod.label_for_teams())
-                    }
-                };
-
-                eb.push_description(&description);
-                if let Some(sub_event) = effect.sub_event {
-                    eb.push_child(sub_event, |mut child| {
-                        child.push_description(&description);
-                        child.push_team_tag(team_id);
-                        // On s19d72, EarlyToTheParty added the wrong Performing. This was fixed on day 73.
-                        let performing_mod_id = if effect.source_mod == SubseasonalMod::EarlyToTheParty && season == 19 && day == 72 {
-                            reverse_performing(effect.source_mod.performing_mod_id())
-                        } else {
-                            effect.source_mod.performing_mod_id()
-                        };
-                        child.push_metadata_str("mod", performing_mod_id);
-                        child.push_metadata_str("source", effect.source_mod.mod_id());
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                        child.build(if effect.active {
-                            EventType::AddedModFromOtherMod
-                        } else {
-                            EventType::RemovedModFromOtherMod
-                        })
-                    })
-                }
-            }
-        }
-    }
-}
-
-fn reverse_performing(input: &str) -> &'static str {
-    if input == "OVERPERFORMING" {
-        "UNDERPERFORMING"
-    } else {
-        "OVERPERFORMING"
     }
 }
 
@@ -210,9 +126,9 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, subseasonal_mod_effects } => {
+            FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, team_subseasonal_mod_changes } => {
                 eb.set_game(game);
-                push_subseasonal_mod_changes(&mut eb, subseasonal_mod_effects, self.season, self.day);
+                eb.push_team_subseasonal_mod_changes(team_subseasonal_mod_changes, self.season, self.day);
                 eb.push_description(&format!("{} of {inning}, {batting_team_name} batting.",
                                              if top_of_inning { "Top" } else { "Bottom" }));
                 eb.build(EventType::HalfInning)
@@ -2291,18 +2207,19 @@ impl FedEvent {
                 eb.set_full_metadata(metadata);
                 eb.build(EventType::BlessingOrGiftWon)
             }
-            FedEventData::SubseasonalModsChange { game, changes } => {
+            FedEventData::TeamSubseasonalModsChange { game, change } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-
-                // I'm guessing the last mod determines the event type?
-                let event_type = changes.last()
-                    .expect("SubseasonalModsChange should never have an empty changes vec")
-                    .source_mod
-                    .event_type();
-
-                push_subseasonal_mod_changes(&mut eb, changes, self.season, self.day);
-
+                let event_type = change.source_mod.event_type();
+                eb.push_team_subseasonal_mod_change(change, self.season, self.day);
+                eb.build(event_type)
+            }
+            FedEventData::PlayerSubseasonalModsChange { game, team_changes, player_change } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_team_subseasonal_mod_changes(team_changes, self.season, self.day);
+                let event_type = player_change.source_mod.event_type();
+                eb.push_player_subseasonal_mod_change(player_change);
                 eb.build(event_type)
             }
             FedEventData::DecreePassed { decree_title, metadata } => {
@@ -2851,10 +2768,10 @@ impl FedEvent {
 
                 eb.build(EventType::ConsumersAttack)
             }
-            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event, subseasonal_mod_effects } => {
+            FedEventData::Psychoacoustics { game, stadium_name, team_id, team_nickname, mod_name, mod_id, sub_event, team_subseasonal_mod_changes } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                push_subseasonal_mod_changes(&mut eb, subseasonal_mod_effects, self.season, self.day);
+                eb.push_team_subseasonal_mod_changes(team_subseasonal_mod_changes, self.season, self.day);
 
                 let description = format!("{stadium_name} is Resonating.\nPsychoAcoustics Echo {mod_name} {} the {team_nickname}.",
                                           if (self.season, self.day) < (15, 33) { "at" } else { "to" });

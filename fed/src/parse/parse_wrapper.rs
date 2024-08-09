@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
+use nom::bytes::complete::tag;
 use nom::combinator::opt;
 use nom::error::convert_error;
 use nom::sequence::preceded;
@@ -497,6 +498,11 @@ impl<'e> EventParseWrapper<'e> {
             })
     }
 
+    pub fn parse_newline(&mut self) -> Result<(), FeedParseError> {
+        self.next_parse(tag("\n"))?;
+        Ok(())
+    }
+
     pub fn parse_spicy_status(&mut self, batter_name: &str) -> Result<SpicyStatus, FeedParseError> {
         Ok(match self.next_parse(parse_spicy_status(batter_name))? {
             ParsedSpicyStatus::None => { SpicyStatus::None }
@@ -977,26 +983,79 @@ impl<'e> EventParseWrapper<'e> {
         }).transpose()
     }
 
-    pub fn parse_subseasonal_mod_changes(&mut self, state: &InterEventState) -> Result<Vec<SubseasonalModChange>, FeedParseError> {
-        self.next_parse(parse_subseasonal_mod_changes)?.into_iter()
-            .map(|(team_nickname, source_mod, is_active)| {
-                let mut child = self.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
-                let team_id = child.next_team_id()?;
+    pub fn parse_team_subseasonal_mod_changes(&mut self, state: &InterEventState) -> Result<(Vec<SubseasonalModChange<TeamModChangeSubject>>, bool), FeedParseError> {
+        let results = self.next_parse(parse_team_subseasonal_mod_changes)?.into_iter()
+            .map(|(team_nickname, source_mod, active)| {
+                let mut child = self.next_child_any_opt(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+                // Team ID is normally on the child, but if the child doesn't have one, I'm trying
+                // out falling back to the first ID listed on the parent. I'm almost certain this
+                // will be wrong and need to be changed, but I want proof that that's the case
+                // first.
+                let team_id = child.as_mut()
+                    .map_or_else(|| self.next_team_id(), |c| c.next_team_id())?;
+
+                if let Some(nick) = team_nickname {
+                    assert!(is_known_team_nickname(nick));
+                }
 
                 ParseOk(SubseasonalModChange {
-                    subject: ModChangeSubject::Team {
+                    subject: TeamModChangeSubject {
                         team_id,
-                        team_nickname: Some(team_nickname.to_string()),
+                        team_nickname: team_nickname.map(str::to_string),
                     },
                     source_mod,
-                    active: child.event_type == EventType::AddedModFromOtherMod,
-                    sub_event: Some(child.as_sub_event()),
+                    active,
+                    sub_event: child.as_ref().map(EventParseWrapper::as_sub_event),
                     // There's probably a way to get around the to_string here, but it's not
                     // important enough to worry about
                     dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
                 })
             })
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let is_terminal = if results.is_empty() {
+            // If there were no team mod changes, this can't be the end of the event because that
+            // would make it an empty event (assuming there was nothing parsed before this, which so
+            // far has always been true)
+            false
+        } else {
+            // If there were some team mod changes, there's a newline iff there is more text after
+            // this, i.e. this section is terminal iff there was no newline
+            self.next_parse(opt(tag("\n")))?.is_none()
+        };
+
+        Ok((results, is_terminal))
+    }
+
+    pub fn parse_player_subseasonal_mod_change(&mut self, state: &InterEventState, source_mod: SubseasonalMod) -> Result<SubseasonalModChange<PlayerModChangeSubject>, FeedParseError> {
+        let (player_name, is_active) = self.next_parse(parse_player_subseasonal_mod_change(source_mod))?;
+        self.parse_player_subseasonal_mod_change_internal(state, source_mod, player_name, is_active)
+    }
+
+    pub fn parse_player_subseasonal_mod_change_opt(&mut self, state: &InterEventState, source_mod: SubseasonalMod) -> Result<Option<SubseasonalModChange<PlayerModChangeSubject>>, FeedParseError> {
+        self.next_parse_opt(parse_player_subseasonal_mod_change(source_mod)).map(|(player_name, is_active)| {
+            self.parse_player_subseasonal_mod_change_internal(state, source_mod, player_name, is_active)
+        }).transpose()
+    }
+
+    fn parse_player_subseasonal_mod_change_internal(&mut self, state: &InterEventState, source_mod: SubseasonalMod, player_name: &str, is_active: bool) -> Result<SubseasonalModChange<PlayerModChangeSubject>, FeedParseError> {
+        let mut child = self.next_child(if is_active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
+        let player_id = child.next_player_id()?;
+        let team_id = child.next_team_id()?;
+
+        ParseOk(SubseasonalModChange {
+            subject: PlayerModChangeSubject {
+                team_id,
+                player_id,
+                player_name: player_name.to_string(),
+            },
+            source_mod,
+            active: child.event_type == EventType::AddedModFromOtherMod,
+            sub_event: Some(child.as_sub_event()),
+            // There's probably a way to get around the to_string here, but it's not
+            // important enough to worry about
+            dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
+        })
     }
 
     pub fn parse_win_event(&mut self) -> Result<Option<WinSubEvent>, FeedParseError> {

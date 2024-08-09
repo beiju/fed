@@ -3,7 +3,7 @@ use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
-use nom::multi::{many0, separated_list1};
+use nom::multi::{many0, separated_list0, separated_list1};
 use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
@@ -14,6 +14,12 @@ use crate::parse::PendingPrizeMatch;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
+
+pub(crate) fn parse_opt_newline(input: &str) -> ParserResult<bool> {
+    let (input, newline) = opt(tag("\n")).parse(input)?;
+
+    Ok((input, newline.is_some()))
+}
 
 pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {
@@ -1583,38 +1589,6 @@ pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
-pub(crate) enum EarlbirdsChange<'a> {
-    AddedToTeam(&'a str),
-    // This one says [object Object]. lol & lmao
-    RemovedFromTeam,
-    AddedToPlayer(&'a str),
-    RemovedFromPlayer(&'a str),
-}
-
-pub(crate) fn parse_earlbird(input: &str) -> ParserResult<Vec<EarlbirdsChange>> {
-    separated_list1(tag("\n"), alt((parse_team_earlbird, parse_player_earlbird))).parse(input)
-}
-
-pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
-    let (input, _) = tag("Happy Earlseason!\n").parse(input)?;
-    let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| EarlbirdsChange::AddedToTeam(n)),
-        tag("Earlbirds wears off for the [object Object].").map(|_| EarlbirdsChange::RemovedFromTeam),
-    )).parse(input)?;
-
-    Ok((input, result))
-}
-
-pub(crate) fn parse_player_earlbird(input: &str) -> ParserResult<EarlbirdsChange> {
-    let (input, result) = alt((
-        parse_terminated(" is an Earlbird.").map(|n| EarlbirdsChange::AddedToPlayer(n)),
-        // Total guess at what the text should be here
-        parse_terminated(" is no longer an Earlbird.").map(|n| EarlbirdsChange::RemovedFromPlayer(n)),
-    )).parse(input)?;
-
-    Ok((input, result))
-}
-
 pub(crate) enum LateToThePartyChange<'a> {
     AddedToTeam(&'a str),
     RemovedFromTeam(&'a str),
@@ -1909,23 +1883,6 @@ pub(crate) enum ParsedMiddling<'a> {
     Player((&'a str, bool)),
 }
 
-pub(crate) fn parse_middling(input: &str) -> ParserResult<Vec<ParsedMiddling>> {
-    separated_list1(tag("\n"), alt((
-        parse_team_middling.map(|res| ParsedMiddling::Team(res)),
-        parse_player_middling.map(|res| ParsedMiddling::Player(res)),
-    ))).parse(input)
-}
-
-pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
-    let (input, _) = tag("Happy Midseason!\n").parse(input)?;
-    let (input, result) = alt((
-        preceded(tag("The "), parse_terminated(" are Middling!")).map(|m| (m, true)),
-        preceded(tag("Middling wears off for the "), parse_terminated(".")).map(|m| (m, false)),
-    )).parse(input)?;
-
-    Ok((input, result))
-}
-
 pub(crate) fn parse_player_middling(input: &str) -> ParserResult<(&str, bool)> {
     alt((
         parse_terminated(" is Middling.").map(|m| (m, true)),
@@ -2136,24 +2093,106 @@ pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResul
     Ok((input, (team_name, mod_name)))
 }
 
-pub(crate) fn parse_subseasonal_mod_changes(input: &str) -> ParserResult<Vec<(&str, SubseasonalMod, bool)>> {
-    many0(parse_subseasonal_mod).parse(input)
+pub(crate) fn parse_team_subseasonal_mod_changes(input: &str) -> ParserResult<Vec<(Option<&str>, SubseasonalMod, bool)>> {
+    let (input, results) = separated_list0(tag("\n"), parse_team_subseasonal_mod_change).parse(input)?;
+    Ok((input, results))
 }
 
-pub(crate) fn parse_subseasonal_mod(input: &str) -> ParserResult<(&str, SubseasonalMod, bool)> {
+pub(crate) fn parse_team_subseasonal_mod_change(input: &str) -> ParserResult<(Option<&str>, SubseasonalMod, bool)> {
+    alt((
+        // For this event, `name` is None iff the mod was removed. I don't assume that's true in general.
+        parse_team_earlbird.map(|name| (name, SubseasonalMod::Earlbirds, name.is_some())),
+        // If there are more "self-announcing" mods, this function should be made more generic
+        parse_team_late_to_the_party.map(|(name, is_active)| (Some(name), SubseasonalMod::LateToTheParty, is_active)),
+        // If there are more "happy midseason" mods, this function should be made more generic
+        parse_team_middling.map(|(name, is_active)| (Some(name), SubseasonalMod::Middling, is_active)),
+        parse_simple_team_subseasonal_mod_change.map(|(name, which_mod, is_active)| (Some(name), which_mod, is_active)),
+    )).parse(input)
+}
+
+pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<Option<&str>> {
+    let (input, _) = tag("Happy Earlseason!\n").parse(input)?;
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| Some(n)),
+        tag("Earlbirds wears off for the [object Object].").map(|_| None),
+    )).parse(input)?;
+
+    Ok((input, result))
+}
+
+pub(crate) fn parse_team_late_to_the_party(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, _) = tag("Late to the Party!\n").parse(input)?;
+
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Late to the Party!")).map(|name| (name, true)),
+        preceded(tag("Late to the Party wears off for the "), parse_terminated(".")).map(|name| (name, false)),
+    )).parse(input)?;
+
+    Ok((input, result))
+}
+
+pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
+    let (input, _) = tag("Happy Midseason!\n").parse(input)?;
+
+    let (input, result) = alt((
+        preceded(tag("The "), parse_terminated(" are Middling!")).map(|name| (name, true)),
+        preceded(tag("Middling wears off for the "), parse_terminated(".")).map(|name| (name, false)),
+    )).parse(input)?;
+
+    Ok((input, result))
+}
+
+pub(crate) fn parse_simple_team_subseasonal_mod_change(input: &str) -> ParserResult<(&str, SubseasonalMod, bool)> {
     let (input, (team_name, active)) = alt((
         preceded(tag("The "), parse_terminated(" are ")).map(|n| (n, true)),
         // When the mod deactivates you don't get the "The" apparently
         parse_terminated(" are no longer ").map(|n| (n, false)),
     )).parse(input)?;
+
     let (input, which_mod) = alt((
         tag("Middling").map(|_| SubseasonalMod::Middling),
         tag("Early to the Party").map(|_| SubseasonalMod::EarlyToTheParty),
         tag("Late to the Party").map(|_| SubseasonalMod::LateToTheParty),
     )).parse(input)?;
-    let (input, _) = tag(".\n").parse(input)?;
+
+    let (input, _) = tag(".").parse(input)?;
 
     Ok((input, (team_name, which_mod, active)))
+}
+
+pub(crate) fn parse_player_subseasonal_mod_change(which_mod: SubseasonalMod) -> impl Fn(&str) -> ParserResult<(&str, bool)> {
+    move |input| {
+        match which_mod {
+            SubseasonalMod::Ambitious => {
+                let (input, (player_name, is_active)) = alt((
+                    parse_terminated(" is feeling Ambitious...").map(|name| (name, true)),
+                    parse_terminated(" loses their Ambition.").map(|name| (name, false)),
+                )).parse(input)?;
+
+                Ok((input, (player_name, is_active)))
+            }
+            SubseasonalMod::Coasting => {
+                let (input, (player_name, is_active)) = alt((
+                    parse_terminated(" is Coasting.").map(|name| (name, true)),
+                    parse_terminated(" stops Coasting.").map(|name| (name, false)),
+                )).parse(input)?;
+
+                Ok((input, (player_name, is_active)))
+            }
+            other_mod => {
+                let (input, (player_name, is_active)) = alt((
+                    // Order matters -- the second is a substring of the first, so the first must
+                    // be... first
+                    parse_terminated(" is no longer ").map(|name| (name, false)),
+                    parse_terminated(" is ").map(|name| (name, true)),
+                )).parse(input)?;
+                let (input, _) = tag(other_mod.label_for_players()).parse(input)?;
+                let (input, _) = tag(".").parse(input)?;
+
+                Ok((input, (player_name, is_active)))
+            }
+        }
+    }
 }
 
 pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<(&str, Option<&str>)> {
