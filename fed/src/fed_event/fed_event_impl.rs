@@ -2592,75 +2592,74 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::Echo { game, echoee_name, primary_echo: main_echo, receiver_echos: sub_echos, } => {
-                let make_children_for_echo = |echo: Echo, mod_type: i64, source: &str, echo_description: &str| {
-                    let child_removed = echo.mods_removed.map(|mods_removed| {
-                        let removes: Vec<_> = mods_removed.mod_ids.into_iter()
-                            .map(|mod_id| json!({ "type": mod_type, "mod": mod_id }))
-                            .collect();
+            FedEventData::Echo { game, echoee_name, primary_echo, receiver_echos, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{} Echoed {echoee_name}!", primary_echo.receiver_name));
 
-                        EventBuilderChild::new(&mods_removed.sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::RemovedModsFromAnotherMod,
-                                category: EventCategory::Changes,
-                                description: format!("{}'s {}Echo faded.", echo.receiver_name,
-                                                     if mod_type == 0 { "" } else { "Echoed " }),
-                                player_tags: vec![echo.receiver_id],
-                                team_tags: vec![echo.receiver_team_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "removes": removes,
-                                "source": source,
-                            }))
+                if let Some(mods_removed) = primary_echo.mods_removed {
+                    eb.push_child(mods_removed.sub_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{}'s Echo faded.", primary_echo.receiver_name));
+                        child_eb.push_player_tag(primary_echo.receiver_id);
+                        child_eb.push_team_tag(primary_echo.receiver_team_id);
+
+                        let removes_vec = mods_removed.mods.into_iter()
+                            .map(|m| json!({ "mod": m.mod_id, "type": m.mod_duration as i64 }))
+                            .collect();
+                        child_eb.push_metadata_json_vec("removes", removes_vec);
+                        child_eb.push_metadata_str("source", "ECHO");
+
+                        child_eb.build(EventType::RemovedModsFromAnotherMod)
                     });
-                    let child_added = {
-                        let adds: Vec<_> = echo.mods_added.mod_ids.into_iter()
-                            .map(|mod_id| json!({ "type": mod_type, "mod": mod_id }))
+                }
+
+                eb.push_child(primary_echo.mods_added.sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!( "{} Echoed {echoee_name}!", primary_echo.receiver_name));
+                    child_eb.push_player_tag(primary_echo.receiver_id);
+                    child_eb.push_team_tag(primary_echo.receiver_team_id);
+
+                    let adds_vec = primary_echo.mods_added.mods.into_iter()
+                        .map(|m| json!({ "mod": m.mod_id, "type": m.mod_duration as i64 }))
+                        .collect();
+                    child_eb.push_metadata_json_vec("adds", adds_vec);
+                    child_eb.push_metadata_str("source", "ECHO");
+
+                    child_eb.build(EventType::AddedModsFromAnotherMod)
+                });
+
+                for receiver_echo in receiver_echos {
+                    if let Some(mods_removed) = receiver_echo.mods_removed {
+                        eb.push_child(mods_removed.sub_event, |mut child_eb| {
+                            child_eb.push_description(&format!( "{}'s Echoed Echo faded.", receiver_echo.receiver_name));
+                            child_eb.push_player_tag(receiver_echo.receiver_id);
+                            child_eb.push_team_tag(receiver_echo.receiver_team_id);
+
+                            let removes_vec = mods_removed.mods.into_iter()
+                                .map(|m| json!({ "mod": m.mod_id, "type": m.mod_duration as i64 }))
+                                .collect();
+                            child_eb.push_metadata_json_vec("removes", removes_vec);
+                            child_eb.push_metadata_str("source", "RECEIVER");
+
+                            child_eb.build(EventType::RemovedModsFromAnotherMod)
+                        });
+                    }
+
+                    eb.push_child(receiver_echo.mods_added.sub_event, |mut child_eb| {
+                        child_eb.push_description(&format!( "{}'s Echoed an Echo from {}!", receiver_echo.receiver_name, primary_echo.receiver_name));
+                        child_eb.push_player_tag(receiver_echo.receiver_id);
+                        child_eb.push_team_tag(receiver_echo.receiver_team_id);
+
+                        let adds_vec = receiver_echo.mods_added.mods.into_iter()
+                            .map(|m| json!({ "mod": m.mod_id, "type": m.mod_duration as i64 }))
                             .collect();
+                        child_eb.push_metadata_json_vec("adds", adds_vec);
+                        child_eb.push_metadata_str("source", "RECEIVER");
 
-                        EventBuilderChild::new(&echo.mods_added.sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::AddedModsFromAnotherMod,
-                                category: EventCategory::Changes,
-                                description: format!("{}{echo_description}!", echo.receiver_name),
-                                player_tags: vec![echo.receiver_id],
-                                team_tags: vec![echo.receiver_team_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "adds": adds,
-                                "source": source,
-                            }))
-                    };
+                        child_eb.build(EventType::AddedModsFromAnotherMod)
+                    });
+                }
 
-                    (child_removed, child_added)
-                };
-
-                let receiver_echo_description = format!("'s Echoed an Echo from {}", main_echo.receiver_name);
-                let main_echo_children = make_children_for_echo(main_echo, 0, "ECHO",
-                                                                &format!(" Echoed {echoee_name}"));
-                let sub_echo_children = sub_echos.into_iter()
-                    .map(|sub_echo| make_children_for_echo(sub_echo, 1, "RECEIVER",
-                                                           &receiver_echo_description));
-
-                let description = main_echo_children.1.update.description.clone();
-                let children = iter::once(main_echo_children)
-                    .chain(sub_echo_children)
-                    .map(|(removed, added)| [removed, Some(added)])
-                    .flatten() // This one should flatten the array
-                    .flatten() // This one should flatten the options
-                    .collect_vec(); // for debugging
-
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Echo,
-                        category: EventCategory::Special,
-                        description,
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                eb.build(EventType::Echo)
             }
             FedEventData::SolarPanelsAwait { game } => {
                 eb.set_game(game);

@@ -889,7 +889,7 @@ pub enum RenovationVotes {
 #[serde(rename_all = "camelCase")]
 pub struct MultipleModsAddedOrRemoved {
     /// Vector of mods that were added/removed. Each mod is represented by its internal ID.
-    pub mod_ids: Vec<String>,
+    pub mods: Vec<ModDesc>,
 
     /// Metadata for the event associated with adding or removing these mods
     pub sub_event: SubEvent,
@@ -1515,9 +1515,11 @@ pub struct Attraction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ModDesc {
     /// Internal name of the mod
+    #[serde(alias = "mod")]
     pub mod_id: String,
 
     /// Duration of the mod
+    #[serde(alias = "type")]
     pub mod_duration: ModDuration,
 }
 

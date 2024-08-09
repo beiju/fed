@@ -1724,9 +1724,11 @@ pub fn parse_next_event(
             let is_fraudulent_reno_fix = event.metadata()
                 .as_object()
                 .and_then(|obj| obj.get("votes"))
-                .ok_or_else(|| FeedParseError::MissingMetadata {
-                    event_type: event.event_type,
-                    field: "votes".to_string(),
+                .ok_or_else(|| {
+                    FeedParseError::MissingMetadata {
+                        event_type: event.event_type,
+                        field: "votes".to_string(),
+                    }
                 })?
                 .is_string();
 
@@ -3557,45 +3559,92 @@ fn make_echo(echoer_name: &str, events: (Option<EventParseWrapper>, EventParseWr
 }
 
 #[derive(Deserialize)]
-struct ModAndType {
-    r#mod: String,
-    // r#type: i32,
+struct RawModDesc {
+    pub r#mod: String,
+    pub r#type: i64,
 }
+
+impl TryFrom<RawModDesc> for ModDesc {
+    type Error = <ModDuration as TryFrom<i64>>::Error;
+
+    fn try_from(value: RawModDesc) -> Result<Self, Self::Error> {
+        Ok(Self {
+            mod_id: value.r#mod,
+            mod_duration: value.r#type.try_into()?,
+        })
+    }
+}
+
+// impl TryInto<ModDesc> for RawModDesc {
+//     type Error = <ModDuration as TryFrom<i64>>::Error;
+//
+//     fn try_into(self) -> Result<ModDesc, Self::Error> {
+//         Ok(ModDesc {
+//             mod_id: self.r#mod,
+//             mod_duration: self.r#type.try_into()?,
+//         })
+//     }
+// }
 
 fn get_mods_removed(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
     #[derive(Deserialize)]
     struct EchoMetadata {
-        removes: Vec<ModAndType>,
+        removes: Vec<RawModDesc>,
     }
 
+    let _metadata = format!("metadata: {}", event.metadata());
+
     let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
-        .map_err(|_| FeedParseError::MissingMetadata {
-            event_type: event.event_type,
-            field: "removes".to_string(),
+        .map_err(|e| {
+            let _err_str = format!("err: {}", e);
+            FeedParseError::MissingMetadata {
+                event_type: event.event_type,
+                field: "removes".to_string(),
+            }
         })?;
 
-    let mod_ids = des.removes.into_iter()
-        .map(|mod_and_type| mod_and_type.r#mod)
-        .collect();
-    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
+    Ok(MultipleModsAddedOrRemoved {
+        mods: des.removes.into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                FeedParseError::MetadataIntToEnumError {
+                    event_type: event.event_type,
+                    field: "removes".to_string(),
+                    err: format!("{e}"),
+                }
+            })?,
+        sub_event: event.as_sub_event(),
+    })
 }
 
 fn get_mods_added(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
     #[derive(Deserialize)]
     struct EchoMetadata {
-        adds: Vec<ModAndType>,
+        adds: Vec<RawModDesc>,
     }
 
     let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
-        .map_err(|_| FeedParseError::MissingMetadata {
-            event_type: event.event_type,
-            field: "adds".to_string(),
+        .map_err(|_| {
+            FeedParseError::MissingMetadata {
+                event_type: event.event_type,
+                field: "adds".to_string(),
+            }
         })?;
 
-    let mod_ids = des.adds.into_iter()
-        .map(|mod_and_type| mod_and_type.r#mod)
-        .collect();
-    Ok(MultipleModsAddedOrRemoved { mod_ids, sub_event: event.as_sub_event() })
+    Ok(MultipleModsAddedOrRemoved {
+        mods: des.adds.into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                FeedParseError::MetadataIntToEnumError {
+                    event_type: event.event_type,
+                    field: "adds".to_string(),
+                    err: format!("{e}"),
+                }
+            })?,
+        sub_event: event.as_sub_event(),
+    })
 }
 
 fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
