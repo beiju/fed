@@ -1773,7 +1773,7 @@ impl FedEvent {
                 if let Some(pressure_built) = pressure_built {
                     eb.push_child(pressure_built.sub_event, |mut child_eb| {
                         child_eb.push_description("Sun(Sun)'s Pressure built...");
-                        child_eb.push_metadata_f64("current", pressure_built.current);
+                        child_eb.push_metadata_f64("current", pressure_built.pressure_after);
                         child_eb.push_metadata_i64("maximum", 99999);
                         child_eb.push_metadata_i64("recharge", 26244);
                         child_eb.build(EventType::SunSunPressure)
@@ -3765,6 +3765,16 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::TunnelsUsed)
+            }
+            FedEventData::SunSunRecharged { pressure_after } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("Sun(Sun) Recharged.");
+
+                eb.push_metadata_f64("current", pressure_after);
+                eb.push_metadata_i64("maximum", 99999);
+                eb.push_metadata_i64("recharge", 26244);
+
+                eb.build(EventType::SunSunPressure)
             }
         };
 

@@ -1647,7 +1647,7 @@ pub fn parse_next_event(
             let pressure_built = pressure_built_event
                 .map(|mut pressure_built_event| {
                     ParseOk(PressureBuilt {
-                        current: pressure_built_event.metadata_f64("current")?,
+                        pressure_after: pressure_built_event.metadata_f64("current")?,
                         sub_event: pressure_built_event.as_sub_event(),
                     })
                 })
@@ -3324,6 +3324,7 @@ pub fn parse_next_event(
                 repair,
             }
         }
+        EventType::PlayerEnteredVault => { todo!() }
         EventType::ABloodType => {
             // Only the shoe thieves ever had this, and Psychoacoustics is incompatible with it.
             // Still, I'm going to parse it
@@ -3423,7 +3424,13 @@ pub fn parse_next_event(
                 earned_win: event.parse_earned_win_opt()?,
             }
         }
-        EventType::SunSunPressure => { todo!() }
+        EventType::SunSunPressure => {
+            let _ = event.next_parse_tag("Sun(Sun) Recharged.")?;
+
+            FedEventData::SunSunRecharged {
+                pressure_after: event.metadata_f64("current")?,
+            }
+        }
         EventType::FoundNothingInterestingInTunnels => { todo!() }
         EventType::CaughtStealingItemFromTunnels => { todo!() }
         EventType::StoleItemFromTunnels => { todo!() }

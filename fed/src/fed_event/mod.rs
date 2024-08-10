@@ -1963,9 +1963,10 @@ pub struct ScoreSummary {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PressureBuilt {
-    // TODO document fields
-    pub current: f64,
-    // Probably going to add more here
+    /// The amount of pressure after this pressure-building event
+    pub pressure_after: f64,
+
+    /// Metadata for the SunSunPressure sub-event
     pub sub_event: SubEvent,
 }
 
@@ -4007,7 +4008,6 @@ pub enum FedEventData {
         /// TODO Document
         effect: RenovationBuiltEffect,
 
-
     },
 
     /// The peanut mister activates and cures a player's peanut allergy
@@ -5403,6 +5403,16 @@ pub enum FedEventData {
         /// FoundNothingInterestingInTunnels event type
         sub_event: SubEvent,
     },
+
+    /// Sun(Sun) recharged at the end of the Season.
+    ///
+    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the recharge value is
+    /// always 26244, so those values are not stored.
+    #[serde(rename_all = "camelCase")]
+    SunSunRecharged {
+        /// The pressure after recharge
+        pressure_after: f64,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5639,6 +5649,7 @@ impl FedEventData {
             FedEventData::CaughtStealingItemWithTunnels { game, .. } => { Some(game) }
             FedEventData::StoleItemWithTunnels { game, .. } => { Some(game) }
             FedEventData::NothingInterestingInTunnels { game, .. } => { Some(game) }
+            FedEventData::SunSunRecharged { .. } => { None }
         }
     }
 }
