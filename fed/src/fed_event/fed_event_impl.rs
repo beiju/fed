@@ -1660,16 +1660,7 @@ impl FedEvent {
                             let description = format!("{player_name} {has}{returned_text} from Elsewhere after {time_elsewhere}!");
                             eb.push_description(&description);
 
-                            if let Some(Scattered { scattered_name, sub_event }) = scattered {
-                                eb.push_child(sub_event, |mut child| {
-                                    child.push_description(&format!("{scattered_name} was Scattered..."));
-                                    child.push_team_tag(team_id);
-                                    child.push_player_tag(player_id);
-                                    child.push_metadata_str("mod", "SCATTERED");
-                                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                                    child.build(EventType::AddedMod)
-                                });
-                            }
+                            eb.push_scattered(scattered, player_id, team_id);
 
                             eb.push_child(sub_event, |mut child| {
                                 child.push_description(&description);
@@ -1713,7 +1704,7 @@ impl FedEvent {
                                                       if is_peanut { "rolled back" } else { "returned" });
                             eb.push_description(&description);
                         }
-                        ReturnFromElsewhereFlavor::PulledBack { team_id, sought_player_id, seeker_player_id, seeker_player_name, sub_event, time_elsewhere } => {
+                        ReturnFromElsewhereFlavor::PulledBack { team_id, sought_player_id, seeker_player_id, seeker_player_name, scattered, sub_event, time_elsewhere } => {
                             eb.push_description(&format!("{seeker_player_name} sought out Elsewhere teammate {player_name}..."));
                             eb.push_player_tag(seeker_player_id);
                             let description = if let Some(time) = time_elsewhere {
@@ -1722,6 +1713,9 @@ impl FedEvent {
                                 format!("{player_name} was pulled back from Elsewhere.")
                             };
                             eb.push_description(&description);
+
+                            eb.push_scattered(scattered, sought_player_id, team_id);
+
                             eb.push_child(sub_event, |mut child| {
                                 child.push_description(&description);
                                 child.push_team_tag(team_id);

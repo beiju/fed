@@ -1039,6 +1039,9 @@ pub enum ReturnFromElsewhereFlavor {
         /// Name of Seeker player who pulled the other player back
         seeker_player_name: String,
 
+        /// Scattered sub-event, if the player was scattered, or null otherwise
+        scattered: Option<Scattered>,
+
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 

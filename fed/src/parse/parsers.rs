@@ -352,7 +352,7 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> 
     }
 }
 
-pub(crate) fn parse_balloons(runs_scored: f64, before_s20d81: bool) -> impl Fn(&str) -> ParserResult<&str> {
+pub(crate) fn parse_balloons(runs_scored: i64, before_s20d81: bool) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         // They changed from "inflates" to "inflated" on s20d72

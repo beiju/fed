@@ -330,7 +330,7 @@ impl<'e> EventParseWrapper<'e> {
             sub_event: self.as_sub_event(),
         })
     }
-    
+
     pub fn as_item_dropped(&self, item_was_broken: bool) -> Result<ItemDroppedForNewItem, FeedParseError> {
         Ok(ItemDroppedForNewItem {
             item_id: self.metadata_uuid("itemId")?,
@@ -702,8 +702,12 @@ impl<'e> EventParseWrapper<'e> {
                 .collect(),
         });
 
-        // Not sure if this is base runs, or rounded final runs, or what
-        let balloons = self.parse_balloons(ledger.as_ref().map_or(runs_scored, |l| l.base_runs))?;
+        // The number of balloons isn't `ledger.base_runs`, because balloons take Magnified into
+        // account: "55abf086-150f-47da-97cf-dd674e65f572"
+        // The number of runs isn't unrounded or truncated runs, because 1 balloon is inflated for
+        // an 0.9-run Acidic Pitch score: "d97cbebe-4357-4765-b221-c941878ef26e"
+        // Simplest remaining explanation is that it's rounded runs
+        let balloons = self.parse_balloons(runs_scored.round() as i64)?;
 
         Ok(Some(ScoreSummary {
             away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
@@ -719,7 +723,7 @@ impl<'e> EventParseWrapper<'e> {
         }))
     }
 
-    pub fn parse_balloons(&mut self, runs_scored: f64) -> Result<Option<String>, FeedParseError> {
+    pub fn parse_balloons(&mut self, runs_scored: i64) -> Result<Option<String>, FeedParseError> {
         let before_s20d81 = (self.season, self.day) < (19, 80);
         let stadium_name = self.next_parse(opt(parse_balloons(runs_scored, before_s20d81)))?;
 
@@ -1072,7 +1076,7 @@ impl<'e> EventParseWrapper<'e> {
         win_child
             .map(|mut child| {
                 let before_s20d81 = (self.season, self.day) < (19, 80);
-                let balloons = self.next_parse_opt(parse_balloons(10., before_s20d81));
+                let balloons = self.next_parse_opt(parse_balloons(10, before_s20d81));
                 ParseOk(WinSubEvent {
                     team_id: child.next_team_id()?,
                     wins_after: child.metadata_i64("after")?,
@@ -1092,6 +1096,19 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_earned_win_opt(&mut self) -> Result<Option<EarnedWin>, FeedParseError> {
         self.next_child_any_opt(&[EventType::WinCollectedRegular, EventType::WinCollectedPostseason])?
             .map(Self::make_earned_win)
+            .transpose()
+    }
+
+    pub fn parse_scattered(&mut self) -> Result<Option<Scattered>, FeedParseError> {
+        self.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
+            .map(|mut scattered_sub_event| {
+                let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
+
+                ParseOk(Scattered {
+                    scattered_name: scattered_name.to_string(),
+                    sub_event: scattered_sub_event.as_sub_event(),
+                })
+            })
             .transpose()
     }
 

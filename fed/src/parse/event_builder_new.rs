@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -426,8 +426,7 @@ impl EventBuilder {
         });
 
         if let Some(stadium_name) = &score.balloons {
-            let runs_scored = score.ledger.as_ref().map_or(score.runs_scored, |l| l.base_runs);
-            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), runs_scored));
+            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored.round()));
         }
     }
 
@@ -854,6 +853,19 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_scattered(&mut self, scattered: Option<Scattered>, player_id: Uuid, team_id: Uuid) {
+        if let Some(Scattered { scattered_name, sub_event }) = scattered {
+            self.push_child(sub_event, |mut child| {
+                child.push_description(&format!("{scattered_name} was Scattered..."));
+                child.push_team_tag(team_id);
+                child.push_player_tag(player_id);
+                child.push_metadata_str("mod", "SCATTERED");
+                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                child.build(EventType::AddedMod)
+            });
+        }
+
+    }
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
         self.push_player_tag(item_repaired.player_id);

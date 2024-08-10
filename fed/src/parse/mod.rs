@@ -2073,7 +2073,7 @@ pub fn parse_next_event(
                         run_gained_sub_event: run_gained_event.as_sub_event(),
                         run_lost_sub_event: run_lost_event.as_sub_event(),
                         victim_event_first,
-                        balloons: event.parse_balloons(1.0)?,
+                        balloons: event.parse_balloons(1)?,
                         hype,
                     }
                 }
@@ -2238,16 +2238,7 @@ pub fn parse_next_event(
                 .map(|ret| {
                     let (player_name, flavor) = match ret {
                         ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere, is_peanut)) => {
-                            let scattered = event.next_child_if_mod_effect(EventType::AddedMod, "SCATTERED")?
-                                .map(|mut scattered_sub_event| {
-                                    let scattered_name = scattered_sub_event.next_parse(parse_terminated(" was Scattered..."))?;
-
-                                    ParseOk(Scattered {
-                                        scattered_name: scattered_name.to_string(),
-                                        sub_event: scattered_sub_event.as_sub_event(),
-                                    })
-                                })
-                                .transpose()?;
+                            let scattered = event.parse_scattered()?;
 
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
@@ -2288,24 +2279,30 @@ pub fn parse_next_event(
                             }
                         }
                         ParsedReturnFromElsewhere::ShortSeeker((seeker_name, sought_name)) => {
+                            let scattered = event.parse_scattered()?;
+
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
                             (sought_name, ReturnFromElsewhereFlavor::PulledBack {
                                 team_id: return_sub_event.next_team_id()?,
                                 sought_player_id: return_sub_event.next_player_id()?,
                                 seeker_player_id: event.next_player_id()?,
+                                seeker_player_name: seeker_name.to_string(),
+                                scattered,
                                 sub_event: return_sub_event.as_sub_event(),
                                 time_elsewhere: None,
-                                seeker_player_name: seeker_name.to_string(),
                             })
                         }
                         ParsedReturnFromElsewhere::NormalSeeker((seeker_name, sought_name, time_elsewhere)) => {
+                            let scattered = event.parse_scattered()?;
+
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
                             (sought_name, ReturnFromElsewhereFlavor::PulledBack {
                                 team_id: return_sub_event.next_team_id()?,
                                 sought_player_id: return_sub_event.next_player_id()?,
                                 seeker_player_id: event.next_player_id()?,
+                                scattered,
                                 sub_event: return_sub_event.as_sub_event(),
                                 time_elsewhere: Some(time_elsewhere),
                                 seeker_player_name: seeker_name.to_string(),
