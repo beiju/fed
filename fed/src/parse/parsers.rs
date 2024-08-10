@@ -2513,11 +2513,7 @@ pub(crate) fn parse_ledger_line(input: &str) -> ParserResult<ParsedLedgerLine> {
         parse_terminated(" is Tired. (0.5 Unruns)").map(|name| ParsedLedgerLine::Tired(name)),
         parse_terminated(" is Wired! (0.5 Runs)").map(|name| ParsedLedgerLine::Wired(name)),
         tag("Acidic Pitch (0.1 Unruns)").map(|_| ParsedLedgerLine::AcidicPitch),
-        // I'm not sure what it means for this to be repeated, so for now I'm just going to treat
-        // the whole thing as a unit and see what breaks
-        // Also, I expect there might be Pitcher and Runner Magnified lines, but that's also a
-        // problem for later
-        tag("Batter Magnified 2x (x2) Batter Magnified 2x (x2)").map(|_| ParsedLedgerLine::Magnified),
+        tag("Batter Magnified 2x (x2)").map(|_| ParsedLedgerLine::Magnified),
     )).parse(input)
 }
 
