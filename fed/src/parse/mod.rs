@@ -395,6 +395,10 @@ pub fn parse_next_event(
 
                         let score_summary = event.parse_score_summary()?;
 
+                        let hotel_motel_party = event.next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
+                            .map(|_| event.next_boost_child_with_team())
+                            .transpose()?;
+
                         FedEventData::StolenBase {
                             game: event.game(unscatter, attractor_secret_base)?,
                             runner_name: runner_name.to_string(),
@@ -406,6 +410,7 @@ pub fn parse_next_event(
                             is_special: event.category == EventCategory::Special,
                             hype,
                             score_summary,
+                            hotel_motel_party,
                         }
                     } else {
                         FedEventData::CaughtStealing {

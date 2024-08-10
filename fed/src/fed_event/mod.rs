@@ -2596,6 +2596,9 @@ pub enum FedEventData {
         /// Score summary effects, if applicable. This will be populated if the season is 20 or
         /// later and either the base stolen was home or if blaserunning is true, otherwise null.
         score_summary: Option<ScoreSummary>,
+
+        /// Info about the Hotel Motel party on this score, if any
+        hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
     },
 
     /// Caught stealing
