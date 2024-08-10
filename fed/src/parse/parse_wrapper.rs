@@ -697,6 +697,7 @@ impl<'e> EventParseWrapper<'e> {
                     ParsedLedgerLine::Tired(name) => { LedgerLine::Tired(name.to_string()) }
                     ParsedLedgerLine::Wired(name) => { LedgerLine::Wired(name.to_string()) }
                     ParsedLedgerLine::AcidicPitch => { LedgerLine::AcidicPitch }
+                    ParsedLedgerLine::Magnified => { LedgerLine::Magnified }
                 })
                 .collect(),
         });

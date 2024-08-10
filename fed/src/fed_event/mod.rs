@@ -1904,6 +1904,7 @@ pub enum LedgerLine {
     Tired(String),
     Wired(String),
     AcidicPitch,
+    Magnified,
 }
 
 impl Display for LedgerLine {
@@ -1916,6 +1917,7 @@ impl Display for LedgerLine {
             LedgerLine::Tired(name) => { write!(f, "{name} is Tired. (0.5 Unruns)") }
             LedgerLine::Wired(name) => { write!(f, "{name} is Wired! (0.5 Runs)") }
             LedgerLine::AcidicPitch => { write!(f, "Acidic Pitch (0.1 Unruns)") }
+            LedgerLine::Magnified => { write!(f, "Batter Magnified 2x (x2) Batter Magnified 2x (x2)") }
         }
     }
 }
