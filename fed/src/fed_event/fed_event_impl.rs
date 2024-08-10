@@ -331,11 +331,13 @@ impl FedEvent {
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
                 eb.push_pitch(pitch);
-                eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
-                eb.push_magmatic(magmatic, &batter_name, batter_id);
+
                 if let Some(h) = &hype && h.source == HomeRunHypeSource::HomeRun {
                     eb.push_hype(&h.hype, home_team_id);
                 }
+
+                eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
+                eb.push_magmatic(magmatic, &batter_name, batter_id);
 
                 // HR itself
                 eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
@@ -3708,7 +3710,7 @@ impl FedEvent {
                     child_eb.push_metadata_str("itemName", item_name.clone());
                     child_eb.push_metadata_str_vec("mods", item_mods.clone());
                     child_eb.push_metadata_f64("playerItemRatingAfter", victim_item_rating_after);
-                    child_eb.push_metadata_f64("playerItemRatingBefore", victim_item_rating_before);
+                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", victim_rating);
                     
                     child_eb.build(EventType::PlayerLostItem)

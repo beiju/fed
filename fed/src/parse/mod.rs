@@ -685,7 +685,11 @@ pub fn parse_next_event(
         }
         EventType::HomeRun => {
             let pitch = event.parse_pitch()?;
+
+            let home_run_hype = event.parse_prefixed_hype()?;
+
             let damaged_items = event.parse_item_damages_and_names(false)?;
+
             // In addition to getting a magmatic event, get a player name and id to check against
             // the batter name and id
             let magmatic_expanded = event.next_parse(parse_magmatic)?
@@ -700,7 +704,6 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let home_run_hype = event.parse_prefixed_hype()?;
             let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 
             // Parsed specially because AFAIK this is the only place an attraction happens and you
@@ -2120,7 +2123,7 @@ pub fn parse_next_event(
                         thief_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
                         thief_item_rating_after: item_gained_event.metadata_f64("playerItemRatingAfter")?,
                         thief_rating: item_gained_event.metadata_f64("playerRating")?,
-                        victim_item_rating_before: item_lost_event.metadata_f64("playerItemRatingBefore")?,
+                        victim_item_rating_before: item_lost_event.metadata_f64_opt("playerItemRatingBefore")?,
                         victim_item_rating_after: item_lost_event.metadata_f64("playerItemRatingAfter")?,
                         victim_rating: item_lost_event.metadata_f64("playerRating")?,
                         stole_item_sub_event: stole_item_event.as_sub_event(),

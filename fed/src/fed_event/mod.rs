@@ -5365,7 +5365,11 @@ pub enum FedEventData {
 
         /// The increase/decrease that all the victim's items caused to their star rating before 
         /// gaining this item
-        victim_item_rating_before: f64,
+        ///
+        /// For reasons currently unknown to me, some items (like the Smokey Plant-Based Sunglasses
+        /// of Intelligence) have a `null` for one or more of their `Rating` properties. That causes
+        /// this value to be `null` when the player loses that item.
+        victim_item_rating_before: Option<f64>,
 
         /// The increase/decrease that all the victim's items now cause to their star rating
         victim_item_rating_after: f64,
