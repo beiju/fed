@@ -3435,6 +3435,30 @@ pub fn parse_next_event(
         EventType::CaughtStealingItemFromTunnels => { todo!() }
         EventType::StoleItemFromTunnels => { todo!() }
         EventType::WeatherEvent => { todo!() }
+        EventType::Sun30Smiles => {
+            let balloons = event.next_parse_opt(parse_balloon_inflated_from_win(false));
+
+            // I checked the order of these
+            let home_win_event = event.next_child(EventType::WinCollectedRegular)?;
+            let away_win_event = event.next_child(EventType::WinCollectedRegular)?;
+
+            fn parse_win(mut win_event: EventParseWrapper) -> Result<ShortEarnedWin, FeedParseError> {
+                let team_nickname = win_event.next_parse(parse_sun_30_win)?;
+                assert!(is_known_team_nickname(team_nickname));
+                Ok(ShortEarnedWin {
+                    team_nickname: team_nickname.to_string(),
+                    wins_after: win_event.metadata_i64("after")?,
+                    sub_event: win_event.as_sub_event(),
+                })
+            }
+
+            FedEventData::Sun30Smiles {
+                game: event.game(unscatter, attractor_secret_base)?,
+                away_win: parse_win(away_win_event)?,
+                home_win: parse_win(home_win_event)?,
+                balloons: balloons.map(str::to_string),
+            }
+        }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

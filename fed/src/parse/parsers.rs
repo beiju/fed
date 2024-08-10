@@ -2615,12 +2615,17 @@ pub(crate) fn parse_balloon_inflated_from_win(before_s20d81: bool) -> impl Fn(&s
     }
 }
 
-
 pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<(&str, i32)> {
     let (input, _) = tag("\nOne of ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, _) = tag("Balloons was struck and popped!\n").parse(input)?;
     let (input, num_birds_scared) = parse_whole_number(input)?;
     let (input, _) = tag(" Birds were scared away!").parse(input)?;
-    return Ok((input, (stadium_name, num_birds_scared)))
+    Ok((input, (stadium_name, num_birds_scared)))
+}
+
+pub(crate) fn parse_sun_30_win(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Sun 30 granted the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" a Win.").parse(input)?;
+    Ok((input, team_nickname))
 }

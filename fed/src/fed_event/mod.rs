@@ -2041,6 +2041,18 @@ pub struct EarnedWin {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ShortEarnedWin {
+    /// Nickname of winning team
+    pub team_nickname: String,
+
+    /// Number of Wins the winning team has once the newly earned Win is added
+    pub wins_after: i64,
+
+    /// Metadata for the team-earned-win sub-event
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct BalloonsPopped {
     /// Name of the stadium in which the balloons were popped
     pub stadium_name: String,
@@ -5421,7 +5433,26 @@ pub enum FedEventData {
     SunSunRecharged {
         /// The pressure after recharge
         pressure_after: f64,
-    }
+    },
+
+    /// Sun 30 smiled upon both teams in a game. This happens whenever a game reaches extra innings
+    /// and the Sun 30 rule is active
+    #[serde(rename_all = "camelCase")]
+    Sun30Smiles {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Metadata for the away team's Win
+        away_win: ShortEarnedWin,
+
+        /// Metadata for the home team's Win
+        home_win: ShortEarnedWin,
+
+        /// If Balloons were inflated as a result of this Win, this is the name of the Stadium.
+        /// Otherwise `null`. The stadium is always the home stadium, and the number of Balloons
+        /// inflated is always 10.
+        balloons: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5659,6 +5690,7 @@ impl FedEventData {
             FedEventData::StoleItemWithTunnels { game, .. } => { Some(game) }
             FedEventData::NothingInterestingInTunnels { game, .. } => { Some(game) }
             FedEventData::SunSunRecharged { .. } => { None }
+            FedEventData::Sun30Smiles { game, .. } => { Some(game) }
         }
     }
 }
