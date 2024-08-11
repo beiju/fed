@@ -9,7 +9,7 @@ use enum_access::EnumDisplay;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use eventually_api::{EventMetadata, EventType, Weather};
+use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
@@ -5144,6 +5144,9 @@ pub enum FedEventData {
 
         /// Event metadata exactly as it appears in the Feed event
         metadata: EventMetadata,
+
+        // TODO Figure out what should happen here
+        successors: Vec<EventuallyEvent>
     },
 
     /// Replica player faded to dust at the end of the season

@@ -3459,12 +3459,14 @@ impl FedEvent {
                 eb.push_metadata_i64("totalGifts", total_gifts);
                 eb.build(EventType::TeamReceivedGifts)
             }
-            FedEventData::GiftReceived { team_id, title_and_recipient, metadata } => {
+            FedEventData::GiftReceived { team_id, title_and_recipient, metadata, mut successors } => {
                 eb.set_category(EventCategory::Outcomes);
                 eb.push_description(&format!("Gift Received: {title_and_recipient}"));
                 eb.push_team_tag(team_id);
                 eb.set_full_metadata(metadata);
-                eb.build(EventType::BlessingOrGiftWon)
+                let main = eb.build(EventType::BlessingOrGiftWon);
+                successors.insert(0, main);
+                return successors;
             }
             FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event } => {
                 let mut dust_eb = eb.connected_event(mod_added_event);
