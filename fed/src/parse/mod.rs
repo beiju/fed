@@ -791,6 +791,9 @@ pub fn parse_next_event(
                 None
             };
 
+            // Not sure of ordering relative to other things
+            let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
+
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
@@ -803,9 +806,6 @@ pub fn parse_next_event(
             } else {
                 None
             };
-
-            // Not sure of ordering relative to other things
-            let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
 
             // I have no idea where this needs to go in relation to the other sub-events
             let score_summary = event.parse_score_summary()?;
@@ -2876,8 +2876,8 @@ pub fn parse_next_event(
                     item_id: event.metadata_uuid("itemId")?,
                     item_name: event.metadata_str("itemName")?.to_string(),
                     item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                    player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
-                    player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
+                    player_item_rating_before: event.metadata_f64_opt("playerItemRatingBefore")?,
+                    player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
                     player_rating: event.metadata_f64("playerRating")?,
                     team_id: event.next_team_id()?,
                     player_name: player_name.to_string(),

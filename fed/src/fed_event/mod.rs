@@ -1380,11 +1380,13 @@ pub struct ItemRepaired {
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
     /// before being repaired (TODO Clarify damage vs. breaking)
-    pub player_item_rating_before: f64,
+    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    pub player_item_rating_before: Option<f64>,
 
     /// The increase or decrease that all the wielding player's items now cause to their star
     /// rating.
-    pub player_item_rating_after: f64,
+    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
     pub player_rating: f64,
@@ -4935,10 +4937,12 @@ pub enum FedEventData {
 
         /// The increase or decrease that all the wielding player's items caused to their star rating
         /// before gaining this item
-        player_item_rating_before: f64,
+        /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+        player_item_rating_before: Option<f64>,
 
         /// The increase or decrease that all the wielding player's items now cause to their star rating
-        player_item_rating_after: f64,
+        /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+        player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
         player_rating: f64,

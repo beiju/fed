@@ -894,8 +894,8 @@ impl EventBuilder {
         self.push_metadata_uuid("itemId", item_repaired.item_id);
         self.push_metadata_str("itemName", item_repaired.item_name);
         self.push_metadata_str_vec("mods", item_repaired.item_mods);
-        self.push_metadata_f64("playerItemRatingAfter", item_repaired.player_item_rating_after);
-        self.push_metadata_f64("playerItemRatingBefore", item_repaired.player_item_rating_before);
+        self.push_metadata_f64_opt("playerItemRatingAfter", item_repaired.player_item_rating_after);
+        self.push_metadata_f64_opt("playerItemRatingBefore", item_repaired.player_item_rating_before);
         self.push_metadata_f64("playerRating", item_repaired.player_rating);
         // In season 17 days 7-10 inclusive, the Coasting event type was accidentally used instead
         // of BrokenItemRepaired
