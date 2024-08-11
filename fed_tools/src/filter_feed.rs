@@ -5,7 +5,10 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde_json::Value;
 
-const ALWAYS_SORT_FIRST: [i64; 1] = [171];
+const ALWAYS_SORT_FIRST: [i64; 2] = [
+    171,
+    203,
+];
 
 #[derive(PartialEq, Eq)]
 struct SpecialSortingEventType(i64);
@@ -68,7 +71,7 @@ fn main() {
             created >= &feed_era_start && !*has_parent
         })
         .collect();
-    println!("Sorting...");
+    println!("Sorting by season...");
     vec.sort_by_key(|(_, _, season, sim, _, _)| (sim.clone(), *season));
     let groups = vec.into_iter().group_by(|(_, _, season, sim, _, _)| (sim.clone(), *season));
 

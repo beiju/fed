@@ -3480,6 +3480,7 @@ pub fn parse_next_event(
         EventType::CaughtStealingItemFromTunnels => { todo!() }
         EventType::StoleItemFromTunnels => { todo!() }
         EventType::WeatherEvent => { todo!() }
+        EventType::ElementAddedToItem => { todo!() }
         EventType::Sun30Smiles => {
             let balloons = event.next_parse_opt(parse_balloon_inflated_from_win(false));
 

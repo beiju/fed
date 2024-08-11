@@ -379,6 +379,7 @@ pub enum EventType {
     CaughtStealingItemFromTunnels = 219,
     StoleItemFromTunnels = 220,
     WeatherEvent = 223,
+    ElementAddedToItem = 224,
     Sun30Smiles = 226,
     StormWarning = 263,
     Snowflakes = 264,
