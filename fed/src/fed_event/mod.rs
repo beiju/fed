@@ -2499,6 +2499,10 @@ pub enum FedEventData {
         /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
         /// Hot mod, otherwise null.
         cooled_off: Option<ModChangeSubEventWithPlayer>,
+
+        /// If the pitcher's item was damage, includes the pitcher's name and details about the item
+        /// being damaged
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
     /// Hit event (Single, Double, Triple, or Quadruple)

@@ -345,10 +345,13 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool, is_
         let (mut input, attractions) = many0(parse_attraction).parse(input)?;
 
         // Fill in hotel_motel_parties, which were defaulted to false
-        for scorer in &mut scorers {
-            let (i, party) = opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
-            scorer.hotel_motel_party = party.is_some();
-            input = i;
+        // Unless this is an FC, in which case hotel motel parties are even later! Isn't this fun
+        if !is_fc {
+            for scorer in &mut scorers {
+                let (i, party) = opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
+                scorer.hotel_motel_party = party.is_some();
+                input = i;
+            }
         }
 
         Ok((input, (scorers, attractions)))

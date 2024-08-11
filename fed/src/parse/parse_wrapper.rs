@@ -590,13 +590,14 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_scores(&mut self, label: &'static str, is_fc: bool) -> Result<Scores, FeedParseError> {
         let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
-        self.parse_scores_with_scoring_players(scoring_players, attractions)
+        self.parse_scores_with_scoring_players(scoring_players, attractions, is_fc)
     }
 
     pub fn parse_scores_with_scoring_players(
         &mut self,
         scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>,
         attractions: Vec<(Uuid, String, String)>,
+        is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
     ) -> Result<Scores, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores: Vec<_> = scoring_players.into_iter()
@@ -628,6 +629,12 @@ impl<'e> EventParseWrapper<'e> {
                     })
                 } else {
                     None
+                };
+
+                let hotel_motel_party = if is_fc {
+                    self.next_parse_opt(parse_hotel_motel_party_with_name(&player_name)).is_some()
+                } else {
+                    hotel_motel_party
                 };
 
                 let hotel_motel_party = if hotel_motel_party {

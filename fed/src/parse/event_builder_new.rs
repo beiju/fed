@@ -512,7 +512,13 @@ impl EventBuilder {
             }
         }
         // Hotel motel parties happen in a block after the scores block (not sure of order w/r/t
-        // attractions)
+        // attractions) (unless it's an FC in which case they're later! i love parsing blaseball.)
+        if !is_fc {
+            self.push_scorer_hotel_motel_parties(scorers);
+        }
+    }
+
+    pub fn push_scorer_hotel_motel_parties(&mut self, scorers: &[ScoringPlayer]) {
         for scorer in scorers {
             if let Some(party) = &scorer.hotel_motel_party {
                 self.push_hotel_motel_party(party, &scorer.player_name, scorer.player_id)

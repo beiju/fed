@@ -653,6 +653,7 @@ pub fn parse_next_event(
         }
         EventType::GroundOut => {
             let pitch = event.parse_pitch()?;
+            let pitcher_item_damage_from_pitch = event.parse_item_damage_and_name(false)?;
             match event.next_parse(parse_ground_out)? {
                 ParsedGroundOut::Simple { batter_name, fielder_name } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
@@ -663,7 +664,7 @@ pub fn parse_next_event(
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
                     let pitcher_item_damage_from_advance = event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, false)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -687,7 +688,7 @@ pub fn parse_next_event(
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!", true)?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::FieldersChoice {
@@ -714,6 +715,7 @@ pub fn parse_next_event(
                         scores,
                         stopped_inhabiting,
                         cooled_off,
+                        pitcher_item_damage: pitcher_item_damage_from_pitch,
                     }
                 }
             }
