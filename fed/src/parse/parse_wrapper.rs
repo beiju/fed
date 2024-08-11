@@ -588,8 +588,8 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
-    pub fn parse_scores(&mut self, label: &'static str) -> Result<Scores, FeedParseError> {
-        let (scoring_players, attractions) = self.parse_scoring_players(label)?;
+    pub fn parse_scores(&mut self, label: &'static str, is_fc: bool) -> Result<Scores, FeedParseError> {
+        let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
         self.parse_scores_with_scoring_players(scoring_players, attractions)
     }
 
@@ -731,8 +731,8 @@ impl<'e> EventParseWrapper<'e> {
         Ok((stadium_name.map(str::to_string)))
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
-        let (scorers, attractions) = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3)))?;
+    pub fn parse_scoring_players(&mut self, label: &'static str, is_fc: bool) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
+        let (scorers, attractions) = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3), is_fc))?;
         let scoring_players = scorers.into_iter()
             .map(|score| {
                 ParseOk((

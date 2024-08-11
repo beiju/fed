@@ -445,7 +445,7 @@ pub fn parse_next_event(
             match event.next_parse(parse_walk)? {
                 ParsedWalk::Ordinary((batter_name, base_instincts)) => {
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
 
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
@@ -466,7 +466,7 @@ pub fn parse_next_event(
                     let charmer_id = event.next_player_id()?;
                     assert_eq!(batter_id, charmer_id);
 
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
                     let (batter_item_damage, pitcher_item_damage) = match broken_item {
                         None => { (None, None) }
                         Some((ActivePositionType::Lineup, _item_name, item_name_damage)) => {
@@ -490,7 +490,7 @@ pub fn parse_next_event(
                 }
                 ParsedWalk::MindTrickStrikeoutIntoWalk((batter_name, strikeout_type)) => {
                     let base_instincts = event.next_parse_opt(parse_base_instincts);
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
                     FedEventData::MindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -505,7 +505,7 @@ pub fn parse_next_event(
                     let pitcher_id = event.next_player_id()?;
                     let _ = event.next_player_id()?; // Charmer id is there twice
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
                     FedEventData::CharmedMindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -600,7 +600,7 @@ pub fn parse_next_event(
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
-            let scores = event.parse_scores(" tags up and scores!")?;
+            let scores = event.parse_scores(" tags up and scores!", false)?;
             let batter_item_damage = event.parse_item_damage(batter_name)?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
@@ -628,7 +628,7 @@ pub fn parse_next_event(
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage_from_out = event.parse_item_damage(fielder_name)?;
                     let pitcher_item_damage_from_out = event.parse_item_damage_and_name(true)?;
-                    let (scoring_players, attractions) = event.parse_scoring_players(" advances on the sacrifice.")?;
+                    let (scoring_players, attractions) = event.parse_scoring_players(" advances on the sacrifice.", false)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
                     let pitcher_item_damage_from_advance = event.parse_item_damage_and_name(true)?;
@@ -655,7 +655,7 @@ pub fn parse_next_event(
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
-                    let (scoring_players, attractions) = event.parse_scoring_players(" scores!")?;
+                    let (scoring_players, attractions) = event.parse_scoring_players(" scores!", true)?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
                     let scores = event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
@@ -674,7 +674,7 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::DoublePlay {
@@ -837,7 +837,7 @@ pub fn parse_next_event(
                 }
                 ParsedHitType::Quadruple => { HitType::Quadruple }
             };
-            let mut scores = event.parse_scores(" scores!")?;
+            let mut scores = event.parse_scores(" scores!", false)?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
@@ -1000,7 +1000,7 @@ pub fn parse_next_event(
             let batter_id = event.next_player_id()?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
-            let scores = event.parse_scores(" scores!")?;
+            let scores = event.parse_scores(" scores!", false)?;
 
             FedEventData::HitByPitch {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1053,7 +1053,7 @@ pub fn parse_next_event(
             match pitch_type {
                 MildPitchType::Ball((balls, strikes)) => {
                     let runners_advance = event.next_parse(parse_runners_advance_on_mild_pitch)?;
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
 
                     FedEventData::MildPitch {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -1067,7 +1067,7 @@ pub fn parse_next_event(
                 }
                 MildPitchType::Walk(batter_name) => {
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!")?;
+                    let scores = event.parse_scores(" scores!", false)?;
 
                     FedEventData::MildPitchWalk {
                         game: event.game(unscatter, attractor_secret_base)?,

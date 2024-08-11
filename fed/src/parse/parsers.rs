@@ -338,9 +338,9 @@ pub(crate) struct ParsedAttraction<'a> {
     pub(crate) player_name: &'a str,
 }
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
+pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool, is_fc: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
-        let (input, mut scorers) = many0(parse_score(score_label, extra_space)).parse(input)?;
+        let (input, mut scorers) = many0(parse_score(score_label, extra_space, is_fc)).parse(input)?;
 
         let (mut input, attractions) = many0(parse_attraction).parse(input)?;
 
@@ -368,19 +368,30 @@ pub(crate) fn parse_balloons(runs_scored: i64, before_s20d81: bool) -> impl Fn(&
     }
 }
 
-pub(crate) fn parse_score(score_label: &'static str, extra_space: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
+pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
         let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
-        let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
-        let (input, _) = tag("\n").parse(input)?;
-        let (input, (damaged_item_name, player_name)) = if let Some((item_name, item_name_plural, player_name)) = item {
-            let (input, _) = tag(player_name).parse(input)?;
-            let (input, _) = tag(score_label).parse(input)?;
-
-            (input, (Some((item_name, item_name_plural)), player_name))
+        let (input, (damaged_item_name, player_name)) = if is_fc {
+            // On an FC, it's the score before the damage
+            let (input, _) = tag("\n").parse(input)?;
+            let (input, player_name) = parse_terminated(score_label).parse(input)?;
+            let (input, item) = opt(parse_item_damage(player_name, extra_space)).parse(input)?;
+            (input, (item, player_name))
         } else {
-            let (input, name) = parse_terminated(score_label).parse(input)?;
-            (input, (None, name))
+            // Otherwise it's the damage before the score
+            let (input, item) = opt(parse_item_damage_unknown_name(extra_space, true)).parse(input)?;
+            let (input, _) = tag("\n").parse(input)?;
+            // If there was a damaged item, we want parse the score using that player's name to make
+            // sure things match. Otherwise, we just parse the name from the score as normal.
+            if let Some((item_name, item_name_plural, player_name)) = item {
+                let (input, _) = tag(player_name).parse(input)?;
+                let (input, _) = tag(score_label).parse(input)?;
+
+                (input, (Some((item_name, item_name_plural)), player_name))
+            } else {
+                let (input, player_name) = parse_terminated(score_label).parse(input)?;
+                (input, (None, player_name))
+            }
         };
 
         Ok((input, ParsedScore {

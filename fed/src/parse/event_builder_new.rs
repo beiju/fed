@@ -381,13 +381,13 @@ impl EventBuilder {
         self.push_free_refills(free_refills.as_slice())
     }
 
-    pub fn push_scores_without_event(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str) {
-        self.push_scorers(&scores.scores, home_team_id, score_label);
+    pub fn push_scores_without_event(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str, is_fc: bool) {
+        self.push_scorers(&scores.scores, home_team_id, score_label, is_fc);
         self.push_free_refills(&scores.free_refills);
     }
 
-    pub fn push_scores(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str) {
-        self.push_scores_without_event(scores, home_team_id, score_label);
+    pub fn push_scores(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str, is_fc: bool) {
+        self.push_scores_without_event(scores, home_team_id, score_label, is_fc);
         self.push_score_summary(scores);
     }
 
@@ -486,15 +486,20 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_scorers(&mut self, scorers: &[ScoringPlayer], home_team_id: Uuid, score_label: &str) {
+    pub fn push_scorers(&mut self, scorers: &[ScoringPlayer], home_team_id: Uuid, score_label: &str, is_fc: bool) {
         // Base scores
         for scorer in scorers {
             self.push_player_tag(scorer.player_id);
             self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
-            if let Some(damage) = &scorer.item_damage {
-                self.push_item_damage(damage, &scorer.player_name);
+            // Fielders Choice has scorer damage after the score message, just for fun. Everything
+            // else has it before.
+            if is_fc {
+                self.push_description(&format!("{} {score_label}", scorer.player_name));
+                self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
+            } else {
+                self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
+                self.push_description(&format!("{} {score_label}", scorer.player_name));
             }
-            self.push_description(&format!("{} {score_label}", scorer.player_name));
         }
         // Attractions happen in a block after the scores block
         for scorer in scorers {
