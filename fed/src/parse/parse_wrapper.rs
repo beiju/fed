@@ -551,8 +551,8 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_batter_debt(&mut self, batter_name: &str, fielder_name: &str) -> Result<Option<BatterDebt>, FeedParseError> {
         self.next_parse_opt(parse_batter_debt(batter_name, fielder_name))
-            .map(|()| {
-                let sub_event = self.next_child_if_mod_effect(EventType::AddedMod, "COFFEE_PERIL")?
+            .map(|debt_type| {
+                let sub_event = self.next_child_if_mod_effect(EventType::AddedMod, debt_type.mod_id())?
                     .map(|mut child| {
                         ParseOk(ModChangeSubEvent {
                             team_id: child.next_team_id()?,
@@ -565,6 +565,7 @@ impl<'e> EventParseWrapper<'e> {
                     batter_id: self.next_player_id()?,
                     fielder_id: self.next_player_id()?,
                     sub_event,
+                    debt_type,
                 })
             })
             .transpose()

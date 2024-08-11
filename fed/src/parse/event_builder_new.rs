@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -557,7 +557,10 @@ impl EventBuilder {
     pub fn push_batter_debt(&mut self, batter_debt: Option<BatterDebt>, batter_name: &str, fielder_name: &str) {
         if let Some(bd) = batter_debt {
             self.push_description(&format!("{batter_name} hit a ball at {fielder_name}..."));
-            let common_description = format!("{fielder_name} is now being Observed.");
+            let common_description = match bd.debt_type {
+                DebtType::Observed => format!("{fielder_name} is now being Observed."),
+                DebtType::Unstable => format!("{fielder_name} became Unstable!"),
+            };
             self.push_description(&common_description);
             self.push_player_tag(bd.batter_id);
             self.push_player_tag(bd.fielder_id);
@@ -569,7 +572,7 @@ impl EventBuilder {
                     child.push_description(&common_description);
                     child.push_player_tag(bd.fielder_id);
                     child.push_team_tag(mod_change.team_id);
-                    child.push_metadata_str("mod", "COFFEE_PERIL");
+                    child.push_metadata_str("mod", bd.debt_type.mod_id());
                     child.push_metadata_i64("type", ModDuration::Weekly as i64);
                     child.build(EventType::AddedMod)
                 })

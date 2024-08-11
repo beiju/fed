@@ -279,24 +279,6 @@ impl FedEvent {
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_parasite(parasite);
                 eb.build(EventType::FlyOut)
-                // let (suffix, observed_child, player_tags) = apply_batter_debt(&batter_debt, &batter_name, &fielder_name);
-                //
-                // event_builder.for_game(&game)
-                //     .fill(EventBuilderUpdate {
-                //         r#type: ,
-                //         category: EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special),
-                //         description: format!("{batter_name} hit a flyout to {fielder_name}.{suffix}"),
-                //         player_tags,
-                //         ..Default::default()
-                //     })
-                //     .scores(&scores, " tags up and scores!")
-                //     .stopped_inhabiting(&stopped_inhabiting)
-                //     .cooled_off(&cooled_off, &batter_name)
-                //     .children(observed_child) // slight abuse of IntoIter
-                //     .item_damage_before_score(&batter_item_damage, &batter_name)
-                //     .item_damage_before_score(&fielder_item_damage, &fielder_name)
-                //     .named_item_damage_before_score(&other_player_item_damage)
-                //     .build()
             }
             FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 let home_team_id = game.home_team; // Need this later

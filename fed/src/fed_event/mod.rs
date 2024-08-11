@@ -1130,6 +1130,23 @@ pub struct DetectiveActivity {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[serde(rename_all = "camelCase")]
+pub enum DebtType {
+    Unstable,
+    Observed,
+}
+
+impl DebtType {
+    pub fn mod_id(&self) -> &'static str {
+        // I think it's just a coincidence that neither of these mods' ids match their display names
+        match self {
+            DebtType::Unstable => { "MARKED" }
+            DebtType::Observed => { "COFFEE_PERIL" }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BatterDebt {
@@ -1144,6 +1161,10 @@ pub struct BatterDebt {
     /// Metadata for the sub-event associated with adding the Observed/Unstable/etc. mod. If the
     /// player already had the mod, this will be null.
     pub sub_event: Option<ModChangeSubEvent>,
+
+    /// Which type of Debt this was, the kind that makes victims Unstable or the kind that makes
+    /// them Observed
+    pub debt_type: DebtType,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

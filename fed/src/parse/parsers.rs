@@ -8,7 +8,7 @@ use nom::number::complete::{float, double};
 use nom::sequence::{pair, preceded, terminated};
 use uuid::Uuid;
 
-use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere, BracketType};
+use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere, BracketType, DebtType};
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 
@@ -173,7 +173,7 @@ pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (batter_name, fielder_name)))
 }
 
-pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<()> + 'a {
+pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str) -> impl Fn(&str) -> ParserResult<DebtType> + 'a {
     move |input: &str| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(batter_name).parse(input)?;
@@ -181,9 +181,12 @@ pub(crate) fn parse_batter_debt<'a>(batter_name: &'a str, fielder_name: &'a str)
         let (input, _) = tag(fielder_name).parse(input)?;
         let (input, _) = tag("...\n").parse(input)?;
         let (input, _) = tag(fielder_name).parse(input)?;
-        let (input, _) = tag(" is now being Observed.").parse(input)?;
+        let (input, debt_type) = alt((
+            tag(" is now being Observed.").map(|_| DebtType::Observed),
+            tag(" became Unstable!").map(|_| DebtType::Unstable),
+        )).parse(input)?;
 
-        Ok((input, ()))
+        Ok((input, debt_type))
     }
 }
 
