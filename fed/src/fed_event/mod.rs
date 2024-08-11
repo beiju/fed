@@ -1954,10 +1954,16 @@ pub struct Ledger {
 
 impl Display for Ledger {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.base_runs == 1. {
-            write!(f, "(1 Run),")?;
+        let (abs_runs, run_type) = if self.base_runs < 0. {
+            (-self.base_runs, "Unrun")
         } else {
-            write!(f, "({} Runs),", self.base_runs)?;
+            (self.base_runs, "Run")
+        };
+
+        if abs_runs == 1. {
+            write!(f, "(1 {run_type}),")?;
+        } else {
+            write!(f, "({} {run_type}s),", abs_runs)?;
         }
 
         for line in &self.lines {
