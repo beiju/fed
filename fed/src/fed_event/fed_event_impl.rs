@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -378,7 +378,7 @@ impl FedEvent {
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.build(EventType::GroundOut)
             }
-            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, hotel_motel_party } => {
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, hotel_motel_party, took_the_fifth_base } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.push_player_tag(runner_id);
@@ -387,9 +387,44 @@ impl FedEvent {
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
 
                 if blaserunning {
-                    eb.push_description(&format!("{} scores with Blaserunning!", runner_name));
+                    eb.push_description(&format!("{runner_name} scores with Blaserunning!"));
                     // The player tag appears a second time when there's blaserunning
                     eb.push_player_tag(runner_id);
+                }
+
+                if let Some(ttfb) = took_the_fifth_base {
+                    eb.push_description(&format!("{runner_name} took The Fifth Base!"));
+                    // The player tag appears a second time when they take The Fifth Base
+                    eb.push_player_tag(runner_id);
+
+                    eb.push_child(ttfb.remove_mod_from_stadium_sub_event, |mut child_eb| {
+                        child_eb.push_description(&format!("{runner_name} took The Fifth Base from {}.", ttfb.stadium_name));
+                        // It's always the stadium you're playing in, which is by definition the
+                        // home team's stadium
+                        child_eb.push_team_tag(home_team_id);
+                        child_eb.push_metadata_str("mod", "EXTRA_BASE");
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        child_eb.build(EventType::RemovedMod)
+                    });
+
+                    if let Some(dropped_item) = ttfb.dropped_item {
+                        eb.push_dropped_item(&runner_name, runner_id, ttfb.team_id, ttfb.player_rating, dropped_item);
+                    }
+
+                    eb.push_child(ttfb.player_gained_item_sub_event, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Changes);
+                        child_eb.push_description(&format!("{runner_name} pocketed The Fifth Base."));
+                        child_eb.push_player_tag(runner_id);
+                        child_eb.push_team_tag(ttfb.team_id);
+                        // As with the PlacedFifthBase, decided to hard-code The Fifth Base's data
+                        child_eb.push_metadata_uuid("itemId", uuid::uuid!("eecc9bf3-96b5-4ea9-9a4a-05f0a0d586f0"));
+                        child_eb.push_metadata_str("itemName", "The Fifth Base".to_string());
+                        child_eb.push_metadata_str_vec("mods", vec!["SUPERWANDERER".to_string()]);
+                        child_eb.push_metadata_f64("playerItemRatingAfter", ttfb.player_item_rating_after);
+                        child_eb.push_metadata_f64("playerItemRatingBefore", ttfb.player_item_rating_before);
+                        child_eb.push_metadata_f64("playerRating", ttfb.player_rating);
+                        child_eb.build(EventType::PlayerGainedItem)
+                    });
                 }
 
                 eb.push_free_refill(free_refill);
@@ -3151,7 +3186,7 @@ impl FedEvent {
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);
                 eb.push_description("A shimmering Crate descends.");
-                eb.push_gained_item(player_name, gained_item);
+                eb.push_gained_item(&player_name, gained_item);
                 eb.build(EventType::GlitterCrateDrop)
             }
             FedEventData::ModsFromAnotherModRemoved { team_id, player_id, player_name, mods_removed, source_mod_name, source_mod_id } => {

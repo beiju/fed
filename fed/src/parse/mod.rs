@@ -379,6 +379,35 @@ pub fn parse_next_event(
                     if is_successful {
                         let runner_id = event.next_player_id()?;
 
+                        let took_the_fifth_base = event.next_parse_opt(parse_player_took_the_fifth_base(runner_name)).is_some();
+                        let took_the_fifth_base = if took_the_fifth_base {
+                            let mut remove_mod_from_stadium_event = event.next_child(EventType::RemovedMod)?;
+                            let stadium_name = remove_mod_from_stadium_event.next_parse(parse_player_took_the_fifth_base_from_stadium(runner_name))?;
+
+                            let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
+                            let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
+
+                            let dropped_item = item_dropped_event
+                                // TODO If this `false` is still hardcoded when this is all done, find
+                                //   some way to remove it
+                                .map(|e| e.as_item_dropped(false))
+                                .transpose()?;
+
+
+                            Some(TookTheFifthBase {
+                                stadium_name: stadium_name.to_string(),
+                                team_id: item_gained_event.next_team_id()?,
+                                remove_mod_from_stadium_sub_event: remove_mod_from_stadium_event.as_sub_event(),
+                                player_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
+                                player_item_rating_after: item_gained_event.metadata_f64("playerItemRatingAfter")?,
+                                player_rating: item_gained_event.metadata_f64("playerRating")?,
+                                player_gained_item_sub_event: item_gained_event.as_sub_event(),
+                                dropped_item,
+                            })
+                        } else {
+                            None
+                        };
+
                         let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
 
                         let free_refill = free_refiller
@@ -411,6 +440,7 @@ pub fn parse_next_event(
                             hype,
                             score_summary,
                             hotel_motel_party,
+                            took_the_fifth_base,
                         }
                     } else {
                         FedEventData::CaughtStealing {

@@ -2082,6 +2082,35 @@ pub struct BalloonsPopped {
     pub birds_scared_away: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TookTheFifthBase {
+    /// Name of the stadium from which The Fifth Base was taken
+    pub stadium_name: String,
+
+    /// Uuid of the team whose player just took The Fifth Base
+    pub team_id: Uuid,
+
+    /// Metadata for the sub-event associated with the stadium losing the The Fifth Base mod
+    pub remove_mod_from_stadium_sub_event: SubEvent,
+
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before taking The Fifth Base
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    pub player_item_rating_after: f64,
+
+    /// The player's star rating. TODO: Is this with or without items?
+    pub player_rating: f64,
+
+    /// Metadata for the event associated with gaining the The Fifth Base item
+    pub player_gained_item_sub_event: SubEvent,
+
+    /// If the player dropped an item as a result of taking The Fifth bAse, contains information
+    /// about the dropped item. Otherwise null.
+    pub dropped_item: Option<ItemDroppedForNewItem>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2620,6 +2649,10 @@ pub enum FedEventData {
 
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+
+        /// If the player took The Fifth Base, contains info about the stadium losing the mod, the
+        /// player gaining the item, and the player possibly dropping their previous item
+        took_the_fifth_base: Option<TookTheFifthBase>,
     },
 
     /// Caught stealing

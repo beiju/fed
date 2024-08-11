@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -247,24 +247,12 @@ impl EventBuilder {
         self.push_metadata_i64("type", 4); // TODO what does this mean?
     }
 
-    pub fn push_gained_item(&mut self, player_name: String, gained_item: ItemGained) {
+    pub fn push_gained_item(&mut self, player_name: &str, gained_item: ItemGained) {
         if let Some(lost_item) = gained_item.dropped_item {
             let dropped_or_ditched = if lost_item.item_was_broken { "ditched" } else { "dropped" };
             self.push_description(&format!("{player_name} gained {} and {dropped_or_ditched} {}.",
                                            gained_item.item_name, lost_item.item_name));
-            self.push_child(lost_item.sub_event, |mut child| {
-                child.set_category(EventCategory::Changes);
-                child.push_description(&format!("{player_name} dropped {}.", lost_item.item_name));
-                child.push_player_tag(gained_item.player_id);
-                child.push_team_tag(gained_item.team_id);
-                child.push_metadata_uuid("itemId", lost_item.item_id);
-                child.push_metadata_str("itemName", lost_item.item_name);
-                child.push_metadata_str_vec("mods", lost_item.item_mods);
-                child.push_metadata_f64("playerItemRatingAfter", lost_item.player_item_rating_after);
-                child.push_metadata_f64("playerItemRatingBefore", lost_item.player_item_rating_before);
-                child.push_metadata_f64("playerRating", gained_item.player_rating);
-                child.build(EventType::PlayerLostItem)
-            });
+            self.push_dropped_item(&player_name, gained_item.player_id, gained_item.team_id, gained_item.player_rating, lost_item);
         } else {
             self.push_description(&format!("{player_name} gained {}.", gained_item.item_name));
         }
@@ -281,6 +269,22 @@ impl EventBuilder {
             child.push_metadata_f64("playerItemRatingBefore", gained_item.player_item_rating_before);
             child.push_metadata_f64("playerRating", gained_item.player_rating);
             child.build(EventType::PlayerGainedItem)
+        });
+    }
+
+    pub fn push_dropped_item(&mut self, player_name: &str, player_id: Uuid, team_id: Uuid, player_rating: f64, dropped_item: ItemDroppedForNewItem) {
+        self.push_child(dropped_item.sub_event, |mut child| {
+            child.set_category(EventCategory::Changes);
+            child.push_description(&format!("{player_name} dropped {}.", dropped_item.item_name));
+            child.push_player_tag(player_id);
+            child.push_team_tag(team_id);
+            child.push_metadata_uuid("itemId", dropped_item.item_id);
+            child.push_metadata_str("itemName", dropped_item.item_name);
+            child.push_metadata_str_vec("mods", dropped_item.item_mods);
+            child.push_metadata_f64("playerItemRatingAfter", dropped_item.player_item_rating_after);
+            child.push_metadata_f64("playerItemRatingBefore", dropped_item.player_item_rating_before);
+            child.push_metadata_f64("playerRating", player_rating);
+            child.build(EventType::PlayerLostItem)
         });
     }
 

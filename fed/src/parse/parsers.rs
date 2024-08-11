@@ -2639,3 +2639,21 @@ pub(crate) fn parse_sun_30_win(input: &str) -> ParserResult<&str> {
     let (input, team_nickname) = parse_terminated(" a Win.").parse(input)?;
     Ok((input, team_nickname))
 }
+
+pub(crate) fn parse_player_took_the_fifth_base(player_name: &str) -> impl Fn(&str) -> ParserResult<()> + '_ {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag(" took The Fifth Base!").parse(input)?;
+        Ok((input, ()))
+    }
+}
+
+pub(crate) fn parse_player_took_the_fifth_base_from_stadium(player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+    move |input| {
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag(" took The Fifth Base from ").parse(input)?;
+        let (input, stadium_name) = parse_terminated(".").parse(input)?;
+        Ok((input, stadium_name))
+    }
+}
