@@ -3898,6 +3898,28 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.build(EventType::TumbleweedSounds)
             }
+            FedEventData::IntentionalWalk { game, pitch, batter_name, batter_id, pitcher_name, pitcher_id, sensed_foul_play_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_pitch(pitch);
+                eb.push_description(&format!("{pitcher_name} senses foul play."));
+                eb.push_description(&format!("{batter_name} is intentionally walked."));
+                eb.push_player_tag(batter_id);
+                eb.push_player_tag(pitcher_id);
+                eb.push_player_tag(batter_id);  // Yes, batter again
+
+                if let Some(sensed_foul_play_sub_event) = sensed_foul_play_sub_event {
+                    eb.push_child(sensed_foul_play_sub_event, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description(&format!("{pitcher_name} sensed foul play."));
+                        child_eb.push_player_tag(pitcher_id);
+
+                        child_eb.build(EventType::InvestigationMessage)
+                    });
+                }
+
+                eb.build(EventType::Walk)
+            }
         };
 
         vec![item]

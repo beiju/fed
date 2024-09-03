@@ -599,6 +599,7 @@ pub(crate) enum ParsedWalk<'s> {
     MindTrickStrikeoutIntoWalk((&'s str, StrikeoutType)),
     MindTrickCharmStrikeoutIntoWalk((&'s str, &'s str, i32)),
     MindTrickWalkIntoStrikeout((&'s str, &'s str)),
+    IntentionalWalk((&'s str, &'s str)),
 }
 
 pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
@@ -609,6 +610,7 @@ pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
         parse_charm_walk.map(|res| ParsedWalk::Charm(res)),
         parse_charmed_mind_trick_walk.map(|res| ParsedWalk::MindTrickCharmStrikeoutIntoWalk(res)),
         parse_ordinary_walk.map(|res| ParsedWalk::Ordinary(res)),
+        parse_intentional_walk.map(|res| ParsedWalk::IntentionalWalk(res)),
     )).parse(input)
 }
 
@@ -630,6 +632,13 @@ pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<Bas
     let (input, base_instincts) = opt(parse_base_instincts).parse(input)?;
 
     Ok((input, (batter_name, base_instincts)))
+}
+
+pub(crate) fn parse_intentional_walk(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, pitcher_name) = parse_terminated(" senses foul play.\n").parse(input)?;
+    let (input, batter_name) = parse_terminated(" is intentionally walked.").parse(input)?;
+
+    Ok((input, (pitcher_name, batter_name)))
 }
 
 pub(crate) fn parse_charm_walk(input: &str) -> ParserResult<(Option<(ActivePositionType, &str, Option<bool>)>, &str, &str)> {

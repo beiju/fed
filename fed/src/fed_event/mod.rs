@@ -5599,6 +5599,33 @@ pub enum FedEventData {
         /// Uuid of the team who caused the tumbleweed sounds
         team_id: Uuid,
     },
+
+    /// Pitcher intentionally gave batter a walk. Only known cases are detective pitchers walking
+    /// Debted batters.
+    #[serde(rename_all = "camelCase")]
+    IntentionalWalk {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        #[serde(flatten)]
+        pitch: GamePitch,
+
+        /// Name of the batter who was walked
+        batter_name: String,
+
+        /// Uuid of the batter who was walked
+        batter_id: Uuid,
+
+        /// Name of pitcher who intentionally gave up the walk
+        pitcher_name: String,
+
+        /// UUid of pitcher who intentionally gave up the walk
+        pitcher_id: Uuid,
+
+        /// Metadata associated with the "sensed foul play" sub-event, if present
+        // TODO When is it present? Theory: only the first tiem
+        sensed_foul_play_sub_event: Option<SubEvent>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5841,6 +5868,7 @@ impl FedEventData {
             FedEventData::Voicemail { game, .. } => { Some(game) }
             FedEventData::BadGatewayBroken { .. } => { None }
             FedEventData::TumbleweedSounds { .. } => { None }
+            FedEventData::IntentionalWalk { game, .. } => { Some(game) }
         }
     }
 }

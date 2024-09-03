@@ -548,6 +548,18 @@ pub fn parse_next_event(
                         pitcher_name: pitcher_name.to_string(),
                     }
                 }
+                ParsedWalk::IntentionalWalk((pitcher_name, batter_name)) => {
+                    let sensed_foul_play_event = event.next_child_opt(EventType::InvestigationMessage)?;
+                    FedEventData::IntentionalWalk {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        pitch,
+                        batter_name: batter_name.to_string(),
+                        batter_id: event.next_player_id()?,
+                        pitcher_name: pitcher_name.to_string(),
+                        pitcher_id: event.next_player_id()?,
+                        sensed_foul_play_sub_event: sensed_foul_play_event.as_ref().map(EventParseWrapper::as_sub_event),
+                    }
+                }
             }
         }
         EventType::Strikeout => {
