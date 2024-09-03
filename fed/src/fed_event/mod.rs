@@ -4758,6 +4758,14 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        /// Exclamation that starts this event, like "SLAM" or "THUD"
+        // TODO should this be an enum?
+        exclamation: String,
+
+        /// Verb for this consumer defense event, like "POWERBOMBED" or "TOASTED"
+        // TODO should this be an enum?
+        verb: String,
+
         /// Name of player who defended the attack, in all caps
         defender_name_caps: String,
 

@@ -2037,11 +2037,13 @@ pub fn parse_next_event(
                         player_id: event.next_player_id()?,
                     }
                 }
-                ParsedConsumerAttack::ConsumerDefended(player_name) => {
+                ParsedConsumerAttack::ConsumerDefended((player_name, exclamation, verb)) => {
                     let defender_id = event.next_player_id()?;
                     let targeted_player_id = event.next_player_id()?;
                     FedEventData::ConsumerDefended {
                         game: event.game(unscatter, attractor_secret_base)?,
+                        exclamation: exclamation.to_string(),
+                        verb: verb.to_string(),
                         defender_name_caps: player_name.to_string(),
                         defender_id,
                         targeted_player_id,

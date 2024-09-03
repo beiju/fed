@@ -3217,11 +3217,11 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
                 eb.build(EventType::ConsumersAttack)
             }
-            FedEventData::ConsumerDefended { game, defender_name_caps, defender_id, targeted_player_id, } => {
+            FedEventData::ConsumerDefended { game, exclamation, verb, defender_name_caps, defender_id, targeted_player_id, } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description("SHABOOM!");
-                eb.push_description(&format!("{defender_name_caps} POWERBOMBED A CONSUMER!"));
+                eb.push_description(&format!("{exclamation}!"));
+                eb.push_description(&format!("{defender_name_caps} {verb} A CONSUMER!"));
                 eb.push_player_tag(defender_id);
                 eb.push_player_tag(targeted_player_id);
                 eb.build(EventType::ConsumersAttack)
