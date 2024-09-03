@@ -1629,7 +1629,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary } => {
+            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary, flood_balloon } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A surge of Immateria rushes up from Under!");
@@ -1671,6 +1671,10 @@ impl FedEvent {
 
                 eb.push_free_refills(&free_refills);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+
+                if flood_balloon {
+                    eb.push_description("A Flood Balloon was filled!");
+                }
 
                 eb.build(EventType::FloodingSwept)
             }

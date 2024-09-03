@@ -3653,6 +3653,9 @@ pub enum FedEventData {
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Flooding events thanks to Flippers.
         score_summary: Option<ScoreSummary>,
+
+        /// Whether a flood balloon was filled
+        flood_balloon: bool,
     },
 
     /// Player(s) returned from Elsewhere
