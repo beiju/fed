@@ -5591,7 +5591,14 @@ pub enum FedEventData {
     BadGatewayBroken {
         /// Uuid of the team who smashed through the Bad Gateway
         team_id: Uuid,
-    }
+    },
+
+    /// There were tumbleweed sounds
+    #[serde(rename_all = "camelCase")]
+    TumbleweedSounds {
+        /// Uuid of the team who caused the tumbleweed sounds
+        team_id: Uuid,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5833,6 +5840,7 @@ impl FedEventData {
             FedEventData::Sun30Smiles { game, .. } => { Some(game) }
             FedEventData::Voicemail { game, .. } => { Some(game) }
             FedEventData::BadGatewayBroken { .. } => { None }
+            FedEventData::TumbleweedSounds { .. } => { None }
         }
     }
 }

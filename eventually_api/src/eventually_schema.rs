@@ -383,6 +383,7 @@ pub enum EventType {
     ElementAddedToItem = 224,
     Sun30Smiles = 226,
     Voicemail = 228,
+    TumbleweedSounds = 232,
     StormWarning = 263,
     Snowflakes = 264,
 }

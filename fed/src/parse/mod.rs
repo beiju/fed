@@ -3547,6 +3547,11 @@ pub fn parse_next_event(
                 },
             }
         }
+        EventType::TumbleweedSounds => {
+            FedEventData::TumbleweedSounds {
+                team_id: event.next_team_id()?,
+            }
+        }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

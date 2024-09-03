@@ -3892,6 +3892,12 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.build(EventType::BadGatewayBroken)
             }
+            FedEventData::TumbleweedSounds { team_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("[TUMBLEWEED SOUNDS]");
+                eb.push_team_tag(team_id);
+                eb.build(EventType::TumbleweedSounds)
+            }
         };
 
         vec![item]
