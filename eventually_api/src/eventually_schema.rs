@@ -366,6 +366,7 @@ pub enum EventType {
     PlayerSoulIncrease = 199,
     Announcement = 201,
     Ratification = 203,
+    BadGatewayBroken = 204,
     HypeBuilds = 206,
     Moderation = 208,
     RunsScored = 209,

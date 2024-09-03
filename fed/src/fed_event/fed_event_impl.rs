@@ -3886,6 +3886,12 @@ impl FedEvent {
 
                 eb.build(EventType::Voicemail)
             }
+            FedEventData::BadGatewayBroken { team_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("SMASH");
+                eb.push_team_tag(team_id);
+                eb.build(EventType::BadGatewayBroken)
+            }
         };
 
         vec![item]

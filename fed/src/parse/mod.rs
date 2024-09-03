@@ -3433,6 +3433,11 @@ pub fn parse_next_event(
                 mod_removals,
             }
         }
+        EventType::BadGatewayBroken => {
+            FedEventData::BadGatewayBroken {
+                team_id: event.next_team_id()?,
+            }
+        }
         EventType::HypeBuilds => { todo!() }
         EventType::Moderation => {
             let team_nickname = event.next_parse(parse_moderation)?;

@@ -5576,6 +5576,13 @@ pub enum FedEventData {
 
         /// Metadata associated with the player shadowed event
         shadowed_sub_event: PlayerBoostSubEvent,
+    },
+
+    /// A team smashed through the Bad Gateway
+    #[serde(rename_all = "camelCase")]
+    BadGatewayBroken {
+        /// Uuid of the team who smashed through the Bad Gateway
+        team_id: Uuid,
     }
 }
 
@@ -5817,6 +5824,7 @@ impl FedEventData {
             FedEventData::SunSunRecharged { .. } => { None }
             FedEventData::Sun30Smiles { game, .. } => { Some(game) }
             FedEventData::Voicemail { game, .. } => { Some(game) }
+            FedEventData::BadGatewayBroken { .. } => { None }
         }
     }
 }
