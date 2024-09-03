@@ -1754,12 +1754,14 @@ pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
 pub(crate) enum ParsedConsumerAttack<'a> {
     Normal((&'a str, Option<(&'a str, Option<bool>)>, bool)),
     ConsumerExpelled,
+    ConsumerDefended(&'a str),
 }
 
 pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerAttack> {
     alt((
         parse_consumer_attack_normal.map(|out| ParsedConsumerAttack::Normal(out)),
         parse_consumer_expelled.map(|()| ParsedConsumerAttack::ConsumerExpelled),
+        parse_consumer_defended.map(|n| ParsedConsumerAttack::ConsumerDefended(n)),
     )).parse(input)
 }
 
@@ -1789,6 +1791,16 @@ pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<(&st
         parse_terminated(" BREAKS").map(|n| (n, Some(false))),
         parse_terminated(" BREAK").map(|n| (n, Some(true))),
     )).parse(input)
+}
+
+pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<&str> {
+    let (input, _exclamation) = tag("SHABOOM!").parse(input)?;
+
+    let (input, _) = tag("\n").parse(input)?;
+
+    let (input, player_name) = parse_terminated(" POWERBOMBED A CONSUMER!").parse(input)?;
+
+    Ok((input, player_name))
 }
 
 pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<()> {

@@ -3217,6 +3217,15 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
                 eb.build(EventType::ConsumersAttack)
             }
+            FedEventData::ConsumerDefended { game, defender_name_caps, defender_id, targeted_player_id, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("SHABOOM!");
+                eb.push_description(&format!("{defender_name_caps} POWERBOMBED A CONSUMER!"));
+                eb.push_player_tag(defender_id);
+                eb.push_player_tag(targeted_player_id);
+                eb.build(EventType::ConsumersAttack)
+            }
             FedEventData::MindTrickWalk { game, pitch, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);

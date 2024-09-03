@@ -4752,6 +4752,22 @@ pub enum FedEventData {
         player_id: Uuid,
     },
 
+    /// A Consumer was defended by a detective
+    #[serde(rename_all = "camelCase")]
+    ConsumerDefended {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of player who defended the attack, in all caps
+        defender_name_caps: String,
+
+        /// Uuid of player who defended the attack
+        defender_id: Uuid,
+
+        /// Uuid of player who was targeted by the Consumer
+        targeted_player_id: Uuid,
+    },
+
     /// Walk as a result of a Mind Trick
     #[serde(rename_all = "camelCase")]
     MindTrickWalk {
@@ -5764,6 +5780,7 @@ impl FedEventData {
             FedEventData::GlitterCrate { game, .. } => { Some(game) }
             FedEventData::ModsFromAnotherModRemoved { .. } => { None }
             FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
+            FedEventData::ConsumerDefended { game, .. } => { Some(game) }
             FedEventData::MindTrickWalk { game, .. } => { Some(game) }
             FedEventData::CharmedMindTrickWalk { game, .. } => { Some(game) }
             FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }

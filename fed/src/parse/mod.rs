@@ -2037,6 +2037,16 @@ pub fn parse_next_event(
                         player_id: event.next_player_id()?,
                     }
                 }
+                ParsedConsumerAttack::ConsumerDefended(player_name) => {
+                    let defender_id = event.next_player_id()?;
+                    let targeted_player_id = event.next_player_id()?;
+                    FedEventData::ConsumerDefended {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        defender_name_caps: player_name.to_string(),
+                        defender_id,
+                        targeted_player_id,
+                    }
+                }
             }
         }
         EventType::EchoChamber => {
