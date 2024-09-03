@@ -3756,6 +3756,10 @@ pub enum FedEventData {
 
         /// Player's rating after the party
         rating_after: f64,
+
+        /// If this Party attracted birds, the name of the stadium the birds were attracted to.
+        /// Otherwise null
+        attracted_birds: Option<String>,
     },
 
     /// Player was hatched from the Field of Eggs

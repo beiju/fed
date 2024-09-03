@@ -1403,10 +1403,15 @@ pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (victim_name, team_name)))
 }
 
-pub(crate) fn parse_party(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_party(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, player_name) = parse_terminated(" is Partying!").parse(input)?;
 
-    Ok((input, player_name))
+    let (input, attracted_birds) = opt(preceded(
+        tag("\nA flock of Birds are attracted to ", ),
+        parse_terminated("!"),
+    )).parse(input)?;
+
+    Ok((input, (player_name, attracted_birds)))
 }
 
 pub(crate) fn parse_player_hatched(input: &str) -> ParserResult<&str> {

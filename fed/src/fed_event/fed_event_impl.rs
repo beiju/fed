@@ -1964,32 +1964,27 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::Party { ref game, team_id, player_id, ref player_name, ref sub_event, rating_before, rating_after } => {
+            FedEventData::Party { game, team_id, player_id, player_name, sub_event, rating_before, rating_after, attracted_birds } => {
+                eb.set_game(game);
                 let description = format!("{player_name} is Partying!");
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
-                        r#type: EventType::PlayerStatIncrease,
-                        description: description.clone(),
-                        team_tags: vec![team_id],
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "before": rating_before,
-                        "after": rating_after,
-                        "type": 4, // ?
-                    }));
+                eb.push_description(&description);
+                eb.push_player_tag(player_id);
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Party,
-                        description,
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .child(child)
-                    .build()
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(&description);
+                    child_eb.push_metadata_f64("before", rating_before);
+                    child_eb.push_metadata_f64("after", rating_after);
+                    child_eb.push_metadata_i64("type", 4); // todo: what does 4 mean?
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.build(EventType::PlayerStatIncrease)
+                });
+
+                if let Some(stadium_name) = attracted_birds {
+                    eb.push_description(&format!("A flock of Birds are attracted to {stadium_name}!"));
+                }
+
+                eb.build(EventType::Party)
             }
             FedEventData::PlayerHatched { player_id, player_name } => {
                 event_builder

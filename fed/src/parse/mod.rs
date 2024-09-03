@@ -1064,7 +1064,7 @@ pub fn parse_next_event(
             }
         }
         EventType::Party => {
-            let player_name = event.next_parse(parse_party)?;
+            let (player_name, attracted_birds) = event.next_parse(parse_party)?;
             let mut sub_event = event.next_child(EventType::PlayerStatIncrease)?;
             FedEventData::Party {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1074,6 +1074,7 @@ pub fn parse_next_event(
                 sub_event: sub_event.as_sub_event(),
                 rating_before: sub_event.metadata_f64("before")?,
                 rating_after: sub_event.metadata_f64("after")?,
+                attracted_birds: attracted_birds.map(str::to_string),
             }
         }
         EventType::StrikeZapped => {
@@ -2738,7 +2739,8 @@ pub fn parse_next_event(
 
                     while let Some(party) = event_iter.next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved).ok() {
                         let mut party = EventParseWrapper::new(&party)?;
-                        let player_name = party.next_parse(parse_party)?;
+                        let (player_name, attracted_birds) = party.next_parse(parse_party)?;
+                        assert!(attracted_birds.is_none());
                         good_riddance_parties.push(GoodRiddanceParty {
                             player_id: party.next_player_id()?,
                             player_name: player_name.to_string(),
