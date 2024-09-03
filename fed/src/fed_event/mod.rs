@@ -5530,6 +5530,37 @@ pub enum FedEventData {
         /// inflated is always 10.
         balloons: Option<String>,
     },
+
+    /// Voicemail activates. A player on the home team is swapped with a player in the Shadows
+    #[serde(rename_all = "camelCase")]
+    Voicemail {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of player who is being replaced
+        replaced_player_id: Uuid,
+
+        /// Name of player who is being replaced
+        replaced_player_name: String,
+
+        /// Uuid of replacement player
+        replacement_player_id: Uuid,
+
+        /// Name of replacement player
+        replacement_player_name: String,
+
+        /// Uuid of team whose player got voicemailed
+        team_id: Uuid,
+
+        /// Nickname of team whose player got voicemailed
+        team_nickname: String,
+
+        /// Metadata associated with the player swap event
+        swap_sub_event: SubEvent,
+
+        /// Metadata associated with the player shadowed event
+        shadowed_sub_event: PlayerBoostSubEvent,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -5768,6 +5799,7 @@ impl FedEventData {
             FedEventData::NothingInterestingInTunnels { game, .. } => { Some(game) }
             FedEventData::SunSunRecharged { .. } => { None }
             FedEventData::Sun30Smiles { game, .. } => { Some(game) }
+            FedEventData::Voicemail { game, .. } => { Some(game) }
         }
     }
 }

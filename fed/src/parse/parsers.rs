@@ -2661,3 +2661,11 @@ pub(crate) fn parse_player_took_the_fifth_base_from_stadium(player_name: &str) -
         Ok((input, stadium_name))
     }
 }
+
+pub(crate) fn parse_voicemail(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("Home Team Shutout.\nIncoming Voicemail...\n").parse(input)?;
+    let (input, replaced_player_nme) = parse_terminated(" is replaced by ").parse(input)?;
+    let (input, replacement_player_name) = parse_terminated(".").parse(input)?;
+
+    Ok((input, (replaced_player_nme, replacement_player_name)))
+}

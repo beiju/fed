@@ -3833,6 +3833,50 @@ impl FedEvent {
 
                 eb.build(EventType::Sun30Smiles)
             }
+            FedEventData::Voicemail { game, replaced_player_id, replaced_player_name, replacement_player_id, replacement_player_name, team_id, team_nickname, swap_sub_event, shadowed_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("Home Team Shutout.");
+                eb.push_description("Incoming Voicemail...");
+                eb.push_description(&format!("{replaced_player_name} is replaced by {replacement_player_name}."));
+
+                eb.push_player_tag(replaced_player_id);
+                eb.push_child(swap_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{replaced_player_name} was replaced by an incoming Voicemail."));
+                    // Voicemails always take from the lineup
+                    child_eb.push_metadata_i64("aLocation", PositionType::Lineup);
+                    child_eb.push_metadata_uuid("aPlayerId", replaced_player_id);
+                    child_eb.push_player_tag(replaced_player_id);
+                    child_eb.push_metadata_str("aPlayerName", &replaced_player_name);
+                    // Voicemails always put you in the shadows (which shares an id with Bench after
+                    // the unification
+                    child_eb.push_metadata_i64("bLocation", PositionType::Bench);
+                    child_eb.push_metadata_uuid("bPlayerId", replacement_player_id);
+                    child_eb.push_player_tag(replacement_player_id);
+                    child_eb.push_metadata_str("bPlayerName", &replacement_player_name);
+
+                    child_eb.push_metadata_uuid("teamId", team_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_str("teamName", &team_nickname);
+
+                    child_eb.build(EventType::PlayerSwap)
+                });
+
+                eb.push_child(shadowed_sub_event.sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{replaced_player_name} entered the Shadows."));
+                    child_eb.push_metadata_f64("before", shadowed_sub_event.rating_before);
+                    child_eb.push_metadata_f64("after", shadowed_sub_event.rating_after);
+                    child_eb.push_metadata_i64("type", 4); // what does this mean??
+                    child_eb.push_player_tag(replaced_player_id);
+                    child_eb.push_team_tag(team_id);
+
+                    child_eb.build(EventType::PlayerStatIncrease)
+                });
+
+                eb.push_player_tag(replacement_player_id);
+
+                eb.build(EventType::Voicemail)
+            }
         };
 
         vec![item]

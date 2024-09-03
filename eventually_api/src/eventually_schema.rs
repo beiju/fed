@@ -381,6 +381,7 @@ pub enum EventType {
     WeatherEvent = 223,
     ElementAddedToItem = 224,
     Sun30Smiles = 226,
+    Voicemail = 228,
     StormWarning = 263,
     Snowflakes = 264,
 }

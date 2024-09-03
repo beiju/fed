@@ -3506,7 +3506,30 @@ pub fn parse_next_event(
                 balloons: balloons.map(str::to_string),
             }
         }
-        EventType::Voicemail => { todo!() }
+        EventType::Voicemail => {
+            let (replaced_player_name, replacement_player_name) = event.next_parse(parse_voicemail)?;
+            let replaced_player_id = event.next_player_id()?;
+            let replacement_player_id = event.next_player_id()?;
+
+            let mut replaced_event = event.next_child(EventType::PlayerSwap)?;
+            let mut replacement_event = event.next_child(EventType::PlayerStatIncrease)?;
+
+            FedEventData::Voicemail {
+                game: event.game(unscatter, attractor_secret_base)?,
+                replaced_player_id,
+                replaced_player_name: replaced_player_name.to_string(),
+                replacement_player_id,
+                replacement_player_name: replacement_player_name.to_string(),
+                team_id: replaced_event.next_team_id()?,
+                team_nickname: replaced_event.metadata_str("teamName")?.to_string(),
+                swap_sub_event: replaced_event.as_sub_event(),
+                shadowed_sub_event: PlayerBoostSubEvent {
+                    rating_before: replacement_event.metadata_f64("before")?,
+                    rating_after: replacement_event.metadata_f64("after")?,
+                    sub_event: replacement_event.as_sub_event(),
+                },
+            }
+        }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {
