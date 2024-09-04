@@ -2167,6 +2167,7 @@ pub fn parse_next_event(
 
                     let thief_id = stole_item_event.next_player_id()?;
                     let victim_id = stole_item_event.next_player_id()?;
+                    let victim_team_id = item_lost_event.next_team_id()?;
 
                     let thief_item_dropped = item_dropped_event
                         // TODO If this `false` is still hardcoded when tunnels is finished, find
@@ -2180,6 +2181,7 @@ pub fn parse_next_event(
                         thief_name: thief_name.to_string(),
                         victim_id,
                         victim_name: victim_name.to_string(),
+                        victim_team_id,
                         item_id: item_lost_event.metadata_uuid("itemId")?,
                         item_name: item_name.to_string(),
                         item_mods: item_lost_event.metadata_str_vec("mods")?

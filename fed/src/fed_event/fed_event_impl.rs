@@ -3693,9 +3693,8 @@ impl FedEvent {
 
                 eb.build(EventType::TunnelsUsed)
             },
-            FedEventData::StoleItemWithTunnels { game, thief_id, thief_name, victim_id, victim_name, item_id, item_name, item_mods, thief_item_rating_before, thief_item_rating_after, thief_rating, victim_item_rating_before, victim_item_rating_after, victim_rating, stole_item_sub_event, item_lost_sub_event, thief_item_dropped, item_gained_sub_event } => {
+            FedEventData::StoleItemWithTunnels { game, thief_id, thief_name, victim_id, victim_name, victim_team_id, item_id, item_name, item_mods, thief_item_rating_before, thief_item_rating_after, thief_rating, victim_item_rating_before, victim_item_rating_after, victim_rating, stole_item_sub_event, item_lost_sub_event, thief_item_dropped, item_gained_sub_event } => {
                 let home_team = game.home_team;
-                let away_team = game.away_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("{thief_name} entered the Tunnels..."));
@@ -3716,7 +3715,7 @@ impl FedEvent {
                 eb.push_child(item_lost_sub_event, |mut child_eb| {
                     child_eb.push_description(&format!("{} {item_name} was stolen by {thief_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(victim_id);
-                    child_eb.push_team_tag(away_team);
+                    child_eb.push_team_tag(victim_team_id);
 
                     child_eb.push_metadata_uuid("itemId", item_id);
                     child_eb.push_metadata_str("itemName", item_name.clone());

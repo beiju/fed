@@ -5485,6 +5485,13 @@ pub enum FedEventData {
 
         /// Name of the player whose item was stolen. This player is always on the away team.
         victim_name: String,
+
+        /// Uuid of the team whose player's item was stolen. This *should* always be the away team,
+        /// because only the home team can use the Tunnels, but thanks to the linked items bug it
+        /// can be a team that's not even in this game!
+        ///
+        /// The thief's team is always the home team, though.
+        victim_team_id: Uuid,
         
         /// Uuid of the item that was stolen
         item_id: Uuid,
