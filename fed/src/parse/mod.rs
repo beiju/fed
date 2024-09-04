@@ -715,6 +715,7 @@ pub fn parse_next_event(
                     let scores = event.parse_scores(" scores!", false)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
+                    let flood_balloon_popped = event.parse_flood_balloon_popped();
                     FedEventData::DoublePlay {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -723,6 +724,7 @@ pub fn parse_next_event(
                         stopped_inhabiting,
                         cooled_off,
                         pitcher_item_damage: pitcher_item_damage_from_pitch,
+                        flood_balloon_popped,
                     }
                 }
             }

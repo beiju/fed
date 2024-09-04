@@ -2509,6 +2509,10 @@ pub enum FedEventData {
         /// If the pitcher's item was damage, includes the pitcher's name and details about the item
         /// being damaged
         pitcher_item_damage: Option<(String, ItemDamaged)>,
+
+        /// If this ground out popped a Flooding Balloon, contains the stadium name and birds scared
+        /// away. Otherwise null.
+        flood_balloon_popped: Option<BalloonsPopped>,
     },
 
     /// Hit event (Single, Double, Triple, or Quadruple)

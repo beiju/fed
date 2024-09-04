@@ -545,9 +545,10 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::DoublePlay { game, pitch, batter_name, scores, stopped_inhabiting, cooled_off, pitcher_item_damage } => {
+            FedEventData::DoublePlay { game, pitch, batter_name, scores, stopped_inhabiting, cooled_off, pitcher_item_damage, flood_balloon_popped } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
+                if flood_balloon_popped.is_some() { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
                 // I feel like there should be an easier way to do this ref conversion
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(n, d)| (n.as_str(), d)));
@@ -555,6 +556,7 @@ impl FedEvent {
                 eb.push_scores(&scores, home_team_id, "scores!", false);
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_cooled_off(cooled_off, &batter_name);
+                eb.push_flood_balloon_popped(flood_balloon_popped);
                 eb.build(EventType::GroundOut)
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score, temp_stolen_player_returned } => {
