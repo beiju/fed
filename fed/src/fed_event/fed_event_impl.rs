@@ -360,7 +360,7 @@ impl FedEvent {
 
                 eb.build(EventType::HomeRun)
             }
-            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage_from_out, pitcher_item_damage_from_advance, fielder_item_damage_from_out, fielder_item_damage_from_advance } => {
+            FedEventData::GroundOut { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, pitcher_item_damage_from_out, pitcher_item_damage_from_advance, fielder_item_damage_from_out, fielder_item_damage_from_advance, flood_balloon_popped } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
@@ -376,6 +376,7 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_score_summary(&scores);
                 eb.push_cooled_off(cooled_off, &batter_name);
+                eb.push_flood_balloon_popped(flood_balloon_popped);
                 eb.build(EventType::GroundOut)
             }
             FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, hotel_motel_party, took_the_fifth_base } => {
@@ -3538,7 +3539,7 @@ impl FedEvent {
             FedEventData::BalloonsCollectedFromWin { game, stadium_name, earned_win } => {
                 eb.set_game(game);
                 eb.push_description(&format!("{stadium_name} {} 10 Balloons!", eb.inflated_or_inflates()));
-                eb.push_earned_win(earned_win);
+                eb.push_earned_win_opt(earned_win);
 
                 eb.build(EventType::BalloonsInflatedFromWin)
             }

@@ -1133,6 +1133,14 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
+    pub fn parse_flood_balloon_popped(&mut self) -> Option<BalloonsPopped> {
+        self.next_parse_opt(parse_flooding_balloons_popped)
+            .map(|(name, birds)| BalloonsPopped {
+                stadium_name: name.to_string(),
+                birds_scared_away: birds,
+            })
+    }
+
     fn make_earned_win(mut win_event: EventParseWrapper) -> Result<EarnedWin, FeedParseError> {
         let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
         assert!(is_known_team_nickname(winning_team_nickname));

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -794,6 +794,12 @@ impl EventBuilder {
         });
     }
 
+    pub fn push_earned_win_opt(&mut self, win: Option<EarnedWin>) {
+        if let Some(win) = win {
+            self.push_earned_win(win);
+        }
+    }
+
     pub fn push_team_subseasonal_mod_changes(&mut self, changes: impl IntoIterator<Item=SubseasonalModChange<TeamModChangeSubject>>, season: i32, day: i32) {
         for change in changes {
             self.push_team_subseasonal_mod_change(change, season, day);
@@ -902,6 +908,13 @@ impl EventBuilder {
 
             child_eb.build(EventType::PlayerMoved)
         });
+    }
+
+    pub fn push_flood_balloon_popped(&mut self, pop: Option<BalloonsPopped>) {
+        if let Some(pop) = pop {
+            self.push_description(&format!("One of {} Flooding Balloons was struck and popped!", Possessive(&pop.stadium_name)));
+            self.push_description(&format!("{} Birds were scared away!", pop.birds_scared_away));
+        }
     }
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {

@@ -2437,6 +2437,10 @@ pub enum FedEventData {
 
         /// Damage that the fielder's item took from the runner advancing, if any
         fielder_item_damage_from_advance: Option<ItemDamaged>,
+
+        /// If this ground out popped a Flooding Balloon, contains the stadium name and birds scared
+        /// away. Otherwise null.
+        flood_balloon_popped: Option<BalloonsPopped>,
     },
 
     /// Fielders choice event
@@ -5281,9 +5285,12 @@ pub enum FedEventData {
         /// and the home team's stadium (this event only occurs when the home team wins).
         stadium_name: String,
 
-        /// The Earned Win event data. This field is always populated on this event. It "steals" the
-        /// value from the following GameOver event.
-        earned_win: EarnedWin,
+        /// The Earned Win event data. Before s21d81 this field was always populated on this event.
+        /// It "steals" the value from the following GameOver event. On that day, the value was
+        /// instead on the preceding GameEnd event. TODO: Figure out if this is a change that stuck
+        /// around, or if it only happens in certain circumstances (it may be notable that a
+        /// voicemail happened in the s21d81 game in question)
+        earned_win: Option<EarnedWin>,
     },
 
     /// Team practices Moderation

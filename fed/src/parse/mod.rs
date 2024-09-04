@@ -671,6 +671,7 @@ pub fn parse_next_event(
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, false)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
+                    let flood_balloon_popped = event.parse_flood_balloon_popped();
                     FedEventData::GroundOut {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -686,6 +687,7 @@ pub fn parse_next_event(
                         pitcher_item_damage_from_advance,
                         fielder_item_damage_from_out,
                         fielder_item_damage_from_advance, // TODO this should be part of scores, no?
+                        flood_balloon_popped,
                     }
                 }
                 ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
@@ -3478,7 +3480,7 @@ pub fn parse_next_event(
             FedEventData::BalloonsCollectedFromWin {
                 game: event.game(unscatter, attractor_secret_base)?,
                 stadium_name: stadium_name.to_string(),
-                earned_win: event.parse_earned_win()?,
+                earned_win: event.parse_earned_win_opt()?,
             }
         }
         EventType::WinCollectedRegular => { todo!() }
