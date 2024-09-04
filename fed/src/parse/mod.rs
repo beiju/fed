@@ -1193,11 +1193,12 @@ pub fn parse_next_event(
             }
         }
         EventType::Sun2 => {
-            let (scoring_team, rays_player) = event.next_parse(parse_sun2)?;
+            let scoring_team = event.next_parse(parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
 
             let win_event = event.parse_win_event()?;
 
+            let rays_player = event.next_parse_opt(parse_catches_rays);
             let caught_some_rays = if let Some(player_name) = rays_player {
                 let mut child = event.next_child(EventType::PlayerStatIncrease)?;
                 Some(PlayerStatChange {
@@ -2104,6 +2105,7 @@ pub fn parse_next_event(
                 ParsedTunnels::StoleRun { victim_team_nickname } => {
                     assert!(is_known_team_nickname(victim_team_nickname));
 
+                    let free_refill = event.parse_free_refill()?;
                     let hype = event.parse_hype()?;
 
                     let mut runs_scored_a = event.next_child(EventType::RunsScored)?;
@@ -2139,6 +2141,7 @@ pub fn parse_next_event(
                         victim_event_first,
                         balloons: event.parse_balloons(1)?,
                         hype,
+                        free_refill,
                     }
                 }
                 ParsedTunnels::CaughtStealingItem { victim_name, item_name } => {

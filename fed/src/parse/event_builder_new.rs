@@ -381,8 +381,8 @@ impl EventBuilder {
 
     // This function only exists to make a more sensible name for the user. Option implements
     // IntoIterator so you could just call the plural form with an option.
-    pub fn push_free_refill(&mut self, free_refills: Option<FreeRefill>) {
-        self.push_free_refills(free_refills.as_slice())
+    pub fn push_free_refill(&mut self, free_refill: Option<FreeRefill>) {
+        self.push_free_refills(free_refill.as_slice())
     }
 
     pub fn push_scores_without_event(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str, is_fc: bool) {

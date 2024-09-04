@@ -952,7 +952,7 @@ pub(crate) fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_sun2(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, (scoring_team, smiled)) = alt((
         // This is before Sun(Sun)
@@ -970,9 +970,14 @@ pub(crate) fn parse_sun2(input: &str) -> ParserResult<(&str, Option<&str>)> {
     };
     let (input, _) = tag(scoring_team).parse(input)?;
     let (input, _) = tag(".").parse(input)?;
-    let (input, rays_player) = opt(preceded(tag("\n"), parse_terminated(" catches some rays."))).parse(input)?;
 
-    Ok((input, (scoring_team, rays_player)))
+    Ok((input, scoring_team))
+}
+
+pub(crate) fn parse_catches_rays(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, rays_player) = parse_terminated(" catches some rays.").parse(input)?;
+    Ok((input, rays_player))
 }
 
 pub(crate) fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {

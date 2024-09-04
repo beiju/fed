@@ -5426,6 +5426,9 @@ pub enum FedEventData {
 
         /// If this run activated Hype, information about the hype. Ohterwise null.
         hype: Option<Hype>,
+
+        /// Free Refill data if one was used, otherwise null
+        free_refill: Option<FreeRefill>,
     },
 
     /// A player tried to steal an item from an opponent player using the Stadium's Tunnels, but
