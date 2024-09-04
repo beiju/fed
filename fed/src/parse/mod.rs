@@ -257,7 +257,7 @@ impl ModsFromAnotherModRemoved {
     }
 
     pub fn format_description_team(&self, team_nickname: &str) -> String {
-        format!("The {team_nickname}' mods caused by {} were removed.", self.source_mod_name)
+        format!("The {} mods caused by {} were removed.", Possessive(team_nickname), self.source_mod_name)
     }
 }
 
