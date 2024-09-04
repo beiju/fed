@@ -3525,8 +3525,8 @@ pub fn parse_next_event(
             let balloons = event.next_parse_opt(parse_balloon_inflated_from_win(false));
 
             // I checked the order of these
-            let home_win_event = event.next_child(EventType::WinCollectedRegular)?;
-            let away_win_event = event.next_child(EventType::WinCollectedRegular)?;
+            let home_win_event = event.next_child(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })?;
+            let away_win_event = event.next_child(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })?;
 
             fn parse_win(mut win_event: EventParseWrapper) -> Result<ShortEarnedWin, FeedParseError> {
                 let team_nickname = win_event.next_parse(parse_sun_30_win)?;

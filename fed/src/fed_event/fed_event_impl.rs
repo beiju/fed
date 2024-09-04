@@ -3814,7 +3814,7 @@ impl FedEvent {
                             "Sun 30: 1".to_string(),
                             "Sun(Sun): 1 ^ 2 = 1".to_string(),
                         ]);
-                        child_eb.build(EventType::WinCollectedRegular)
+                        child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                     });
                 }
 
