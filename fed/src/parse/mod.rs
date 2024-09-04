@@ -1739,6 +1739,7 @@ pub fn parse_next_event(
                         game: event.game(unscatter, attractor_secret_base)?,
                         player_id: event.next_player_id()?,
                         player_name: player_name.to_string(),
+                        is_unstable,
                     }
                 }
             }

@@ -4054,6 +4054,9 @@ pub enum FedEventData {
 
         /// Name of fireproof player
         player_name: String,
+
+        /// Whether the fireproof player was Unstable
+        is_unstable: bool,
     },
 
     /// Team's lineup was sorted as a result of gaining Base Dealing

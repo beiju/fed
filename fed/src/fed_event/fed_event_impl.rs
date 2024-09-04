@@ -2263,16 +2263,16 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::FireproofIncineration { game, player_id, player_name } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::IncinerationBlocked,
-                        category: EventCategory::Special,
-                        description: format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::FireproofIncineration { game, player_id, player_name, is_unstable } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                if is_unstable {
+                    eb.push_description(&format!("{player_name} is Unstable!"));
+                }
+                eb.push_description(&format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"));
+                eb.push_player_tag(player_id);
+
+                eb.build(EventType::IncinerationBlocked)
             }
             FedEventData::LineupSorted { team_id, team_nickname } => {
                 event_builder
