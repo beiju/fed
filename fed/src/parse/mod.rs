@@ -2710,12 +2710,26 @@ pub fn parse_next_event(
                 })?;
             let mod_event = EventParseWrapper::new(&mod_event)?;
 
+            let weaker_apart_event = event_iter.extract_next_match(|e| {
+                e.r#type == EventType::RemovedModFromOtherMod && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+            })
+                .map(|weaker_apart_event| {
+                    let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
+                    let names = weaker_apart_event.next_parse(parse_weaker_apart(player_name))?;
+                    ParseOk(PlayerLostTogethernessMod {
+                        other_player_names: names.into_iter().map(str::to_string).collect(),
+                        sub_event: weaker_apart_event.as_sub_event(),
+                    })
+                })
+                .transpose()?;
+
             FedEventData::ReplicaFadedToDust {
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
                 player_id,
                 player_name: player_name.to_string(),
                 mod_added_event: mod_event.as_sub_event(),
+                weaker_apart_event,
             }
         }
         EventType::PlayerTraded => { todo!() }

@@ -3457,7 +3457,7 @@ impl FedEvent {
                 successors.insert(0, main);
                 return successors;
             }
-            FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event } => {
+            FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event, weaker_apart_event } => {
                 let mut dust_eb = eb.connected_event(mod_added_event);
                 dust_eb.set_category(EventCategory::Changes);
                 dust_eb.push_description(&format!("{player_name} faded to dust."));
@@ -3467,17 +3467,35 @@ impl FedEvent {
                 dust_eb.push_metadata_i64("type", ModDuration::Permanent);
                 let dust_add_event = dust_eb.build(EventType::AddedMod);
 
+                let weaker_apart_event = weaker_apart_event.map(|weaker_apart| {
+                    let mut weaker_apart_eb = eb.connected_event(weaker_apart.sub_event);
+                    weaker_apart_eb.set_category(EventCategory::Changes);
+                    let names_str = iter::once(&player_name)
+                    .chain(weaker_apart.other_player_names.iter())
+                    .join(" and ");
+                    weaker_apart_eb.push_description(&format!("{names_str} are weaker apart."));
+                    weaker_apart_eb.push_team_tag(team_id);
+                    weaker_apart_eb.push_player_tag(player_id);
+                    weaker_apart_eb.push_metadata_str("mod", "YOLKED");
+                    weaker_apart_eb.push_metadata_str("source", "HARD_BOILED");
+                    weaker_apart_eb.push_metadata_i64("type", ModDuration::Permanent);
+                    weaker_apart_eb.build(EventType::RemovedModFromOtherMod)
+                });
+
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(&format!("{player_name} faded away from the {team_nickname}."));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_uuid("playerId", player_id);
-                eb.push_metadata_str("playerName", player_name);
+                eb.push_metadata_str("playerName", &player_name);
                 eb.push_metadata_uuid("teamId", team_id);
                 eb.push_metadata_str("teamName", team_nickname);
                 let main_event = eb.build(EventType::PlayerRemovedFromTeam);
 
-                return vec![main_event, dust_add_event];
+                let mut events = vec![main_event, dust_add_event];
+                if let Some(e) = weaker_apart_event { events.push(e); }
+
+                return events;
             }
             FedEventData::ABloodType { game, team_id, team_nickname, blood_type_mod_id, sub_event } => {
                 eb.set_game(game);

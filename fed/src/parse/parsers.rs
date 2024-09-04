@@ -2724,3 +2724,23 @@ pub(crate) fn parse_voicemail(input: &str) -> ParserResult<(&str, &str)> {
 
     Ok((input, (replaced_player_nme, replacement_player_name)))
 }
+
+pub(crate) fn parse_weaker_apart(first_player_name: &str) -> impl Fn(&str) -> ParserResult<Vec<&str>> + '_ {
+    move |input| {
+        let (input, _) = tag(first_player_name).parse(input)?;
+        let (input, _) = opt(tag(" and ")).parse(input)?;
+        let (input, names) = many0(alt((
+            parse_terminated(" and "),
+            // In principle I should make this one only be allowed to match at the end, but... eh
+            parse_terminated(" are weaker apart."),
+        ))).parse(input)?;
+
+        let (input, _) = if names.is_empty() {
+            tag(" are weaker apart.").parse(input)?
+        } else {
+            (input, "")
+        };
+
+        Ok((input, names))
+    }
+}

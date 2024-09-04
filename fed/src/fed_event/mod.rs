@@ -2119,6 +2119,15 @@ pub struct TookTheFifthBase {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerLostTogethernessMod {
+    /// List of the other players with the same togetherness mod. May be empty.
+    pub other_player_names: Vec<String>,
+
+    /// Metadata for the associated mod being removed
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -5210,6 +5219,10 @@ pub enum FedEventData {
 
         /// Metadata for the associated ModAdded event for adding the Dust mod
         mod_added_event: SubEvent,
+
+        /// If a replica of a Hard Boiled player fades to dust while Yolked, they'll lose the Yolked
+        /// mod. This is metadata for that event.
+        weaker_apart_event: Option<PlayerLostTogethernessMod>,
     },
 
     /// Team with A Blood gets A blood type at the beginning of a game
