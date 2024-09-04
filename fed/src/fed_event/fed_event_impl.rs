@@ -557,43 +557,21 @@ impl FedEvent {
                 eb.build(EventType::GroundOut)
             }
             FedEventData::GameEnd { game, winner_id, winning_team_name, winning_team_score, losing_team_name, losing_team_score, temp_stolen_player_returned } => {
-                let child = temp_stolen_player_returned
-                    .map(|ret| {
-                        EventBuilderChild::new(&ret.sub_event)
-                            .update(EventBuilderUpdate {
-                                r#type: EventType::PlayerMoved,
-                                category: EventCategory::Changes,
-                                description: format!("{} is returned to the {}.",
-                                                     ret.player_name, ret.new_team_nickname),
-                                player_tags: vec![ret.player_id],
-                                team_tags: vec![ret.previous_team_id, ret.new_team_id],
-                                ..Default::default()
-                            })
-                            .metadata(json!({
-                                "location": ret.location as i64,
-                                "playerId": ret.player_id,
-                                "playerName": ret.player_name,
-                                "receiveLocation": ret.location as i64,
-                                "receiveTeamId": ret.new_team_id,
-                                "receiveTeamName": ret.new_team_nickname,
-                                "sendTeamId": ret.previous_team_id,
-                                "sendTeamName": ret.previous_team_nickname,
-                            }))
-                    });
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::GameEnd,
-                        category: EventCategory::Outcomes,
-                        description: format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"),
-                        team_tags: vec![game.home_team, game.away_team],
-                        // This is the default value but I'm stating it just to convey that yes, I
-                        // do mean to repeat the team tags. That's how the events are.
-                        override_team_tags: false,
-                        ..Default::default()
-                    })
-                    .metadata(json!({ "winner": winner_id }))
-                    .children(child)
-                    .build()
+                let home_team_id = game.home_team;
+                let away_team_id = game.away_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(&format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"));
+                eb.push_metadata_uuid("winner", winner_id);
+                // It pushes them a second time. This has to be after set_game, as that overrides them
+                eb.push_team_tag(home_team_id);
+                eb.push_team_tag(away_team_id);
+
+                if let Some(ret) = temp_stolen_player_returned {
+                    eb.push_temp_stolen_player_returned(&ret);
+                }
+
+                eb.build(EventType::GameEnd)
             }
             FedEventData::MildPitch { game, pitcher_id, pitcher_name, balls, strikes, runners_advance, scores } => {
                 let home_team_id = game.home_team;
@@ -3543,12 +3521,16 @@ impl FedEvent {
 
                 eb.build(EventType::ShameDonor)
             }
-            FedEventData::GameOver { game, earned_win } => {
+            FedEventData::GameOver { game, earned_win, temp_stolen_players_returned } => {
                 eb.set_game(game);
                 eb.push_description("Game Over.");
 
                 if let Some(win) = earned_win {
                     eb.push_earned_win(win);
+                }
+
+                for player_return in temp_stolen_players_returned {
+                    eb.push_temp_stolen_player_returned(&player_return);
                 }
 
                 eb.build(EventType::GameOver)

@@ -910,18 +910,8 @@ pub fn parse_next_event(
             let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = event.next_parse(parse_game_end)?;
 
             let temp_stolen_player_returned = event.next_child_opt(EventType::PlayerMoved)?
-                .map(|child| {
-                    Ok::<_, FeedParseError>(PlayerMovedTeams {
-                        player_id: child.metadata_uuid("playerId")?,
-                        player_name: child.metadata_str("playerName")?.to_string(),
-                        location: child.metadata_enum("location")?,
-                        previous_team_id: child.metadata_uuid("sendTeamId")?,
-                        previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
-                        new_team_id: child.metadata_uuid("receiveTeamId")?,
-                        new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
-                        sub_event: child.as_sub_event(),
-                    })
-                })
+                .as_mut()
+                .map(EventParseWrapper::parse_player_moved_teams)
                 .transpose()?;
 
             FedEventData::GameEnd {
@@ -3496,9 +3486,19 @@ pub fn parse_next_event(
         EventType::GameOver => {
             let _ = event.next_parse_tag("Game Over.")?;
 
+            let earned_win = event.parse_earned_win_opt()?;
+
+            // I couldn't figure out how to write this with iterators because next_child_opt returns
+            // a Result
+            let mut temp_stolen_players_returned = Vec::new();
+            while let Some(mut moved_event) = event.next_child_opt(EventType::PlayerMoved)? {
+                temp_stolen_players_returned.push(moved_event.parse_player_moved_teams()?);
+            }
+
             FedEventData::GameOver {
                 game: event.game(unscatter, attractor_secret_base)?,
-                earned_win: event.parse_earned_win_opt()?,
+                earned_win,
+                temp_stolen_players_returned,
             }
         }
         EventType::SunSunPressure => {

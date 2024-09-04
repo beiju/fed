@@ -2877,6 +2877,8 @@ pub enum FedEventData {
 
         /// Information about a temp stolen player being returned at the end of the game, if
         /// applicable. Otherwise null.
+        ///
+        /// Sometimes this information is on the GameOver event instead (TODO: when?)
         temp_stolen_player_returned: Option<PlayerMovedTeams>,
     },
 
@@ -5258,6 +5260,14 @@ pub enum FedEventData {
         /// The Earned Win event data. After s20 this data always exists somewhere, but it may be
         /// attached to different events.
         earned_win: Option<EarnedWin>,
+
+        /// Players who were Carcinized and are now being returned to their original team at the end
+        /// of the game.
+        ///
+        /// Arguably much of this information is redundant, since there were never any instances
+        /// where a non-Crabs team triggered carcinization, and it only ever moves lineup players.
+        /// I may compress it more in the future.
+        temp_stolen_players_returned: Vec<PlayerMovedTeams>,
     },
 
     /// "<Team> inflated 10 Balloons!" event that occurs when the home team wins a game and their
@@ -5627,7 +5637,7 @@ pub enum FedEventData {
         pitcher_id: Uuid,
 
         /// Metadata associated with the "sensed foul play" sub-event, if present
-        // TODO When is it present? Theory: only the first tiem
+        // TODO When is it present? Theory: only the first time
         sensed_foul_play_sub_event: Option<SubEvent>,
     },
 }

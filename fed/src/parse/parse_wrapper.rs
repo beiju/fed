@@ -1120,6 +1120,19 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
+    pub fn parse_player_moved_teams(&mut self) -> Result<PlayerMovedTeams, FeedParseError> {
+        Ok(PlayerMovedTeams {
+            player_id: self.metadata_uuid("playerId")?,
+            player_name: self.metadata_str("playerName")?.to_string(),
+            location: self.metadata_enum("location")?,
+            previous_team_id: self.metadata_uuid("sendTeamId")?,
+            previous_team_nickname: self.metadata_str("sendTeamName")?.to_string(),
+            new_team_id: self.metadata_uuid("receiveTeamId")?,
+            new_team_nickname: self.metadata_str("receiveTeamName")?.to_string(),
+            sub_event: self.as_sub_event(),
+        })
+    }
+
     fn make_earned_win(mut win_event: EventParseWrapper) -> Result<EarnedWin, FeedParseError> {
         let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
         assert!(is_known_team_nickname(winning_team_nickname));

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -882,7 +882,26 @@ impl EventBuilder {
                 child.build(EventType::AddedMod)
             });
         }
+    }
 
+    pub fn push_temp_stolen_player_returned(&mut self, ret: &PlayerMovedTeams) {
+        self.push_child(ret.sub_event, |mut child_eb| {
+            child_eb.push_description(&format!("{} is returned to the {}.", ret.player_name, ret.new_team_nickname));
+            child_eb.push_player_tag(ret.player_id);
+            child_eb.push_team_tag(ret.previous_team_id);
+            child_eb.push_team_tag(ret.new_team_id);
+
+            child_eb.push_metadata_i64("location", ret.location);
+            child_eb.push_metadata_uuid("playerId", ret.player_id);
+            child_eb.push_metadata_str("playerName", &ret.player_name);
+            child_eb.push_metadata_i64("receiveLocation", ret.location);
+            child_eb.push_metadata_uuid("receiveTeamId", ret.new_team_id);
+            child_eb.push_metadata_str("receiveTeamName", &ret.new_team_nickname);
+            child_eb.push_metadata_uuid("sendTeamId", ret.previous_team_id);
+            child_eb.push_metadata_str("sendTeamName", &ret.previous_team_nickname);
+
+            child_eb.build(EventType::PlayerMoved)
+        });
     }
 
     pub fn build_item_repaired(mut self, item_repaired: ItemRepaired) -> EventuallyEvent {
