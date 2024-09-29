@@ -6,10 +6,11 @@ pub use fed_event_impl::*;
 
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
+use std::iter;
 use std::marker::PhantomData;
 use chrono::{DateTime, Utc};
 use enum_access::EnumDisplay;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
@@ -1958,6 +1959,13 @@ pub enum LedgerRunModifier {
 }
 
 impl LedgerRunModifier {
+    pub fn modify(&self, in_value: f64) -> f64 {
+        match self {
+            LedgerRunModifier::Magnified => { in_value * 2.0 }
+            LedgerRunModifier::Underhanded => { in_value * -1.0 }
+        }
+    }
+
     pub fn modify_and_write(&self, run_value_before: f64, mut f: impl Write) -> Result<f64, std::fmt::Error> {
         Ok(match self {
             LedgerRunModifier::Magnified => {
@@ -1991,12 +1999,21 @@ impl LedgerRun {
 
         Ok(run_value)
     }
+
+    // TODO dedup logic with compute_and_write
+    pub fn value(&self) -> f64 {
+        self.modifiers.iter()
+            .fold(1.0, |value, modifier| modifier.modify(value))
+    }
 }
 
-pub trait LedgerV2: WithStructure {
+pub trait LedgerV2: WithStructure + Display {
     fn label() -> &'static str;
 
-    fn to_string(&self) -> String;
+    // Returns the number of Run lines in the ledger
+    fn len(&self) -> usize;
+
+    fn run_values(&self) -> impl Iterator<Item=f64>;
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
@@ -2014,37 +2031,86 @@ impl<RunSourceT: WithStructure> SimpleLedgerV2<RunSourceT> {
     }
 }
 
-impl<RunSourceT: run_source::RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourceT> {
+impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourceT> {
     // TODO I can't remember why I have this indirection and it might not be necessary
     fn label() -> &'static str {
         RunSourceT::label()
     }
 
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-        let mut summary_line = String::new();
-        let mut run_total = 0.;
+    fn len(&self) -> usize {
+        self.runs.len()
+    }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        self.runs.iter()
+            .map(|run| run.value())
+    }
+}
+
+impl<RunSourceT: RunSource + WithStructure> Display for SimpleLedgerV2<RunSourceT> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut is_first_run = true;
+
         for run in &self.runs {
-            if !s.is_empty() { write!(s, "\n").unwrap(); }
-            let run_value = run.compute_and_write(Self::label(), &mut s).unwrap();
-            if !summary_line.is_empty() { write!(summary_line, " + ").unwrap(); }
-            write!(summary_line, "{run_value}").unwrap();
-            run_total += run_value;
-        }
-        if self.runs.len() > 1 {
-            s += "\n";
-            s += &summary_line;
-            s += " = ";
-            s += &run_total.to_string();
+            if is_first_run {
+                is_first_run = false;
+            } else {
+                write!(f, "\n")?;
+            }
+
+            let run_value = run.compute_and_write(Self::label(), &mut *f)?;
         }
 
-        s
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct HomeRunLedger {
+    pub home_run: SimpleLedgerV2<HomeRun>,
+    pub alley_oop: Option<SimpleLedgerV2<HomeRunSlamDunk>>,
+}
+
+impl LedgerV2 for HomeRunLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        let mut len = self.home_run.len();
+        if let Some(oop) = &self.alley_oop { len += oop.len() }
+        len
+    }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        self.home_run.run_values()
+            .chain(
+                // The Either crate very conveniently does the work to consolidate 2 iterators of
+                // different concrete types but with the same Item type into a single Iterator type
+                if let Some(oop) = &self.alley_oop {
+                    Either::Left(oop.run_values())
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
+    }
+}
+
+impl Display for HomeRunLedger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.home_run)?;
+        if let Some(alley_oop) = &self.alley_oop {
+            write!(f, "\n{}", alley_oop)?;
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
     None,
+    // TODO: If possible, have the V1 parser convert to V2 and always store V2
     V1 {
         base_runs: f64,
         lines: Vec<LedgerLineV1>,
@@ -2052,12 +2118,11 @@ pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStr
     V2(LedgerRunT),
 }
 
-impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
-    pub fn to_string(&self, ledger_label: &str) -> String {
+impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ledger::None => String::new(),
+            Ledger::None => {},
             Ledger::V1 { base_runs, lines } => {
-                let mut s = String::new();
                 let (abs_runs, run_type) = if *base_runs < 0. {
                     (-base_runs, "Unrun")
                 } else {
@@ -2065,21 +2130,40 @@ impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
                 };
 
                 if abs_runs == 1. {
-                    write!(s, "(1 {run_type}),").unwrap();
+                    write!(f, "(1 {run_type}),")?;
                 } else {
-                    write!(s, "({} {run_type}s),", abs_runs).unwrap();
+                    write!(f, "({} {run_type}s),", abs_runs)?;
                 }
 
                 for line in lines {
-                    write!(s, " {line}").unwrap();
+                    write!(f, " {line}")?;
                 }
-
-                s
             }
             Ledger::V2(ledger) => {
-                ledger.to_string()
+                write!(f, "{ledger}")?;
+
+                // A summary line is printed iff there was more than 1 instance of runs being scored
+                if ledger.len() > 1 {
+                    let mut runs_total_value = 0.0;
+                    let mut is_first = true;
+                    for value in ledger.run_values() {
+                        runs_total_value += value;
+                        if is_first {
+                            write!(f, "\n")?;
+                            is_first = false;
+                        } else {
+                            write!(f, " + ")?;
+                        }
+
+                        write!(f, "{value}")?;
+                    }
+
+                    write!(f, " = {runs_total_value}")?;
+                }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -2739,7 +2823,7 @@ pub enum FedEventData {
         /// Starting in s20 there's a separate RunsScored sub-event. This contains that information,
         /// if applicable. There are also effects attached to scoring in general, rather than each
         /// individual Run scored, and those also appear here.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::HomeRun>>>,
+        score_summary: Option<ScoreSummary<HomeRunLedger>>,
 
         /// If this home run popped some Balloons, this contains the name of the stadium whose
         /// balloons were popped and the number of birds that were scared away.

@@ -337,9 +337,9 @@ pub(crate) struct ParsedAttraction<'a> {
     pub(crate) player_name: &'a str,
 }
 
-pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool, is_fc: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
+pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool, is_fc: bool, hype_before_score: bool) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
-        let (input, mut scorers) = many0(parse_score(score_label, extra_space, is_fc)).parse(input)?;
+        let (input, mut scorers) = many0(parse_score(score_label, extra_space, is_fc, hype_before_score)).parse(input)?;
 
         let (mut input, attractions) = many0(parse_attraction).parse(input)?;
 
@@ -370,9 +370,15 @@ pub(crate) fn parse_balloons(runs_scored: i64, before_s20d81: bool) -> impl Fn(&
     }
 }
 
-pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
+pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: bool, hype_before_score: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
-        let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+        // Prior to s22, hype was listed before the score and scorer name
+        let (input, hype_stadium_name) = if hype_before_score {
+            opt(parse_hype_suffix).parse(input)?
+        } else {
+            (input, None)
+        };
+
         let (input, (damaged_item_name, player_name)) = if is_fc {
             // On an FC, it's the score before the damage
             let (input, _) = tag("\n").parse(input)?;
@@ -394,6 +400,15 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: b
                 let (input, player_name) = parse_terminated(score_label).parse(input)?;
                 (input, (None, player_name))
             }
+        };
+
+        // Starting in s22, the hype message was moved after the "<player name> scored!" message, at
+        // least for base hits. Unconfirmed whether it happened for other hits. Not yet confirmed
+        // how this change interacts with damage messages
+        let (input, hype_stadium_name) = if hype_before_score {
+            (input, hype_stadium_name)
+        } else {
+            opt(parse_hype_suffix).parse(input)?
         };
 
         Ok((input, ParsedScore {

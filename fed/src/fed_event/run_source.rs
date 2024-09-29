@@ -26,7 +26,7 @@ macro_rules! run_source {
 
 run_source!(Flyout, "Sacrifice");
 run_source!(GroundOut, "Sacrifice");
-run_source!(FieldersChoice, "Fielders Choice");
+run_source!(FieldersChoice, "Base Hit"); // this doesn't seem like the right label but ok
 run_source!(Hit, "Base Hit");
 run_source!(DoublePlay, "Double Play");
 run_source!(StolenBase, "Steal Home"); // Probably needs to become non-Simple because of Blaserunning
@@ -37,6 +37,7 @@ run_source!(MildPitch, "Mild Pitch");
 run_source!(MildPitchWalk, "Mild Pitch Walk");
 run_source!(CharmWalk, "Charm Walk");
 run_source!(HomeRun, "Home Run");
+run_source!(HomeRunSlamDunk, "Slam Dunk");
 run_source!(MildPitchCharmWalk, "Mild Pitch Charm Walk");
 run_source!(Flippers, "Flippers");
 run_source!(HitByPitch, "Hit By Pitch");

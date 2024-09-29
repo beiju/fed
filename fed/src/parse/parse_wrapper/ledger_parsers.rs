@@ -1,27 +1,29 @@
 use nom::{Finish, Parser};
+use nom::bytes::complete::tag;
+use nom::combinator::opt;
 use nom::error::convert_error;
+use eventually_api::EventType;
 use with_structure::WithStructure;
-use crate::{FeedParseError, Ledger, LedgerRun, LedgerRunModifier, LedgerV2, RunSource, SimpleLedgerV2};
+use crate::{FeedParseError, HomeRunLedger, Ledger, LedgerRun, LedgerRunModifier, LedgerV2, RunSource, SimpleLedgerV2};
 use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::parse::parsers::*;
 
 pub trait ParseableLedger {
     type Ledger: LedgerV2;
 
-    fn parse(event: &mut EventParseWrapper) -> Result<Ledger<Self::Ledger>, FeedParseError>;
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError>;
 }
 
 impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<RunSourceT> {
     type Ledger = Self;
 
-    fn parse(event: &mut EventParseWrapper) -> Result<Ledger<Self>, FeedParseError> {
-        let score_ledger = event.metadata_str("ledger")?;
-        let (_, lines) = parse_score_ledger_v2(RunSourceT::label()).parse(score_ledger).finish()
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        let (rest, lines) = parse_score_ledger_v2(RunSourceT::label()).parse(ledger).finish()
             .map_err(|e| {
                 FeedParseError::ScoreLedgerParseError {
-                    event_type: event.event_type,
-                    err: convert_error(score_ledger, e),
-                    original: score_ledger.to_string(),
+                    event_type: EventType::RunsScored,
+                    err: convert_error(ledger, e),
+                    original: ledger.to_string(),
                 }
             })?;
 
@@ -50,6 +52,26 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
             runs.push(finished_run);
         }
 
-        Ok(Ledger::V2(SimpleLedgerV2::from_runs(runs)))
+        Ok((rest, SimpleLedgerV2::from_runs(runs)))
+    }
+}
+
+impl ParseableLedger for HomeRunLedger {
+    type Ledger = Self;
+
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        let (ledger, home_run) = SimpleLedgerV2::parse(ledger)?;
+
+        let (ledger, alley_oop) = if ledger.starts_with("\nSlam Dunk") {
+            let (rest, oop) = SimpleLedgerV2::parse(&ledger[1..])?;
+            (rest, Some(oop))
+        } else {
+            (ledger, None)
+        };
+
+        Ok((ledger, Self {
+            home_run,
+            alley_oop,
+        }))
     }
 }

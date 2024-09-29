@@ -590,16 +590,15 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
-    pub fn parse_scores<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(&mut self, label: &'static str, ledger_label: &str, is_fc: bool) -> Result<Scores<LedgerT>, FeedParseError> {
+    pub fn parse_scores<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(&mut self, label: &'static str, is_fc: bool) -> Result<Scores<LedgerT>, FeedParseError> {
         let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
-        self.parse_scores_with_scoring_players(scoring_players, attractions, ledger_label, is_fc)
+        self.parse_scores_with_scoring_players(scoring_players, attractions, is_fc)
     }
 
     pub fn parse_scores_with_scoring_players<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
         &mut self,
         scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>,
         attractions: Vec<(Uuid, String, String)>,
-        ledger_label: &str,
         is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
     ) -> Result<Scores<LedgerT>, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
@@ -664,7 +663,7 @@ impl<'e> EventParseWrapper<'e> {
 
         let free_refills = self.parse_free_refills()?;
 
-        let score_summary = self.parse_score_summary(ledger_label)?;
+        let score_summary = self.parse_score_summary()?;
         // Every score post s19 should have a ScoreSummary
         // Commented out because it's actually easier to diagnose if it fails later
         // assert_eq!(score_summary.is_some(), self.season >= 19 && !scores.is_empty());
@@ -676,7 +675,7 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_score_summary<LedgerT: LedgerV2 +  ParseableLedger<Ledger = LedgerT>>(&mut self, ledger_label: &str) -> Result<Option<ScoreSummary<LedgerT>>, FeedParseError> {
+    pub fn parse_score_summary<LedgerT: LedgerV2 +  ParseableLedger<Ledger = LedgerT>>(&mut self) -> Result<Option<ScoreSummary<LedgerT>>, FeedParseError> {
         let Some(mut score_child) = self.next_child_opt(EventType::RunsScored)? else {
             return Ok(None);
         };
@@ -690,7 +689,7 @@ impl<'e> EventParseWrapper<'e> {
                 err: convert_error(score_update, e),
             })?;
 
-        let ledger = if self.season < 20 {
+        let ledger = if self.season < 19 {
             Ledger::None
         } else if self.season < 21 {
             let score_ledger = score_child.metadata_str("ledger")?;
@@ -723,7 +722,9 @@ impl<'e> EventParseWrapper<'e> {
                 Ledger::None
             }
         } else {
-            LedgerT::parse(&mut score_child)?
+            let score_ledger = score_child.metadata_str("ledger")?;
+            let (_, ledger) = LedgerT::parse(score_ledger)?;
+            Ledger::V2(ledger)
         };
 
         // The number of balloons isn't `ledger.base_runs`, because balloons take Magnified into
@@ -755,7 +756,13 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn parse_scoring_players(&mut self, label: &'static str, is_fc: bool) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
-        let (scorers, attractions) = self.next_parse(parse_scores(label, (self.season, self.day) < (15, 3), is_fc))?;
+        let (scorers, attractions) = self.next_parse(parse_scores(
+            label,
+            (self.season, self.day) < (15, 3),
+            is_fc,
+            self.season < 21,
+        ))?;
+
         let scoring_players = scorers.into_iter()
             .map(|score| {
                 ParseOk((
