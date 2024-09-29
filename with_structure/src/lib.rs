@@ -2,14 +2,10 @@ mod base_impls;
 
 use std::hash::Hash;
 pub use base_impls::*;
-
-// Records the structure of a single item (struct or enum)
-pub trait ItemStructure: Eq + Hash {
-
-}
+pub use perfect_derive; // used in generated macro code
 
 pub trait WithStructure {
-    type Structure: ItemStructure;
+    type Structure: Eq + Hash;
 
     fn structure(&self) -> Self::Structure;
 }

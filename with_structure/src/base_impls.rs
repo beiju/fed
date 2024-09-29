@@ -1,10 +1,10 @@
-use crate::{WithStructure, ItemStructure};
+use std::marker::PhantomData;
+use crate::WithStructure;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct MonostateStructure;
-impl ItemStructure for MonostateStructure {}
 
 macro_rules! trivial_with_structure {
     ($($t:ty),+) => {
@@ -24,8 +24,6 @@ impl<T> WithStructure for Vec<T> {
     fn structure(&self) -> Self::Structure { MonostateStructure }
 }
 
-impl<T: ItemStructure> ItemStructure for Option<T> {}
-
 impl<T: WithStructure> WithStructure for Option<T> {
     type Structure = Option<T::Structure>;
 
@@ -36,3 +34,62 @@ impl<T: WithStructure> WithStructure for Option<T> {
         }
     }
 }
+
+impl<T: WithStructure> WithStructure for PhantomData<T> {
+    type Structure = MonostateStructure;
+
+    fn structure(&self) -> Self::Structure { MonostateStructure }
+}
+
+macro_rules! tuple_impls {
+    ( $( $name:ident )+ ) => {
+        impl<$($name: WithStructure),+> WithStructure for ($($name),+) {
+            type Structure = ($($name::Structure),+);
+
+            // We're reusing the type names as variable names, and rust (arguably correctly)
+            // complains about the case
+            #[allow(non_snake_case)]
+            fn structure(&self) -> Self::Structure {
+                let ($($name,)+) = self;
+                ($($name.structure(),)+)
+            }
+        }
+    };
+}
+
+// The 1-tuple conflicts with vector, not sure why (also not sure that it's vector specifically,
+// that may just have been the first conflict rustc noticed)
+tuple_impls! { A B }
+tuple_impls! { A B C }
+tuple_impls! { A B C D }
+tuple_impls! { A B C D E }
+tuple_impls! { A B C D E F }
+tuple_impls! { A B C D E F G }
+tuple_impls! { A B C D E F G H }
+tuple_impls! { A B C D E F G H I }
+tuple_impls! { A B C D E F G H I J }
+tuple_impls! { A B C D E F G H I J K }
+tuple_impls! { A B C D E F G H I J K L }
+
+macro_rules! array_impls {
+    ($n:literal) => {
+        impl<T> WithStructure for [T; $n] {
+            type Structure = MonostateStructure;
+            fn structure(&self) -> Self::Structure { MonostateStructure }
+        }
+    };
+}
+
+array_impls! { 0 }
+array_impls! { 1 }
+array_impls! { 2 }
+array_impls! { 3 }
+array_impls! { 4 }
+array_impls! { 5 }
+array_impls! { 6 }
+array_impls! { 7 }
+array_impls! { 8 }
+array_impls! { 9 }
+array_impls! { 10 }
+array_impls! { 11 }
+array_impls! { 12 }

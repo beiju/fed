@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped, LedgerV2};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -385,27 +385,28 @@ impl EventBuilder {
         self.push_free_refills(free_refill.as_slice())
     }
 
-    pub fn push_scores_without_event(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str, is_fc: bool) {
+    pub fn push_scores_without_event<T: LedgerV2>(&mut self, scores: &Scores<T>, home_team_id: Uuid, score_label: &str, is_fc: bool) {
         self.push_scorers(&scores.scores, home_team_id, score_label, is_fc);
         self.push_free_refills(&scores.free_refills);
     }
 
-    pub fn push_scores(&mut self, scores: &Scores, home_team_id: Uuid, score_label: &str, is_fc: bool) {
+    pub fn push_scores<T: LedgerV2>(&mut self, scores: &Scores<T>, home_team_id: Uuid, score_label: &str, ledger_label: &str, is_fc: bool) {
         self.push_scores_without_event(scores, home_team_id, score_label, is_fc);
-        self.push_score_summary(scores);
+        self.push_score_summary(scores, ledger_label);
     }
 
-    pub fn push_score_summary(&mut self, scores: &Scores) {
-        self.push_opt_direct_score_summary(scores.score_summary.as_ref())
+    pub fn push_score_summary<T: LedgerV2>(&mut self, scores: &Scores<T>, ledger_label: &str) {
+        self.push_opt_direct_score_summary(scores.score_summary.as_ref(), ledger_label)
     }
 
-    pub fn push_opt_direct_score_summary(&mut self, score_summary: Option<&ScoreSummary>) {
+    pub fn push_opt_direct_score_summary<T: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<T>>, ledger_label: &str) {
         if let Some(ss) = score_summary {
-            self.push_direct_score_summary(ss)
+            self.push_direct_score_summary(ss, ledger_label)
         }
     }
 
-    pub fn push_direct_score_summary(&mut self, score: &ScoreSummary) {
+    pub fn push_direct_score_summary<T: LedgerV2>(&mut self, score: &ScoreSummary<T>, ledger_label: &str) {
+        let season = self.0.season;
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
@@ -414,12 +415,9 @@ impl EventBuilder {
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
             child_eb.push_metadata_str("homeEmoji", &score.home_emoji);
             child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
-            if let Some(ledger) = &score.ledger {
-                child_eb.push_metadata_str("ledger", ledger.to_string());
-            } else {
-                child_eb.push_metadata_str("ledger", "");
-            }
-            child_eb.push_metadata_str("update", if score.runs_scored == 1.0 {
+            child_eb.push_metadata_str("ledger", &score.ledger.to_string(ledger_label));
+            // Apparently in season 22 they un-fixed the pluralization
+            child_eb.push_metadata_str("update", if score.runs_scored == 1.0 && season < 21 {
                 "1 Run scored!".to_string()
             } else if score.runs_scored < 0.0 {
                 format!("{} Unruns scored!", -score.runs_scored)

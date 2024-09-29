@@ -1,16 +1,15 @@
+use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
+use crate::parse::PendingPrizeMatch;
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
-use nom::{AsChar, IResult, Parser};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
 use nom::multi::{many0, separated_list0, separated_list1};
-use nom::number::complete::{float, double};
+use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
+use nom::{AsChar, IResult, Parser};
 use uuid::Uuid;
-
-use crate::{Base, EchoChamberModAdded, HomeRunType, NumbersGo, Ledger, StrikeoutType, SubseasonalMod, TimeElsewhere, BracketType, DebtType};
-use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
-use crate::parse::PendingPrizeMatch;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
@@ -2537,7 +2536,7 @@ pub(crate) fn parse_moderation(input: &str) -> ParserResult<&str> {
     Ok((input, team_nickname))
 }
 
-pub(crate) enum ParsedLedgerLine<'a> {
+pub(crate) enum ParsedLedgerLineV1<'a> {
     NegativePolarity,
     Underachiever,
     Underhanded,
@@ -2548,39 +2547,90 @@ pub(crate) enum ParsedLedgerLine<'a> {
     Magnified,
 }
 
-pub(crate) fn parse_score_ledger(input: &str) -> ParserResult<Option<(f64, Vec<ParsedLedgerLine>)>> {
+pub(crate) enum ParsedLedgerLineV2 {
+    Run,
+    Magnified {
+        runs_before: f64,
+        runs_after: f64,
+    },
+    Underhanded {
+        runs_before: f64,
+        runs_after: f64,
+    },
+}
+
+pub(crate) fn parse_score_ledger_v1(input: &str) -> ParserResult<Option<(f64, Vec<ParsedLedgerLineV1>)>> {
     alt((
         eof.map(|_| None),
-        parse_nonempty_score_ledger.map(|val| Some(val)),
+        parse_score_ledger_v1_nonempty.map(|v| Some(v)),
     )).parse(input)
 }
 
-pub(crate) fn parse_nonempty_score_ledger(input: &str) -> ParserResult<(f64, Vec<ParsedLedgerLine>)> {
+pub(crate) fn parse_score_ledger_v1_nonempty(input: &str) -> ParserResult<(f64, Vec<ParsedLedgerLineV1>)> {
     let (input, _) = tag("(").parse(input)?;
     let (input, base_runs) = double.parse(input)?;
-    let (input, unrun_multipiler) = alt((
+    let (input, unrun_multiplier) = alt((
          tag(if base_runs == 1. { " Run), " } else { " Runs), " }).map(|_| 1.),
          tag(if base_runs == 1. { " Unrun), " } else { " Unruns), " }).map(|_| -1.),
     )).parse(input)?;
 
-    let (input, ledger_lines) = separated_list1(tag(" "), parse_ledger_line).parse(input)?;
+    let (input, ledger_lines) = separated_list1(tag(" "), parse_ledger_line_v1).parse(input)?;
 
-    Ok((input, (base_runs * unrun_multipiler, ledger_lines)))
+    Ok((input, (base_runs * unrun_multiplier, ledger_lines)))
 }
 
-pub(crate) fn parse_ledger_line(input: &str) -> ParserResult<ParsedLedgerLine> {
+pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<ParsedLedgerLineV1> {
     alt((
-        tag("Negative Polarity (x-1)").map(|_| ParsedLedgerLine::NegativePolarity),
-        tag("Underachiever (x-1)").map(|_| ParsedLedgerLine::Underachiever),
-        tag("Underhanded (x-1)").map(|_| ParsedLedgerLine::Underhanded),
-        tag("Subtractor (x-1)").map(|_| ParsedLedgerLine::Subtractor),
-        parse_terminated(" is Tired. (0.5 Unruns)").map(|name| ParsedLedgerLine::Tired(name)),
-        parse_terminated(" is Wired! (0.5 Runs)").map(|name| ParsedLedgerLine::Wired(name)),
-        tag("Acidic Pitch (0.1 Unruns)").map(|_| ParsedLedgerLine::AcidicPitch),
-        tag("Batter Magnified 2x (x2)").map(|_| ParsedLedgerLine::Magnified),
+        tag("Negative Polarity (x-1)").map(|_| ParsedLedgerLineV1::NegativePolarity),
+        tag("Underachiever (x-1)").map(|_| ParsedLedgerLineV1::Underachiever),
+        tag("Underhanded (x-1)").map(|_| ParsedLedgerLineV1::Underhanded),
+        tag("Subtractor (x-1)").map(|_| ParsedLedgerLineV1::Subtractor),
+        parse_terminated(" is Tired. (0.5 Unruns)").map(|name| ParsedLedgerLineV1::Tired(name)),
+        parse_terminated(" is Wired! (0.5 Runs)").map(|name| ParsedLedgerLineV1::Wired(name)),
+        tag("Acidic Pitch (0.1 Unruns)").map(|_| ParsedLedgerLineV1::AcidicPitch),
+        tag("Batter Magnified 2x (x2)").map(|_| ParsedLedgerLineV1::Magnified),
     )).parse(input)
 }
 
+pub(crate) fn parse_score_ledger_v2(ledger_label: &str) -> impl Fn(&str) -> ParserResult<Vec<ParsedLedgerLineV2>> + '_ {
+    move |input| {
+        separated_list1(tag("\n"), parse_ledger_line_v2(ledger_label)).parse(input)
+    }
+}
+
+pub(crate) fn parse_ledger_line_v2(ledger_label: &str) -> impl Fn(&str) -> ParserResult<ParsedLedgerLineV2> + '_ {
+    move |input| {
+        alt((
+            pair(tag(ledger_label), tag(": 1 Run")).map(|_| ParsedLedgerLineV2::Run),
+            parse_ledger_batter_magnified
+                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Magnified {
+                    runs_before,
+                    runs_after,
+                }),
+            parse_ledger_underhanded
+                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Underhanded {
+                    runs_before,
+                    runs_after,
+                }),
+        )).parse(input)
+    }
+}
+
+pub(crate) fn parse_ledger_batter_magnified(input: &str) -> ParserResult<(f64, f64)> {
+    let (input, _) = tag("\tBatter Magnified 2x: ").parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" * 2 = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_underhanded(input: &str) -> ParserResult<(f64, f64)> {
+    let (input, _) = tag("\tUnderhanded: ").parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" * -1 = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (runs_before, runs_after)))
+}
 
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
     let (input, stadium_name) = parse_terminated("'s Light Switch is now ").parse(input)?;

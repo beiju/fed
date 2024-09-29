@@ -1,4 +1,6 @@
 #![feature(let_chains)]
+#![feature(adt_const_params)]
+
 mod parse;
 mod fed_event;
 mod peekable_with_logging;

@@ -25,10 +25,11 @@ pub enum FeedParseError {
         err: String,
     },
 
-    #[error("ScoreLedger parse error for {event_type:?} event: {err}")]
+    #[error("ScoreLedger parse error for {event_type:?} event: {err}\n\noriginal: {original}")]
     ScoreLedgerParseError {
         event_type: EventType,
         err: String,
+        original: String,
     },
 
     #[error("Expected {tag_type} tag(s) to be non-null for {event_type:?} event")]

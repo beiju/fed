@@ -24,11 +24,12 @@ use crate::parse::event_builder_new::Possessive;
 
 // pub use stream::expansion_era_events;
 
-const KNOWN_TEAM_NICKNAMES: [&'static str; 24] = [
+// Evidently the mills have the prestigious honor of being the only team with a nickname change
+const KNOWN_TEAM_NICKNAMES: [&'static str; 25] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
-    "Flowers", "Millennials", "Pies", "Garages", "Dale", "Lift", "Firefighters", "Steaks",
-    "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms", "Crabs",
-    "Mechanics",
+    "Flowers", "Millennials", "Millenials", "Pies", "Garages", "Dale", "Lift", "Firefighters",
+    "Steaks", "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms",
+    "Crabs", "Mechanics",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -415,7 +416,7 @@ pub fn parse_next_event(
                             })
                             .transpose()?;
 
-                        let score_summary = event.parse_score_summary()?;
+                        let score_summary = event.parse_score_summary("Steal Home")?;
 
                         let hotel_motel_party = event.next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
                             .map(|_| event.next_boost_child_with_team())
@@ -468,7 +469,7 @@ pub fn parse_next_event(
             match event.next_parse(parse_walk)? {
                 ParsedWalk::Ordinary((batter_name, base_instincts)) => {
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "Walk", false)?;
 
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
@@ -489,7 +490,7 @@ pub fn parse_next_event(
                     let charmer_id = event.next_player_id()?;
                     assert_eq!(batter_id, charmer_id);
 
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO charm", false)?;
                     let (batter_item_damage, pitcher_item_damage) = match broken_item {
                         None => { (None, None) }
                         Some((ActivePositionType::Lineup, _item_name, item_name_damage)) => {
@@ -513,7 +514,7 @@ pub fn parse_next_event(
                 }
                 ParsedWalk::MindTrickStrikeoutIntoWalk((batter_name, strikeout_type)) => {
                     let base_instincts = event.next_parse_opt(parse_base_instincts);
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO mind trick",false)?;
                     FedEventData::MindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -528,7 +529,7 @@ pub fn parse_next_event(
                     let pitcher_id = event.next_player_id()?;
                     let _ = event.next_player_id()?; // Charmer id is there twice
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO mind trick charm", false)?;
                     FedEventData::CharmedMindTrickWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -570,7 +571,7 @@ pub fn parse_next_event(
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
                     let parasite = event.parse_parasite()?;
-                    let score_summary = event.parse_score_summary()?;
+                    let score_summary = event.parse_score_summary("TODO strikeout")?;
                     FedEventData::StrikeoutSwinging {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -588,7 +589,7 @@ pub fn parse_next_event(
                     let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let free_refill = event.parse_free_refill()?;
                     let parasite = event.parse_parasite()?;
-                    let score_summary = event.parse_score_summary()?;
+                    let score_summary = event.parse_score_summary("TODO strikeout looking")?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -635,7 +636,7 @@ pub fn parse_next_event(
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
-            let scores = event.parse_scores(" tags up and scores!", false)?;
+            let scores = event.parse_scores(" tags up and scores!", "Sacrifice", false)?;
             let batter_item_damage = event.parse_item_damage(batter_name)?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
@@ -669,7 +670,7 @@ pub fn parse_next_event(
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
                     let pitcher_item_damage_from_advance = event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, false)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, "Sacrifice", false)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
                     FedEventData::GroundOut {
@@ -695,7 +696,7 @@ pub fn parse_next_event(
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!", true)?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, true)?;
+                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, "TODO fc", true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     FedEventData::FieldersChoice {
@@ -712,7 +713,7 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO dp", false)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
@@ -817,7 +818,7 @@ pub fn parse_next_event(
             };
 
             // I have no idea where this needs to go in relation to the other sub-events
-            let score_summary = event.parse_score_summary()?;
+            let score_summary = event.parse_score_summary("Home Run")?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -878,7 +879,7 @@ pub fn parse_next_event(
                 }
                 ParsedHitType::Quadruple => { HitType::Quadruple }
             };
-            let mut scores = event.parse_scores(" scores!", false)?;
+            let mut scores = event.parse_scores(" scores!", "Base Hit", false)?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
@@ -892,7 +893,7 @@ pub fn parse_next_event(
             // parse_scores gets the score event, but sometimes the spicy event is in the way. Can't
             // fix this by reordering the calls because it's in the opposite order in the event text
             if scores.score_summary.is_none() {
-                scores.score_summary = event.parse_score_summary()?;
+                scores.score_summary = event.parse_score_summary("TODO hit 2")?;
             }
 
             FedEventData::Hit {
@@ -1006,7 +1007,7 @@ pub fn parse_next_event(
             let (team_nickname, num_runs, unruns, gained) = event.next_parse(parse_runs_overflowing)?;
             assert!(is_known_team_nickname(team_nickname));
 
-            let score_summary = event.parse_score_summary()?;
+            let score_summary = event.parse_score_summary("TODO runs overflowing")?;
 
             FedEventData::RunsOverflowing {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1031,7 +1032,7 @@ pub fn parse_next_event(
             let batter_id = event.next_player_id()?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
-            let scores = event.parse_scores(" scores!", false)?;
+            let scores = event.parse_scores(" scores!", "TODO hbp",false)?;
 
             FedEventData::HitByPitch {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1085,7 +1086,7 @@ pub fn parse_next_event(
             match pitch_type {
                 MildPitchType::Ball((balls, strikes)) => {
                     let runners_advance = event.next_parse(parse_runners_advance_on_mild_pitch)?;
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO mild pitch", false)?;
 
                     FedEventData::MildPitch {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -1099,7 +1100,7 @@ pub fn parse_next_event(
                 }
                 MildPitchType::Walk(batter_name) => {
                     let batter_id = event.next_player_id()?;
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let scores = event.parse_scores(" scores!", "TODO mild pitch walk", false)?;
 
                     FedEventData::MildPitchWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -1901,7 +1902,7 @@ pub fn parse_next_event(
                 .collect::<Result<Vec<_>, _>>()?;
 
             let free_refills = event.parse_free_refills()?;
-            let score_summary = event.parse_score_summary()?;
+            let score_summary = event.parse_score_summary("Flippers")?;
 
             FedEventData::FloodingSwept {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -2525,7 +2526,7 @@ pub fn parse_next_event(
 
             // TODO Do I need this extra check?
             let score_summary = if event.season >= 19 {
-                event.parse_score_summary()?
+                event.parse_score_summary("TODO shame donor")?
             } else {
                 None
             };
@@ -3478,7 +3479,7 @@ pub fn parse_next_event(
             // opposing team (the Shoe Thieves).
             let hype = event.parse_hype()?;
 
-            let score_summary = event.parse_score_summary()?
+            let score_summary = event.parse_score_summary("TODO moderation")?
                 .ok_or_else(|| {
                     FeedParseError::NotEnoughChildren {
                         event_type: event.event_type,

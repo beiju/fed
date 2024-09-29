@@ -1,9 +1,12 @@
 mod fed_event_impl;
+mod run_source;
+pub use run_source::*;
 
 pub use fed_event_impl::*;
 
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
+use std::marker::PhantomData;
 use chrono::{DateTime, Utc};
 use enum_access::EnumDisplay;
 use itertools::Itertools;
@@ -21,7 +24,7 @@ use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 use crate::FeedParseError;
 use crate::parse::builder::possessive;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
 #[repr(i32)]
 pub enum Being {
     EmergencyAlert = -1,
@@ -35,7 +38,7 @@ pub enum Being {
 }
 
 /// Game data. Every game event has one of these.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct GameEvent {
     /// Game uuid
@@ -59,7 +62,7 @@ pub struct GameEvent {
 }
 
 /// Pitch data. The normal-baseball game events all have one of these.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct GamePitch {
     /// If a Double Strike was fired, the name of the pitcher who fired it. Otherwise null.
@@ -122,7 +125,7 @@ pub struct WinSubEvent {
 }
 
 // TODO Consolidate with ModChangeSubEventWithNamedPlayer
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FreeRefill {
     /// Metadata for the sub-event associated with losing the Free Refill mod
@@ -175,9 +178,9 @@ pub struct HotelMotelScoringPlayer {
     pub boost: PlayerBoostSubEventWithTeam,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
-pub struct Scores {
+pub struct Scores<LedgerRunT: LedgerV2> {
     /// Info for all the scores that happened on this event
     pub scores: Vec<ScoringPlayer>,
 
@@ -190,10 +193,10 @@ pub struct Scores {
 
     /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
     /// attaching effects (such as Balloons) to the score summary. This contains that information.
-    pub score_summary: Option<ScoreSummary>,
+    pub score_summary: Option<ScoreSummary<LedgerRunT>>,
 }
 
-impl Scores {
+impl<T: LedgerV2> Scores<T> {
     #[deprecated = "This is part of the old event builder"]
     pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str, extra_space: bool) -> String {
         let mut output = String::new();
@@ -270,7 +273,7 @@ impl Score {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
     /// Metadata for the sub-event associated with adding the Inhabiting modifier. If the player
@@ -294,7 +297,7 @@ pub struct Inhabiting {
 }
 
 // TODO: Have a variant of this where the player name and id are inferred from the batter's
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct StoppedInhabiting {
     /// Sub-event associated with losing the Inhabiting mod
@@ -312,7 +315,7 @@ pub struct StoppedInhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum CoffeeBeanMod {
     Wired,
     Tired,
@@ -339,7 +342,7 @@ impl TryFrom<&str> for CoffeeBeanMod {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
 #[serde(rename_all = "camelCase")]
 #[repr(i64)]
 pub enum AttrCategory {
@@ -360,7 +363,7 @@ impl Display for AttrCategory {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase", tag = "action", content = "strikeoutBatterName")]
 pub enum BlooddrainAction {
     AddBall,
@@ -412,7 +415,7 @@ impl Display for ModDuration {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the id of the player is not present in the
 // containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEvent {
     /// Metadata for the sub-event associated with the mod change
@@ -425,7 +428,7 @@ pub struct ModChangeSubEvent {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is not present in the
 // containing event, use ModChangeSubEventWithNamedPlayer instead.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithPlayer {
     /// Metadata for the sub-event associated with the mod change
@@ -441,7 +444,7 @@ pub struct ModChangeSubEventWithPlayer {
 // Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
 // Which of those it is will come from context. If the name of the player is present in the
 // containing event, use ModChangeSubEventWithPlayer instead.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithNamedPlayer {
     /// Metadata for the sub-event associated with the mod change
@@ -457,7 +460,7 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub player_name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FlipNegative {
     /// Uuid of the undertaker player (the one who did the flipping)
@@ -473,7 +476,7 @@ pub struct FlipNegative {
     pub flip_negative_sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub enum SpicyStatus {
     /// Nothing Spicy-related is happening
@@ -488,7 +491,7 @@ pub enum SpicyStatus {
     RedHot(Option<ModChangeSubEvent>),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerModChangeSubject {
     /// Uuid of the team whose player's mod changed
@@ -502,7 +505,7 @@ pub struct PlayerModChangeSubject {
 }
 
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamModChangeSubject {
     /// Uuid of the team whose mod changed
@@ -515,7 +518,7 @@ pub struct TeamModChangeSubject {
     pub team_nickname: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub enum SubseasonalMod {
     // Earlseason
@@ -606,9 +609,9 @@ impl SubseasonalMod {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
-pub struct SubseasonalModChange<SubjectType> {
+pub struct SubseasonalModChange<SubjectType: WithStructure> {
     /// Team or player whose subseasonal mod (de)activated
     pub subject: SubjectType,
 
@@ -645,7 +648,7 @@ impl SpicyStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerStatChange {
     /// Team uuid of player whose stats changed
@@ -669,7 +672,7 @@ pub struct PlayerStatChange {
 }
 
 // Like PlayerStatChange for when the player and team is known from other context. Intended for use in an Option
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct KnownPlayerStatChange {
     /// Player's rating before the stats changed. The rating category is stored externally. Rating
@@ -683,7 +686,7 @@ pub struct KnownPlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ActivePositionType {
@@ -707,7 +710,7 @@ impl ActivePositionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ShadowPositionType {
@@ -735,7 +738,7 @@ impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
 }
 
 // TODO doc comments
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedbackPlayerData {
     pub team_id: Uuid,
@@ -779,7 +782,7 @@ pub enum PlayerReverb {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 // This uses a combo of flatten and adjacent tagging
 #[serde(rename_all = "camelCase", tag = "type", content = "subEvent")]
 pub enum ReverbType {
@@ -789,7 +792,7 @@ pub enum ReverbType {
     SeveralPlayers(Vec<PlayerReverb>),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub enum BatterSkippedReason {
     /// Batter is Shelled
@@ -811,7 +814,7 @@ pub enum StatChangeCategory {
     All = 4,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerNameId {
     /// Player uuid
@@ -822,7 +825,7 @@ pub struct PlayerNameId {
 }
 
 // This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PitcherNameId {
     /// Pitcher uuid
@@ -842,7 +845,7 @@ pub struct Scattered {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerSentElsewhere {
     /// Uuid of the team whose player was sent Elsewhere
@@ -878,14 +881,14 @@ pub enum FloodingSweptEffect {
     Ego(PlayerNameId),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(untagged, rename_all = "camelCase")]
 pub enum RenovationVotes {
     Normal(i64),
     Manual(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct MultipleModsAddedOrRemoved {
     /// Vector of mods that were added/removed. Each mod is represented by its internal ID.
@@ -895,7 +898,7 @@ pub struct MultipleModsAddedOrRemoved {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Echo {
     /// Team Uuid of player who received the Echo.
@@ -914,7 +917,7 @@ pub struct Echo {
     pub mods_added: MultipleModsAddedOrRemoved,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct EchoIntoStatic {
     /// Team Uuid of player who echoed into static
@@ -1051,7 +1054,7 @@ pub enum ReturnFromElsewhereFlavor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamRunsLost {
     /// Number of runs lost
@@ -1072,7 +1075,7 @@ impl Display for TeamRunsLost {
 }
 
 // TODO: Make this into a static vec with max size 2 (third-party crate)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(into = "SerdeRunLossesFromSalmon", try_from = "SerdeRunLossesFromSalmon")]
 pub enum RunLossesFromSalmon {
     None,
@@ -1117,7 +1120,7 @@ impl Display for RunLossesFromSalmon {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectiveActivity {
     /// Uuid of the detective
@@ -1130,7 +1133,7 @@ pub struct DetectiveActivity {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub enum DebtType {
     Unstable,
@@ -1147,7 +1150,7 @@ impl DebtType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct BatterDebt {
     /// Batter Uuid. For some reason this is only added to the event when Debt procs, even though
@@ -1167,7 +1170,7 @@ pub struct BatterDebt {
     pub debt_type: DebtType,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct TogglePerforming {
     /// Uuid of the player whose Overperforming/Underperforming was toggled
@@ -1922,7 +1925,7 @@ pub enum GameStartAnnouncement {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
-pub enum LedgerLine {
+pub enum LedgerLineV1 {
     NegativePolarity,
     Underachiever,
     Underhanded,
@@ -1933,58 +1936,162 @@ pub enum LedgerLine {
     Magnified,
 }
 
-impl Display for LedgerLine {
+impl Display for LedgerLineV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LedgerLine::NegativePolarity => { write!(f, "Negative Polarity (x-1)") }
-            LedgerLine::Underachiever => { write!(f, "Underachiever (x-1)") }
-            LedgerLine::Underhanded => { write!(f, "Underhanded (x-1)") }
-            LedgerLine::Subtractor => { write!(f, "Subtractor (x-1)") }
-            LedgerLine::Tired(name) => { write!(f, "{name} is Tired. (0.5 Unruns)") }
-            LedgerLine::Wired(name) => { write!(f, "{name} is Wired! (0.5 Runs)") }
-            LedgerLine::AcidicPitch => { write!(f, "Acidic Pitch (0.1 Unruns)") }
-            LedgerLine::Magnified => { write!(f, "Batter Magnified 2x (x2)") }
+            LedgerLineV1::NegativePolarity => { write!(f, "Negative Polarity (x-1)") }
+            LedgerLineV1::Underachiever => { write!(f, "Underachiever (x-1)") }
+            LedgerLineV1::Underhanded => { write!(f, "Underhanded (x-1)") }
+            LedgerLineV1::Subtractor => { write!(f, "Subtractor (x-1)") }
+            LedgerLineV1::Tired(name) => { write!(f, "{name} is Tired. (0.5 Unruns)") }
+            LedgerLineV1::Wired(name) => { write!(f, "{name} is Wired! (0.5 Runs)") }
+            LedgerLineV1::AcidicPitch => { write!(f, "Acidic Pitch (0.1 Unruns)") }
+            LedgerLineV1::Magnified => { write!(f, "Batter Magnified 2x (x2)") }
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct Ledger {
-    pub base_runs: f64,
-    pub lines: Vec<LedgerLine>,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum LedgerRunModifier {
+    Magnified,
+    Underhanded,
 }
 
-impl Display for Ledger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (abs_runs, run_type) = if self.base_runs < 0. {
-            (-self.base_runs, "Unrun")
-        } else {
-            (self.base_runs, "Run")
-        };
+impl LedgerRunModifier {
+    pub fn modify_and_write(&self, run_value_before: f64, mut f: impl Write) -> Result<f64, std::fmt::Error> {
+        Ok(match self {
+            LedgerRunModifier::Magnified => {
+                let run_value_after = run_value_before * 2.;
+                write!(f, "\tBatter Magnified 2x: {run_value_before} * 2 = {run_value_after}")?;
+                run_value_after
+            }
+            LedgerRunModifier::Underhanded => {
+                let run_value_after = run_value_before * -1.;
+                write!(f, "\tUnderhanded: {run_value_before} * -1 = {run_value_after}")?;
+                run_value_after
+            }
+        })
+    }
+}
 
-        if abs_runs == 1. {
-            write!(f, "(1 {run_type}),")?;
-        } else {
-            write!(f, "({} {run_type}s),", abs_runs)?;
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct LedgerRun {
+    pub modifiers: Vec<LedgerRunModifier>,
+}
+
+impl LedgerRun {
+    pub fn compute_and_write(&self, ledger_label: &str, mut f: impl Write) -> Result<f64, std::fmt::Error> {
+        write!(f, "{ledger_label}: 1 Run")?;
+
+        let mut run_value = 1.;
+        for modifier in &self.modifiers {
+            write!(f, "\n")?;
+            run_value = modifier.modify_and_write(run_value, &mut f)?;
         }
 
-        for line in &self.lines {
-            write!(f, " {line}")?;
+        Ok(run_value)
+    }
+}
+
+pub trait LedgerV2: WithStructure {
+    fn label() -> &'static str;
+
+    fn to_string(&self) -> String;
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct SimpleLedgerV2<RunSourceT: WithStructure> {
+    pub runs: Vec<LedgerRun>,
+    source: PhantomData<RunSourceT>,
+}
+
+impl<RunSourceT: WithStructure> SimpleLedgerV2<RunSourceT> {
+    pub fn from_runs(runs: Vec<LedgerRun>) -> Self {
+        Self {
+            runs,
+            source: Default::default(),
+        }
+    }
+}
+
+impl<RunSourceT: run_source::RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourceT> {
+    // TODO I can't remember why I have this indirection and it might not be necessary
+    fn label() -> &'static str {
+        RunSourceT::label()
+    }
+
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        let mut summary_line = String::new();
+        let mut run_total = 0.;
+        for run in &self.runs {
+            if !s.is_empty() { write!(s, "\n").unwrap(); }
+            let run_value = run.compute_and_write(Self::label(), &mut s).unwrap();
+            if !summary_line.is_empty() { write!(summary_line, " + ").unwrap(); }
+            write!(summary_line, "{run_value}").unwrap();
+            run_total += run_value;
+        }
+        if self.runs.len() > 1 {
+            s += "\n";
+            s += &summary_line;
+            s += " = ";
+            s += &run_total.to_string();
         }
 
-        Ok(())
+        s
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
+    None,
+    V1 {
+        base_runs: f64,
+        lines: Vec<LedgerLineV1>,
+    },
+    V2(LedgerRunT),
+}
+
+impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
+    pub fn to_string(&self, ledger_label: &str) -> String {
+        match self {
+            Ledger::None => String::new(),
+            Ledger::V1 { base_runs, lines } => {
+                let mut s = String::new();
+                let (abs_runs, run_type) = if *base_runs < 0. {
+                    (-base_runs, "Unrun")
+                } else {
+                    (*base_runs, "Run")
+                };
+
+                if abs_runs == 1. {
+                    write!(s, "(1 {run_type}),").unwrap();
+                } else {
+                    write!(s, "({} {run_type}s),", abs_runs).unwrap();
+                }
+
+                for line in lines {
+                    write!(s, " {line}").unwrap();
+                }
+
+                s
+            }
+            Ledger::V2(ledger) => {
+                ledger.to_string()
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct ScoreSummary {
+pub struct ScoreSummary<LedgerRunT: LedgerV2> {
     // TODO document fields
     pub away_emoji: String,
     pub away_score: f64,
     pub home_emoji: String,
     pub home_score: f64,
     pub runs_scored: f64, // negative for unruns
-    pub ledger: Option<Ledger>,
+    pub ledger: Ledger<LedgerRunT>,
     pub team_id: Uuid,
     pub team_nickname: String,
     pub sub_event: SubEvent,
@@ -2127,7 +2234,6 @@ pub struct PlayerLostTogethernessMod {
     /// Metadata for the associated mod being removed
     pub sub_event: SubEvent,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -2147,6 +2253,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// Weather for this game
+        #[with_structure(ignore)]
         weather: Weather,
 
         /// Uuid of the stadium this game is being played in, if any
@@ -2360,7 +2467,7 @@ pub enum FedEventData {
         fielder_name: String,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::Flyout>>,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null. Note that scoring players losing Inhabiting is inside `scores`.
@@ -2412,7 +2519,7 @@ pub enum FedEventData {
         fielder_name: String,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::GroundOut>>,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
@@ -2471,7 +2578,7 @@ pub enum FedEventData {
         out_at_base: Base,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::FieldersChoice>>,
 
         /// If the runner was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
@@ -2505,7 +2612,7 @@ pub enum FedEventData {
         batter_name: String,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::DoublePlay>>,
 
         /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
         /// mod, otherwise null.
@@ -2543,7 +2650,7 @@ pub enum FedEventData {
         hit_type: HitType,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::Hit>>,
 
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
@@ -2632,7 +2739,7 @@ pub enum FedEventData {
         /// Starting in s20 there's a separate RunsScored sub-event. This contains that information,
         /// if applicable. There are also effects attached to scoring in general, rather than each
         /// individual Run scored, and those also appear here.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::HomeRun>>>,
 
         /// If this home run popped some Balloons, this contains the name of the stadium whose
         /// balloons were popped and the number of birds that were scared away.
@@ -2674,7 +2781,7 @@ pub enum FedEventData {
 
         /// Score summary effects, if applicable. This will be populated if the season is 20 or
         /// later and either the base stolen was home or if blaserunning is true, otherwise null.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StolenBase>>>,
 
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
@@ -2737,7 +2844,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StrikeoutSwinging>>>,
     },
 
     /// Strikeout looking
@@ -2776,7 +2883,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StrikeoutLooking>>>,
     },
 
     /// Player drew a walk
@@ -2795,7 +2902,7 @@ pub enum FedEventData {
         batter_id: Uuid,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::Walk>>,
 
         /// If the batter went to a later base with Base Instincts, this is the base they went to.
         /// Otherwise null.
@@ -2922,7 +3029,7 @@ pub enum FedEventData {
         runners_advance: bool,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::MildPitch>>,
     },
 
     /// Mild pitch that results in a walk
@@ -2944,7 +3051,7 @@ pub enum FedEventData {
         batter_name: String,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::MildPitchWalk>>,
     },
 
     /// Player is Beaned with a Tired or Wired
@@ -3259,7 +3366,7 @@ pub enum FedEventData {
         batter_item_damage: Option<ItemDamaged>,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::CharmWalk>>,
     },
 
     /// Player gained a Free Refill
@@ -3433,6 +3540,7 @@ pub enum FedEventData {
         description: String,
 
         /// Metadata associated with the tarot reading. This is vague on purpose to be generic.
+        #[with_structure(ignore)]
         metadata: serde_json::Value,
 
         /// Uuids of players involved in this tarot reading. This is vague on purpose to be generic.
@@ -3671,7 +3779,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Flooding events thanks to Flippers.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::Flippers>>>,
 
         /// Whether a flood balloon was filled
         flood_balloon: bool,
@@ -3969,6 +4077,7 @@ pub enum FedEventData {
         will_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
+        #[with_structure(ignore)]
         metadata: EventMetadata,
     },
 
@@ -3986,6 +4095,7 @@ pub enum FedEventData {
         blessing_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
+        #[with_structure(ignore)]
         metadata: EventMetadata,
     },
 
@@ -4032,6 +4142,7 @@ pub enum FedEventData {
         decree_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
+        #[with_structure(ignore)]
         metadata: EventMetadata,
     },
 
@@ -4459,6 +4570,7 @@ pub enum FedEventData {
         message: String,
 
         /// Event metadata exactly as it appears in the Feed event
+        #[with_structure(ignore)]
         metadata: EventMetadata,
 
         /// Player tags exactly as it appears in the Feed event
@@ -4520,7 +4632,7 @@ pub enum FedEventData {
         sub_event: SubEvent,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::HitByPitch>>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
@@ -4560,7 +4672,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information.
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::RunsOverflowing>>>,
     },
 
     /// Detective enters a Crime Scene
@@ -4833,7 +4945,7 @@ pub enum FedEventData {
         // batter_item_damage: Option<ItemDamaged>,
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::MindTrickWalk>>,
     },
 
     /// Walk as a result of a Mind Trick which overrode a Charm strikeout
@@ -4860,7 +4972,7 @@ pub enum FedEventData {
         // Item damages would go here but I haven't encountered one yet so I haven't put it in
 
         #[serde(flatten)]
-        scores: Scores,
+        scores: Scores<SimpleLedgerV2<run_source::CharmedMindTrickWalk>>,
     },
 
     /// Strikeout as a result of a Mind Trick ("strikes out thinking"). From the introduction of
@@ -5196,6 +5308,7 @@ pub enum FedEventData {
         title_and_recipient: String,
 
         /// Event metadata exactly as it appears in the Feed event
+        #[with_structure(ignore)]
         metadata: EventMetadata,
 
         // TODO Figure out what should happen here
@@ -5271,7 +5384,7 @@ pub enum FedEventData {
         unruns: f64,
 
         /// If after s20, the associated score summary
-        score_summary: Option<ScoreSummary>,
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::DonatedShame>>>,
     },
 
     /// Game Over event which bestows the Win object on the winning team. This event did not exist
@@ -5328,7 +5441,7 @@ pub enum FedEventData {
 
         /// The associated score summary. Unlike most cases this always exists because Moderation
         /// was added after score summaries.
-        score_summary: ScoreSummary,
+        score_summary: ScoreSummary<SimpleLedgerV2<run_source::Moderation>>,
     },
 
     /// Player placed and stole to The Fifth Base
