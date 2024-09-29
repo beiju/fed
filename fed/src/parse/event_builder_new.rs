@@ -420,7 +420,7 @@ impl EventBuilder {
             // Apparently in season 22 they un-fixed the pluralization
             child_eb.push_metadata_str("update", if score.runs_scored == 1.0 && season < 21 {
                 "1 Run scored!".to_string()
-            } else if score.runs_scored < 0.0 {
+            } else if score.runs_scored.signum() < 0.0 { // TODO is it signum or just <= ?
                 format!("{} Unruns scored!", -score.runs_scored)
             } else {
                 format!("{} Runs scored!", score.runs_scored)

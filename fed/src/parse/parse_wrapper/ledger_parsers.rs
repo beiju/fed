@@ -37,13 +37,21 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
                         runs.push(finished_run);
                     }
                 },
-                ParsedLedgerLineV2::Magnified { .. } => { // TODO Verify run numbers are as expected
+                ParsedLedgerLineV2::Magnified { position, .. } => { // TODO Verify run numbers are as expected
                     let run = active_run.as_mut().unwrap(); // TODO make this a Result
-                    run.modifiers.push(LedgerRunModifier::Magnified);
+                    run.modifiers.push(LedgerRunModifier::Magnified(position));
                 }
                 ParsedLedgerLineV2::Underhanded { .. } => { // TODO Verify run numbers are as expected
                     let run = active_run.as_mut().unwrap(); // TODO make this a Result
                     run.modifiers.push(LedgerRunModifier::Underhanded);
+                }
+                ParsedLedgerLineV2::SunPoint1 { value, .. } => { // TODO Verify run numbers are as expected
+                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
+                    run.modifiers.push(LedgerRunModifier::SunPoint1(value));
+                }
+                ParsedLedgerLineV2::Subtractor { .. } => { // TODO Verify run numbers are as expected
+                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
+                    run.modifiers.push(LedgerRunModifier::Subtractor);
                 }
             }
         }

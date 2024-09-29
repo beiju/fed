@@ -709,6 +709,13 @@ impl ActivePositionType {
             ActivePositionType::Rotation => "pitching",
         }
     }
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            ActivePositionType::Lineup => "Batter",
+            ActivePositionType::Rotation => "Pitcher",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
@@ -1954,28 +1961,45 @@ impl Display for LedgerLineV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum LedgerRunModifier {
-    Magnified,
+    Magnified(ActivePositionType),
     Underhanded,
+    // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so it
+    // could be stored as a fixed point value, but I decided not to do that because blaseball is
+    // blaseball and javascript is javascript
+    SunPoint1(f64),
+    Subtractor,
 }
 
 impl LedgerRunModifier {
     pub fn modify(&self, in_value: f64) -> f64 {
         match self {
-            LedgerRunModifier::Magnified => { in_value * 2.0 }
+            LedgerRunModifier::Magnified(_) => { in_value * 2.0 }
             LedgerRunModifier::Underhanded => { in_value * -1.0 }
+            LedgerRunModifier::SunPoint1(value) => { in_value + value }
+            LedgerRunModifier::Subtractor => { in_value * -1.0 }
         }
     }
 
     pub fn modify_and_write(&self, run_value_before: f64, mut f: impl Write) -> Result<f64, std::fmt::Error> {
         Ok(match self {
-            LedgerRunModifier::Magnified => {
+            LedgerRunModifier::Magnified(position) => {
                 let run_value_after = run_value_before * 2.;
-                write!(f, "\tBatter Magnified 2x: {run_value_before} * 2 = {run_value_after}")?;
+                write!(f, "\t{} Magnified 2x: {run_value_before} * 2 = {run_value_after}", position.title())?;
                 run_value_after
             }
             LedgerRunModifier::Underhanded => {
                 let run_value_after = run_value_before * -1.;
                 write!(f, "\tUnderhanded: {run_value_before} * -1 = {run_value_after}")?;
+                run_value_after
+            }
+            LedgerRunModifier::SunPoint1(value) => {
+                let run_value_after = run_value_before + value;
+                write!(f, "\tSun .1: {run_value_before} + {value} = {run_value_after}")?;
+                run_value_after
+            }
+            LedgerRunModifier::Subtractor => {
+                let run_value_after = run_value_before * -1.;
+                write!(f, "\tSubtractor: {run_value_before} * -1 = {run_value_after}")?;
                 run_value_after
             }
         })
@@ -1988,6 +2012,8 @@ pub struct LedgerRun {
 }
 
 impl LedgerRun {
+    // Note this function is only used with V1 ledgers, so it doesn't support anything added after
+    // s22
     pub fn compute_and_write(&self, ledger_label: &str, mut f: impl Write) -> Result<f64, std::fmt::Error> {
         write!(f, "{ledger_label}: 1 Run")?;
 
@@ -2158,7 +2184,12 @@ impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
                         write!(f, "{value}")?;
                     }
 
-                    write!(f, " = {runs_total_value}")?;
+                    // To my horror, my code was returning a .9999999.... where blaseball's didn't
+                    if runs_total_value.fract() == 0. {
+                        write!(f, " = {runs_total_value}")?;
+                    } else {
+                        write!(f, " = {runs_total_value:.1}")?;
+                    }
                 }
             }
         }

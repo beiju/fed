@@ -2565,10 +2565,20 @@ pub(crate) enum ParsedLedgerLineV1<'a> {
 pub(crate) enum ParsedLedgerLineV2 {
     Run,
     Magnified {
+        position: ActivePositionType,
         runs_before: f64,
         runs_after: f64,
     },
     Underhanded {
+        runs_before: f64,
+        runs_after: f64,
+    },
+    SunPoint1 {
+        value: f64,
+        runs_before: f64,
+        runs_after: f64,
+    },
+    Subtractor {
         runs_before: f64,
         runs_after: f64,
     },
@@ -2617,13 +2627,25 @@ pub(crate) fn parse_ledger_line_v2(ledger_label: &str) -> impl Fn(&str) -> Parse
     move |input| {
         alt((
             pair(tag(ledger_label), tag(": 1 Run")).map(|_| ParsedLedgerLineV2::Run),
-            parse_ledger_batter_magnified
-                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Magnified {
+            parse_ledger_player_magnified
+                .map(|(position, runs_before, runs_after)| ParsedLedgerLineV2::Magnified {
+                    position,
                     runs_before,
                     runs_after,
                 }),
-            parse_ledger_underhanded
+            parse_ledger_negating("Underhanded")
                 .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Underhanded {
+                    runs_before,
+                    runs_after,
+                }),
+            parse_ledger_sun_point1
+                .map(|(value, runs_before, runs_after)| ParsedLedgerLineV2::SunPoint1 {
+                    value,
+                    runs_before,
+                    runs_after,
+                }),
+            parse_ledger_negating("Subtractor")
+                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Subtractor {
                     runs_before,
                     runs_after,
                 }),
@@ -2631,20 +2653,38 @@ pub(crate) fn parse_ledger_line_v2(ledger_label: &str) -> impl Fn(&str) -> Parse
     }
 }
 
-pub(crate) fn parse_ledger_batter_magnified(input: &str) -> ParserResult<(f64, f64)> {
-    let (input, _) = tag("\tBatter Magnified 2x: ").parse(input)?;
+pub(crate) fn parse_ledger_player_magnified(input: &str) -> ParserResult<(ActivePositionType, f64, f64)> {
+    let (input, position) = alt((
+        tag("\tBatter Magnified 2x: ").map(|_| ActivePositionType::Lineup),
+        tag("\tPitcher Magnified 2x: ").map(|_| ActivePositionType::Rotation),
+    )).parse(input)?;
     let (input, runs_before) = double.parse(input)?;
     let (input, _) = tag(" * 2 = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
-    Ok((input, (runs_before, runs_after)))
+    Ok((input, (position, runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_underhanded(input: &str) -> ParserResult<(f64, f64)> {
-    let (input, _) = tag("\tUnderhanded: ").parse(input)?;
+// Covers any negating mod: underhanded, subtractor, etc
+pub(crate) fn parse_ledger_negating(mod_name: &str) -> impl Fn(&str) -> ParserResult<(f64, f64)> + '_ {
+    move |input| {
+        let (input, _) = tag("\t").parse(input)?;
+        let (input, _) = tag(mod_name).parse(input)?;
+        let (input, _) = tag(": ").parse(input)?;
+        let (input, runs_before) = double.parse(input)?;
+        let (input, _) = tag(" * -1 = ").parse(input)?;
+        let (input, runs_after) = double.parse(input)?;
+        Ok((input, (runs_before, runs_after)))
+    }
+}
+
+pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f64)> {
+    let (input, _) = tag("\tSun .1: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;
-    let (input, _) = tag(" * -1 = ").parse(input)?;
+    let (input, _) = tag(" + ").parse(input)?;
+    let (input, value) = double.parse(input)?;
+    let (input, _) = tag(" = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
-    Ok((input, (runs_before, runs_after)))
+    Ok((input, (value, runs_before, runs_after)))
 }
 
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
