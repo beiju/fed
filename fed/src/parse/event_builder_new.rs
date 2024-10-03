@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped, LedgerV2};
+use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped, LedgerV2, HotelMotelParty};
 
 pub struct EventBuilder(EventuallyEvent);
 
@@ -461,14 +461,17 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: &PlayerBoostSubEventWithTeam, player_name: &str, player_id: Uuid) {
+    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: &HotelMotelParty, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
         let description = format!("{player_name} is Partying!");
         self.push_description(&description);
-        self.push_child(hotel_motel_party.sub_event, |mut child| {
+        if let Some(stadium_name) = &hotel_motel_party.birds {
+            self.push_description(&format!("A flock of Birds are attracted to {stadium_name}!"));
+        }
+        self.push_child(hotel_motel_party.boost.sub_event, |mut child| {
             child.push_description(&description);
             child.push_player_tag(player_id);
-            child.build_boost_with_team(hotel_motel_party)
+            child.build_boost_with_team(&hotel_motel_party.boost)
         })
     }
 
@@ -671,7 +674,7 @@ impl EventBuilder {
 
     pub fn push_hotel_motel(&mut self, parties: &[HotelMotelScoringPlayer]) {
         for party in parties {
-            self.push_hotel_motel_party(&party.boost, &party.player_name, party.player_id);
+            self.push_hotel_motel_party(&party.party, &party.player_name, party.player_id);
         }
     }
 

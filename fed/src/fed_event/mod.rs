@@ -160,10 +160,20 @@ pub struct ScoringPlayer {
     pub attraction: Option<Attraction>,
 
     /// Info about the Hotel Motel party on this score, if any
-    pub hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+    pub hotel_motel_party: Option<HotelMotelParty>,
 
     /// Info about Hype building as a result of this score, if any
     pub hype: Option<Hype>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct HotelMotelParty {
+    /// If Birds were attracted to the stadium, the name of the stadium
+    pub birds: Option<String>,
+
+    #[serde(flatten)]
+    pub boost: PlayerBoostSubEventWithTeam,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -176,7 +186,7 @@ pub struct HotelMotelScoringPlayer {
     pub player_name: String,
 
     #[serde(flatten)]
-    pub boost: PlayerBoostSubEventWithTeam,
+    pub party: HotelMotelParty,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -884,7 +894,7 @@ pub enum FloodingSweptEffect {
         player_name: String,
 
         /// Info about the Hotel Motel party on this score, if any
-        hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+        hotel_motel_party: Option<HotelMotelParty>,
     },
     Ego(PlayerNameId),
 }
@@ -2094,6 +2104,7 @@ impl<RunSourceT: RunSource + WithStructure> Display for SimpleLedgerV2<RunSource
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct HomeRunLedger {
     pub home_run: SimpleLedgerV2<HomeRun>,
+    pub big_bucket: Option<SimpleLedgerV2<HomeRunBigBucket>>,
     pub alley_oop: Option<SimpleLedgerV2<HomeRunSlamDunk>>,
 }
 
@@ -2104,15 +2115,23 @@ impl LedgerV2 for HomeRunLedger {
 
     fn len(&self) -> usize {
         let mut len = self.home_run.len();
+        if let Some(oop) = &self.big_bucket { len += oop.len() }
         if let Some(oop) = &self.alley_oop { len += oop.len() }
         len
     }
 
     fn run_values(&self) -> impl Iterator<Item=f64> {
+        // The Either crate very conveniently does the work to consolidate 2 iterators of
+        // different concrete types but with the same Item type into a single Iterator type
         self.home_run.run_values()
             .chain(
-                // The Either crate very conveniently does the work to consolidate 2 iterators of
-                // different concrete types but with the same Item type into a single Iterator type
+                if let Some(oop) = &self.big_bucket {
+                    Either::Left(oop.run_values())
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
+            .chain(
                 if let Some(oop) = &self.alley_oop {
                     Either::Left(oop.run_values())
                 } else {
@@ -2125,6 +2144,9 @@ impl LedgerV2 for HomeRunLedger {
 impl Display for HomeRunLedger {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.home_run)?;
+        if let Some(big_bucket) = &self.big_bucket {
+            write!(f, "\n{}", big_bucket)?;
+        }
         if let Some(alley_oop) = &self.alley_oop {
             write!(f, "\n{}", alley_oop)?;
         }
@@ -2899,7 +2921,7 @@ pub enum FedEventData {
         score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StolenBase>>>,
 
         /// Info about the Hotel Motel party on this score, if any
-        hotel_motel_party: Option<PlayerBoostSubEventWithTeam>,
+        hotel_motel_party: Option<HotelMotelParty>,
 
         /// If the player took The Fifth Base, contains info about the stadium losing the mod, the
         /// player gaining the item, and the player possibly dropping their previous item
@@ -5554,9 +5576,8 @@ pub enum FedEventData {
         /// team to win. Since this was at the end of the game it counted as Shame and built Hype.
         hype: Option<Hype>,
 
-        /// The associated score summary. Unlike most cases this always exists because Moderation
-        /// was added after score summaries.
-        score_summary: ScoreSummary<SimpleLedgerV2<run_source::Moderation>>,
+        /// The associated score summary, if applicable.
+        score_summary: Option<ScoreSummary<SimpleLedgerV2<Moderation>>>,
     },
 
     /// Player placed and stole to The Fifth Base

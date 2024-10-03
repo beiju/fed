@@ -419,7 +419,10 @@ pub fn parse_next_event(
                         let score_summary = event.parse_score_summary()?;
 
                         let hotel_motel_party = event.next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
-                            .map(|_| event.next_boost_child_with_team())
+                            .map(|birds| ParseOk(HotelMotelParty {
+                                birds: birds.map(str::to_string),
+                                boost: event.next_boost_child_with_team()?,
+                            }))
                             .transpose()?;
 
                         FedEventData::StolenBase {
@@ -1881,8 +1884,11 @@ pub fn parse_next_event(
                             })
                         }
                         ParsedFloodingEffect::Flippers(player_name, had_hotel_motel_party) => {
-                            let hotel_motel_party = if had_hotel_motel_party {
-                                Some(event.next_boost_child_with_team()?)
+                            let hotel_motel_party = if let Some(birds) = had_hotel_motel_party {
+                                Some(HotelMotelParty {
+                                    birds: birds.map(str::to_string),
+                                    boost: event.next_boost_child_with_team()?,
+                                })
                             } else {
                                 None
                             };
@@ -3480,13 +3486,7 @@ pub fn parse_next_event(
             // opposing team (the Shoe Thieves).
             let hype = event.parse_hype()?;
 
-            let score_summary = event.parse_score_summary()?
-                .ok_or_else(|| {
-                    FeedParseError::NotEnoughChildren {
-                        event_type: event.event_type,
-                        expected_at_least: 1,
-                    }
-                })?;
+            let score_summary = event.parse_score_summary()?;
 
             FedEventData::Moderation {
                 game: event.game(unscatter, attractor_secret_base)?,

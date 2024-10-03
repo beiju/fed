@@ -1649,8 +1649,8 @@ impl FedEvent {
 
                 // Hotel motel parties from Flippers appear after flumps, so another loop is needed
                 for effect in &effects {
-                    if let FloodingSweptEffect::Flippers { player_name, player_id, hotel_motel_party: Some(boost) } = effect {
-                        eb.push_hotel_motel_party(boost, player_name, *player_id);
+                    if let FloodingSweptEffect::Flippers { player_name, player_id, hotel_motel_party: Some(party) } = effect {
+                        eb.push_hotel_motel_party(party, player_name, *player_id);
                     }
                 }
 
@@ -3573,7 +3573,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description(&format!("The {team_nickname} practice Moderation."));
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
-                eb.push_direct_score_summary(&score_summary);
+                eb.push_opt_direct_score_summary(score_summary.as_ref());
                 eb.build(EventType::Moderation)
             }
             FedEventData::PlacedFifthBase { game, player_id, player_name, player_team_id, player_item_rating_before, player_item_rating_after, player_rating, stadium_name, player_lost_item_event, stadium_gained_mod_event } => {

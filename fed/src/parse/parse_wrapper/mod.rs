@@ -597,7 +597,7 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_scores_with_scoring_players<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
         &mut self,
-        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>,
+        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>,
         attractions: Vec<(Uuid, String, String)>,
         is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
     ) -> Result<Scores<LedgerT>, FeedParseError> {
@@ -634,13 +634,17 @@ impl<'e> EventParseWrapper<'e> {
                 };
 
                 let hotel_motel_party = if is_fc {
-                    self.next_parse_opt(parse_hotel_motel_party_with_name(&player_name)).is_some()
+                    self.next_parse_opt(parse_hotel_motel_party_with_name(&player_name))
+                        .map(|o| o.map(str::to_string))
                 } else {
                     hotel_motel_party
                 };
 
-                let hotel_motel_party = if hotel_motel_party {
-                    Some(self.next_boost_child_with_team()?)
+                let hotel_motel_party = if let Some(birds) = hotel_motel_party {
+                    Some(HotelMotelParty {
+                        birds,
+                        boost: self.next_boost_child_with_team()?,
+                    })
                 } else {
                     None
                 };
@@ -755,7 +759,7 @@ impl<'e> EventParseWrapper<'e> {
         Ok(stadium_name.map(str::to_string))
     }
 
-    pub fn parse_scoring_players(&mut self, label: &'static str, is_fc: bool) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, bool, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
+    pub fn parse_scoring_players(&mut self, label: &'static str, is_fc: bool) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
         let (scorers, attractions) = self.next_parse(parse_scores(
             label,
             (self.season, self.day) < (15, 3),
@@ -769,7 +773,7 @@ impl<'e> EventParseWrapper<'e> {
                     self.next_player_id()?,
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
-                    score.hotel_motel_party,
+                    score.hotel_motel_party.map(|n| n.map(str::to_string)),
                     score.hype_stadium_name.map(str::to_string),
                 ))
             })
@@ -945,16 +949,19 @@ impl<'e> EventParseWrapper<'e> {
 
     pub fn parse_hotel_motel_parties(&mut self) -> Result<Vec<HotelMotelScoringPlayer>, FeedParseError> {
         let mut parties = Vec::new();
-        while let Some(player_name) = self.next_parse_opt(parse_hotel_motel_party) {
+        while let Some((player_name, birds)) = self.next_parse_opt(parse_hotel_motel_party) {
             let mut child = self.next_child(EventType::PlayerStatIncrease)?;
             parties.push(HotelMotelScoringPlayer {
                 player_id: child.next_player_id()?,
                 player_name: player_name.to_string(),
-                boost: PlayerBoostSubEventWithTeam {
-                    team_id: child.next_team_id()?,
-                    rating_before: child.metadata_f64("before")?,
-                    rating_after: child.metadata_f64("after")?,
-                    sub_event: child.as_sub_event(),
+                party: HotelMotelParty {
+                    birds: birds.map(str::to_string),
+                    boost: PlayerBoostSubEventWithTeam {
+                        team_id: child.next_team_id()?,
+                        rating_before: child.metadata_f64("before")?,
+                        rating_after: child.metadata_f64("after")?,
+                        sub_event: child.as_sub_event(),
+                    },
                 },
             });
         }

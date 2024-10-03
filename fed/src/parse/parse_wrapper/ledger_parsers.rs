@@ -70,6 +70,13 @@ impl ParseableLedger for HomeRunLedger {
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, home_run) = SimpleLedgerV2::parse(ledger)?;
 
+        let (ledger, big_bucket) = if ledger.starts_with("\nBig Bucket") {
+            let (rest, bucket) = SimpleLedgerV2::parse(&ledger[1..])?;
+            (rest, Some(bucket))
+        } else {
+            (ledger, None)
+        };
+
         let (ledger, alley_oop) = if ledger.starts_with("\nSlam Dunk") {
             let (rest, oop) = SimpleLedgerV2::parse(&ledger[1..])?;
             (rest, Some(oop))
@@ -79,6 +86,7 @@ impl ParseableLedger for HomeRunLedger {
 
         Ok((ledger, Self {
             home_run,
+            big_bucket,
             alley_oop,
         }))
     }

@@ -38,6 +38,7 @@ run_source!(MildPitchWalk, "Mild Pitch Walk");
 run_source!(CharmWalk, "Charm Walk");
 run_source!(HomeRun, "Home Run");
 run_source!(HomeRunSlamDunk, "Slam Dunk");
+run_source!(HomeRunBigBucket, "Big Bucket");
 run_source!(MildPitchCharmWalk, "Mild Pitch Charm Walk");
 run_source!(Flippers, "Flippers");
 run_source!(HitByPitch, "Hit By Pitch");

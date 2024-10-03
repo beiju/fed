@@ -328,7 +328,9 @@ pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
 pub(crate) struct ParsedScore<'a> {
     pub(crate) damaged_item_name: Option<(&'a str, Option<bool>)>,
     pub(crate) player_name: &'a str,
-    pub(crate) hotel_motel_party: bool,
+    // Outer option: whether there was a party. Inner option: whether the party attracted birds.
+    // str inside options: name of stadium birds were attracted to
+    pub(crate) hotel_motel_party: Option<Option<&'a str>>,
     pub(crate) hype_stadium_name: Option<&'a str>,
 }
 
@@ -348,7 +350,7 @@ pub(crate) fn parse_scores<'a>(score_label: &'static str, extra_space: bool, is_
         if !is_fc {
             for scorer in &mut scorers {
                 let (i, party) = opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
-                scorer.hotel_motel_party = party.is_some();
+                scorer.hotel_motel_party = party;
                 input = i;
             }
         }
@@ -414,7 +416,7 @@ pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: b
         Ok((input, ParsedScore {
             damaged_item_name,
             player_name,
-            hotel_motel_party: false, // Filled in later in a subsequent loop
+            hotel_motel_party: None, // Filled in later in a subsequent loop
             hype_stadium_name,
         }))
     }
@@ -429,14 +431,19 @@ pub(crate) fn parse_attraction(input: &str) -> ParserResult<ParsedAttraction> {
     Ok((input, ParsedAttraction { team_nickname, player_name }))
 }
 
-pub(crate) fn parse_hotel_motel_party_with_name(player_name: &str) -> impl Fn(&str) -> ParserResult<()> + '_ {
+pub(crate) fn parse_hotel_motel_party_with_name(player_name: &str) -> impl Fn(&str) -> ParserResult<Option<&str>> + '_ {
     move |input: &str| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = tag(" is Partying!").parse(input)?;
 
+        let (input, attracted_birds) = opt(preceded(
+            tag("\nA flock of Birds are attracted to ", ),
+            parse_terminated("!"),
+        )).parse(input)?;
 
-        Ok((input, ()))
+
+        Ok((input, attracted_birds))
     }
 }
 
@@ -1247,7 +1254,7 @@ pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<ParsedPlay
 
 pub(crate) enum ParsedFloodingEffect<'a> {
     Elsewhere((&'a str, Option<&'a str>)),
-    Flippers(&'a str, bool /* hotel motel party */),
+    Flippers(&'a str, Option<Option<&'a str>> /* hotel motel party with optional birds */),
     Ego(&'a str),
 }
 
@@ -1258,9 +1265,9 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
     let (mut input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
 
     for effect in &mut effects {
-        if let ParsedFloodingEffect::Flippers(player_name, is_party) = effect {
-            let (input_, party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
-            *is_party = party.is_some();
+        if let ParsedFloodingEffect::Flippers(player_name, party) = effect {
+            let (input_, parsed_party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
+            *party = parsed_party;
             input = input_; // not sure if there's a more natural way to do this
         }
     }
@@ -1275,7 +1282,7 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
         parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
         preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
             // hotel motel party must be filled in later because of order-of-effects
-            .map(|n| ParsedFloodingEffect::Flippers(n, false)),
+            .map(|n| ParsedFloodingEffect::Flippers(n, None)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
     )).parse(input)
@@ -2465,11 +2472,10 @@ pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
     Ok((input, item_name))
 }
 
-pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<(&str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
-    let (input, player_name) = parse_terminated(" is Partying!").parse(input)?;
 
-    Ok((input, player_name))
+    parse_party.parse(input)
 }
 
 pub(crate) fn parse_coasting(input: &str) -> ParserResult<(bool, Vec<&str>)> {
