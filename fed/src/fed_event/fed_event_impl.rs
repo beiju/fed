@@ -3742,8 +3742,11 @@ impl FedEvent {
                     child_eb.build(EventType::StoleItemFromTunnels)
                 });
 
+                // Conjecture: in season 22 they changed "stole" and "stolen" to "took" and "taken".
+                // We'll see if that causes any errors
                 eb.push_child(item_lost_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{} {item_name} was stolen by {thief_name}!", Possessive(&victim_name)));
+                    let verb = if (self.season, self.day) > (21, 2) { "taken" } else { "stolen" };
+                    child_eb.push_description(&format!("{} {item_name} was {verb} by {thief_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(victim_team_id);
 
@@ -3775,7 +3778,8 @@ impl FedEvent {
                 }
 
                 eb.push_child(item_gained_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{thief_name} stole {} {item_name}!", Possessive(&victim_name)));
+                    let verb = if (self.season, self.day) > (21, 2) { "took" } else { "stole" };
+                    child_eb.push_description(&format!("{thief_name} {verb} {} {item_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(thief_id);
                     child_eb.push_team_tag(home_team);
 
