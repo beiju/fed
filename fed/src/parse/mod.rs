@@ -1031,7 +1031,7 @@ pub fn parse_next_event(
             }
         }
         EventType::HitByPitch => {
-            let (pitcher_name, batter_name) = event.next_parse(parse_hit_by_pitch)?;
+            let (pitcher_name, batter_name, debt_type) = event.next_parse(parse_hit_by_pitch)?;
             let pitcher_id = event.next_player_id()?;
             let batter_id = event.next_player_id()?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
@@ -1045,6 +1045,7 @@ pub fn parse_next_event(
                 batter_team_id: sub_event.next_team_id()?,
                 batter_id,
                 batter_name: batter_name.to_string(),
+                debt_type,
                 sub_event: sub_event.as_sub_event(),
                 scores,
             }

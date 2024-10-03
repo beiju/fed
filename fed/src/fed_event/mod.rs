@@ -4765,11 +4765,14 @@ pub enum FedEventData {
         /// Name of player who was hit by the HBP
         batter_name: String,
 
+        /// Which type of Debt was applied to the player who was hit by the HBP
+        debt_type: DebtType,
+
         /// Metadata for the event associated with adding the Observed mod
         sub_event: SubEvent,
 
         #[serde(flatten)]
-        scores: Scores<SimpleLedgerV2<run_source::HitByPitch>>,
+        scores: Scores<SimpleLedgerV2<HitByPitch>>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating

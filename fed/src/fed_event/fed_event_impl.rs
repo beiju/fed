@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -2912,32 +2912,37 @@ impl FedEvent {
 
                 eb.build(EventType::SalmonSwim)
             }
-            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, sub_event, scores } => {
-                let child = EventBuilderChild::new(&sub_event)
-                    .update(EventBuilderUpdate {
-                        category: EventCategory::Changes,
-                        r#type: EventType::AddedMod,
-                        description: format!("{batter_name} is now being Observed..."),
-                        team_tags: vec![batter_team_id],
-                        player_tags: vec![batter_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "COFFEE_PERIL",
-                        "type": 2, // ?
-                    }));
+            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, debt_type, sub_event, scores } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
 
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::HitByPitch,
-                        category: EventCategory::Special,
-                        description: format!("{pitcher_name} hits {batter_name} with a pitch!\n{batter_name} is now being Observed..."),
-                        player_tags: vec![pitcher_id, batter_id],
-                        ..Default::default()
-                    })
-                    .scores(&scores, " scores!")
-                    .child(child)
-                    .build()
+                eb.push_description(&format!("{pitcher_name} hits {batter_name} with a pitch!"));
+                let debt_description = match debt_type {
+                    DebtType::Unstable => {
+                        format!("{batter_name} became Unstable!")
+                    }
+                    DebtType::Observed => {
+                        format!("{batter_name} is now being Observed...")
+                    }
+                };
+                eb.push_description(&debt_description);
+                eb.push_player_tag(pitcher_id);
+                eb.push_player_tag(batter_id);
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(&debt_description);
+                    child_eb.push_team_tag(batter_team_id);
+                    child_eb.push_player_tag(batter_id);
+                    child_eb.push_metadata_str("mod", debt_type.mod_id());
+                    child_eb.push_metadata_i64("type", ModDuration::Weekly);
+                    child_eb.build(EventType::AddedMod)
+                });
+
+                // TODO re-enable this
+                // eb.push_scores(scores, home_team_id);
+
+                eb.build(EventType::HitByPitch)
             }
             FedEventData::SolarPanelsActivate { game, num_runs, team_nickname } => {
                 eb.set_game(game);

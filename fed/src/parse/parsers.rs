@@ -1927,13 +1927,16 @@ pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLo
     Ok((input, ParsedTeamRunsLost { runs, name }))
 }
 
-pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str, DebtType)> {
     let (input, pitcher_name) = parse_terminated(" hits ").parse(input)?;
     let (input, batter_name) = parse_terminated(" with a pitch!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
-    let (input, _) = tag(" is now being Observed...").parse(input)?; // I'll deal with murder debt later
+    let (input, debt_type) = alt((
+        tag(" is now being Observed...").map(|_| DebtType::Observed),
+        tag(" became Unstable!").map(|_| DebtType::Unstable),
+    )).parse(input)?;
 
-    Ok((input, (pitcher_name, batter_name)))
+    Ok((input, (pitcher_name, batter_name, debt_type)))
 }
 
 pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
