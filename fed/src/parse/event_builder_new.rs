@@ -5,7 +5,10 @@ use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped, LedgerV2, HotelMotelParty};
 
-pub struct EventBuilder(EventuallyEvent);
+pub struct EventBuilder {
+    event: EventuallyEvent,
+    phantom_children: i64,
+}
 
 
 // Newtype with Display implementation that prints the string using grammatically correct possessive
@@ -48,59 +51,65 @@ fn reverse_performing(input: &str) -> &'static str {
 
 impl EventBuilder {
     pub fn new(id: Uuid, created: DateTime<Utc>, sim: String, day: i32, season: i32, tournament: i32, phase: i32, nuts: i32) -> Self {
-        let mut builder = Self(EventuallyEvent {
-            id,
-            created,
-            r#type: Default::default(),
-            category: Default::default(),
-            metadata: Default::default(),
-            blurb: "".to_string(),
-            description: "".to_string(),
-            election_option_id: None,
-            player_tags: Some(vec![]),
-            game_tags: Some(vec![]),
-            team_tags: Some(vec![]),
-            sim,
-            day,
-            season,
-            tournament,
-            phase,
-            nuts,
-        });
+        let mut builder = Self {
+            event: EventuallyEvent {
+                id,
+                created,
+                r#type: Default::default(),
+                category: Default::default(),
+                metadata: Default::default(),
+                blurb: "".to_string(),
+                description: "".to_string(),
+                election_option_id: None,
+                player_tags: Some(vec![]),
+                game_tags: Some(vec![]),
+                team_tags: Some(vec![]),
+                sim,
+                day,
+                season,
+                tournament,
+                phase,
+                nuts,
+            },
+            phantom_children: 0,
+        };
 
-        builder.0.metadata.other = serde_json::json!({});
+        builder.event.metadata.other = serde_json::json!({});
 
         builder
     }
 
     pub fn connected_event(&self, sub_event: SubEvent) -> Self {
-        Self(EventuallyEvent {
-            id: sub_event.id,
-            created: sub_event.created,
-            nuts: sub_event.nuts,
-            metadata: self.0.metadata.connected_event_metadata(),
-            ..self.0.clone()
-        })
+        Self {
+            event: EventuallyEvent {
+                id: sub_event.id,
+                created: sub_event.created,
+                nuts: sub_event.nuts,
+                metadata: self.event.metadata.connected_event_metadata(),
+                ..self.event.clone()
+            },
+            phantom_children: 0,
+        }
     }
 
     pub fn description(&self) -> &str {
-        &self.0.description
+        &self.event.description
     }
 
     pub fn set_description(&mut self, description: String) {
-        self.0.description = description;
+        self.event.description = description;
     }
 
     pub fn set_category(&mut self, category: EventCategory) {
-        self.0.category = category;
+        self.event.category = category;
     }
 
     pub fn set_game(&mut self, game: GameEvent) {
-        self.0.game_tags = Some(vec![game.game_id]);
-        self.0.team_tags = Some(vec![game.away_team, game.home_team]);
-        self.0.metadata.play = Some(game.play);
+        self.event.game_tags = Some(vec![game.game_id]);
+        self.event.team_tags = Some(vec![game.away_team, game.home_team]);
+        self.event.metadata.play = Some(game.play);
         // Root events of games are always -1, non-games are null
-        self.0.metadata.sub_play = Some(-1);
+        self.event.metadata.sub_play = Some(-1);
 
         if let Some(unscatter) = game.unscatter {
             self.push_child(unscatter.sub_event, |mut child| {
@@ -121,51 +130,55 @@ impl EventBuilder {
     }
 
     pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F) where F: FnOnce(Self) -> EventuallyEvent {
-        let mut child_builder = Self::new(sub_event.id, sub_event.created, self.0.sim.clone(), self.0.day, self.0.season, self.0.tournament, self.0.phase, sub_event.nuts);
+        let mut child_builder = Self::new(sub_event.id, sub_event.created, self.event.sim.clone(), self.event.day, self.event.season, self.event.tournament, self.event.phase, sub_event.nuts);
         // Childrens' categories are usually Changes
-        child_builder.0.category = EventCategory::Changes;
-        child_builder.0.metadata.parent = Some(self.0.id);
-        child_builder.0.game_tags = self.0.game_tags.clone();
-        child_builder.0.metadata.play = self.0.metadata.play;
-        child_builder.0.metadata.sub_play = Some(self.0.metadata.children.len() as i64);
-        self.0.metadata.children.push(build_func(child_builder))
+        child_builder.event.category = EventCategory::Changes;
+        child_builder.event.metadata.parent = Some(self.event.id);
+        child_builder.event.game_tags = self.event.game_tags.clone();
+        child_builder.event.metadata.play = self.event.metadata.play;
+        child_builder.event.metadata.sub_play = Some(self.event.metadata.children.len() as i64 + self.phantom_children);
+        self.event.metadata.children.push(build_func(child_builder))
+    }
+
+    pub fn push_phantom_child(&mut self) {
+        self.phantom_children += 1;
     }
 
     pub fn clear_sub_play(&mut self) {
-        self.0.metadata.sub_play = None;
+        self.event.metadata.sub_play = None;
     }
 
     pub fn push_description(&mut self, desc: &str) {
-        if !self.0.description.is_empty() {
-            self.0.description.push('\n');
+        if !self.event.description.is_empty() {
+            self.event.description.push('\n');
         }
-        self.0.description += desc.into();
+        self.event.description += desc.into();
     }
 
     pub fn push_player_tag(&mut self, player_id: Uuid) {
-        self.0.player_tags.as_mut()
+        self.event.player_tags.as_mut()
             .expect("Builder should not be used for events with no player tags")
             .push(player_id)
     }
 
     pub fn push_team_tag(&mut self, team_id: Uuid) {
-        self.0.team_tags.as_mut()
+        self.event.team_tags.as_mut()
             .expect("Builder should not be used for events with no team tags")
             .push(team_id)
     }
 
     pub fn set_team_tags(&mut self, team_tags: Vec<Uuid>) {
-        self.0.team_tags = Some(team_tags);
+        self.event.team_tags = Some(team_tags);
     }
 
     fn metadata_mut(&mut self) -> &mut Map<String, Value> {
-        self.0.metadata.other
+        self.event.metadata.other
             .as_object_mut()
             .expect("Internal error: This metadata should always be an object")
     }
 
     pub fn set_full_metadata(&mut self, metadata: EventMetadata) {
-        self.0.metadata = metadata;
+        self.event.metadata = metadata;
     }
 
     pub fn push_metadata_null(&mut self, key: impl Into<String>) {
@@ -309,12 +322,12 @@ impl EventBuilder {
     pub fn push_item_damage(&mut self, dmg: &ItemDamaged, player_name: &str) {
         let description = format!("{}{} {dmg}",
                                   // bug-for-bug compatibility :)
-                                  if (self.0.season, self.0.day) < (15, 3) { " " } else { "" },
+                                  if (self.event.season, self.event.day) < (15, 3) { " " } else { "" },
                                   Possessive(player_name));
         self.push_description(&description);
         // In season 17 days 7-10 inclusive, the Ambitious event type was accidentally used instead
         // of ItemBreaks
-        let use_ambitious = self.0.season == 17 && self.0.day >= 7 && self.0.day <= 10;
+        let use_ambitious = self.event.season == 17 && self.event.day >= 7 && self.event.day <= 10;
         self.push_child(dmg.sub_event, |mut child| {
             child.push_description(&description);
             child.push_player_tag(dmg.player_id);
@@ -407,7 +420,7 @@ impl EventBuilder {
     }
 
     pub fn push_direct_score_summary<T: LedgerV2>(&mut self, score: &ScoreSummary<T>) {
-        let season = self.0.season;
+        let season = self.event.season;
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
@@ -434,7 +447,7 @@ impl EventBuilder {
     }
 
     pub fn inflated_or_inflates(&self) -> &'static str {
-        if (self.0.season, self.0.day) < (19, 80) { "inflated" } else { "inflates" }
+        if (self.event.season, self.event.day) < (19, 80) { "inflated" } else { "inflates" }
     }
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {
@@ -763,7 +776,7 @@ impl EventBuilder {
     }
 
     pub fn push_earned_win(&mut self, win: EarnedWin) {
-        let day = self.0.day;
+        let day = self.event.day;
         self.push_child(win.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Outcomes);
             child_eb.push_description(&format!("The {} collected a Win.", win.winning_team_nickname));
@@ -938,7 +951,7 @@ impl EventBuilder {
         self.push_metadata_f64("playerRating", item_repaired.player_rating);
         // In season 17 days 7-10 inclusive, the Coasting event type was accidentally used instead
         // of BrokenItemRepaired
-        let use_coasting = self.0.season == 17 && self.0.day >= 7 && self.0.day <= 10;
+        let use_coasting = self.event.season == 17 && self.event.day >= 7 && self.event.day <= 10;
         self.build(if item_repaired.health_before == 0 {
             if use_coasting {
                 EventType::Coasting
@@ -1008,7 +1021,7 @@ impl EventBuilder {
     }
 
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {
-        self.0.r#type = event_type;
-        self.0
+        self.event.r#type = event_type;
+        self.event
     }
 }

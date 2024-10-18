@@ -28,10 +28,8 @@ run_source!(Flyout, "Sacrifice");
 run_source!(GroundOut, "Sacrifice");
 run_source!(FieldersChoice, "Base Hit"); // this doesn't seem like the right label but ok
 run_source!(Hit, "Base Hit");
-run_source!(DoublePlay, "Double Play");
+run_source!(DoublePlay, "Base Hit"); // I guess this is a base hit too
 run_source!(StolenBase, "Steal Home"); // Probably needs to become non-Simple because of Blaserunning
-run_source!(StrikeoutSwinging, "Strikeout Swinging");
-run_source!(StrikeoutLooking, "Strikeout Looking");
 run_source!(Walk, "Walk");
 run_source!(MildPitch, "Mild Pitch");
 run_source!(MildPitchWalk, "Mild Pitch Walk");
@@ -46,4 +44,3 @@ run_source!(RunsOverflowing, "Runs Overflowing");
 run_source!(MindTrickWalk, "Mind Trick Walk");
 run_source!(CharmedMindTrickWalk, "Charmed Mind Trick Walk");
 run_source!(DonatedShame, "Donated Shame");
-run_source!(Moderation, "Moderation");

@@ -124,8 +124,10 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, count))
 }
 
-pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32, bool)> {
+pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32, bool, bool)> {
     move |input| {
+        // There's an extra space -- for now
+        let (input, offworld) = opt(tag("Offworld  ")).parse(input)?;
         let (input, very_foul) = opt(tag("Very ")).parse(input)?;
         // Starting in s20 there's an extra space. unfortunately
         let (input, _) = opt(tag(" ")).parse(input)?;
@@ -133,7 +135,7 @@ pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserRes
         let (input, _) = tag(if double_strike { "Foul Balls. " } else { "Foul Ball. " }).parse(input)?;
         let (input, (balls, strikes)) = parse_count(input)?;
 
-        Ok((input, (balls, strikes, very_foul.is_some())))
+        Ok((input, (balls, strikes, very_foul.is_some(), offworld.is_some())))
     }
 }
 
@@ -2571,8 +2573,7 @@ pub(crate) enum ParsedLedgerLineV1<'a> {
     Magnified,
 }
 
-pub(crate) enum ParsedLedgerLineV2 {
-    Run,
+pub(crate) enum ParsedLedgerV2Modifier {
     Magnified {
         position: ActivePositionType,
         runs_before: f64,
@@ -2588,6 +2589,10 @@ pub(crate) enum ParsedLedgerLineV2 {
         runs_after: f64,
     },
     Subtractor {
+        runs_before: f64,
+        runs_after: f64,
+    },
+    AcidicPitch {
         runs_before: f64,
         runs_after: f64,
     },
@@ -2626,40 +2631,43 @@ pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<ParsedLedgerLine
     )).parse(input)
 }
 
-pub(crate) fn parse_score_ledger_v2(ledger_label: &str) -> impl Fn(&str) -> ParserResult<Vec<ParsedLedgerLineV2>> + '_ {
+pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> ParserResult<bool> + '_ {
     move |input| {
-        separated_list1(tag("\n"), parse_ledger_line_v2(ledger_label)).parse(input)
+        let (input, run) = opt(terminated(pair(tag(ledger_label), tag(": 1 Run")), opt(tag("\n")))).parse(input)?;
+        Ok((input, run.is_some()))
     }
 }
 
-pub(crate) fn parse_ledger_line_v2(ledger_label: &str) -> impl Fn(&str) -> ParserResult<ParsedLedgerLineV2> + '_ {
-    move |input| {
-        alt((
-            pair(tag(ledger_label), tag(": 1 Run")).map(|_| ParsedLedgerLineV2::Run),
-            parse_ledger_player_magnified
-                .map(|(position, runs_before, runs_after)| ParsedLedgerLineV2::Magnified {
-                    position,
-                    runs_before,
-                    runs_after,
-                }),
-            parse_ledger_negating("Underhanded")
-                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Underhanded {
-                    runs_before,
-                    runs_after,
-                }),
-            parse_ledger_sun_point1
-                .map(|(value, runs_before, runs_after)| ParsedLedgerLineV2::SunPoint1 {
-                    value,
-                    runs_before,
-                    runs_after,
-                }),
-            parse_ledger_negating("Subtractor")
-                .map(|(runs_before, runs_after)| ParsedLedgerLineV2::Subtractor {
-                    runs_before,
-                    runs_after,
-                }),
-        )).parse(input)
-    }
+pub(crate) fn parse_ledger_v2_modifier(input: &str) -> ParserResult<Option<ParsedLedgerV2Modifier>> {
+    opt(terminated(alt((
+        parse_ledger_player_magnified
+            .map(|(position, runs_before, runs_after)| ParsedLedgerV2Modifier::Magnified {
+                position,
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_negating("Underhanded")
+            .map(|(runs_before, runs_after)| ParsedLedgerV2Modifier::Underhanded {
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_sun_point1
+            .map(|(value, runs_before, runs_after)| ParsedLedgerV2Modifier::SunPoint1 {
+                value,
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_negating("Subtractor")
+            .map(|(runs_before, runs_after)| ParsedLedgerV2Modifier::Subtractor {
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_acidic_pitch
+            .map(|(runs_before, runs_after)| ParsedLedgerV2Modifier::AcidicPitch {
+                runs_before,
+                runs_after,
+            }),
+    )), opt(tag("\n")))).parse(input)
 }
 
 pub(crate) fn parse_ledger_player_magnified(input: &str) -> ParserResult<(ActivePositionType, f64, f64)> {
@@ -2694,6 +2702,27 @@ pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f6
     let (input, _) = tag(" = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
     Ok((input, (value, runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)> {
+    let (input, _) = tag("\tAcidic Pitch: ").parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" + -0.1 = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<(f64)> {
+    let (input, _) = tag("Moderation: ").parse(input)?;
+    let (input, runs) = double.parse(input)?;
+    let (input, _) = tag(" Unruns").parse(input)?;
+    Ok((input, runs))
+}
+
+pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<()> {
+    let (input, _) = tag("Triple Threat: 0.3 Unrun").parse(input)?;
+    let (input, _) = opt(tag("\n")).parse(input)?;
+    Ok((input, ()))
 }
 
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
@@ -2779,13 +2808,29 @@ pub(crate) fn parse_tunnels_stole_item(thief_name: &str) -> impl Fn(&str) -> Par
     }
 }
 
-
 pub(crate) fn parse_balloon_inflated_from_win(before_s20d81: bool) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
         let (input, stadium_name) = parse_terminated(if before_s20d81 { " inflated "} else { " inflates " }).parse(input)?;
         let (input, _) = tag("10 Balloons!").parse(input)?;
 
         Ok((input, stadium_name))
+    }
+}
+
+pub(crate) fn parse_sun30(before_s20d81: bool) -> impl Fn(&str) -> ParserResult<(&str, &str, Option<&str>)> {
+    move |input| {
+        let (input, balloon) = opt(parse_balloon_inflated_from_win(before_s20d81)).parse(input)?;
+        // TODO parse_newline_if(do_parse: bool) function that gets used everywhere I have this pattern
+        let (input, _) = if balloon.is_some() {
+            tag("\n").parse(input)?
+        } else {
+            (input, "")
+        };
+        let (input, _) = tag("The ").parse(input)?;
+        let (input, home_team_nickname) = parse_terminated(" and ").parse(input)?;
+        let (input, away_team_nickname) = parse_terminated(" reached Extra Innings.\nSun 30 smiled upon them.").parse(input)?;
+
+        Ok((input, (away_team_nickname, home_team_nickname, balloon)))
     }
 }
 

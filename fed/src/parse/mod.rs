@@ -8,7 +8,7 @@ mod parse_wrapper;
 use std::collections::HashMap;
 use crate::PeekableWithLogging;
 use std::sync::{Arc, Mutex};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use nom::combinator::opt;
 use nom::Parser;
 use serde::Deserialize;
@@ -993,7 +993,7 @@ pub fn parse_next_event(
         }
         EventType::FoulBall => {
             let pitch = event.parse_pitch()?;
-            let (balls, strikes, very_foul) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
+            let (balls, strikes, very_foul, offworld) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
             let batter_item_damage = event.parse_item_damage_and_name(true)?;
             let birds = event.parse_birds();
 
@@ -1005,6 +1005,7 @@ pub fn parse_next_event(
                 batter_item_damage,
                 birds,
                 very_foul,
+                offworld,
             }
         }
         EventType::RunsOverflowing => {
@@ -3541,12 +3542,34 @@ pub fn parse_next_event(
         EventType::WeatherEvent => { todo!() }
         EventType::ElementAddedToItem => { todo!() }
         EventType::Sun30Smiles => {
-            let balloons = event.next_parse_opt(parse_balloon_inflated_from_win(false));
+            let (away_team_nickname, home_team_nickname, balloons) = event.next_parse(parse_sun30(false))?;
+            assert!(is_known_team_nickname(away_team_nickname));
+            assert!(is_known_team_nickname(home_team_nickname));
+
+            // Need this early to query the home and away team names
+            let game = event.game(unscatter, attractor_secret_base)?;
+
+            fn event_has_team_id(desired_id: Uuid) -> impl Fn(EventParseWrapper) -> bool {
+                move |mut child: EventParseWrapper| {
+                    child.next_team_id().map(|team_id| team_id == desired_id).unwrap_or(false)
+                }
+            }
 
             // I checked the order of these
-            let home_win_event = event.next_child(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })?;
-            let away_win_event = event.next_child(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })?;
+            // Then I ran into event d7f39a58-f148-4506-a59f-7e14c3680d55, where the beams and spies
+            // were playing but the spies (away team) didn't have a Win event. Time will tell if the
+            // same thing can happen to the home team.
+            let home_win_event = event.next_child_if(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason },
+                                                     event_has_team_id(game.home_team))?;
+            let away_win_event = event.next_child_if(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason },
+                                                     event_has_team_id(game.away_team))?;
 
+            // This may not be always true, but until I have proof it isn't I'm going to assert it is
+            let away_win_event = away_win_event
+                .expect("If this expect ever panics I want to know about it");
+
+            // TODO this is slightly redundant after doing the work necessary to support optional
+            //   Win sub-events
             fn parse_win(mut win_event: EventParseWrapper) -> Result<ShortEarnedWin, FeedParseError> {
                 let team_nickname = win_event.next_parse(parse_sun_30_win)?;
                 assert!(is_known_team_nickname(team_nickname));
@@ -3557,10 +3580,15 @@ pub fn parse_next_event(
                 })
             }
 
+            let home = match home_win_event {
+                Some(e) => { Either::Left(parse_win(e)?) }
+                None => { Either::Right(home_team_nickname.to_string()) }
+            };
+
             FedEventData::Sun30Smiles {
-                game: event.game(unscatter, attractor_secret_base)?,
-                away_win: parse_win(away_win_event)?,
-                home_win: parse_win(home_win_event)?,
+                game,
+                away: parse_win(away_win_event)?,
+                home,
                 balloons: balloons.map(str::to_string),
             }
         }

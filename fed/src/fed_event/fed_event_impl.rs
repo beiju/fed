@@ -1,12 +1,12 @@
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use serde_json::json;
 use std::fmt::Write;
 use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
 use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin};
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
@@ -245,8 +245,9 @@ impl FedEvent {
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
-            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds, very_foul } => {
+            FedEventData::FoulBall { game, pitch, balls, strikes, batter_item_damage, birds, very_foul, offworld } => {
                 eb.set_game(game);
+                let offworld = if offworld { "Offworld " } else { "" };
                 let very = if very_foul { "Very" } else { "" };
                 let foul_ball_text = if pitch.double_strike.is_some() {
                     eb.set_category(EventCategory::Special);
@@ -259,7 +260,7 @@ impl FedEvent {
                 let extra_space = if self.season < 19 { "" } else { " " };
 
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
+                eb.push_description(&format!("{offworld}{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
                 eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_birds(birds);
                 eb.build(EventType::FoulBall)
@@ -3823,32 +3824,44 @@ impl FedEvent {
 
                 eb.build(EventType::SunSunPressure)
             }
-            FedEventData::Sun30Smiles { game, away_win, home_win, balloons } => {
+            FedEventData::Sun30Smiles { game, away, home, balloons } => {
                 let home_team_id = game.home_team;
                 let away_team_id = game.away_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
 
+                let home_team_nickname = match &home {
+                    Either::Left(win) => { &win.team_nickname }
+                    Either::Right(team_nickname) => { team_nickname }
+                };
+
                 if let Some(stadium_name) = balloons {
                     eb.push_description(&format!("{stadium_name} inflates 10 Balloons!"));
                 }
-                eb.push_description(&format!("The {} and {} reached Extra Innings.", home_win.team_nickname, away_win.team_nickname));
+                eb.push_description(&format!("The {} and {} reached Extra Innings.", home_team_nickname, away.team_nickname));
                 eb.push_description("Sun 30 smiled upon them.");
 
-                for (win, team_id) in [(home_win, home_team_id), (away_win, away_team_id)] {
-                    eb.push_child(win.sub_event, |mut child_eb| {
-                        child_eb.set_category(EventCategory::Outcomes);
-                        child_eb.push_description(&format!("Sun 30 granted the {} a Win.", win.team_nickname));
-                        child_eb.push_team_tag(team_id);
-                        child_eb.push_metadata_i64("amount", 1);
-                        child_eb.push_metadata_i64("before", win.wins_after - 1);
-                        child_eb.push_metadata_i64("after", win.wins_after);
-                        child_eb.push_metadata_str_vec("lines", vec![
-                            "Sun 30: 1".to_string(),
-                            "Sun(Sun): 1 ^ 2 = 1".to_string(),
-                        ]);
-                        child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
-                    });
+                for (maybe_win, team_id) in [(home, home_team_id), (Either::Left(away), away_team_id)] {
+                    match maybe_win {
+                        Either::Left(win) => {
+                            eb.push_child(win.sub_event, |mut child_eb| {
+                                child_eb.set_category(EventCategory::Outcomes);
+                                child_eb.push_description(&format!("Sun 30 granted the {} a Win.", win.team_nickname));
+                                child_eb.push_team_tag(team_id);
+                                child_eb.push_metadata_i64("amount", 1);
+                                child_eb.push_metadata_i64("before", win.wins_after - 1);
+                                child_eb.push_metadata_i64("after", win.wins_after);
+                                child_eb.push_metadata_str_vec("lines", vec![
+                                    "Sun 30: 1".to_string(),
+                                    "Sun(Sun): 1 ^ 2 = 1".to_string(),
+                                ]);
+                                child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
+                            });
+                        }
+                        Either::Right(_) => {
+                            eb.push_phantom_child();
+                        }
+                    }
                 }
 
                 eb.build(EventType::Sun30Smiles)

@@ -219,10 +219,6 @@ impl<'e> EventParseWrapper<'e> {
         Ok(id)
     }
 
-    pub fn next_child(&mut self, expected_type: EventType) -> Result<Self, FeedParseError> {
-        self.next_child_any(&[expected_type])
-    }
-
     pub fn next_child_any(&mut self, expected_types: &[EventType]) -> Result<Self, FeedParseError> {
         let (child, rest) = self.children.split_first()
             .ok_or_else(|| {
@@ -243,6 +239,10 @@ impl<'e> EventParseWrapper<'e> {
         self.children = rest;
 
         Self::new(child)
+    }
+
+    pub fn next_child(&mut self, expected_type: EventType) -> Result<Self, FeedParseError> {
+        self.next_child_any(&[expected_type])
     }
 
     pub fn next_child_opt(&mut self, expected_type: EventType) -> Result<Option<Self>, FeedParseError> {
@@ -295,7 +295,7 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_child_if_any<F>(&mut self, expected_types: &[EventType], pred: F) -> Result<Option<Self>, FeedParseError>
-        where F: Fn(Self) -> bool {
+    where F: Fn(Self) -> bool {
         let Some((child, rest)) = self.children.split_first() else {
             return Ok(None);
         };

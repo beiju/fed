@@ -1,11 +1,8 @@
 use nom::{Finish, Parser};
-use nom::bytes::complete::tag;
-use nom::combinator::opt;
-use nom::error::convert_error;
+use nom::error::{convert_error, VerboseError};
 use eventually_api::EventType;
 use with_structure::WithStructure;
-use crate::{FeedParseError, HomeRunLedger, Ledger, LedgerRun, LedgerRunModifier, LedgerV2, RunSource, SimpleLedgerV2};
-use crate::parse::parse_wrapper::EventParseWrapper;
+use crate::{FeedParseError, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, RunSource, SimpleLedgerV2, TripleThreatLedger};
 use crate::parse::parsers::*;
 
 pub trait ParseableLedger {
@@ -14,53 +11,58 @@ pub trait ParseableLedger {
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError>;
 }
 
+fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), FeedParseError> {
+    let mut modifiers = Vec::new();
+    loop {
+        let (rest, parsed_modifier) = parse_ledger(parse_ledger_v2_modifier, ledger)?;
+        ledger = rest;
+
+        match parsed_modifier {
+            None => { break Ok((ledger, modifiers))  }
+            Some(ParsedLedgerV2Modifier::Magnified { position, .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::Magnified(position));
+            }
+            Some(ParsedLedgerV2Modifier::Underhanded { .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::Underhanded);
+            }
+            Some(ParsedLedgerV2Modifier::SunPoint1 { value, .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::SunPoint1(value));
+            }
+            Some(ParsedLedgerV2Modifier::Subtractor { .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::Subtractor);
+            }
+            Some(ParsedLedgerV2Modifier::AcidicPitch { .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::AcidicPitch);
+            }
+        }
+    }
+}
+
 impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<RunSourceT> {
     type Ledger = Self;
 
-    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
-        let (rest, lines) = parse_score_ledger_v2(RunSourceT::label()).parse(ledger).finish()
-            .map_err(|e| {
-                FeedParseError::ScoreLedgerParseError {
-                    event_type: EventType::RunsScored,
-                    err: convert_error(ledger, e),
-                    original: ledger.to_string(),
-                }
-            })?;
-
+    fn parse(mut ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let mut runs = Vec::new();
-        let mut active_run = None;
 
-        for line in lines {
-            match line {
-                ParsedLedgerLineV2::Run => {
-                    if let Some(finished_run) = active_run.replace(LedgerRun::default()) {
-                        runs.push(finished_run);
-                    }
-                },
-                ParsedLedgerLineV2::Magnified { position, .. } => { // TODO Verify run numbers are as expected
-                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
-                    run.modifiers.push(LedgerRunModifier::Magnified(position));
-                }
-                ParsedLedgerLineV2::Underhanded { .. } => { // TODO Verify run numbers are as expected
-                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
-                    run.modifiers.push(LedgerRunModifier::Underhanded);
-                }
-                ParsedLedgerLineV2::SunPoint1 { value, .. } => { // TODO Verify run numbers are as expected
-                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
-                    run.modifiers.push(LedgerRunModifier::SunPoint1(value));
-                }
-                ParsedLedgerLineV2::Subtractor { .. } => { // TODO Verify run numbers are as expected
-                    let run = active_run.as_mut().unwrap(); // TODO make this a Result
-                    run.modifiers.push(LedgerRunModifier::Subtractor);
-                }
+        loop {
+            // Try to parse the ledger line; if we can, continue. If we can't, break
+            let mut parsed_run;
+            (ledger, parsed_run) = parse_ledger(parse_ledger_v2_run(RunSourceT::label()), ledger)?;
+
+            if !parsed_run {
+                break Ok((ledger, SimpleLedgerV2::from_runs(runs)));
             }
-        }
 
-        if let Some(finished_run) = active_run.take() {
-            runs.push(finished_run);
-        }
+            let mut run = LedgerRun::default();
+            (ledger, run.modifiers) = parse_modifiers(ledger)?;
 
-        Ok((rest, SimpleLedgerV2::from_runs(runs)))
+            runs.push(run);
+        }
     }
 }
 
@@ -70,15 +72,15 @@ impl ParseableLedger for HomeRunLedger {
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, home_run) = SimpleLedgerV2::parse(ledger)?;
 
-        let (ledger, big_bucket) = if ledger.starts_with("\nBig Bucket") {
-            let (rest, bucket) = SimpleLedgerV2::parse(&ledger[1..])?;
+        let (ledger, big_bucket) = if ledger.starts_with("Big Bucket") {
+            let (rest, bucket) = SimpleLedgerV2::parse(&ledger)?;
             (rest, Some(bucket))
         } else {
             (ledger, None)
         };
 
-        let (ledger, alley_oop) = if ledger.starts_with("\nSlam Dunk") {
-            let (rest, oop) = SimpleLedgerV2::parse(&ledger[1..])?;
+        let (ledger, alley_oop) = if ledger.starts_with("Slam Dunk") {
+            let (rest, oop) = SimpleLedgerV2::parse(&ledger)?;
             (rest, Some(oop))
         } else {
             (ledger, None)
@@ -89,5 +91,37 @@ impl ParseableLedger for HomeRunLedger {
             big_bucket,
             alley_oop,
         }))
+    }
+}
+
+fn parse_ledger<'a, O>(mut parser: impl Parser<&'a str, O, VerboseError<&'a str>>, ledger: &'a str) -> Result<(&'a str, O), FeedParseError> {
+    parser.parse(ledger)
+        .finish()
+        .map_err(|e| {
+            FeedParseError::ScoreLedgerParseError {
+                event_type: EventType::RunsScored,
+                err: convert_error(ledger, e),
+                original: ledger.to_string(),
+            }
+        })
+}
+
+impl ParseableLedger for ModerationLedger {
+    type Ledger = Self;
+
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        let (ledger, value) = parse_ledger(parse_ledger_moderation, ledger)?;
+        Ok((ledger, ModerationLedger::new(value)))
+    }
+}
+
+impl ParseableLedger for TripleThreatLedger {
+    type Ledger = Self;
+
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        let (ledger, _) = parse_ledger(parse_ledger_triple_threat, ledger)?;
+        let (ledger, modifiers) = parse_modifiers(ledger)?;
+
+        Ok((ledger, TripleThreatLedger::new(modifiers)))
     }
 }

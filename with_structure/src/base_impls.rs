@@ -35,6 +35,18 @@ impl<T: WithStructure> WithStructure for Option<T> {
     }
 }
 
+#[cfg(feature = "either")]
+impl<L: WithStructure, R: WithStructure> WithStructure for either::Either<L, R> {
+    type Structure = either::Either<L::Structure, R::Structure>;
+
+    fn structure(&self) -> Self::Structure {
+        match self {
+            either::Either::Left(inner) => { either::Either::Left(inner.structure()) }
+            either::Either::Right(inner) => { either::Either::Right(inner.structure()) }
+        }
+    }
+}
+
 impl<T: WithStructure> WithStructure for PhantomData<T> {
     type Structure = MonostateStructure;
 

@@ -1978,6 +1978,19 @@ pub enum LedgerRunModifier {
     // blaseball and javascript is javascript
     SunPoint1(f64),
     Subtractor,
+    AcidicPitch,
+}
+
+struct RunDisplay(f64);
+
+impl Display for RunDisplay {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0.fract() == 0. {
+            write!(f, "{}", self.0)
+        } else {
+            write!(f, "{:.1}", self.0)
+        }
+    }
 }
 
 impl LedgerRunModifier {
@@ -1987,6 +2000,7 @@ impl LedgerRunModifier {
             LedgerRunModifier::Underhanded => { in_value * -1.0 }
             LedgerRunModifier::SunPoint1(value) => { in_value + value }
             LedgerRunModifier::Subtractor => { in_value * -1.0 }
+            LedgerRunModifier::AcidicPitch => { in_value - 0.1 }
         }
     }
 
@@ -1994,22 +2008,27 @@ impl LedgerRunModifier {
         Ok(match self {
             LedgerRunModifier::Magnified(position) => {
                 let run_value_after = run_value_before * 2.;
-                write!(f, "\t{} Magnified 2x: {run_value_before} * 2 = {run_value_after}", position.title())?;
+                write!(f, "\t{} Magnified 2x: {} * 2 = {}", position.title(), RunDisplay(run_value_before), RunDisplay(run_value_after))?;
                 run_value_after
             }
             LedgerRunModifier::Underhanded => {
                 let run_value_after = run_value_before * -1.;
-                write!(f, "\tUnderhanded: {run_value_before} * -1 = {run_value_after}")?;
+                write!(f, "\tUnderhanded: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
                 run_value_after
             }
             LedgerRunModifier::SunPoint1(value) => {
                 let run_value_after = run_value_before + value;
-                write!(f, "\tSun .1: {run_value_before} + {value} = {run_value_after}")?;
+                write!(f, "\tSun .1: {} + {value} = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
                 run_value_after
             }
             LedgerRunModifier::Subtractor => {
                 let run_value_after = run_value_before * -1.;
-                write!(f, "\tSubtractor: {run_value_before} * -1 = {run_value_after}")?;
+                write!(f, "\tSubtractor: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                run_value_after
+            }
+            LedgerRunModifier::AcidicPitch => {
+                let run_value_after = run_value_before - 0.1;
+                write!(f, "\tAcidic Pitch: {} + -0.1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
                 run_value_after
             }
         })
@@ -2155,6 +2174,73 @@ impl Display for HomeRunLedger {
     }
 }
 
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct ModerationLedger {
+    // Will always be negative, indicating Unruns, except for that one time it was bugged and gave
+    // the talkers runs instead
+    pub num_runs: f64,
+}
+
+impl ModerationLedger {
+    pub fn new(num_runs: f64) -> Self {
+        Self { num_runs }
+    }
+}
+
+impl LedgerV2 for ModerationLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize { 1 }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        iter::once(self.num_runs)
+    }
+}
+
+impl Display for ModerationLedger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Moderation: {} Unruns", RunDisplay(self.num_runs))
+    }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct TripleThreatLedger {
+    pub modifiers: Vec<LedgerRunModifier>,
+}
+
+impl TripleThreatLedger {
+    pub fn new(modifiers: Vec<LedgerRunModifier>) -> Self {
+        Self { modifiers }
+    }
+}
+
+impl LedgerV2 for TripleThreatLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize { 1 }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        iter::once(0.3)
+    }
+}
+
+impl Display for TripleThreatLedger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Triple Threat: {} Unrun", RunDisplay(0.3))?;
+
+        for modifier in &self.modifiers {
+            write!(f, "\n")?;
+            modifier.modify_and_write(-0.3, &mut *f)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
     None,
@@ -2203,15 +2289,10 @@ impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
                             write!(f, " + ")?;
                         }
 
-                        write!(f, "{value}")?;
+                        write!(f, "{}", RunDisplay(value))?;
                     }
 
-                    // To my horror, my code was returning a .9999999.... where blaseball's didn't
-                    if runs_total_value.fract() == 0. {
-                        write!(f, " = {runs_total_value}")?;
-                    } else {
-                        write!(f, " = {runs_total_value:.1}")?;
-                    }
+                    write!(f, " = {}", RunDisplay(runs_total_value))?;
                 }
             }
         }
@@ -2528,6 +2609,9 @@ pub enum FedEventData {
 
         /// True if this was a Very foul ball (or balls), false otherwise.
         very_foul: bool,
+
+        /// True if this was an Offworld foul ball (or balls), false otherwise.
+        offworld: bool,
     },
 
     /// Strike, swinging
@@ -2981,7 +3065,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StrikeoutSwinging>>>,
+        score_summary: Option<ScoreSummary<TripleThreatLedger>>,
     },
 
     /// Strikeout looking
@@ -3020,7 +3104,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StrikeoutLooking>>>,
+        score_summary: Option<ScoreSummary<TripleThreatLedger>>,
     },
 
     /// Player drew a walk
@@ -5580,7 +5664,7 @@ pub enum FedEventData {
         hype: Option<Hype>,
 
         /// The associated score summary, if applicable.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<Moderation>>>,
+        score_summary: Option<ScoreSummary<ModerationLedger>>,
     },
 
     /// Player placed and stole to The Fifth Base
@@ -5847,10 +5931,15 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// Metadata for the away team's Win
-        away_win: ShortEarnedWin,
+        away: ShortEarnedWin,
 
-        /// Metadata for the home team's Win
-        home_win: ShortEarnedWin,
+        /// Metadata for the home team's Win, if the corresponding earned-a-Win sub-event exists.
+        /// Otherwise, just the team's nickname.
+        ///
+        /// The earned-a-Win sub-event doesn't always exist (see event
+        /// d7f39a58-f148-4506-a59f-7e14c3680d55) but I don't know why. If you know why, please
+        /// contact beiju in the SIBR discord.
+        home: Either<ShortEarnedWin, String>,
 
         /// If Balloons were inflated as a result of this Win, this is the name of the Stadium.
         /// Otherwise `null`. The stadium is always the home stadium, and the number of Balloons
