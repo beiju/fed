@@ -1386,23 +1386,33 @@ pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserRes
     Ok((input, (seeker_name, sought_name)))
 }
 
-pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>)> {
+pub(crate) fn parse_incineration(input: &str) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>, Option<&str>)> {
     alt((
-        parse_incineration_normal.map(|(v, r, a)| (v, r, None, a)),
+        parse_incineration_normal.map(|(v, r, a, m)| (v, r, None, a, m)),
         // You can ambush on Unstable but I haven't implemented it yet, that's the last None
-        parse_incineration_unstable.map(|(v, r, u)| (v, r, Some(u), None)),
+        parse_incineration_unstable.map(|(v, r, u)| (v, r, Some(u), None, None)),
     )).parse(input)
 }
 
-pub(crate) fn parse_incineration_normal(input: &str) -> ParserResult<(&str, &str, Option<(&str, &str)>)> {
+pub(crate) fn parse_incineration_normal(input: &str) -> ParserResult<(&str, &str, Option<(&str, &str)>, Option<&str>)> {
     let (input, _) = tag("Rogue Umpire incinerated ").parse(input)?;
-    let (input, victim_name) = parse_terminated("!\nThey're replaced by ").parse(input)?;
+    let (input, victim_name) = parse_terminated("!\n").parse(input)?;
+    let (input, heat_magnet) = opt(parse_heat_magnet).parse(input)?;
+    let (input, _) = tag("They're replaced by ").parse(input)?;
     let (input, (replacement_name, ambush)) = alt((
         parse_ambush.map(|(i, a, t)| (i, Some((a, t)))),
         parse_until_period_eof.map(|i| (i, None)),
     ))(input)?;
 
-    Ok((input, (victim_name, replacement_name, ambush)))
+    Ok((input, (victim_name, replacement_name, ambush, heat_magnet)))
+}
+
+pub(crate) fn parse_heat_magnet(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The Heat Magnet catches. The Thermal Converter hums.\n").parse(input)?;
+    let (input, _) = tag("5 Runs generated for the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated("!\n").parse(input)?;
+
+    Ok((input, team_nickname))
 }
 
 pub(crate) fn parse_ambush(input: &str) -> ParserResult<(&str, &str, &str)> {

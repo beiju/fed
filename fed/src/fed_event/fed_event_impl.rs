@@ -1745,7 +1745,7 @@ impl FedEvent {
 
                 eb.build(EventType::ReturnFromElsewhere)
             }
-            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush, pressure_built } => {
+            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush, pressure_built, heat_magnet } => {
                 let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
 
                 eb.set_game(game);
@@ -1759,6 +1759,12 @@ impl FedEvent {
                 }
 
                 eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
+
+                if heat_magnet.is_some() {
+                    eb.push_description("The Heat Magnet catches. The Thermal Converter hums.");
+                    eb.push_description(&format!("5 Runs generated for the {team_nickname}!"));
+                }
+
                 eb.push_description(&format!("They're replaced by {replacement_name}."));
 
                 eb.push_child(incin_child, |mut child_eb| {
@@ -1771,7 +1777,14 @@ impl FedEvent {
                         child_eb.set_category(EventCategory::Special);
                         child_eb.push_metadata_str("effect", "Incineration");
                         child_eb.push_metadata_i32("weather", Weather::SolarEclipse);
-                        child_eb.build(EventType::WeatherEvent)
+                        // I suspect the season (and possibly day) is the actual signal and
+                        // heat_magnet is just an accidental conflation, but I'll keep this until
+                        // it's proven wrong.
+                        if heat_magnet.is_none() {
+                            child_eb.build(EventType::WinCollectedRegular)
+                        } else {
+                            child_eb.build(EventType::WeatherEvent)
+                        }
                     }
                 });
 
@@ -1858,87 +1871,9 @@ impl FedEvent {
                     });
                 }
 
+                eb.push_opt_direct_score_summary(heat_magnet.as_ref());
+
                 eb.build(EventType::Incineration)
-                // let location_int: i64 = location.into();
-                // let mut prefix = String::new();
-                // let mut suffix = String::new();
-                // let mut children = vec![
-                //     EventBuilderChild::new(incin_child)
-                //         .update(EventBuilderUpdate {
-                //             category: ,
-                //             r#type: ,
-                //             description: format!("Rogue Umpire incinerated {victim_name}!"),
-                //             team_tags: vec![team_id],
-                //             player_tags: vec![victim_id],
-                //             ..Default::default()
-                //         }),
-                //     EventBuilderChild::new(enter_hall_child)
-                //         .update(EventBuilderUpdate {
-                //             category: EventCategory::Changes,
-                //             r#type: EventType::EnterHallOfFlame,
-                //             description: format!("{victim_name} entered the Hall of Flame."),
-                //             player_tags: vec![victim_id],
-                //             ..Default::default()
-                //         }),
-                //     EventBuilderChild::new(hatch_child)
-                //         .update(EventBuilderUpdate {
-                //             category: EventCategory::Changes,
-                //             r#type: EventType::PlayerHatched,
-                //             description: format!("{replacement_name} has been hatched from the field of eggs."),
-                //             player_tags: vec![replacement_id],
-                //             ..Default::default()
-                //         })
-                //         .metadata(json!({ "id": replacement_id })),
-                //     EventBuilderChild::new(replace_child)
-                //         .update(EventBuilderUpdate {
-                //             category: EventCategory::Changes,
-                //             r#type: EventType::PlayerBornFromIncineration,
-                //             description: format!("{replacement_name} replaced the incinerated {victim_name}."),
-                //             team_tags: vec![team_id],
-                //             player_tags: vec![victim_id, replacement_id],
-                //             ..Default::default()
-                //         })
-                //         .metadata(json!({
-                //             "inPlayerId": replacement_id,
-                //             "inPlayerName": replacement_name,
-                //             "location": location_int,
-                //             "outPlayerId": victim_id,
-                //             "outPlayerName": victim_name,
-                //             "teamId": team_id,
-                //             "teamName": team_nickname,
-                //         })),
-                // ];
-                //
-                // if let Some(chain) = unstable_chain {
-                //     prefix = format!("{victim_name} is Unstable!\nA Debt was collected.\n");
-                //     suffix = format!("\nThe Instability chains to {}!", chain.player_name);
-                //     children.push(
-                //         EventBuilderChild::new(&chain.sub_event)
-                //             .update(EventBuilderUpdate {
-                //                 category: EventCategory::Changes,
-                //                 r#type: EventType::AddedMod,
-                //                 description: format!("The Instability chains to {}!", chain.player_name),
-                //                 team_tags: vec![chain.team_id],
-                //                 player_tags: vec![chain.player_id],
-                //                 ..Default::default()
-                //             })
-                //             .metadata(json!({
-                //                 "mod": "MARKED",
-                //                 "type": ModDuration::Weekly as i64,
-                //             }))
-                //     )
-                // }
-                //
-                // event_builder.for_game(game)
-                //     .fill(EventBuilderUpdate {
-                //         r#type: EventType::Incineration,
-                //         category: EventCategory::Special,
-                //         description: format!("{prefix}Rogue Umpire incinerated {victim_name}!\nThey're replaced by {replacement_name}.{suffix}"),
-                //         player_tags: vec![victim_id, replacement_id],
-                //         ..Default::default()
-                //     })
-                //     .children(children)
-                //     .build()
             }
             FedEventData::PitcherChange { game, team_nickname: team_name, pitcher_id, pitcher_name } => {
                 event_builder.for_game(&game)

@@ -1668,7 +1668,7 @@ pub fn parse_next_event(
             }
         }
         EventType::Incineration => {
-            let (victim_name, replacement_name, unstable_chain_name, ambush) = event.next_parse(parse_incineration)?;
+            let (victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed) = event.next_parse(parse_incineration)?;
 
             // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
             // Incineration sub-event instead of adding a new event type.
@@ -1701,6 +1701,9 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
+            let heat_magnet = event.parse_score_summary()?;
+            assert_eq!(heat_magnet.is_some(), heat_magnet_parsed.is_some());
+
             let team_nickname = replace_child.metadata_str("teamName")?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::Incineration {
@@ -1721,6 +1724,7 @@ pub fn parse_next_event(
                 ),
                 ambush,
                 pressure_built,
+                heat_magnet,
             }
         }
         EventType::IncinerationBlocked => {

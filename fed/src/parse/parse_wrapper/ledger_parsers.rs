@@ -1,8 +1,9 @@
 use nom::{Finish, Parser};
+use nom::bytes::complete::tag;
 use nom::error::{convert_error, VerboseError};
 use eventually_api::EventType;
 use with_structure::WithStructure;
-use crate::{FeedParseError, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, RunSource, SimpleLedgerV2, TripleThreatLedger};
+use crate::{FeedParseError, HeatMagnetLedger, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, RunSource, SimpleLedgerV2, TripleThreatLedger};
 use crate::parse::parsers::*;
 
 pub trait ParseableLedger {
@@ -123,5 +124,15 @@ impl ParseableLedger for TripleThreatLedger {
         let (ledger, modifiers) = parse_modifiers(ledger)?;
 
         Ok((ledger, TripleThreatLedger::new(modifiers)))
+    }
+}
+
+impl ParseableLedger for HeatMagnetLedger {
+    type Ledger = Self;
+
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        let (ledger, _) = parse_ledger(tag("Heat Magnet: 5 Runs"), ledger)?;
+
+        Ok((ledger, HeatMagnetLedger::new()))
     }
 }

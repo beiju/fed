@@ -2241,6 +2241,33 @@ impl Display for TripleThreatLedger {
     }
 }
 
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct HeatMagnetLedger;
+
+impl HeatMagnetLedger {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl LedgerV2 for HeatMagnetLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize { 1 }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        iter::once(5.0)
+    }
+}
+
+impl Display for HeatMagnetLedger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Heat Magnet: 5 Runs")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
     None,
@@ -4059,7 +4086,11 @@ pub enum FedEventData {
 
         /// In season 20, incinerations started building Sun(Sun)'s Pressure. This holds the
         /// metadata for the pressure building sub-event, if applicable
-        pressure_built: Option<PressureBuilt>
+        pressure_built: Option<PressureBuilt>,
+
+        /// If the Heat Magnet activated on this Incineration, contains the score summary for the
+        /// resulting score. Otherwise `null`.
+        heat_magnet: Option<ScoreSummary<HeatMagnetLedger>>,
     },
 
     /// Pitcher change event. This happens automatically when something incapacitates the active
