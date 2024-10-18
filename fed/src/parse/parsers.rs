@@ -2913,3 +2913,9 @@ pub(crate) fn parse_weaker_apart(first_player_name: &str) -> impl Fn(&str) -> Pa
         Ok((input, names))
     }
 }
+
+pub(crate) fn parse_trade(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" sought out a trade, but nothing caught their eye.").parse(input)?;
+
+    Ok((input, player_name))
+}

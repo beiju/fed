@@ -3879,6 +3879,22 @@ impl FedEvent {
 
                 eb.build(EventType::Walk)
             }
+            FedEventData::NothingToTrade { game, trader_name, trader_id, victim_id, sub_event } => {
+                eb.set_game(game);
+                let description = format!("{trader_name} sought out a trade, but nothing caught their eye.");
+                eb.push_description(&description);
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_description(&description);
+                    child_eb.push_player_tag(trader_id);
+                    child_eb.push_player_tag(victim_id);
+
+                    child_eb.build(EventType::TradeFailed)
+                });
+
+                eb.build(EventType::Trade)
+            }
         };
 
         vec![item]

@@ -6049,6 +6049,25 @@ pub enum FedEventData {
         // TODO When is it present? Theory: only the first time
         sensed_foul_play_sub_event: Option<SubEvent>,
     },
+
+    /// Player sought out a trade, but nothing caught their eye
+    NothingToTrade {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who sought out the trade
+        trader_name: String,
+
+        /// Uuid of the player who sought out the trade
+        trader_id: Uuid,
+
+        /// Uuid of the player who the trader looked at
+        victim_id: Uuid,
+
+        /// Sub-event associated with finding nothing to trade. Not sure why this requires a
+        /// sub-event.
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6292,6 +6311,7 @@ impl FedEventData {
             FedEventData::BadGatewayBroken { .. } => { None }
             FedEventData::TumbleweedSounds { .. } => { None }
             FedEventData::IntentionalWalk { game, .. } => { Some(game) }
+            FedEventData::NothingToTrade { game, .. } => { Some(game) }
         }
     }
 }

@@ -3625,6 +3625,23 @@ pub fn parse_next_event(
                 team_id: event.next_team_id()?,
             }
         }
+        EventType::Trade => {
+            let player_name = event.next_parse(parse_trade)?;
+
+            // Presumably this will need to be expanded
+            let mut child_event = event.next_child(EventType::TradeFailed)?;
+            let trader_id = child_event.next_player_id()?;
+            let victim_id = child_event.next_player_id()?;
+
+            FedEventData::NothingToTrade {
+                game: event.game(unscatter, attractor_secret_base)?,
+                trader_name: player_name.to_string(),
+                trader_id,
+                victim_id,
+                sub_event: child_event.as_sub_event(),
+            }
+        }
+        EventType::TradeFailed => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

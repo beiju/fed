@@ -384,6 +384,8 @@ pub enum EventType {
     Sun30Smiles = 226,
     Voicemail = 228,
     TumbleweedSounds = 232,
+    Trade = 233,
+    TradeFailed = 234,
     StormWarning = 263,
     Snowflakes = 264,
 }
