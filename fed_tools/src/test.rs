@@ -16,7 +16,7 @@ use eventually_api::EventuallyEvent;
 use fed::{FedEvent, InterEventStateSync, parse_next_event};
 use fed::MakePeekableWithLogging;
 
-const SEASONS: [(&'static str, i32, i64); 10] = [
+const SEASONS: [(&'static str, i32, i64); 11] = [
     // sim, season number, number of events in that season
     ("thisidisstaticyo", 11, 330308),
     ("thisidisstaticyo", 12, 407451),
@@ -28,7 +28,7 @@ const SEASONS: [(&'static str, i32, i64); 10] = [
     ("thisidisstaticyo", 18, 397322),
     ("thisidisstaticyo", 19, 411748),
     ("thisidisstaticyo", 20, 401722),
-    // ("thisidisstaticyo", 21, 410259),
+    ("thisidisstaticyo", 21, 410259),
     // ("thisidisstaticyo", 22, 408058),
     // ("thisidisstaticyo", 23, 354855),
 ];
