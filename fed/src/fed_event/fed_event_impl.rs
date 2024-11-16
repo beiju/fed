@@ -1777,10 +1777,11 @@ impl FedEvent {
                         child_eb.set_category(EventCategory::Special);
                         child_eb.push_metadata_str("effect", "Incineration");
                         child_eb.push_metadata_i32("weather", Weather::SolarEclipse);
-                        // I suspect the season (and possibly day) is the actual signal and
-                        // heat_magnet is just an accidental conflation, but I'll keep this until
-                        // it's proven wrong.
-                        if heat_magnet.is_none() {
+                        // It is funny that for two seasons an incineration seems to have been
+                        // considered a "win"
+                        // Note this may need to be 20 instead, I'm not sure. Or it may need to be a
+                        // specific season and day.
+                        if self.season < 21 {
                             child_eb.build(EventType::WinCollectedRegular)
                         } else {
                             child_eb.build(EventType::WeatherEvent)
