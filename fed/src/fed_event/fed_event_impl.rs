@@ -326,8 +326,6 @@ impl FedEvent {
                 eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
                 eb.push_player_tag(batter_id);
 
-                eb.push_hotel_motel(&hotel_motel_parties);
-
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
                     if let Some(h) = &hype && h.source == HomeRunHypeSource::Buckets {
@@ -346,6 +344,8 @@ impl FedEvent {
                         eb.push_hype(&h.hype, home_team_id);
                     }
                 }
+
+                eb.push_hotel_motel(&hotel_motel_parties);
 
                 // Not sure of the ordering here
                 if let Some(pop) = balloons_popped {

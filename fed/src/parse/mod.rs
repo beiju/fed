@@ -783,13 +783,6 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let hotel_motel_parties = event.parse_hotel_motel_parties()?;
-
-            // stopped_inhabiting definitely happens before free_refills
-            // (event d4805130-be10-42ab-81b2-f8eefb14a4e4)
-            let batter_id = event.next_player_id()?;
-            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
-
             let big_bucket = event.next_parse(parse_big_bucket)?;
             let big_bucket_hype = if big_bucket {
                 event.parse_hype()?
@@ -803,6 +796,13 @@ pub fn parse_next_event(
             } else {
                 None
             };
+
+            let hotel_motel_parties = event.parse_hotel_motel_parties()?;
+
+            // stopped_inhabiting definitely happens before free_refills
+            // (event d4805130-be10-42ab-81b2-f8eefb14a4e4)
+            let batter_id = event.next_player_id()?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             // Not sure of ordering relative to other things
             let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
