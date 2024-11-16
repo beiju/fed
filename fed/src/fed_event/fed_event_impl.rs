@@ -1777,11 +1777,9 @@ impl FedEvent {
                         child_eb.set_category(EventCategory::Special);
                         child_eb.push_metadata_str("effect", "Incineration");
                         child_eb.push_metadata_i32("weather", Weather::SolarEclipse);
-                        // It is funny that for two seasons an incineration seems to have been
+                        // It is funny that for one season an incineration seems to have been
                         // considered a "win"
-                        // Note this may need to be 20 instead, I'm not sure. Or it may need to be a
-                        // specific season and day.
-                        if self.season < 21 {
+                        if self.season < 20 {
                             child_eb.build(EventType::WinCollectedRegular)
                         } else {
                             child_eb.build(EventType::WeatherEvent)
