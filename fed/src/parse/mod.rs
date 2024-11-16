@@ -993,7 +993,10 @@ pub fn parse_next_event(
         }
         EventType::FoulBall => {
             let pitch = event.parse_pitch()?;
-            let (balls, strikes, very_foul, offworld) = event.next_parse(parse_foul_ball(pitch.double_strike.is_some()))?;
+            let (balls, strikes, very_foul, offworld) = event.next_parse(parse_foul_ball(
+                pitch.double_strike.is_some(),
+                (event.season, event.day) < (21, 9),
+            ))?;
             let batter_item_damage = event.parse_item_damage_and_name(true)?;
             let birds = event.parse_birds();
 

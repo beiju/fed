@@ -134,10 +134,9 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i32, i32)> {
     Ok((input, count))
 }
 
-pub(crate) fn parse_foul_ball(double_strike: bool) -> impl Fn(&str) -> ParserResult<(i32, i32, bool, bool)> {
+pub(crate) fn parse_foul_ball(double_strike: bool, extra_space_after_offworld: bool) -> impl Fn(&str) -> ParserResult<(i32, i32, bool, bool)> {
     move |input| {
-        // There's an extra space -- for now
-        let (input, offworld) = opt(tag("Offworld  ")).parse(input)?;
+        let (input, offworld) = opt(tag(if extra_space_after_offworld { "Offworld  " } else { "Offworld " })).parse(input)?;
         let (input, very_foul) = opt(tag("Very ")).parse(input)?;
         // Starting in s20 there's an extra space. unfortunately
         let (input, _) = opt(tag(" ")).parse(input)?;
