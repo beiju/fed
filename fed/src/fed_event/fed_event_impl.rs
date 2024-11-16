@@ -1835,6 +1835,20 @@ impl FedEvent {
                 if let Some(ambush) = ambush {
                     eb.push_description("An Ambush.");
                     eb.push_description(&format!("{} enters the {} shadows.", ambush.player_name, possessive(ambush.team_nickname.clone())));
+
+                    if let Some(team) = ambush.former_team {
+                        eb.push_child(team.sub_event, |mut child_eb| {
+                            child_eb.push_description(&format!("{} was pulled from the incinerated {}.", ambush.player_name, team.team_nickname));
+                            child_eb.push_player_tag(ambush.player_id);
+                            child_eb.push_team_tag(team.team_id);
+                            child_eb.push_metadata_uuid("playerId", ambush.player_id);
+                            child_eb.push_metadata_str("playerName", &ambush.player_name);
+                            child_eb.push_metadata_uuid("teamId", team.team_id);
+                            child_eb.push_metadata_str("teamName", &team.team_nickname);
+                            child_eb.build(EventType::PlayerRemovedFromTeam)
+                        });
+                    }
+
                     eb.push_child(ambush.exit_hall_event, |mut child_eb| {
                         child_eb.push_description(&format!("{} exited the Hall of Flame", ambush.player_name));
                         child_eb.push_player_tag(ambush.player_id);
@@ -3286,7 +3300,7 @@ impl FedEvent {
                 eb.push_child(enter_shadows_sub_event, |mut child| {
                     child.push_description(&format!("{exiting_pitcher_name} entered the Shadows."));
                     child.push_player_tag(exiting_pitcher_id);
-                    // TODO: Why does this specific event not have a team tag here?  
+                    // TODO: Why does this specific event not have a team tag here?
                     if self.id != uuid::uuid!("c341cd11-e218-4acf-baed-8521c8f62d5a") {
                         child.push_team_tag(team_id);
                     }

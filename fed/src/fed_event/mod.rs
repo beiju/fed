@@ -841,6 +841,19 @@ pub struct PlayerNameId {
     pub player_name: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct KnownPlayerRemovedFromTeam {
+    /// Uuid of team the player was removed from
+    pub team_id: Uuid,
+
+    /// Nickname of team the player was removed from
+    pub team_nickname: String,
+    
+    /// Metadata for the player removed from team sub-event
+    pub sub_event: SubEvent,
+}
+
 // This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -1893,6 +1906,11 @@ pub struct Ambush {
 
     /// Name of ambushed player
     pub player_name: String,
+    
+    /// If this player was formerly on a team (which can only happen if their whole team was 
+    /// Incinerated), this is the info about that team and the removed-from-team event. Otherwise
+    /// null.
+    pub former_team: Option<KnownPlayerRemovedFromTeam>,
 
     /// Metadata for the exit-hall-of-flame event
     pub exit_hall_event: SubEvent,
