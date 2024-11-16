@@ -1,8 +1,6 @@
 mod fed_event_impl;
-mod run_source;
-pub use run_source::*;
-
-pub use fed_event_impl::*;
+pub mod run_source;
+pub use run_source::RunSource;
 
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
@@ -2127,9 +2125,9 @@ impl<RunSourceT: RunSource + WithStructure> Display for SimpleLedgerV2<RunSource
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct HomeRunLedger {
-    pub home_run: SimpleLedgerV2<HomeRun>,
-    pub big_bucket: Option<SimpleLedgerV2<HomeRunBigBucket>>,
-    pub alley_oop: Option<SimpleLedgerV2<HomeRunSlamDunk>>,
+    pub home_run: SimpleLedgerV2<run_source::HomeRun>,
+    pub big_bucket: Option<SimpleLedgerV2<run_source::HomeRunBigBucket>>,
+    pub alley_oop: Option<SimpleLedgerV2<run_source::HomeRunSlamDunk>>,
 }
 
 impl LedgerV2 for HomeRunLedger {
@@ -4971,7 +4969,7 @@ pub enum FedEventData {
         sub_event: SubEvent,
 
         #[serde(flatten)]
-        scores: Scores<SimpleLedgerV2<HitByPitch>>,
+        scores: Scores<SimpleLedgerV2<run_source::HitByPitch>>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
