@@ -20,6 +20,16 @@ pub(crate) fn parse_opt_newline(input: &str) -> ParserResult<bool> {
     Ok((input, newline.is_some()))
 }
 
+pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<&str> {
+    move |input| {
+        if cond {
+            tag("\n").parse(input)
+        } else {
+            Ok((input, ""))
+        }
+    }
+}
+
 pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {
         let (input, parsed_value) = if tag_content == "." {
@@ -2735,6 +2745,19 @@ pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<()> {
     Ok((input, ()))
 }
 
+pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<()> {
+    let (input, _) = tag("Blaserunning: 0.2 Run").parse(input)?;
+    Ok((input, ()))
+}
+
+pub(crate) fn parse_ledger_stolen_base(input: &str) -> ParserResult<(bool, bool)> {
+    let (input, stole_home) = parse_ledger_v2_run("Steal Home").parse(input)?;
+    let (input, _) = opt(tag("\n")).parse(input)?;
+    let (input, blaserunning) = opt(parse_ledger_blaserunning).parse(input)?;
+
+    Ok((input, (stole_home, blaserunning.is_some())))
+}
+
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
     let (input, stadium_name) = parse_terminated("'s Light Switch is now ").parse(input)?;
     let (input, is_on) = alt((
@@ -2830,12 +2853,7 @@ pub(crate) fn parse_balloon_inflated_from_win(before_s20d81: bool) -> impl Fn(&s
 pub(crate) fn parse_sun30(before_s20d81: bool) -> impl Fn(&str) -> ParserResult<(&str, &str, Option<&str>)> {
     move |input| {
         let (input, balloon) = opt(parse_balloon_inflated_from_win(before_s20d81)).parse(input)?;
-        // TODO parse_newline_if(do_parse: bool) function that gets used everywhere I have this pattern
-        let (input, _) = if balloon.is_some() {
-            tag("\n").parse(input)?
-        } else {
-            (input, "")
-        };
+        let (input, _) = parse_newline_if(balloon.is_some()).parse(input)?;
         let (input, _) = tag("The ").parse(input)?;
         let (input, home_team_nickname) = parse_terminated(" and ").parse(input)?;
         let (input, away_team_nickname) = parse_terminated(" reached Extra Innings.\nSun 30 smiled upon them.").parse(input)?;

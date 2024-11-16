@@ -29,7 +29,8 @@ run_source!(GroundOut, "Sacrifice");
 run_source!(FieldersChoice, "Base Hit"); // this doesn't seem like the right label but ok
 run_source!(Hit, "Base Hit");
 run_source!(DoublePlay, "Base Hit"); // I guess this is a base hit too
-run_source!(StolenBase, "Steal Home"); // Probably needs to become non-Simple because of Blaserunning
+run_source!(StealHome, "Steal Home");
+run_source!(Blaserunning, "Blaserunning");
 run_source!(Walk, "Walk");
 run_source!(MildPitch, "Mild Pitch");
 run_source!(MildPitchWalk, "Mild Pitch Walk");

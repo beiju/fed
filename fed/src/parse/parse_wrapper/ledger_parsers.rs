@@ -3,7 +3,7 @@ use nom::bytes::complete::tag;
 use nom::error::{convert_error, VerboseError};
 use eventually_api::EventType;
 use with_structure::WithStructure;
-use crate::{FeedParseError, HeatMagnetLedger, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, RunSource, SimpleLedgerV2, TripleThreatLedger};
+use crate::{FeedParseError, HeatMagnetLedger, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, RunSource, SimpleLedgerV2, StolenBaseLedger, TripleThreatLedger};
 use crate::parse::parsers::*;
 
 pub trait ParseableLedger {
@@ -134,5 +134,30 @@ impl ParseableLedger for HeatMagnetLedger {
         let (ledger, _) = parse_ledger(tag("Heat Magnet: 5 Runs"), ledger)?;
 
         Ok((ledger, HeatMagnetLedger::new()))
+    }
+}
+
+impl ParseableLedger for StolenBaseLedger {
+    type Ledger = Self;
+
+    fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
+        // TODO This doesn't account for modifiers between stolen base and blaserunning
+        let (ledger, (steal_home, blaserunning)) = parse_ledger(parse_ledger_stolen_base, ledger)?;
+
+        let (ledger, steal_home) = if steal_home {
+            let (ledger, modifiers) = parse_modifiers(ledger)?;
+            (ledger, Some(LedgerRun::new(modifiers)))
+        } else {
+            (ledger, None)
+        };
+
+        let (ledger, blaserunning) = if blaserunning {
+            let (ledger, modifiers) = parse_modifiers(ledger)?;
+            (ledger, Some(LedgerRun::new(modifiers)))
+        } else {
+            (ledger, None)
+        };
+
+        Ok((ledger, Self { steal_home, blaserunning }))
     }
 }

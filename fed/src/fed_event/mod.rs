@@ -2041,12 +2041,17 @@ pub struct LedgerRun {
 }
 
 impl LedgerRun {
-    // Note this function is only used with V1 ledgers, so it doesn't support anything added after
-    // s22
-    pub fn compute_and_write(&self, ledger_label: &str, mut f: impl Write) -> Result<f64, std::fmt::Error> {
-        write!(f, "{ledger_label}: 1 Run")?;
+    pub fn new(modifiers: Vec<LedgerRunModifier>) -> Self {
+        Self { modifiers }
+    }
 
-        let mut run_value = 1.;
+    pub fn compute_and_write(&self, ledger_label: &str, f: impl Write) -> Result<f64, std::fmt::Error> {
+        self.compute_and_write_with_value(1.0, ledger_label, f)
+    }
+
+    pub fn compute_and_write_with_value(&self, mut run_value: f64, ledger_label: &str, mut f: impl Write) -> Result<f64, std::fmt::Error> {
+        write!(f, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 { "" } else { "s" } )?;
+
         for modifier in &self.modifiers {
             write!(f, "\n")?;
             run_value = modifier.modify_and_write(run_value, &mut f)?;
@@ -2265,6 +2270,85 @@ impl LedgerV2 for HeatMagnetLedger {
 impl Display for HeatMagnetLedger {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Heat Magnet: 5 Runs")
+    }
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct StolenBaseLedger {
+    pub steal_home: Option<LedgerRun>,
+    pub blaserunning: Option<LedgerRun>,
+}
+
+impl LedgerV2 for StolenBaseLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        let mut len = 0;
+        if self.steal_home.is_some() { len += 1 }
+        if self.blaserunning.is_some() { len += 1 }
+        len
+    }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        // I wrote this stuff with the chain when steal_home and blaserunning
+        // were different types. It can probably be simpler.
+        iter::empty()
+            .chain(
+                if let Some(sh) = &self.steal_home {
+                    Either::Left(iter::once(sh.value()))
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
+            .chain(
+                if let Some(br) = &self.blaserunning {
+                    Either::Left(iter::once(br.value()))
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct NewlineDelimiter {
+    is_first_line: bool,
+}
+
+impl NewlineDelimiter {
+    pub fn new() -> Self {
+        Self {
+            is_first_line: true,
+        }
+    }
+
+    pub fn print(&mut self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.is_first_line {
+            self.is_first_line = false;
+            Ok(())
+        } else {
+            write!(f, "\n")
+        }
+    }
+}
+
+impl Display for StolenBaseLedger {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut delimiter = NewlineDelimiter::new();
+
+        if let Some(sh) = &self.steal_home {
+            delimiter.print(f)?;
+            sh.compute_and_write("Steal Home", &mut *f)?;
+        }
+        
+        if let Some(br) = &self.blaserunning {
+            delimiter.print(f)?;
+            br.compute_and_write_with_value(0.2, "Blaserunning", &mut *f)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -3029,7 +3113,7 @@ pub enum FedEventData {
 
         /// Score summary effects, if applicable. This will be populated if the season is 20 or
         /// later and either the base stolen was home or if blaserunning is true, otherwise null.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::StolenBase>>>,
+        score_summary: Option<ScoreSummary<StolenBaseLedger>>,
 
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<HotelMotelParty>,
