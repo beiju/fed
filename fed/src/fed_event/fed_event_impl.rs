@@ -3938,6 +3938,13 @@ impl FedEvent {
 
                 eb.build(EventType::Trade)
             }
+            FedEventData::RoamFailed { player_name, player_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("Roam failed.");
+                eb.push_description(&format!("{player_name} was gripped by Force."));
+                eb.push_player_tag(player_id);
+                eb.build(EventType::PlayerMoveFailedForce)
+            }
         };
 
         vec![item]

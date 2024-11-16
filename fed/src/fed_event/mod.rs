@@ -6198,6 +6198,16 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with the victim changing items
         victim_item_change_sub_event: SubEvent,
     },
+
+    /// Player tried and failed to Roam. The only observed instances of this were Parker MacMillan
+    /// trying to Roam out of the Vault and being blocked by The Force Field
+    RoamFailed {
+        /// Name of the player who tried and failed to Roam
+        player_name: String,
+        
+        /// Uuid of the player who tried and failed to Roam
+        player_id: Uuid,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6443,6 +6453,7 @@ impl FedEventData {
             FedEventData::IntentionalWalk { game, .. } => { Some(game) }
             FedEventData::NothingToTrade { game, .. } => { Some(game) }
             FedEventData::Trade { game, .. } => { Some(game) }
+            FedEventData::RoamFailed { .. } => { None }
         }
     }
 }

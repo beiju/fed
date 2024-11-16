@@ -2833,7 +2833,16 @@ pub fn parse_next_event(
         EventType::PlayerStatDecrease => { todo!() }
         EventType::PlayerStatReroll => { todo!() }
         EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
-        EventType::PlayerMoveFailedForce => { todo!() }
+        EventType::PlayerMoveFailedForce => {
+            // The only top-level instances of this event is Parker trying to Roam 
+            event.next_parse_tag("Roam failed.\nParker MacMillan was gripped by Force.")?;
+            
+            FedEventData::RoamFailed {
+                player_name: "Parker MacMillan".to_string(),
+                player_id: event.next_player_id()?,
+            }
+            
+        }
         EventType::EnterHallOfFlame => {
             // In Beta, this event type is only top-level for return-to-hall events. That was no
             // longer true in Short Circuits.
