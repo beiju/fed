@@ -386,6 +386,7 @@ pub enum EventType {
     TumbleweedSounds = 232,
     Trade = 233,
     TradeFailed = 234,
+    ItemTraded = 236,
     StormWarning = 263,
     Snowflakes = 264,
 }

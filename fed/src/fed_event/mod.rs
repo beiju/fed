@@ -6152,6 +6152,72 @@ pub enum FedEventData {
         /// sub-event.
         sub_event: SubEvent,
     },
+
+    /// Trader did a trade
+    Trade {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who sought out the trade
+        trader_name: String,
+
+        /// Uuid of the player who sought out the trade
+        trader_id: Uuid,
+
+        /// Name of the item that the trader gave to the victim
+        donated_item_name: String,
+
+        /// Uuid of the item that the trader gave to the victim
+        donated_item_id: Uuid,
+
+        /// Mods the trader gained by switching items
+        trader_mods_gained: Vec<String>,
+
+        /// Mods the trader lost by switching items
+        trader_mods_lost: Vec<String>,
+
+        /// Trader's item rating before the swap
+        trader_item_rating_before: f64,
+
+        /// Trader's item rating after the swap
+        trader_item_rating_after: f64,
+
+        /// Trader's total rating
+        trader_rating: f64,
+
+        /// Metadata for the sub-event associated with the trader changing items
+        trader_item_change_sub_event: SubEvent,
+
+        /// Name of the player whose item the trader took
+        victim_name: String,
+
+        /// Uuid of the player whose item the trader took
+        victim_id: Uuid,
+
+        /// Name of the item that the trader took from the victim
+        taken_item_name: String,
+
+        /// Uuid of the item that the trader took from the victim
+        taken_item_id: Uuid,
+
+        /// Mods the victim gained by switching items
+        victim_mods_gained: Vec<String>,
+
+        /// Mods the victim lost by switching items
+        victim_mods_lost: Vec<String>,
+
+        /// Victim's item rating before the swap
+        victim_item_rating_before: f64,
+
+        /// Victim's item rating after the swap
+        victim_item_rating_after: f64,
+
+        /// Victim's total rating
+        victim_rating: f64,
+
+        /// Metadata for the sub-event associated with the victim changing items
+        victim_item_change_sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6396,6 +6462,7 @@ impl FedEventData {
             FedEventData::TumbleweedSounds { .. } => { None }
             FedEventData::IntentionalWalk { game, .. } => { Some(game) }
             FedEventData::NothingToTrade { game, .. } => { Some(game) }
+            FedEventData::Trade { game, .. } => { Some(game) }
         }
     }
 }

@@ -3629,22 +3629,52 @@ pub fn parse_next_event(
             }
         }
         EventType::Trade => {
-            let player_name = event.next_parse(parse_trade)?;
+            match event.next_parse(parse_trade)? {
+                ParsedTrade::NothingCaughtTheirEye { trader_name } => {
+                    let mut child_event = event.next_child(EventType::TradeFailed)?;
+                    let trader_id = child_event.next_player_id()?;
+                    let victim_id = child_event.next_player_id()?;
 
-            // Presumably this will need to be expanded
-            let mut child_event = event.next_child(EventType::TradeFailed)?;
-            let trader_id = child_event.next_player_id()?;
-            let victim_id = child_event.next_player_id()?;
+                    FedEventData::NothingToTrade {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        trader_name: trader_name.to_string(),
+                        trader_id,
+                        victim_id,
+                        sub_event: child_event.as_sub_event(),
+                    }
+                }
+                ParsedTrade::Traded { trader_name, donated_item_name, victim_name, taken_item_name } => {
+                    let mut trader_event = event.next_child(EventType::ItemTraded)?;
+                    let mut victim_event = event.next_child(EventType::ItemTraded)?;
 
-            FedEventData::NothingToTrade {
-                game: event.game(unscatter, attractor_secret_base)?,
-                trader_name: player_name.to_string(),
-                trader_id,
-                victim_id,
-                sub_event: child_event.as_sub_event(),
+                    FedEventData::Trade {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        trader_name: trader_name.to_string(),
+                        trader_id: trader_event.next_player_id()?,
+                        donated_item_name: donated_item_name.to_string(),
+                        donated_item_id: trader_event.metadata_uuid("itemTradedId")?,
+                        trader_mods_gained: trader_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
+                        trader_mods_lost: trader_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
+                        trader_item_rating_before: trader_event.metadata_f64("playerItemRatingBefore")?,
+                        trader_item_rating_after: trader_event.metadata_f64("playerItemRatingAfter")?,
+                        trader_rating: trader_event.metadata_f64("playerRating")?,
+                        trader_item_change_sub_event: trader_event.as_sub_event(),
+                        victim_name: victim_name.to_string(),
+                        victim_id: victim_event.next_player_id()?,
+                        taken_item_name: taken_item_name.to_string(),
+                        taken_item_id: victim_event.metadata_uuid("itemTradedId")?,
+                        victim_mods_gained: victim_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
+                        victim_mods_lost: victim_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
+                        victim_item_rating_before: victim_event.metadata_f64("playerItemRatingBefore")?,
+                        victim_item_rating_after: victim_event.metadata_f64("playerItemRatingAfter")?,
+                        victim_rating: victim_event.metadata_f64("playerRating")?,
+                        victim_item_change_sub_event: victim_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::TradeFailed => { todo!() }
+        EventType::ItemTraded => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

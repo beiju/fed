@@ -2931,8 +2931,35 @@ pub(crate) fn parse_weaker_apart(first_player_name: &str) -> impl Fn(&str) -> Pa
     }
 }
 
-pub(crate) fn parse_trade(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = parse_terminated(" sought out a trade, but nothing caught their eye.").parse(input)?;
+pub(crate) enum ParsedTrade<'a> {
+    NothingCaughtTheirEye {
+        trader_name: &'a str,
+    },
+    Traded {
+        trader_name: &'a str,
+        donated_item_name: &'a str,
+        victim_name: &'a str,
+        taken_item_name: &'a str,
+    }
+}
 
-    Ok((input, player_name))
+pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
+    alt((
+        parse_terminated(" sought out a trade, but nothing caught their eye.")
+            .map(|trader_name| ParsedTrade::NothingCaughtTheirEye { trader_name }),
+        parse_successful_trade.map(|(trader_name, donated_item_name, victim_name, taken_item_name)| 
+            ParsedTrade::Traded { trader_name, donated_item_name, victim_name, taken_item_name }
+        ),
+    )).parse(input)
+}
+
+
+pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
+    let (input, _) = tag("Trader ").parse(input)?;
+    let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
+    let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
+    let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+    let (input, taken_item_name) = parse_terminated(".").parse(input)?;
+
+    Ok((input, (trader_name, donated_item_name, victim_name, taken_item_name)))
 }

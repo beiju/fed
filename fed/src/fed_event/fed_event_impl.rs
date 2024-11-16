@@ -3895,6 +3895,47 @@ impl FedEvent {
 
                 eb.build(EventType::Trade)
             }
+            FedEventData::Trade { game, trader_name, trader_id, donated_item_name, donated_item_id, trader_mods_gained, trader_mods_lost, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, taken_item_name, taken_item_id, victim_mods_gained, victim_mods_lost, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
+                eb.set_game(game);
+                let description = format!("Trader {trader_name} traded their {donated_item_name} for {victim_name}'s {taken_item_name}.");
+                eb.push_description(&description);
+
+                eb.push_child(trader_item_change_sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.push_description(&description);
+                    child_eb.push_player_tag(trader_id);
+                    // This event has no team tag, although it probably shouldReceived
+                    child_eb.push_metadata_uuid("itemTradedId", donated_item_id);
+                    child_eb.push_metadata_str("itemTradedName", &donated_item_name);
+                    child_eb.push_metadata_uuid("itemReceivedId", taken_item_id);
+                    child_eb.push_metadata_str("itemReceivedName", &taken_item_name);
+                    child_eb.push_metadata_str_vec("modsGained", trader_mods_gained);
+                    child_eb.push_metadata_str_vec("modsLost", trader_mods_lost);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", trader_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", trader_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", trader_rating);
+                    child_eb.build(EventType::ItemTraded)
+                });
+
+                eb.push_child(victim_item_change_sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Changes);
+                    child_eb.push_description(&format!("{victim_name} traded their {taken_item_name} for Trader {trader_name}'s {donated_item_name}."));
+                    child_eb.push_player_tag(victim_id);
+                    // This event has no team tag, even though it probably should
+                    child_eb.push_metadata_uuid("itemTradedId", taken_item_id);
+                    child_eb.push_metadata_str("itemTradedName", &taken_item_name);
+                    child_eb.push_metadata_uuid("itemReceivedId", donated_item_id);
+                    child_eb.push_metadata_str("itemReceivedName", &donated_item_name);
+                    child_eb.push_metadata_str_vec("modsGained", victim_mods_gained);
+                    child_eb.push_metadata_str_vec("modsLost", victim_mods_lost);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", victim_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", victim_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", victim_rating);
+                    child_eb.build(EventType::ItemTraded)
+                });
+
+                eb.build(EventType::Trade)
+            }
         };
 
         vec![item]
