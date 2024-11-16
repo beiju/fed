@@ -20,7 +20,7 @@ use crate::parse::error::FeedParseError;
 use crate::parse::parsers::*;
 use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::fed_event::*;
-use crate::parse::event_builder_new::Possessive;
+use crate::format_utils::Possessive;
 
 // pub use stream::expansion_era_events;
 

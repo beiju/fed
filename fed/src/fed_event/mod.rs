@@ -21,6 +21,7 @@ use with_structure_derive::WithStructure;
 use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::FeedParseError;
+use crate::format_utils::NewlineDelimiter;
 use crate::parse::builder::possessive;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
@@ -1974,8 +1975,8 @@ pub enum LedgerRunModifier {
     },
     Underhanded,
     SunPoint1 {
-        // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so 
-        // it could be stored as a fixed point value, but I decided not to do that because blaseball 
+        // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so
+        // it could be stored as a fixed point value, but I decided not to do that because blaseball
         // is blaseball and javascript is javascript
         value: f64,
     },
@@ -2010,29 +2011,29 @@ impl LedgerRunModifier {
         }
     }
 
-    pub fn modify_and_write(&self, run_value_before: f64, mut f: impl Write) -> Result<f64, std::fmt::Error> {
+    pub fn modify_and_write(&self, run_value_before: f64, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
         let run_value_after = self.modify(run_value_before);
         match self {
             LedgerRunModifier::Magnified { position } => {
-                write!(f, "\t{} Magnified 2x: {} * 2 = {}", position.title(), RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\t{} Magnified 2x: {} * 2 = {}", position.title(), RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
             LedgerRunModifier::Underhanded => {
-                write!(f, "\tUnderhanded: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\tUnderhanded: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
             LedgerRunModifier::SunPoint1 { value } => {
-                write!(f, "\tSun .1: {} + {value} = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\tSun .1: {} + {value} = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
             LedgerRunModifier::Subtractor => {
-                write!(f, "\tSubtractor: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\tSubtractor: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
             LedgerRunModifier::AcidicPitch => {
-                write!(f, "\tAcidic Pitch: {} + -0.1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\tAcidic Pitch: {} + -0.1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
             LedgerRunModifier::Wired { player_name } => {
-                write!(f, "\t{player_name} is Wired!: {} + 0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(w, "\t{player_name} is Wired!: {} + 0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
         }
-        
+
         Ok(run_value_after)
     }
 }
@@ -2047,16 +2048,16 @@ impl LedgerRun {
         Self { modifiers }
     }
 
-    pub fn compute_and_write(&self, ledger_label: &str, f: impl Write) -> Result<f64, std::fmt::Error> {
-        self.compute_and_write_with_value(1.0, ledger_label, f)
+    pub fn compute_and_write(&self, ledger_label: &str, w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+        self.compute_and_write_with_value(1.0, ledger_label, w)
     }
 
-    pub fn compute_and_write_with_value(&self, mut run_value: f64, ledger_label: &str, mut f: impl Write) -> Result<f64, std::fmt::Error> {
-        write!(f, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 { "" } else { "s" } )?;
+    pub fn compute_and_write_with_value(&self, mut run_value: f64, ledger_label: &str, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+        write!(w, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 { "" } else { "s" } )?;
 
         for modifier in &self.modifiers {
-            write!(f, "\n")?;
-            run_value = modifier.modify_and_write(run_value, &mut f)?;
+            write!(w, "\n")?;
+            run_value = modifier.modify_and_write(run_value, w)?;
         }
 
         Ok(run_value)
@@ -2069,13 +2070,15 @@ impl LedgerRun {
     }
 }
 
-pub trait LedgerV2: WithStructure + Display {
+pub trait LedgerV2: WithStructure {
     fn label() -> &'static str;
 
     // Returns the number of Run lines in the ledger
     fn len(&self) -> usize;
 
     fn run_values(&self) -> impl Iterator<Item=f64>;
+
+    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result;
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
@@ -2107,20 +2110,18 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
         self.runs.iter()
             .map(|run| run.value())
     }
-}
 
-impl<RunSourceT: RunSource + WithStructure> Display for SimpleLedgerV2<RunSourceT> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
         let mut is_first_run = true;
 
         for run in &self.runs {
             if is_first_run {
                 is_first_run = false;
             } else {
-                write!(f, "\n")?;
+                write!(w, "\n")?;
             }
 
-            let run_value = run.compute_and_write(Self::label(), &mut *f)?;
+            let run_value = run.compute_and_write(Self::label(), w)?;
         }
 
         Ok(())
@@ -2165,16 +2166,16 @@ impl LedgerV2 for HomeRunLedger {
                 }
             )
     }
-}
 
-impl Display for HomeRunLedger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.home_run)?;
+    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+        self.home_run.write(season, day, w)?;
         if let Some(big_bucket) = &self.big_bucket {
-            write!(f, "\n{}", big_bucket)?;
+            write!(w, "\n")?;
+            big_bucket.write(season, day, w)?;
         }
         if let Some(alley_oop) = &self.alley_oop {
-            write!(f, "\n{}", alley_oop)?;
+            write!(w, "\n")?;
+            alley_oop.write(season, day, w)?;
         }
 
         Ok(())
@@ -2204,11 +2205,9 @@ impl LedgerV2 for ModerationLedger {
     fn run_values(&self) -> impl Iterator<Item=f64> {
         iter::once(self.num_runs)
     }
-}
 
-impl Display for ModerationLedger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Moderation: {} Unruns", RunDisplay(self.num_runs))
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+        write!(w, "Moderation: {} Unruns", RunDisplay(self.num_runs))
     }
 }
 
@@ -2233,15 +2232,15 @@ impl LedgerV2 for TripleThreatLedger {
     fn run_values(&self) -> impl Iterator<Item=f64> {
         iter::once(0.3)
     }
-}
 
-impl Display for TripleThreatLedger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Triple Threat: {} Unrun", RunDisplay(0.3))?;
+    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+        // s21d05 zero-indexed i still see singular unrun
+        // s21d10 zero-indexed i see plural unruns
+        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(0.3), if (season, day) < (21, 10) { "" } else { "" })?;
 
         for modifier in &self.modifiers {
-            write!(f, "\n")?;
-            modifier.modify_and_write(-0.3, &mut *f)?;
+            write!(w, "\n")?;
+            modifier.modify_and_write(-0.3, w)?;
         }
 
         Ok(())
@@ -2267,11 +2266,9 @@ impl LedgerV2 for HeatMagnetLedger {
     fn run_values(&self) -> impl Iterator<Item=f64> {
         iter::once(5.0)
     }
-}
 
-impl Display for HeatMagnetLedger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Heat Magnet: 5 Runs")
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+        write!(w, "Heat Magnet: 5 Runs")
     }
 }
 
@@ -2312,42 +2309,18 @@ impl LedgerV2 for StolenBaseLedger {
                 }
             )
     }
-}
 
-#[derive(Debug, Copy, Clone)]
-struct NewlineDelimiter {
-    is_first_line: bool,
-}
-
-impl NewlineDelimiter {
-    pub fn new() -> Self {
-        Self {
-            is_first_line: true,
-        }
-    }
-
-    pub fn print(&mut self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.is_first_line {
-            self.is_first_line = false;
-            Ok(())
-        } else {
-            write!(f, "\n")
-        }
-    }
-}
-
-impl Display for StolenBaseLedger {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
         let mut delimiter = NewlineDelimiter::new();
 
         if let Some(sh) = &self.steal_home {
-            delimiter.print(f)?;
-            sh.compute_and_write("Steal Home", &mut *f)?;
+            delimiter.print(w)?;
+            sh.compute_and_write("Steal Home", w)?;
         }
         
         if let Some(br) = &self.blaserunning {
-            delimiter.print(f)?;
-            br.compute_and_write_with_value(0.2, "Blaserunning", &mut *f)?;
+            delimiter.print(w)?;
+            br.compute_and_write_with_value(0.2, "Blaserunning", w)?;
         }
 
         Ok(())
@@ -2365,8 +2338,14 @@ pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStr
     V2(LedgerRunT),
 }
 
-impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
+    pub fn to_string(&self, season: i32, day: i32) -> String {
+        let mut s = String::new();
+        self.write(season, day, &mut s).expect("write() should not fail on a string formatter");
+        s
+    }
+    
+    pub fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
         match self {
             Ledger::None => {},
             Ledger::V1 { base_runs, lines } => {
@@ -2377,17 +2356,17 @@ impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
                 };
 
                 if abs_runs == 1. {
-                    write!(f, "(1 {run_type}),")?;
+                    write!(w, "(1 {run_type}),")?;
                 } else {
-                    write!(f, "({} {run_type}s),", abs_runs)?;
+                    write!(w, "({} {run_type}s),", abs_runs)?;
                 }
 
                 for line in lines {
-                    write!(f, " {line}")?;
+                    write!(w, " {line}")?;
                 }
             }
             Ledger::V2(ledger) => {
-                write!(f, "{ledger}")?;
+                ledger.write(season, day, w)?;
 
                 // A summary line is printed iff there was more than 1 instance of runs being scored
                 if ledger.len() > 1 {
@@ -2396,16 +2375,16 @@ impl<LedgerRunT: LedgerV2 + Display> Display for Ledger<LedgerRunT> {
                     for value in ledger.run_values() {
                         runs_total_value += value;
                         if is_first {
-                            write!(f, "\n")?;
+                            write!(w, "\n")?;
                             is_first = false;
                         } else {
-                            write!(f, " + ")?;
+                            write!(w, " + ")?;
                         }
 
-                        write!(f, "{}", RunDisplay(value))?;
+                        write!(w, "{}", RunDisplay(value))?;
                     }
 
-                    write!(f, " = {}", RunDisplay(runs_total_value))?;
+                    write!(w, " = {}", RunDisplay(runs_total_value))?;
                 }
             }
         }

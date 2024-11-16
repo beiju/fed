@@ -16,7 +16,7 @@ use eventually_api::EventuallyEvent;
 use fed::{FedEvent, InterEventStateSync, parse_next_event};
 use fed::MakePeekableWithLogging;
 
-const SEASONS: [(&'static str, i64, i64); 11] = [
+const SEASONS: [(&'static str, i32, i64); 11] = [
     // sim, season number, number of events in that season
     ("thisidisstaticyo", 11, 330308),
     ("thisidisstaticyo", 12, 407451),
@@ -128,7 +128,7 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, stop_signal: impl Fn() -> bool, args: Args) -> anyhow::Result<()> {
+fn run_test_on_season(sim: &str, season: i32, total_events: i64, multi_progress: &MultiProgress, stop_signal: impl Fn() -> bool, args: Args) -> anyhow::Result<()> {
     // If these files don't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson

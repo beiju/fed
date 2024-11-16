@@ -1,12 +1,12 @@
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use itertools::{Either, Itertools};
 use serde_json::json;
-use std::fmt::Write;
 use std::iter;
 
-use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, make_free_refill_child, possessive};
-use crate::parse::event_builder_new::{EventBuilder, Possessive, Runs};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, Echo, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin};
+use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive};
+use crate::parse::event_builder_new::{EventBuilder};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin};
+use crate::format_utils::Possessive;
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {

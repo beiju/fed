@@ -1,44 +1,13 @@
-use std::fmt::{Display, Formatter};
+use crate::format_utils::Possessive;
+use crate::{Attraction, AttractionWithPlayer, BalloonsPopped, BatterDebt, BracketType, DebtType, DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired, KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId, PlayerSentElsewhere, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject};
 use chrono::{DateTime, Utc};
+use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
 use uuid::Uuid;
-use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
-use crate::{Attraction, AttractionWithPlayer, BatterDebt, DetectiveActivity, FreeRefill, GameEvent, GamePitch, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemGained, ItemRepaired, KnownPlayerStatChange, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerNameId, PlayerSentElsewhere, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, EarnedWin, FlipNegative, BracketType, TeamModChangeSubject, SubseasonalModChange, SubseasonalMod, PlayerModChangeSubject, Scattered, DebtType, ItemDroppedForNewItem, PlayerMovedTeams, BalloonsPopped, LedgerV2, HotelMotelParty};
 
 pub struct EventBuilder {
     event: EventuallyEvent,
     phantom_children: i64,
-}
-
-
-// Newtype with Display implementation that prints the string using grammatically correct possessive
-pub struct Possessive<'a>(pub &'a str);
-
-impl Display for Possessive<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(l) = self.0.chars().last() && l == 's' {
-            write!(f, "{}'", self.0)
-        } else {
-            write!(f, "{}'s", self.0)
-        }
-    }
-}
-
-// Newtype that formats runs and unruns
-pub struct Runs(pub f64);
-
-impl Display for Runs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.0 == -1.0 {
-            write!(f, "1 Unrun")
-        } else if self.0 == 1.0 {
-            write!(f, "1 Run")
-        } else if self.0 < 0.0 {
-            write!(f, "{} Unruns", -self.0)
-        } else {
-            write!(f, "{} Runs", self.0)
-        }
-    }
 }
 
 fn reverse_performing(input: &str) -> &'static str {
@@ -420,7 +389,7 @@ impl EventBuilder {
     }
 
     pub fn push_direct_score_summary<T: LedgerV2>(&mut self, score: &ScoreSummary<T>) {
-        let season = self.event.season;
+        let (season, day) = (self.event.season, self.event.day);
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
@@ -429,7 +398,7 @@ impl EventBuilder {
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
             child_eb.push_metadata_str("homeEmoji", &score.home_emoji);
             child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
-            child_eb.push_metadata_str("ledger", &score.ledger.to_string());
+            child_eb.push_metadata_str("ledger", &score.ledger.to_string(season, day));
             // Apparently in season 22 they un-fixed the pluralization
             child_eb.push_metadata_str("update", if score.runs_scored == 1.0 && season < 21 {
                 "1 Run scored!".to_string()

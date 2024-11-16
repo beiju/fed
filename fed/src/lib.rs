@@ -4,6 +4,7 @@
 mod parse;
 mod fed_event;
 mod peekable_with_logging;
+mod format_utils;
 
 pub use parse::stream::{EXPANSION_ERA_START, EXPANSION_ERA_END};
 pub use eventually_api::Weather;
