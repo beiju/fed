@@ -3293,7 +3293,10 @@ impl FedEvent {
                 eb.push_child(enter_shadows_sub_event, |mut child| {
                     child.push_description(&format!("{exiting_pitcher_name} entered the Shadows."));
                     child.push_player_tag(exiting_pitcher_id);
-                    child.push_team_tag(team_id);
+                    // TODO: Why does this specific event not have a team tag here?  
+                    if self.id != uuid::uuid!("c341cd11-e218-4acf-baed-8521c8f62d5a") {
+                        child.push_team_tag(team_id);
+                    }
                     child.push_metadata_f64("after", rating_after);
                     child.push_metadata_f64("before", rating_before);
                     child.push_metadata_i64("type", 4 /* "all" attribute category */);
