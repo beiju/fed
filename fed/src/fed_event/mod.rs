@@ -2234,9 +2234,8 @@ impl LedgerV2 for TripleThreatLedger {
     }
 
     fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
-        // s21d05 zero-indexed i still see singular unrun
-        // s21d10 zero-indexed i see plural unruns
-        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(0.3), if (season, day) < (21, 10) { "" } else { "" })?;
+        // Somewhere between s22d06 and s22d11 they fixed the pluralization of Unruns here
+        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(0.3), if (season, day) < (21, 10) { "" } else { "s" })?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
