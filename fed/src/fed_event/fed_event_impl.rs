@@ -5,7 +5,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive};
 use crate::parse::event_builder_new::{EventBuilder};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin, RunStolenThroughTunnelsDetails};
 use crate::format_utils::Possessive;
 
 #[deprecated = "This is part of the old event builder"]
@@ -3582,7 +3582,7 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::Ratification));
                 return events;
             }
-            FedEventData::RunStolenThroughTunnels { game, thieving_player_id, thieving_player_name, thieving_team_id, thieving_team_nickname, victim_team_id, victim_team_nickname, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first, balloons, hype, free_refill } => {
+            FedEventData::RunStolenThroughTunnels { game, thieving_player_name, thieving_player_id, victim_team_nickname, details, balloons, hype, free_refill } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -3593,31 +3593,33 @@ impl FedEvent {
                 eb.push_balloons(balloons.as_deref(), 1.0);
                 eb.push_player_tag(thieving_player_id);
 
-                let order = if victim_event_first {
-                    [
-                        (run_lost_sub_event, victim_team_id, victim_team_nickname),
-                        (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
-                    ]
-                } else {
-                    [
-                        (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
-                        (run_lost_sub_event, victim_team_id, victim_team_nickname),
-                    ]
-                };
+                if let Some(RunStolenThroughTunnelsDetails { victim_team_id, thieving_team_nickname, thieving_team_id, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first }) = details {
+                    let order = if victim_event_first {
+                        [
+                            (run_lost_sub_event, victim_team_id, victim_team_nickname),
+                            (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
+                        ]
+                    } else {
+                        [
+                            (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
+                            (run_lost_sub_event, victim_team_id, victim_team_nickname),
+                        ]
+                    };
 
-                for (sub_event, team_id, team_nickname) in order {
-                    eb.push_child(sub_event, |mut child_eb| {
-                        child_eb.set_category(EventCategory::Game);
-                        child_eb.push_team_tag(team_id);
-                        child_eb.push_description(&format!("The {} scored!", team_nickname));
-                        child_eb.push_metadata_str("awayEmoji", &away_emoji);
-                        child_eb.push_metadata_i64_or_f64("awayScore", away_score);
-                        child_eb.push_metadata_str("homeEmoji", &home_emoji);
-                        child_eb.push_metadata_i64_or_f64("homeScore", home_score);
-                        child_eb.push_metadata_str("update", "");
-                        child_eb.push_metadata_str("ledger", "");
-                        child_eb.build(EventType::RunsScored)
-                    });
+                    for (sub_event, team_id, team_nickname) in order {
+                        eb.push_child(sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Game);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_description(&format!("The {} scored!", team_nickname));
+                            child_eb.push_metadata_str("awayEmoji", &away_emoji);
+                            child_eb.push_metadata_i64_or_f64("awayScore", away_score);
+                            child_eb.push_metadata_str("homeEmoji", &home_emoji);
+                            child_eb.push_metadata_i64_or_f64("homeScore", home_score);
+                            child_eb.push_metadata_str("update", "");
+                            child_eb.push_metadata_str("ledger", "");
+                            child_eb.build(EventType::RunsScored)
+                        });
+                    }
                 }
 
                 eb.build(EventType::TunnelsUsed)

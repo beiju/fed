@@ -2127,37 +2127,47 @@ pub fn parse_next_event(
                     let free_refill = event.parse_free_refill()?;
                     let hype = event.parse_hype()?;
 
-                    let mut runs_scored_a = event.next_child(EventType::RunsScored)?;
-                    let mut runs_scored_b = event.next_child(EventType::RunsScored)?;
+                    // On exactly two occasions (dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
+                    // 4338a482-f7eb-448c-9827-e9220f2e86a4) a RunStolenThroughTunnels was emitted
+                    // without any children. I have no idea why that happened.
+                    let details = event.next_child_opt(EventType::RunsScored)?
+                        .map(|mut runs_scored_a| {
+                            // If there was one child, there must also be a second child
+                            let mut runs_scored_b = event.next_child(EventType::RunsScored)?;
 
-                    let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
-                    assert!(is_known_team_nickname(team_nickname_a));
-                    let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
-                    assert!(is_known_team_nickname(team_nickname_b));
+                            let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                            assert!(is_known_team_nickname(team_nickname_a));
+                            let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
+                            assert!(is_known_team_nickname(team_nickname_b));
 
-                    let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
-                        if team_nickname_a == victim_team_nickname {
-                            (runs_scored_b, runs_scored_a, team_nickname_b, true)
-                        } else {
-                            assert_eq!(team_nickname_b, victim_team_nickname);
-                            (runs_scored_a, runs_scored_b, team_nickname_a, false)
-                        };
+                            let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
+                                if team_nickname_a == victim_team_nickname {
+                                    (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                                } else {
+                                    assert_eq!(team_nickname_b, victim_team_nickname);
+                                    (runs_scored_a, runs_scored_b, team_nickname_a, false)
+                                };
+                            ParseOk(RunStolenThroughTunnelsDetails {
+                                thieving_team_id: run_gained_event.next_team_id()?,
+                                victim_team_id: run_lost_event.next_team_id()?,
+                                thieving_team_nickname: thieving_team_nickname.to_string(),
+                                away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
+                                away_score: run_gained_event.metadata_f64("awayScore")?,
+                                home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
+                                home_score: run_gained_event.metadata_f64("homeScore")?,
+                                run_gained_sub_event: run_gained_event.as_sub_event(),
+                                run_lost_sub_event: run_lost_event.as_sub_event(),
+                                victim_event_first,
+                            })
+                        })
+                        .transpose()?;
 
                     FedEventData::RunStolenThroughTunnels {
                         game: event.game(unscatter, attractor_secret_base)?,
-                        thieving_player_id: event.next_player_id()?,
                         thieving_player_name: thief_name.to_string(),
-                        thieving_team_id: run_gained_event.next_team_id()?,
-                        thieving_team_nickname: thieving_team_nickname.to_string(),
-                        victim_team_id: run_lost_event.next_team_id()?,
+                        thieving_player_id: event.next_player_id()?,
                         victim_team_nickname: victim_team_nickname.to_string(),
-                        away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
-                        away_score: run_gained_event.metadata_f64("awayScore")?,
-                        home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
-                        home_score: run_gained_event.metadata_f64("homeScore")?,
-                        run_gained_sub_event: run_gained_event.as_sub_event(),
-                        run_lost_sub_event: run_lost_event.as_sub_event(),
-                        victim_event_first,
+                        details,
                         balloons: event.parse_balloons(1)?,
                         hype,
                         free_refill,
@@ -2834,14 +2844,14 @@ pub fn parse_next_event(
         EventType::PlayerStatReroll => { todo!() }
         EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
         EventType::PlayerMoveFailedForce => {
-            // The only top-level instances of this event is Parker trying to Roam 
+            // The only top-level instances of this event is Parker trying to Roam
             event.next_parse_tag("Roam failed.\nParker MacMillan was gripped by Force.")?;
-            
+
             FedEventData::RoamFailed {
                 player_name: "Parker MacMillan".to_string(),
                 player_id: event.next_player_id()?,
             }
-            
+
         }
         EventType::EnterHallOfFlame => {
             // In Beta, this event type is only top-level for return-to-hall events. That was no
