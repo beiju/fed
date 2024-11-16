@@ -22,7 +22,7 @@ fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), F
             None => { break Ok((ledger, modifiers))  }
             Some(ParsedLedgerV2Modifier::Magnified { position, .. }) => {
                 // TODO Verify run numbers are as expected
-                modifiers.push(LedgerRunModifier::Magnified(position));
+                modifiers.push(LedgerRunModifier::Magnified { position });
             }
             Some(ParsedLedgerV2Modifier::Underhanded { .. }) => {
                 // TODO Verify run numbers are as expected
@@ -30,7 +30,7 @@ fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), F
             }
             Some(ParsedLedgerV2Modifier::SunPoint1 { value, .. }) => {
                 // TODO Verify run numbers are as expected
-                modifiers.push(LedgerRunModifier::SunPoint1(value));
+                modifiers.push(LedgerRunModifier::SunPoint1 { value });
             }
             Some(ParsedLedgerV2Modifier::Subtractor { .. }) => {
                 // TODO Verify run numbers are as expected
@@ -39,6 +39,12 @@ fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), F
             Some(ParsedLedgerV2Modifier::AcidicPitch { .. }) => {
                 // TODO Verify run numbers are as expected
                 modifiers.push(LedgerRunModifier::AcidicPitch);
+            }
+            Some(ParsedLedgerV2Modifier::Wired { player_name, .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::Wired { 
+                    player_name: player_name.to_string(),
+                });
             }
         }
     }
@@ -52,7 +58,7 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
 
         loop {
             // Try to parse the ledger line; if we can, continue. If we can't, break
-            let mut parsed_run;
+            let parsed_run;
             (ledger, parsed_run) = parse_ledger(parse_ledger_v2_run(RunSourceT::label()), ledger)?;
 
             if !parsed_run {

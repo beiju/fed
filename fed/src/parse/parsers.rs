@@ -2592,7 +2592,7 @@ pub(crate) enum ParsedLedgerLineV1<'a> {
     Magnified,
 }
 
-pub(crate) enum ParsedLedgerV2Modifier {
+pub(crate) enum ParsedLedgerV2Modifier<'a> {
     Magnified {
         position: ActivePositionType,
         runs_before: f64,
@@ -2615,6 +2615,11 @@ pub(crate) enum ParsedLedgerV2Modifier {
         runs_before: f64,
         runs_after: f64,
     },
+    Wired {
+        player_name: &'a str,
+        runs_before: f64,
+        runs_after: f64,
+    }
 }
 
 pub(crate) fn parse_score_ledger_v1(input: &str) -> ParserResult<Option<(f64, Vec<ParsedLedgerLineV1>)>> {
@@ -2686,6 +2691,12 @@ pub(crate) fn parse_ledger_v2_modifier(input: &str) -> ParserResult<Option<Parse
                 runs_before,
                 runs_after,
             }),
+        parse_ledger_wired
+            .map(|(player_name, runs_before, runs_after)| ParsedLedgerV2Modifier::Wired {
+                player_name,
+                runs_before,
+                runs_after,
+            }),
     )), opt(tag("\n")))).parse(input)
 }
 
@@ -2729,6 +2740,15 @@ pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)>
     let (input, _) = tag(" + -0.1 = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
     Ok((input, (runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_wired(input: &str) -> ParserResult<(&str, f64, f64)> {
+    let (input, _) = tag("\t").parse(input)?;
+    let (input, player_name) = parse_terminated(" is Wired!: ").parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" + 0.5 = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (player_name, runs_before, runs_after)))
 }
 
 pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<(f64)> {

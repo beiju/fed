@@ -1969,14 +1969,21 @@ impl Display for LedgerLineV1 {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum LedgerRunModifier {
-    Magnified(ActivePositionType),
+    Magnified {
+        position: ActivePositionType,
+    },
     Underhanded,
-    // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so it
-    // could be stored as a fixed point value, but I decided not to do that because blaseball is
-    // blaseball and javascript is javascript
-    SunPoint1(f64),
+    SunPoint1 {
+        // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so 
+        // it could be stored as a fixed point value, but I decided not to do that because blaseball 
+        // is blaseball and javascript is javascript
+        value: f64,
+    },
     Subtractor,
     AcidicPitch,
+    Wired {
+        player_name: String,
+    },
 }
 
 struct RunDisplay(f64);
@@ -1994,42 +2001,39 @@ impl Display for RunDisplay {
 impl LedgerRunModifier {
     pub fn modify(&self, in_value: f64) -> f64 {
         match self {
-            LedgerRunModifier::Magnified(_) => { in_value * 2.0 }
+            LedgerRunModifier::Magnified { .. } => { in_value * 2.0 }
             LedgerRunModifier::Underhanded => { in_value * -1.0 }
-            LedgerRunModifier::SunPoint1(value) => { in_value + value }
+            LedgerRunModifier::SunPoint1 { value } => { in_value + value }
             LedgerRunModifier::Subtractor => { in_value * -1.0 }
             LedgerRunModifier::AcidicPitch => { in_value - 0.1 }
+            LedgerRunModifier::Wired { .. } => { in_value + 0.5 }
         }
     }
 
     pub fn modify_and_write(&self, run_value_before: f64, mut f: impl Write) -> Result<f64, std::fmt::Error> {
-        Ok(match self {
-            LedgerRunModifier::Magnified(position) => {
-                let run_value_after = run_value_before * 2.;
+        let run_value_after = self.modify(run_value_before);
+        match self {
+            LedgerRunModifier::Magnified { position } => {
                 write!(f, "\t{} Magnified 2x: {} * 2 = {}", position.title(), RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-                run_value_after
             }
             LedgerRunModifier::Underhanded => {
-                let run_value_after = run_value_before * -1.;
                 write!(f, "\tUnderhanded: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-                run_value_after
             }
-            LedgerRunModifier::SunPoint1(value) => {
-                let run_value_after = run_value_before + value;
+            LedgerRunModifier::SunPoint1 { value } => {
                 write!(f, "\tSun .1: {} + {value} = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-                run_value_after
             }
             LedgerRunModifier::Subtractor => {
-                let run_value_after = run_value_before * -1.;
                 write!(f, "\tSubtractor: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-                run_value_after
             }
             LedgerRunModifier::AcidicPitch => {
-                let run_value_after = run_value_before - 0.1;
                 write!(f, "\tAcidic Pitch: {} + -0.1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-                run_value_after
             }
-        })
+            LedgerRunModifier::Wired { player_name } => {
+                write!(f, "\t{player_name} is Wired!: {} + 0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+            }
+        }
+        
+        Ok(run_value_after)
     }
 }
 
