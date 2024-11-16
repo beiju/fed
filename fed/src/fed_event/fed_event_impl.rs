@@ -2874,8 +2874,7 @@ impl FedEvent {
                     child_eb.build(EventType::AddedMod)
                 });
 
-                // TODO re-enable this
-                // eb.push_scores(scores, home_team_id);
+                eb.push_scores(&scores, home_team_id, "scores!", false, false);
 
                 eb.build(EventType::HitByPitch)
             }
