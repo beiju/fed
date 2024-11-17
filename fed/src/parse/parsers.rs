@@ -1,6 +1,6 @@
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
-use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere};
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
@@ -2619,6 +2619,15 @@ pub(crate) enum ParsedLedgerV2Modifier<'a> {
         player_name: &'a str,
         runs_before: f64,
         runs_after: f64,
+    },
+    Tired {
+        player_name: &'a str,
+        runs_before: f64,
+        runs_after: f64,
+    },
+    NegativePolarity {
+        runs_before: f64,
+        runs_after: f64,
     }
 }
 
@@ -2691,9 +2700,20 @@ pub(crate) fn parse_ledger_v2_modifier(input: &str) -> ParserResult<Option<Parse
                 runs_before,
                 runs_after,
             }),
-        parse_ledger_wired
+        parse_ledger_ired("Wired!", " + ")
             .map(|(player_name, runs_before, runs_after)| ParsedLedgerV2Modifier::Wired {
                 player_name,
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_ired("Tired.", " + -")
+            .map(|(player_name, runs_before, runs_after)| ParsedLedgerV2Modifier::Tired {
+                player_name,
+                runs_before,
+                runs_after,
+            }),
+        parse_ledger_negating("Negative Polarity")
+            .map(|(runs_before, runs_after)| ParsedLedgerV2Modifier::NegativePolarity {
                 runs_before,
                 runs_after,
             }),
@@ -2742,26 +2762,33 @@ pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)>
     Ok((input, (runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_wired(input: &str) -> ParserResult<(&str, f64, f64)> {
-    let (input, _) = tag("\t").parse(input)?;
-    let (input, player_name) = parse_terminated(" is Wired!: ").parse(input)?;
-    let (input, runs_before) = double.parse(input)?;
-    let (input, _) = tag(" + 0.5 = ").parse(input)?;
-    let (input, runs_after) = double.parse(input)?;
-    Ok((input, (player_name, runs_before, runs_after)))
+pub(crate) fn parse_ledger_ired<'a>(label: &'a str, plus_minus: &'a str) -> impl Fn(&str) -> ParserResult<(&str, f64, f64)> + 'a {
+    move |input| {
+        let (input, _) = tag("\t").parse(input)?;
+        let (input, player_name) = parse_terminated(&format!(" is {label}: ")).parse(input)?;
+        let (input, runs_before) = double.parse(input)?;
+        let (input, _) = tag(plus_minus).parse(input)?;
+        let (input, _) = tag("0.5 = ").parse(input)?;
+        let (input, runs_after) = double.parse(input)?;
+        Ok((input, (player_name, runs_before, runs_after)))
+    }
 }
 
-pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<(f64)> {
+pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<f64> {
     let (input, _) = tag("Moderation: ").parse(input)?;
     let (input, runs) = double.parse(input)?;
     let (input, _) = tag(" Unruns").parse(input)?;
     Ok((input, runs))
 }
 
-pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<()> {
-    let (input, _) = tag("Triple Threat: 0.3 Unrun").parse(input)?;
+pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<TripleThreats> {
+    let (input, threats) = alt((
+        tag("Triple Threat: 0.3 Unrun").map(|_| TripleThreats::One),
+        tag("Triple Threat: 0.6 Unrun").map(|_| TripleThreats::Two),
+        tag("Triple Threat: 0.9 Unrun").map(|_| TripleThreats::Three),
+    )).parse(input)?;
     let (input, _) = opt(tag("\n")).parse(input)?;
-    Ok((input, ()))
+    Ok((input, threats))
 }
 
 pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<()> {

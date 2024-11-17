@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
-use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};pub 
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::AsRefStr;
@@ -21,7 +21,7 @@ use with_structure_derive::WithStructure;
 use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::FeedParseError;
-use crate::format_utils::NewlineDelimiter;
+use crate::format_utils::{NewlineDelimiter, RunDisplay};
 use crate::parse::builder::possessive;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
@@ -2003,18 +2003,10 @@ pub enum LedgerRunModifier {
     Wired {
         player_name: String,
     },
-}
-
-struct RunDisplay(f64);
-
-impl Display for RunDisplay {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.0.fract() == 0. {
-            write!(f, "{}", self.0)
-        } else {
-            write!(f, "{:.1}", self.0)
-        }
-    }
+    Tired {
+        player_name: String,
+    },
+    NegativePolarity,
 }
 
 impl LedgerRunModifier {
@@ -2026,6 +2018,8 @@ impl LedgerRunModifier {
             LedgerRunModifier::Subtractor => { in_value * -1.0 }
             LedgerRunModifier::AcidicPitch => { in_value - 0.1 }
             LedgerRunModifier::Wired { .. } => { in_value + 0.5 }
+            LedgerRunModifier::Tired { .. } => { in_value - 0.5 }
+            LedgerRunModifier::NegativePolarity => { in_value * -1.0 }
         }
     }
 
@@ -2049,6 +2043,12 @@ impl LedgerRunModifier {
             }
             LedgerRunModifier::Wired { player_name } => {
                 write!(w, "\t{player_name} is Wired!: {} + 0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+            }
+            LedgerRunModifier::Tired { player_name } => {
+                write!(w, "\t{player_name} is Tired.: {} + -0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+            }
+            LedgerRunModifier::NegativePolarity => {
+                write!(w, "\tNegative Polarity: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
             }
         }
 
@@ -2229,14 +2229,25 @@ impl LedgerV2 for ModerationLedger {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[repr(u8)]
+pub enum TripleThreats {
+    One = 1,
+    Two = 2,
+    Three = 3,
+}
+
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct TripleThreatLedger {
+    /// Triple threat has 3 conditions under which it can give 0.3 unruns, and they can stack. This
+    /// indicates how many of them are active  
+    pub threats: TripleThreats,
     pub modifiers: Vec<LedgerRunModifier>,
 }
 
 impl TripleThreatLedger {
-    pub fn new(modifiers: Vec<LedgerRunModifier>) -> Self {
-        Self { modifiers }
+    pub fn new(threats: TripleThreats, modifiers: Vec<LedgerRunModifier>) -> Self {
+        Self { threats, modifiers }
     }
 }
 
@@ -2252,8 +2263,9 @@ impl LedgerV2 for TripleThreatLedger {
     }
 
     fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+        let num_unruns = (self.threats as u8) as f64 * 0.3; 
         // Somewhere between s22d06 and s22d11 they fixed the pluralization of Unruns here
-        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(0.3), if (season, day) < (21, 10) { "" } else { "s" })?;
+        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(num_unruns), if (season, day) < (21, 10) { "" } else { "s" })?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;

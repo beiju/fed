@@ -46,6 +46,16 @@ fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), F
                     player_name: player_name.to_string(),
                 });
             }
+            Some(ParsedLedgerV2Modifier::Tired { player_name, .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::Tired { 
+                    player_name: player_name.to_string(),
+                });
+            }
+            Some(ParsedLedgerV2Modifier::NegativePolarity { .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::NegativePolarity);
+            }
         }
     }
 }
@@ -126,10 +136,10 @@ impl ParseableLedger for TripleThreatLedger {
     type Ledger = Self;
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
-        let (ledger, _) = parse_ledger(parse_ledger_triple_threat, ledger)?;
+        let (ledger, threats) = parse_ledger(parse_ledger_triple_threat, ledger)?;
         let (ledger, modifiers) = parse_modifiers(ledger)?;
 
-        Ok((ledger, TripleThreatLedger::new(modifiers)))
+        Ok((ledger, TripleThreatLedger::new(threats, modifiers)))
     }
 }
 

@@ -34,14 +34,14 @@ run_source!(Blaserunning, "Blaserunning");
 run_source!(Walk, "Walk");
 run_source!(MildPitch, "Mild Pitch");
 run_source!(MildPitchWalk, "Mild Pitch Walk");
-run_source!(CharmWalk, "Charm Walk");
+run_source!(CharmWalk, "Walk"); // TODO Merge all "walk" sources?
 run_source!(HomeRun, "Home Run");
 run_source!(HomeRunSlamDunk, "Slam Dunk");
 run_source!(HomeRunBigBucket, "Big Bucket");
 run_source!(MildPitchCharmWalk, "Mild Pitch Charm Walk");
 run_source!(Flippers, "Flippers");
 run_source!(HitByPitch, "Hit By Pitch");
-run_source!(RunsOverflowing, "Runs Overflowing");
+run_source!(RunsOverflowing, "Overflow");
 run_source!(MindTrickWalk, "Mind Trick Walk");
 run_source!(CharmedMindTrickWalk, "Charmed Mind Trick Walk");
 run_source!(DonatedShame, "Donated Shame");

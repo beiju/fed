@@ -13,7 +13,20 @@ impl Display for Possessive<'_> {
     }
 }
 
+pub struct RunDisplay(pub f64);
+
+impl Display for RunDisplay {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0.fract() == 0. {
+            write!(f, "{}", self.0)
+        } else {
+            write!(f, "{:.1}", self.0)
+        }
+    }
+}
+
 // Newtype that formats runs and unruns
+// TODO Should this use RunDisplay or replace it?
 pub struct Runs(pub f64);
 
 impl Display for Runs {
