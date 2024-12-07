@@ -2672,6 +2672,8 @@ pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> Parser
 }
 
 pub(crate) fn parse_ledger_v2_modifier(input: &str) -> ParserResult<Option<ParsedLedgerV2Modifier>> {
+    // TODO: Always parse leading "\n", then I can get rid of a bunch of `opt(tag("\n")).parse()`,
+    //   especially in ledger_parser.rs
     opt(terminated(alt((
         parse_ledger_player_magnified
             .map(|(position, runs_before, runs_after)| ParsedLedgerV2Modifier::Magnified {
@@ -2802,6 +2804,16 @@ pub(crate) fn parse_ledger_stolen_base(input: &str) -> ParserResult<(bool, bool)
     let (input, blaserunning) = opt(parse_ledger_blaserunning).parse(input)?;
 
     Ok((input, (stole_home, blaserunning.is_some())))
+}
+
+pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i32> {
+    let (input, _) = tag("Overflow: ").parse(input)?;
+    let (input, num_runs) = parse_whole_number.parse(input)?;
+    let (input, _) = tag(" Run").parse(input)?;
+    // TODO: Remove after fixing parse_ledger_v2_modifier according to the TODO there
+    let (input, _) = opt(tag("\n")).parse(input)?;
+
+    Ok((input, num_runs))
 }
 
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {

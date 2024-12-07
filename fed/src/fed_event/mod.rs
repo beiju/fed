@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
-use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};pub 
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::AsRefStr;
@@ -2298,6 +2298,49 @@ impl LedgerV2 for HeatMagnetLedger {
 
     fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
         write!(w, "Heat Magnet: 5 Runs")
+    }
+}
+
+// Should this be generic too? I think the pattern of "one group of an
+// arbitrary number of runs, with modifiers" is repeated
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+pub struct OverflowLedger {
+    // Apparently there's no instance of floating point runs here? Might be
+    // wrong but I'm feeling hubrisy
+    pub num_runs: i32,
+    pub modifiers: Vec<LedgerRunModifier>,
+}
+
+impl OverflowLedger {
+    pub fn new(num_runs: i32, modifiers: Vec<LedgerRunModifier>) -> Self {
+        Self { num_runs, modifiers }
+    }
+}
+
+impl LedgerV2 for OverflowLedger {
+    fn label() -> &'static str {
+        todo!()
+    }
+
+    fn len(&self) -> usize { 1 }
+
+    fn run_values(&self) -> impl Iterator<Item=f64> {
+        iter::once(self.num_runs as f64)
+    }
+
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+        // Note: They appear to have fixed the pluralization at some point,
+        // but the very first instance was "Overflow: 5 Run" on s22d42
+        // This will have to support unruns eventually
+        write!(w, "Overflow: {} Run", self.num_runs)?;
+
+        let mut run_value = self.num_runs as f64;
+        for modifier in &self.modifiers {
+            write!(w, "\n")?;
+            run_value = modifier.modify_and_write(run_value, w)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -5051,7 +5094,7 @@ pub enum FedEventData {
         /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information.
-        score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::RunsOverflowing>>>,
+        score_summary: Option<ScoreSummary<OverflowLedger>>,
     },
 
     /// Detective enters a Crime Scene
