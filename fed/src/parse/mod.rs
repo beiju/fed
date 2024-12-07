@@ -1842,16 +1842,27 @@ pub fn parse_next_event(
                 }
                 ParsedBlessingOrGift::Gift(title_and_recipient) => {
                     // TODO Clean this up once I understand it more
+                    // See this discord conversation for me going a little insane about these events: https://discord.com/channels/738107179294523402/1047288668953530389/1272058222806831186
+                    // and then a small continuation here: https://discord.com/channels/738107179294523402/1047288668953530389/1314845918855565333
                     let successors = if title_and_recipient.contains("Mint Edition") {
-                        let next1 = event_iter.next().unwrap();
-                        let next2 = event_iter.next().unwrap();
-                        // I'm hoping eventually this assert will trigger and then I will finally know what the other event is
-                        assert!(
-                            (next1.r#type == EventType::Undefined && next2.r#type == EventType::Undefined) ||
-                            (next1.r#type == EventType::AddedMod && next2.r#type == EventType::Undefined) ||
-                            (next1.r#type == EventType::Undefined && next2.r#type == EventType::AddedMod)
-                        );
-                        vec![next1, next2]
+                        if event_iter.peek().unwrap().r#type == EventType::BlessingOrGiftWon {
+                            // Sometimes (I think if the replica is being reused) there's nothing special after it.
+                            // This still needs handling for what if the last BlessingOrGiftWon is a non-special mint edition one
+                            vec![]
+                        } else {
+                            let next1 = event_iter.next().unwrap();
+                            let next2 = event_iter.next().unwrap();
+                            // I'm hoping eventually this assert will trigger and then I will finally know what the other event is
+                            assert!(
+                                // So sometimes there are 2 events after this event and both start out redacted,
+                                // and apparently we've only ever unredacted one of them (which is AddedMod).
+                                // This assert is meant to catch the other one.
+                                (next1.r#type == EventType::Undefined && next2.r#type == EventType::Undefined) ||
+                                (next1.r#type == EventType::AddedMod && next2.r#type == EventType::Undefined) ||
+                                (next1.r#type == EventType::Undefined && next2.r#type == EventType::AddedMod)
+                            );
+                            vec![next1, next2]
+                        }
                     } else {
                         Vec::new()
                     };
