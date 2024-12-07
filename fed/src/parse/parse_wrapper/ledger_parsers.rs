@@ -169,7 +169,7 @@ impl ParseableLedger for StolenBaseLedger {
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         // TODO This doesn't account for modifiers between stolen base and blaserunning
-        let (ledger, (steal_home, blaserunning)) = parse_ledger(parse_ledger_stolen_base, ledger)?;
+        let (ledger, steal_home) = parse_ledger(parse_ledger_steal_home, ledger)?;
 
         let (ledger, steal_home) = if steal_home {
             let (ledger, modifiers) = parse_modifiers(ledger)?;
@@ -177,6 +177,8 @@ impl ParseableLedger for StolenBaseLedger {
         } else {
             (ledger, None)
         };
+
+        let (ledger, blaserunning) = parse_ledger(parse_ledger_blaserunning, ledger)?;
 
         let (ledger, blaserunning) = if blaserunning {
             let (ledger, modifiers) = parse_modifiers(ledger)?;

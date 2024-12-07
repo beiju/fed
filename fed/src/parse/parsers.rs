@@ -2793,17 +2793,28 @@ pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<TripleThre
     Ok((input, threats))
 }
 
-pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<()> {
-    let (input, _) = tag("Blaserunning: 0.2 Run").parse(input)?;
-    Ok((input, ()))
+pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<bool> {
+    let (input, blaserunning) = opt(tag("Blaserunning: 0.2 Run")).parse(input)?;
+    // Like other modifiers, the text is pluralized iff there are modifiers. The easiest way to
+    // handle this is to consume the s separately. It would probably be fine to do it independently
+    // of the previous opt, but philosophically I feel better only doing it if the first opt matches
+    // anything.
+    let input = if blaserunning.is_some() {
+        opt(tag("s")).parse(input)?.0
+    } else {
+        input
+    };
+    // TODO: Remove after fixing parse_ledger_v2_modifier according to the TODO there
+    let (input, _) = opt(tag("\n")).parse(input)?;
+
+    Ok((input, blaserunning.is_some()))
 }
 
-pub(crate) fn parse_ledger_stolen_base(input: &str) -> ParserResult<(bool, bool)> {
+pub(crate) fn parse_ledger_steal_home(input: &str) -> ParserResult<bool> {
     let (input, stole_home) = parse_ledger_v2_run("Steal Home").parse(input)?;
     let (input, _) = opt(tag("\n")).parse(input)?;
-    let (input, blaserunning) = opt(parse_ledger_blaserunning).parse(input)?;
 
-    Ok((input, (stole_home, blaserunning.is_some())))
+    Ok((input, stole_home))
 }
 
 pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i32> {

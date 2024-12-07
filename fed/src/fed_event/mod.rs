@@ -2071,7 +2071,8 @@ impl LedgerRun {
     }
 
     pub fn compute_and_write_with_value(&self, mut run_value: f64, ledger_label: &str, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
-        write!(w, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 { "" } else { "s" } )?;
+        // The !self.modifiers.is_empty() part seems to be a bug in Blaseball
+        write!(w, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 || !self.modifiers.is_empty() { "" } else { "s" } )?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
@@ -2082,9 +2083,9 @@ impl LedgerRun {
     }
 
     // TODO dedup logic with compute_and_write
-    pub fn value(&self) -> f64 {
+    pub fn value(&self, run_value: f64) -> f64 {
         self.modifiers.iter()
-            .fold(1.0, |value, modifier| modifier.modify(value))
+            .fold(run_value, |value, modifier| modifier.modify(value))
     }
 }
 
@@ -2126,7 +2127,8 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
 
     fn run_values(&self) -> impl Iterator<Item=f64> {
         self.runs.iter()
-            .map(|run| run.value())
+            // SimpleLedger runs are always worth 1.0 before modifiers
+            .map(|run| run.value(1.0))
     }
 
     fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
@@ -2373,14 +2375,14 @@ impl LedgerV2 for StolenBaseLedger {
         iter::empty()
             .chain(
                 if let Some(sh) = &self.steal_home {
-                    Either::Left(iter::once(sh.value()))
+                    Either::Left(iter::once(sh.value(1.0)))
                 } else {
                     Either::Right(iter::empty())
                 }
             )
             .chain(
                 if let Some(br) = &self.blaserunning {
-                    Either::Left(iter::once(br.value()))
+                    Either::Left(iter::once(br.value(0.2)))
                 } else {
                     Either::Right(iter::empty())
                 }
