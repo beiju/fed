@@ -43,6 +43,91 @@ impl Display for Runs {
     }
 }
 
+impl Runs {
+    pub fn unruns_always_plural(self) -> RunsWithUnrunsAlwaysPlural {
+        RunsWithUnrunsAlwaysPlural(self.0)
+    }
+
+    pub fn singular_if(self, always_singular: bool) -> RunsWithSingularOverride {
+        RunsWithSingularOverride { nested: self, always_singular }
+    }
+
+    pub fn singular(&self) -> RunsSingular {
+        RunsSingular(self.0)
+    }
+}
+pub struct RunsSingular(pub f64);
+
+impl Display for RunsSingular {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0 < 0.0 {
+            write!(f, "{} Unrun", self.0)
+        } else {
+            write!(f, "{} Run", self.0)
+        }
+    }
+}
+
+
+pub struct RunsWithUnrunsAlwaysPlural(pub f64);
+
+impl Display for RunsWithUnrunsAlwaysPlural {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0 == 1.0 {
+            write!(f, "1 Run")
+        } else if self.0 >= 0.0 {
+            write!(f, "{} Runs", self.0)
+        } else {
+            write!(f, "{} Unruns", -self.0)
+        }
+    }
+}
+
+impl RunsWithUnrunsAlwaysPlural {
+    pub fn singular_if(self, always_singular: bool) -> RunsWithUnrunsAlwaysPluralAndSingularOverride {
+        RunsWithUnrunsAlwaysPluralAndSingularOverride {
+            nested: self,
+            always_singular,
+        }
+    }
+
+    // Note: This will erase the "unruns always plural" fact and return singular unruns anyway
+    pub fn singular(&self) -> RunsSingular {
+        RunsSingular(self.0)
+    }
+}
+
+pub struct RunsWithSingularOverride {
+    pub nested: Runs,
+    pub always_singular: bool,
+}
+
+impl Display for RunsWithSingularOverride {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.always_singular {
+            self.nested.singular().fmt(f)
+        } else {
+            self.nested.fmt(f)
+        }
+    }
+}
+
+pub struct RunsWithUnrunsAlwaysPluralAndSingularOverride {
+    pub nested: RunsWithUnrunsAlwaysPlural,
+    pub always_singular: bool,
+}
+
+impl Display for RunsWithUnrunsAlwaysPluralAndSingularOverride {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // Singular override beats unruns always plural
+        if self.always_singular {
+            self.nested.singular().fmt(f)
+        } else {
+            self.nested.fmt(f)
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct NewlineDelimiter {
     is_first_line: bool,

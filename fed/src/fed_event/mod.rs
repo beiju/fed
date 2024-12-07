@@ -21,7 +21,7 @@ use with_structure_derive::WithStructure;
 use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::FeedParseError;
-use crate::format_utils::{NewlineDelimiter, RunDisplay};
+use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
 use crate::parse::builder::possessive;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
@@ -2335,11 +2335,11 @@ impl LedgerV2 for OverflowLedger {
     }
 
     fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
-        // Like with triple threat, this only gets pluralized if there are no modifiers. But
-        // unlike triple threat, it's possible for this to be 1, and in that case it's
-        // (correctly) never pluralized
-        let pluralize = self.num_runs != 1 && self.modifiers.is_empty();
-        write!(w, "Overflow: {} Run{}", self.num_runs, if pluralize { "s" } else { "" })?;
+        // Like with triple threat, this only gets pluralized if there are no modifiers.
+        write!(w, "Overflow: {}",
+               Runs(self.num_runs as f64)
+                .unruns_always_plural()
+                .singular_if(!self.modifiers.is_empty()))?;
 
         let mut run_value = self.num_runs as f64;
         for modifier in &self.modifiers {
@@ -2805,7 +2805,9 @@ pub enum FedEventData {
         /// Meta about the batter's item breaking, if it broke, otherwise null.
         batter_item_damage: Option<(String, ItemDamaged)>,
 
-        /// If a new bird found a birdhouse, the total number of birds. Otherwise null.
+        /// If a new Bird found a Birdhouse, this is the total number of birds in this stadium.
+        /// Otherwise null (null does not indicate there are no birds, just that there was no
+        /// Birdhouse event on this foul ball). Note there can be negative birds.
         birds: Option<i32>,
 
         /// True if this was a Very foul ball (or balls), false otherwise.

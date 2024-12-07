@@ -87,6 +87,10 @@ pub(crate) fn parse_whole_number(input: &str) -> ParserResult<i32> {
     map_res(digit1, str::parse).parse(input)
 }
 
+pub(crate) fn parse_integer(input: &str) -> ParserResult<i32> {
+    map_res(recognize(pair(opt(tag("-")), digit1)), str::parse).parse(input)
+}
+
 pub(crate) fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>, bool)> {
     let (input, repeating) = opt(parse_terminated("is Repeating!\n")).parse(input)?;
     let (input, (batter_name, inhabiting_name)) = alt((
@@ -2335,7 +2339,7 @@ pub(crate) fn parse_charge_blood<'a>(batter_name: &'a str, a: &'a str) -> impl F
 
 pub(crate) fn parse_birds(input: &str) -> ParserResult<i32> {
     let (input, _) = tag("\nA new Bird finds a Birdhouse. ").parse(input)?;
-    parse_whole_number.parse(input)
+    parse_integer.parse(input)
 }
 
 pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(bool, &str, &str)> {
@@ -2820,11 +2824,15 @@ pub(crate) fn parse_ledger_steal_home(input: &str) -> ParserResult<bool> {
 pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i32> {
     let (input, _) = tag("Overflow: ").parse(input)?;
     let (input, num_runs) = parse_whole_number.parse(input)?;
-    let (input, _) = tag(" Run").parse(input)?;
+    let (input, mul) = alt((
+        tag(" Run").map(|_| 1),
+        // Not sure about the pluralization situation here
+        tag(" Unruns").map(|_| -1),
+    )).parse(input)?;
     // TODO: Remove after fixing parse_ledger_v2_modifier according to the TODO there
     let (input, _) = opt(tag("\n")).parse(input)?;
 
-    Ok((input, num_runs))
+    Ok((input, num_runs * mul))
 }
 
 pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
