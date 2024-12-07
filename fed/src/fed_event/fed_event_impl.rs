@@ -261,8 +261,8 @@ impl FedEvent {
 
                 eb.push_pitch(pitch);
                 eb.push_description(&format!("{offworld}{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
-                eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_birds(birds);
+                eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::FoulBall)
             }
             FedEventData::Flyout { game, pitch, batter_name, fielder_name, scores, stopped_inhabiting, cooled_off, is_special, batter_debt, batter_item_damage, fielder_item_damage, other_player_item_damage, parasite } => {

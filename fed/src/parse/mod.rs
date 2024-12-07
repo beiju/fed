@@ -996,8 +996,9 @@ pub fn parse_next_event(
                 pitch.double_strike.is_some(),
                 (event.season, event.day) < (21, 9),
             ))?;
-            let batter_item_damage = event.parse_item_damage_and_name(true)?;
+            // Birds definitely come before item damage
             let birds = event.parse_birds();
+            let batter_item_damage = event.parse_item_damage_and_name(true)?;
 
             FedEventData::FoulBall {
                 game: event.game(unscatter, attractor_secret_base)?,
