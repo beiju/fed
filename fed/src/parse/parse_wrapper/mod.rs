@@ -777,7 +777,9 @@ impl<'e> EventParseWrapper<'e> {
             label,
             (self.season, self.day) < (15, 3),
             is_fc,
-            self.season < 21,
+            // TODO Should I reference event types here or should I add another argument?
+            // (if this is even the right thing to check)
+            self.season < 21 || self.event_type == EventType::Walk,
         ))?;
 
         let scoring_players = scorers.into_iter()

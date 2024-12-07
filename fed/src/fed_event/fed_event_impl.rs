@@ -478,7 +478,8 @@ impl FedEvent {
                 }
                 eb.push_player_tag(batter_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
+                // Seems like Walks continue having hype before score even after s21 when the other events stop
+                eb.push_scores(&scores, home_team_id, "scores!", false, true);
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.build(EventType::Walk)
             }
