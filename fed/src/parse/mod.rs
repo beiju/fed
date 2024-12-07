@@ -1891,19 +1891,27 @@ pub fn parse_next_event(
                                 flipped_negative,
                             })
                         }
-                        ParsedFloodingEffect::Flippers(player_name, had_hotel_motel_party) => {
-                            let hotel_motel_party = if let Some(birds) = had_hotel_motel_party {
-                                Some(HotelMotelParty {
-                                    birds: birds.map(str::to_string),
-                                    boost: event.next_boost_child_with_team()?,
+                        ParsedFloodingEffect::Flippers(player_name, hype, hotel_motel_party) => {
+                            let hotel_motel_party = hotel_motel_party
+                                .map(|stadium_name| {
+                                    ParseOk(HotelMotelParty {
+                                        birds: stadium_name.map(str::to_string),
+                                        boost: event.next_boost_child_with_team()?,
+                                    })
                                 })
-                            } else {
-                                None
-                            };
+                                .transpose()?;
+
+                            let hype = hype
+                                .map(|stadium_name| {
+                                    event.parse_hype_from_stadium(stadium_name.to_string())
+                                })
+                                .transpose()?;
+
                             FloodingSweptEffect::Flippers {
                                 player_id: event.next_player_id()?,
                                 player_name: player_name.to_string(),
                                 hotel_motel_party,
+                                hype,
                             }
                         }
                         ParsedFloodingEffect::Ego(player_name) => {

@@ -1269,7 +1269,8 @@ pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<ParsedPlay
 
 pub(crate) enum ParsedFloodingEffect<'a> {
     Elsewhere((&'a str, Option<&'a str>)),
-    Flippers(&'a str, Option<Option<&'a str>> /* hotel motel party with optional birds */),
+    // TODO these comments are stupid, make this a struct variant
+    Flippers(&'a str /* scorer name */, Option<&'a str> /* hype */, Option<Option<&'a str>> /* hotel motel party with optional birds */),
     Ego(&'a str),
 }
 
@@ -1280,7 +1281,7 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
     let (mut input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
 
     for effect in &mut effects {
-        if let ParsedFloodingEffect::Flippers(player_name, party) = effect {
+        if let ParsedFloodingEffect::Flippers(player_name, _, party) = effect {
             let (input_, parsed_party) = opt(parse_hotel_motel_party_with_name(player_name)).parse(input)?;
             *party = parsed_party;
             input = input_; // not sure if there's a more natural way to do this
@@ -1295,9 +1296,10 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
     alt((
         parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
-        preceded(tag("\n"), parse_terminated(" uses their Flippers to slingshot home!"))
-            // hotel motel party must be filled in later because of order-of-effects
-            .map(|n| ParsedFloodingEffect::Flippers(n, None)),
+        parse_flippers_score
+            // The None is for a hotel motel party which must be filled in
+            // later because of order of effects
+            .map(|(n, h)| ParsedFloodingEffect::Flippers(n, h, None)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
     )).parse(input)
@@ -1314,6 +1316,14 @@ pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<(&str, Option<&
     let (input, flipped_negative) = opt(parse_flipped_negative(swept_name)).parse(input)?;
 
     Ok((input, (swept_name, flipped_negative)))
+}
+
+pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<(&str, Option<&str>)> {
+    let (input, _) = tag("\n").parse(input)?;
+    let (input, scorer_name) = parse_terminated(" uses their Flippers to slingshot home!").parse(input)?;
+    let (input, hype) = opt(parse_hype_suffix).parse(input)?;
+
+    Ok((input, (scorer_name, hype)))
 }
 
 pub(crate) fn parse_flipped_negative(swept_player_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {

@@ -1616,6 +1616,7 @@ impl FedEvent {
                     .build()
             }
             FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary, flood_balloon } => {
+                let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A surge of Immateria rushes up from Under!");
@@ -1630,12 +1631,10 @@ impl FedEvent {
                                                       if self.season < 18 { "is" } else { "was" });
                             eb.push_sent_elsewhere(sent_elsewhere, &description, &description);
                         }
-                        FloodingSweptEffect::Flippers { player_name, player_id, .. } => {
-                            // There's a danger that this could end a game and therefore have hype
-                            // and whatever else comes with it, but I'll deal with that if and when
-                            // it actually occurs
+                        FloodingSweptEffect::Flippers { player_name, player_id, hype, .. } => {
                             eb.push_description(&format!("{player_name} uses their Flippers to slingshot home!"));
                             eb.push_player_tag(*player_id);
+                            eb.push_hype_opt(hype.as_ref(), home_team);
                         }
                         FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
                             eb.push_description(&format!("{player_name}'s Ego keeps them on base!"));
@@ -1650,17 +1649,18 @@ impl FedEvent {
 
                 // Hotel motel parties from Flippers appear after flumps, so another loop is needed
                 for effect in &effects {
-                    if let FloodingSweptEffect::Flippers { player_name, player_id, hotel_motel_party: Some(party) } = effect {
+                    if let FloodingSweptEffect::Flippers { player_name, player_id, hotel_motel_party: Some(party), .. } = effect {
                         eb.push_hotel_motel_party(party, player_name, *player_id);
                     }
                 }
 
-                eb.push_free_refills(&free_refills);
-                eb.push_opt_direct_score_summary(score_summary.as_ref());
-
+                // Flood balloons are definitely before normal balloons
                 if flood_balloon {
                     eb.push_description("A Flood Balloon was filled!");
                 }
+
+                eb.push_free_refills(&free_refills);
+                eb.push_opt_direct_score_summary(score_summary.as_ref());
 
                 eb.build(EventType::FloodingSwept)
             }

@@ -907,6 +907,9 @@ pub enum FloodingSweptEffect {
 
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<HotelMotelParty>,
+
+        /// If this event built hype, the metadata about the hype event
+        hype: Option<Hype>,
     },
     Ego(PlayerNameId),
 }
