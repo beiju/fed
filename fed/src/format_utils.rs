@@ -61,7 +61,7 @@ pub struct RunsSingular(pub f64);
 impl Display for RunsSingular {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.0 < 0.0 {
-            write!(f, "{} Unrun", self.0)
+            write!(f, "{} Unrun", -self.0)
         } else {
             write!(f, "{} Run", self.0)
         }

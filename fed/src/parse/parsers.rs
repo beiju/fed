@@ -2837,8 +2837,11 @@ pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i32> {
     let (input, mul) = alt((
         tag(" Run").map(|_| 1),
         // Not sure about the pluralization situation here
-        tag(" Unruns").map(|_| -1),
+        tag(" Unrun").map(|_| -1),
     )).parse(input)?;
+    // Plurality depends on external factors (whether there's modifiers), for some reason, so just
+    // consume an "s" if there's one available
+    let (input, _) = opt(tag("s")).parse(input)?;
     // TODO: Remove after fixing parse_ledger_v2_modifier according to the TODO there
     let (input, _) = opt(tag("\n")).parse(input)?;
 

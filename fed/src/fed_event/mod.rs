@@ -2254,6 +2254,10 @@ impl TripleThreatLedger {
     pub fn new(threats: TripleThreats, modifiers: Vec<LedgerRunModifier>) -> Self {
         Self { threats, modifiers }
     }
+
+    pub fn value(&self) -> f64 {
+        (self.threats as u8) as f64 * -0.3
+    }
 }
 
 impl LedgerV2 for TripleThreatLedger {
@@ -2264,21 +2268,20 @@ impl LedgerV2 for TripleThreatLedger {
     fn len(&self) -> usize { 1 }
 
     fn run_values(&self) -> impl Iterator<Item=f64> {
-        iter::once(0.3)
+        iter::once(self.value())
     }
 
     // TODO: This used to use season and day but it turns out that was the wrong signal. If this was
     //   the only use, remove them from the signature
     fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
-        let num_unruns = (self.threats as u8) as f64 * 0.3; 
         // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
         // was surprised too.
-        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(num_unruns),
-               if self.modifiers.is_empty() { "s" } else { "" })?;
+        write!(w, "Triple Threat: {}", Runs(self.value())
+            .singular_if(!self.modifiers.is_empty()))?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
-            modifier.modify_and_write(-0.3, w)?;
+            modifier.modify_and_write(self.value(), w)?;
         }
 
         Ok(())
