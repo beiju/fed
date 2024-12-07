@@ -2004,10 +2004,14 @@ pub fn parse_next_event(
         EventType::EnterSecretBase => {
             let player_name = event.next_parse(parse_terminated(" enters the Secret Base..."))?;
 
+            let deep_darkness = event.next_child_opt(EventType::InvestigationMessage)?
+                .map(|child_event| child_event.as_sub_event());
+
             FedEventData::EnterSecretBase {
                 game: event.game(unscatter, attractor_secret_base)?,
                 player_id: event.next_player_id()?,
                 player_name: player_name.to_string(),
+                deep_darkness,
             }
         }
         EventType::ExitSecretBase => {

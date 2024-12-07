@@ -5189,6 +5189,10 @@ pub enum FedEventData {
 
         /// Name of the player who entered the Secret Base
         player_name: String,
+
+        /// When detectives enter the Secret Base (TODO: Every time?) they sense a Deep Darkness.
+        /// This is the metadata for that sub-event, if it exists. Otherwise null.
+        deep_darkness: Option<SubEvent>,
     },
 
     /// Player exits the Secret Base

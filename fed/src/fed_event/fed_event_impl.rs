@@ -3000,16 +3000,23 @@ impl FedEvent {
                     })
                     .build()
             }
-            FedEventData::EnterSecretBase { game, player_id, player_name } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::EnterSecretBase,
-                        category: EventCategory::Special,
-                        description: format!("{player_name} enters the Secret Base..."),
-                        player_tags: vec![player_id],
-                        ..Default::default()
+            FedEventData::EnterSecretBase { game, player_id, player_name, deep_darkness } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(&format!("{player_name} enters the Secret Base..."));
+                eb.push_player_tag(player_id);
+
+                if let Some(deep_darkness_event) = deep_darkness {
+                    eb.push_child(deep_darkness_event, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description(&format!("{player_name} senses a Deep Darkness..."));
+                        child_eb.push_player_tag(player_id);
+
+                        child_eb.build(EventType::InvestigationMessage)
                     })
-                    .build()
+                }
+
+                eb.build(EventType::EnterSecretBase)
             }
             FedEventData::ExitSecretBase { game, player_id, player_name, to_fifth } => {
                 eb.set_game(game);
