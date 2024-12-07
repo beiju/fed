@@ -2262,10 +2262,14 @@ impl LedgerV2 for TripleThreatLedger {
         iter::once(0.3)
     }
 
-    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+    // TODO: This used to use season and day but it turns out that was the wrong signal. If this was
+    //   the only use, remove them from the signature
+    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
         let num_unruns = (self.threats as u8) as f64 * 0.3; 
-        // Somewhere between s22d06 and s22d11 they fixed the pluralization of Unruns here
-        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(num_unruns), if (season, day) < (21, 10) { "" } else { "s" })?;
+        // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
+        // was surprised too.
+        write!(w, "Triple Threat: {} Unrun{}", RunDisplay(num_unruns),
+               if self.modifiers.is_empty() { "s" } else { "" })?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
@@ -2329,10 +2333,11 @@ impl LedgerV2 for OverflowLedger {
     }
 
     fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
-        // Note: They appear to have fixed the pluralization at some point,
-        // but the very first instance was "Overflow: 5 Run" on s22d42
-        // This will have to support unruns eventually
-        write!(w, "Overflow: {} Run", self.num_runs)?;
+        // Like with triple threat, this only gets pluralized if there are no modifiers. But
+        // unlike triple threat, it's possible for this to be 1, and in that case it's
+        // (correctly) never pluralized
+        let pluralize = self.num_runs != 1 && self.modifiers.is_empty();
+        write!(w, "Overflow: {} Run{}", self.num_runs, if pluralize { "s" } else { "" })?;
 
         let mut run_value = self.num_runs as f64;
         for modifier in &self.modifiers {
