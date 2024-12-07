@@ -3962,6 +3962,92 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
                 eb.build(EventType::PlayerMoveFailedForce)
             }
+            FedEventData::ThievesGuildStolePlayer { game, thieving_team_id, thieving_team_nickname, thieving_team_stadium_name, victim_team_id, victim_team_nickname, stolen_player_id, stolen_player_name, player_moved_teams_sub_event, player_shadows_boost } => {
+                eb.set_game(game);
+                eb.push_player_tag(stolen_player_id);
+                eb.push_description(&format!("{thieving_team_stadium_name} Thieves' Guild convened."));
+                eb.push_description(&format!("They stole {victim_team_nickname}' Shadows player {stolen_player_name}!"));
+
+                eb.push_child(player_moved_teams_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("The {victim_team_nickname} sent a player to the {thieving_team_nickname}."));
+                    child_eb.push_player_tag(stolen_player_id);
+                    child_eb.push_team_tag(victim_team_id);
+                    child_eb.push_team_tag(thieving_team_id);
+
+                    child_eb.push_metadata_i64("location", 2  /* Shadows */);
+                    child_eb.push_metadata_i64("receiveLocation", 2 /* Shadows */);
+                    child_eb.push_metadata_uuid("playerId", stolen_player_id);
+                    child_eb.push_metadata_str("playerName", &stolen_player_name);
+                    child_eb.push_metadata_uuid("receiveTeamId", thieving_team_id);
+                    child_eb.push_metadata_str("receiveTeamName", &thieving_team_nickname);
+                    child_eb.push_metadata_uuid("sendTeamId", victim_team_id);
+                    child_eb.push_metadata_str("sendTeamName", victim_team_nickname);
+
+                    child_eb.build(EventType::PlayerMoved)
+                });
+
+                eb.push_child(player_shadows_boost.sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("{stolen_player_name} entered the Shadows."));
+                    child_eb.push_player_tag(stolen_player_id);
+                    child_eb.push_team_tag(thieving_team_id);
+
+                    child_eb.build_boost(&player_shadows_boost)
+                });
+
+                eb.build(EventType::ThievesGuildStolePlayer)
+            }
+            FedEventData::ThievesGuildStoleItem { game, thieving_team_nickname, thieving_team_stadium_name, beneficiary_player_name, beneficiary_gained_item, victim_team_id, victim_team_nickname, victim_player_id, victim_player_name, victim_lost_item } => {
+                eb.set_game(game);
+                eb.push_player_tag(beneficiary_gained_item.player_id);
+                eb.push_player_tag(victim_player_id);
+                eb.push_description(&format!("{thieving_team_stadium_name} Thieves' Guild convened."));
+                eb.push_description(&format!("They stole {} from {victim_team_nickname}' Shadows player {victim_player_name} and gave it to {beneficiary_player_name}.", beneficiary_gained_item.item_name));
+
+                // Almost, but not quite, reusable from the above
+                let stolen_statement = format!("{thieving_team_stadium_name} Thieves' Guild stole {} from {victim_player_name} and give it to {beneficiary_player_name}.", beneficiary_gained_item.item_name);
+
+                // The borrow checker wants this, but it also makes our format strings look nicer
+                let item_name = &beneficiary_gained_item.item_name;
+
+                eb.push_child(victim_lost_item.sub_event, |mut child_eb| {
+                    // The missing space after the stolen_statement is game-accurate
+                    child_eb.push_description(&format!("{stolen_statement}{victim_player_name}'s {item_name} was taken by {beneficiary_player_name}!"));
+                    child_eb.push_player_tag(victim_player_id);
+                    child_eb.push_team_tag(victim_team_id);
+
+                    child_eb.push_metadata_uuid("itemId", beneficiary_gained_item.item_id);
+                    child_eb.push_metadata_str("itemName", item_name);
+                    child_eb.push_metadata_str_vec("mods", beneficiary_gained_item.item_mods.clone());
+                    child_eb.push_metadata_f64("playerItemRatingAfter", victim_lost_item.player_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", victim_lost_item.player_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", victim_lost_item.player_rating);
+
+                    child_eb.build(EventType::PlayerLostItem)
+                });
+
+                if let Some(item_dropped) = beneficiary_gained_item.dropped_item {
+                    eb.push_dropped_item(&beneficiary_player_name, beneficiary_gained_item.player_id, beneficiary_gained_item.team_id, beneficiary_gained_item.player_rating, item_dropped);
+                }
+
+                // This is just different enough to not use eb.push_gained_item
+                eb.push_child(beneficiary_gained_item.sub_event, |mut child_eb| {
+                    // The missing space after the stolen_statement is game-accurate
+                    child_eb.push_description(&format!("{stolen_statement}{beneficiary_player_name} took {victim_player_name}'s {item_name}!"));
+                    child_eb.push_player_tag(beneficiary_gained_item.player_id);
+                    child_eb.push_team_tag(beneficiary_gained_item.team_id);
+
+                    child_eb.push_metadata_uuid("itemId", beneficiary_gained_item.item_id);
+                    child_eb.push_metadata_str("itemName", item_name);
+                    child_eb.push_metadata_str_vec("mods", beneficiary_gained_item.item_mods);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", beneficiary_gained_item.player_item_rating_after);
+                    child_eb.push_metadata_f64("playerItemRatingBefore", beneficiary_gained_item.player_item_rating_before);
+                    child_eb.push_metadata_f64("playerRating", beneficiary_gained_item.player_rating);
+
+                    child_eb.build(EventType::PlayerGainedItem)
+                });
+
+                eb.build(EventType::ThievesGuildStoleItem)
+            }
         };
 
         vec![item]

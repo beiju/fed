@@ -3054,3 +3054,28 @@ pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(&str, &str, &
 
     Ok((input, (trader_name, donated_item_name, victim_name, taken_item_name)))
 }
+
+
+pub(crate) fn parse_thieves_guild_convened(input: &str) -> ParserResult<&str> {
+    parse_terminated(" Thieves' Guild convened.\n").parse(input)
+}
+
+pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("They stole ").parse(input)?;
+    // This may need to be more intelligent about pluralization, we'll see
+    let (input, victim_team_nickname) = parse_terminated("' Shadows player ").parse(input)?;
+    let (input, stolen_player_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (victim_team_nickname, stolen_player_name)))
+}
+
+pub(crate) fn parse_thieves_guild_stole_item(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
+    let (input, _) = tag("They stole ").parse(input)?;
+    let (input, item_name) = parse_terminated(" from ").parse(input)?;
+    // This may need to be more intelligent about pluralization, we'll see
+    let (input, victim_team_nickname) = parse_terminated("' Shadows player ").parse(input)?;
+    let (input, victim_player_name) = parse_terminated(" and gave it to ").parse(input)?;
+    let (input, beneficiary_player_name) = parse_until_period_eof.parse(input)?;
+
+    Ok((input, (item_name, victim_team_nickname, victim_player_name, beneficiary_player_name)))
+}

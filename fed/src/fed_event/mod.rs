@@ -1392,6 +1392,22 @@ pub struct ItemGained {
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ItemLost {
+    /// The increase or decrease that all the wielding player's items caused to their star rating
+    /// before losing this item
+    pub player_item_rating_before: f64,
+
+    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    pub player_item_rating_after: f64,
+
+    /// The player's star rating. TODO: Is this with or without items?
+    pub player_rating: f64,
+
+    /// Metadata for the event associated with losing the item
+    pub sub_event: SubEvent,
+}
+
 #[derive(Debug, Clone, PartialEq,Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemRepaired {
     /// Uuid of item that was repaired
@@ -6311,6 +6327,74 @@ pub enum FedEventData {
         /// Uuid of the player who tried and failed to Roam
         player_id: Uuid,
     },
+
+    /// A team's Thieves Guild stole a player from their opponents' Shadows
+    ThievesGuildStolePlayer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the thieving team.
+        thieving_team_id: Uuid,
+
+        /// Nickname of the thieving team.
+        thieving_team_nickname: String,
+
+        /// Name of the stadium owned by the thieving team. This is how that team's thieves' guild
+        /// is identified.
+        thieving_team_stadium_name: String,
+
+        /// Uuid of the team whose player was stolen.
+        victim_team_id: Uuid,
+
+        /// Nickname of the team whose player was stolen.
+        victim_team_nickname: String,
+
+        /// Uuid of the player who was stolen
+        stolen_player_id: Uuid,
+
+        /// Name of the player who was stolen
+        stolen_player_name: String,
+
+        /// Metadata for the sub-event associated with the player moving teams
+        player_moved_teams_sub_event: SubEvent,
+
+        /// Metadata for the player's shadow boost
+        player_shadows_boost: PlayerBoostSubEvent,
+    },
+
+    /// A team's Thieves Guild stole an item from a player from their opponents' Shadows
+    ThievesGuildStoleItem {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the thieving team.
+        thieving_team_nickname: String,
+
+        /// Name of the stadium owned by the thieving team. This is how that team's thieves' guild
+        /// is identified.
+        thieving_team_stadium_name: String,
+
+        /// Name of player who gained the stolen item
+        beneficiary_player_name: String,
+
+        /// Information associated with the thieving team's player gaining the item
+        beneficiary_gained_item: ItemGained,
+
+        /// Uuid of the team who lost the item
+        victim_team_id: Uuid,
+
+        /// Nickname of the team who lost the item
+        victim_team_nickname: String,
+
+        /// Uuid of player who lost the item
+        victim_player_id: Uuid,
+
+        /// Name of player who lost the item
+        victim_player_name: String,
+
+        /// Information associated with the victim team's player losing the item
+        victim_lost_item: ItemLost,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6557,6 +6641,8 @@ impl FedEventData {
             FedEventData::NothingToTrade { game, .. } => { Some(game) }
             FedEventData::Trade { game, .. } => { Some(game) }
             FedEventData::RoamFailed { .. } => { None }
+            FedEventData::ThievesGuildStolePlayer { game, .. } => { Some(game) }
+            FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }
         }
     }
 }

@@ -383,6 +383,8 @@ pub enum EventType {
     ElementAddedToItem = 224,
     Sun30Smiles = 226,
     Voicemail = 228,
+    ThievesGuildStoleItem = 230,
+    ThievesGuildStolePlayer = 231,
     TumbleweedSounds = 232,
     Trade = 233,
     TradeFailed = 234,

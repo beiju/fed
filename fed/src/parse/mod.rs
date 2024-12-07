@@ -3665,6 +3665,81 @@ pub fn parse_next_event(
                 },
             }
         }
+        EventType::ThievesGuildStoleItem => {
+            let thieving_team_stadium_name = event.next_parse(parse_thieves_guild_convened)?;
+            let (item_name, victim_team_nickname, victim_player_name, beneficiary_player_name) = event.next_parse(parse_thieves_guild_stole_item)?;
+            assert!(is_known_team_nickname(victim_team_nickname));
+
+            let mut item_lost_child = event.next_child(EventType::PlayerLostItem)?;
+            // Cheating a little here by parsing only the beginning of a sub-event
+            let thieving_team_nickname = item_lost_child.next_parse(parse_terminated("Thieves' Guild stole"))?;
+            let mut item_dropped_for_other_item_child = event.next_child_opt(EventType::PlayerLostItem)?;
+            let mut item_gained_child = event.next_child(EventType::PlayerGainedItem)?;
+
+            let dropped_item = item_dropped_for_other_item_child
+                .map(|drop_event| {
+                    ParseOk(ItemDroppedForNewItem {
+                        item_id: drop_event.metadata_uuid("itemId")?,
+                        item_name: drop_event.metadata_str("itemName")?.to_string(),
+                        item_mods: drop_event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                        player_item_rating_before: drop_event.metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
+                        item_was_broken: false, // TODO
+                        sub_event: drop_event.as_sub_event(),
+                    })     
+                })
+                .transpose()?;
+
+            FedEventData::ThievesGuildStoleItem {
+                game: event.game(unscatter, attractor_secret_base)?,
+                thieving_team_nickname: thieving_team_nickname.to_string(),
+                thieving_team_stadium_name: thieving_team_stadium_name.to_string(),
+                beneficiary_player_name: beneficiary_player_name.to_string(),
+                beneficiary_gained_item: ItemGained {
+                    item_id: item_gained_child.metadata_uuid("itemId")?,
+                    item_name: item_name.to_string(),
+                    item_mods: item_gained_child.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                    player_item_rating_before: item_gained_child.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: item_gained_child.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: item_gained_child.metadata_f64("playerRating")?,
+                    team_id: item_gained_child.next_team_id()?,
+                    player_id: item_gained_child.next_player_id()?,
+                    sub_event: item_gained_child.as_sub_event(),
+                    dropped_item,
+                },
+                victim_team_id: item_lost_child.next_team_id()?,
+                victim_team_nickname: victim_team_nickname.to_string(),
+                victim_player_id: item_lost_child.next_player_id()?,
+                victim_player_name: victim_player_name.to_string(),
+                victim_lost_item: ItemLost {
+                    player_item_rating_before: item_lost_child.metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: item_lost_child.metadata_f64("playerItemRatingAfter")?,
+                    player_rating: item_lost_child.metadata_f64("playerRating")?,
+                    sub_event: item_lost_child.as_sub_event(),
+                },
+            }
+        }
+        EventType::ThievesGuildStolePlayer => {
+            let thieving_team_stadium_name = event.next_parse(parse_thieves_guild_convened)?;
+            let (victim_team_nickname, stolen_player_name) = event.next_parse(parse_thieves_guild_stole_player)?;
+            assert!(is_known_team_nickname(victim_team_nickname));
+
+            let moved_teams_child = event.next_child(EventType::PlayerMoved)?;
+            let player_shadows_boost = event.next_boost_child()?;
+
+            FedEventData::ThievesGuildStolePlayer {
+                game: event.game(unscatter, attractor_secret_base)?,
+                thieving_team_id: moved_teams_child.metadata_uuid("receiveTeamId")?,
+                thieving_team_nickname: moved_teams_child.metadata_str("receiveTeamName")?.to_string(),
+                thieving_team_stadium_name: thieving_team_stadium_name.to_string(),
+                victim_team_id: moved_teams_child.metadata_uuid("sendTeamId")?,
+                victim_team_nickname: victim_team_nickname.to_string(),
+                stolen_player_id: moved_teams_child.metadata_uuid("playerId")?,
+                stolen_player_name: stolen_player_name.to_string(),
+                player_moved_teams_sub_event: moved_teams_child.as_sub_event(),
+                player_shadows_boost,
+            }
+        }
         EventType::TumbleweedSounds => {
             FedEventData::TumbleweedSounds {
                 team_id: event.next_team_id()?,
