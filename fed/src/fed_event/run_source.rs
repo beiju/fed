@@ -32,7 +32,7 @@ run_source!(DoublePlay, "Base Hit"); // I guess this is a base hit too
 run_source!(StealHome, "Steal Home");
 run_source!(Blaserunning, "Blaserunning");
 run_source!(Walk, "Walk");
-run_source!(MildPitch, "Mild Pitch");
+run_source!(MildPitch, "Base Hit"); // Now this one has to be a mistake
 run_source!(MildPitchWalk, "Mild Pitch Walk");
 run_source!(CharmWalk, "Walk"); // TODO Merge all "walk" sources?
 run_source!(HomeRun, "Home Run");
