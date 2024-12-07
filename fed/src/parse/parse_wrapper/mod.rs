@@ -595,7 +595,25 @@ impl<'e> EventParseWrapper<'e> {
         self.parse_scores_with_scoring_players(scoring_players, attractions, is_fc)
     }
 
+    pub fn parse_scores_without_summary<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(&mut self, label: &'static str, is_fc: bool) -> Result<Scores<LedgerT>, FeedParseError> {
+        let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
+        self.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, is_fc)
+    }
+
     pub fn parse_scores_with_scoring_players<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
+        &mut self,
+        scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>,
+        attractions: Vec<(Uuid, String, String)>,
+        is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
+    ) -> Result<Scores<LedgerT>, FeedParseError> {
+        let mut scores = self.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, is_fc)?;
+        scores.score_summary = self.parse_score_summary()?;
+        Ok(scores)
+    }
+
+    // This is unfortunately not well type-encoded. This function always returns a Scores item with
+    // .score_summary set to None, and subsequent functions may parse and set the score summary
+    pub fn parse_scores_with_scoring_players_without_summary<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
         &mut self,
         scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>,
         attractions: Vec<(Uuid, String, String)>,
@@ -667,15 +685,10 @@ impl<'e> EventParseWrapper<'e> {
 
         let free_refills = self.parse_free_refills()?;
 
-        let score_summary = self.parse_score_summary()?;
-        // Every score post s19 should have a ScoreSummary
-        // Commented out because it's actually easier to diagnose if it fails later
-        // assert_eq!(score_summary.is_some(), self.season >= 19 && !scores.is_empty());
-
         Ok(Scores {
             scores,
             free_refills,
-            score_summary,
+            score_summary: None, // Filled in by a later function
         })
     }
 

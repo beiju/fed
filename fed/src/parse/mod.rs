@@ -883,7 +883,7 @@ pub fn parse_next_event(
                 ParsedHitType::Quadruple => { HitType::Quadruple }
             };
 
-            let mut scores = event.parse_scores(" scores!", false)?;
+            let mut scores = event.parse_scores_without_summary(" scores!", false)?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
@@ -894,11 +894,10 @@ pub fn parse_next_event(
                 event.parse_stopped_inhabiting(Some(batter_id))?
             };
 
-            // parse_scores gets the score event, but sometimes the spicy event is in the way. Can't
-            // fix this by reordering the calls because it's in the opposite order in the event text
-            if scores.score_summary.is_none() {
-                scores.score_summary = event.parse_score_summary()?;
-            }
+            // parse_scores ordinarily gets the score event, but for this event the Spicy text is
+            // in the way.
+            assert!(scores.score_summary.is_none());
+            scores.score_summary = event.parse_score_summary()?;
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
