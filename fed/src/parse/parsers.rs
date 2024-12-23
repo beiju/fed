@@ -3031,7 +3031,11 @@ pub(crate) enum ParsedTrade<'a> {
         donated_item_name: &'a str,
         victim_name: &'a str,
         taken_item_name: &'a str,
-    }
+    },
+    NothingToOffer {
+        trader_name: &'a str,
+        victim_name: &'a str,
+    },
 }
 
 pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
@@ -3041,6 +3045,9 @@ pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
         parse_successful_trade.map(|(trader_name, donated_item_name, victim_name, taken_item_name)| 
             ParsedTrade::Traded { trader_name, donated_item_name, victim_name, taken_item_name }
         ),
+        parse_trade_nothing_to_offer.map(|(trader_name, victim_name)|
+            ParsedTrade::NothingToOffer { trader_name, victim_name }
+        ),
     )).parse(input)
 }
 
@@ -3049,10 +3056,18 @@ pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(&str, &str, &
     let (input, _) = tag("Trader ").parse(input)?;
     let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
     let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
-    let (input, victim_name) = parse_terminated("'s ").parse(input)?;
+    let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, taken_item_name) = parse_terminated(".").parse(input)?;
 
     Ok((input, (trader_name, donated_item_name, victim_name, taken_item_name)))
+}
+
+
+pub(crate) fn parse_trade_nothing_to_offer(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, trader_name) = parse_terminated(" tried to trade with ").parse(input)?;
+    let (input, victim_name) = parse_terminated(" but they had nothing to offer.").parse(input)?;
+
+    Ok((input, (trader_name, victim_name)))
 }
 
 

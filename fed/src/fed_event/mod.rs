@@ -37,6 +37,35 @@ pub enum Being {
     Namerifeht = 6,
 }
 
+// TODO Check to see if this is a dupe of an existing struct or if any subfields can be consolidated
+//   into an existing struct
+// TODO After doing the above, document this struct
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct TraderTrade {
+    pub victim_id: Uuid,
+    pub victim_name: String,
+    pub victim_team_id: Uuid,
+    pub victim_item_rating_before: f64,
+    pub victim_item_rating_after: f64,
+    pub victim_rating: f64,
+
+    pub trader_id: Uuid,
+    pub trader_name: String,
+    pub trader_team_id: Uuid,
+    pub trader_item_rating_before: f64,
+    pub trader_item_rating_after: f64,
+    pub trader_rating: f64,
+
+    pub stolen_item_id: Uuid,
+    pub stolen_item_name: String,
+    pub stolen_item_mods: Vec<String>,
+
+    pub exchanged_item_name: Option<String>,
+    pub victim_lost_item_sub_event: SubEvent,
+    pub trader_gained_item_sub_event: SubEvent,
+}
+
 /// Game data. Every game event has one of these.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +88,9 @@ pub struct GameEvent {
 
     /// If an Attractor entered the Secret Base on this tick, contains information about this player
     pub attractor_secret_base: Option<PlayerNameId>,
+
+    /// If a Trader initiated a Trade on this tick, contains information about the trade
+    pub trader_trade: Option<TraderTrade>,
 }
 
 /// Pitch data. The normal-baseball game events all have one of these.
@@ -6276,10 +6308,14 @@ pub enum FedEventData {
         trader_mods_lost: Vec<String>,
 
         /// Trader's item rating before the swap
-        trader_item_rating_before: f64,
+        ///
+        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        trader_item_rating_before: Option<f64>,
 
         /// Trader's item rating after the swap
-        trader_item_rating_after: f64,
+        ///
+        /// Can be null under unidentified circumstances (see 69b1e333-db49-40e7-bcf6-432814f0c391)
+        trader_item_rating_after: Option<f64>,
 
         /// Trader's total rating
         trader_rating: f64,
@@ -6306,16 +6342,45 @@ pub enum FedEventData {
         victim_mods_lost: Vec<String>,
 
         /// Victim's item rating before the swap
-        victim_item_rating_before: f64,
+        ///
+        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        victim_item_rating_before: Option<f64>,
 
         /// Victim's item rating after the swap
-        victim_item_rating_after: f64,
+        ///
+        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        victim_item_rating_after: Option<f64>,
 
         /// Victim's total rating
         victim_rating: f64,
 
         /// Metadata for the sub-event associated with the victim changing items
         victim_item_change_sub_event: SubEvent,
+    },
+
+    /// Player tried to trade with another player, but the other had nothing to offer. This event is
+    /// very similar to NothingToTrade, but has a slightly different message that names the victim.
+    /// I don't know what the difference is, but the two event messages intermingle so it's not just
+    /// a case of the message changing.
+    NothingToOffer {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who sought out the trade
+        trader_name: String,
+
+        /// Uuid of the player who sought out the trade
+        trader_id: Uuid,
+
+        /// Name of the player who the trader looked at
+        victim_name: String,
+
+        /// Uuid of the player who the trader looked at
+        victim_id: Uuid,
+
+        /// Sub-event associated with finding nothing to trade. Not sure why this requires a
+        /// sub-event.
+        sub_event: SubEvent,
     },
 
     /// Player tried and failed to Roam. The only observed instances of this were Parker MacMillan
@@ -6640,6 +6705,7 @@ impl FedEventData {
             FedEventData::IntentionalWalk { game, .. } => { Some(game) }
             FedEventData::NothingToTrade { game, .. } => { Some(game) }
             FedEventData::Trade { game, .. } => { Some(game) }
+            FedEventData::NothingToOffer { game, .. } => { Some(game) }
             FedEventData::RoamFailed { .. } => { None }
             FedEventData::ThievesGuildStolePlayer { game, .. } => { Some(game) }
             FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }

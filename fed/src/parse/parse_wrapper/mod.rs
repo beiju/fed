@@ -1233,6 +1233,38 @@ impl<'e> EventParseWrapper<'e> {
         let away_team = self.next_team_id()?;
         let home_team = self.next_team_id()?;
 
+        // I'm taking a guess that Trader stuff is always at the end of an event. This does mean
+        // that `game()` has to be called last, but in practice I think I do that already.
+        let trader_trade = self.next_child_opt(EventType::PlayerLostItem)?
+            .map(|mut victim_lost_event| {
+                let victim_name = victim_lost_event.next_parse(parse_terminated(" traded away "))?;
+                // If there was a PlayerLostItem event, there must also be a PlayerGainedItem event
+                let mut trader_gained_event = self.next_child(EventType::PlayerGainedItem)?;
+                let trader_name = trader_gained_event.next_parse(parse_terminated(" traded their "))?;
+
+                ParseOk(TraderTrade {
+                    victim_id: victim_lost_event.next_player_id()?,
+                    victim_name: victim_name.to_string(),
+                    victim_team_id: victim_lost_event.next_team_id()?,
+                    victim_item_rating_before: victim_lost_event.metadata_f64("playerItemRatingBefore")?,
+                    victim_item_rating_after: victim_lost_event.metadata_f64("playerItemRatingAfter")?,
+                    victim_rating: victim_lost_event.metadata_f64("playerRating")?,
+                    trader_id: trader_gained_event.next_player_id()?,
+                    trader_name: trader_name.to_string(),
+                    trader_team_id: trader_gained_event.next_team_id()?,
+                    trader_item_rating_before: trader_gained_event.metadata_f64("playerItemRatingBefore")?,
+                    trader_item_rating_after: trader_gained_event.metadata_f64("playerItemRatingAfter")?,
+                    trader_rating: trader_gained_event.metadata_f64("playerRating")?,
+                    stolen_item_id: victim_lost_event.metadata_uuid("itemId")?,
+                    stolen_item_name: victim_lost_event.metadata_str("itemName")?.to_string(),
+                    stolen_item_mods: victim_lost_event.metadata_str_vec("mods")?.into_iter().map(String::from).collect(),
+                    exchanged_item_name: None, // TODO
+                    victim_lost_item_sub_event: victim_lost_event.as_sub_event(),
+                    trader_gained_item_sub_event: trader_gained_event.as_sub_event(),
+                })
+            })
+            .transpose()?;
+
         Ok(GameEvent {
             game_id,
             home_team,
@@ -1246,6 +1278,7 @@ impl<'e> EventParseWrapper<'e> {
                 })?,
             unscatter,
             attractor_secret_base,
+            trader_trade,
         })
     }
 

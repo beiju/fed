@@ -3916,7 +3916,7 @@ impl FedEvent {
             }
             FedEventData::Trade { game, trader_name, trader_id, donated_item_name, donated_item_id, trader_mods_gained, trader_mods_lost, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, taken_item_name, taken_item_id, victim_mods_gained, victim_mods_lost, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
                 eb.set_game(game);
-                let description = format!("Trader {trader_name} traded their {donated_item_name} for {victim_name}'s {taken_item_name}.");
+                let description = format!("Trader {trader_name} traded their {donated_item_name} for {} {taken_item_name}.", Possessive(&victim_name));
                 eb.push_description(&description);
 
                 eb.push_child(trader_item_change_sub_event, |mut child_eb| {
@@ -3930,8 +3930,8 @@ impl FedEvent {
                     child_eb.push_metadata_str("itemReceivedName", &taken_item_name);
                     child_eb.push_metadata_str_vec("modsGained", trader_mods_gained);
                     child_eb.push_metadata_str_vec("modsLost", trader_mods_lost);
-                    child_eb.push_metadata_f64("playerItemRatingAfter", trader_item_rating_after);
-                    child_eb.push_metadata_f64("playerItemRatingBefore", trader_item_rating_before);
+                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", trader_item_rating_after);
+                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", trader_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", trader_rating);
                     child_eb.build(EventType::ItemTraded)
                 });
@@ -3947,10 +3947,26 @@ impl FedEvent {
                     child_eb.push_metadata_str("itemReceivedName", &donated_item_name);
                     child_eb.push_metadata_str_vec("modsGained", victim_mods_gained);
                     child_eb.push_metadata_str_vec("modsLost", victim_mods_lost);
-                    child_eb.push_metadata_f64("playerItemRatingAfter", victim_item_rating_after);
-                    child_eb.push_metadata_f64("playerItemRatingBefore", victim_item_rating_before);
+                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", victim_item_rating_after);
+                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", victim_rating);
                     child_eb.build(EventType::ItemTraded)
+                });
+
+                eb.build(EventType::Trade)
+            }
+            FedEventData::NothingToOffer { game, trader_name, trader_id, victim_name, victim_id, sub_event } => {
+                eb.set_game(game);
+                let description = format!("{trader_name} tried to trade with {victim_name} but they had nothing to offer.");
+                eb.push_description(&description);
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_description(&description);
+                    child_eb.push_player_tag(trader_id);
+                    child_eb.push_player_tag(victim_id);
+
+                    child_eb.build(EventType::TradeFailed)
                 });
 
                 eb.build(EventType::Trade)

@@ -96,6 +96,36 @@ impl EventBuilder {
             self.push_description(&format!("{} enters the Secret Base...", attractor.player_name));
             self.push_player_tag(attractor.player_id)
         }
+
+        // This is probably going to need to be treated specially because I assume it goes at the
+        // end of the child list, but for now pretend it's at the beginning
+        if let Some(trader_trade) = game.trader_trade {
+            self.push_child(trader_trade.victim_lost_item_sub_event, |mut child_eb| {
+                child_eb.push_description(&format!("{} traded away {} to {} for {}.", trader_trade.victim_name, trader_trade.stolen_item_name, trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing")));
+                child_eb.push_player_tag(trader_trade.victim_id);
+                child_eb.push_team_tag(trader_trade.victim_team_id);
+                child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
+                child_eb.push_metadata_str("itemName", &trader_trade.stolen_item_name);
+                child_eb.push_metadata_str_vec("mods", trader_trade.stolen_item_mods.clone());
+                child_eb.push_metadata_f64("playerItemRatingBefore", trader_trade.victim_item_rating_before);
+                child_eb.push_metadata_f64("playerItemRatingAfter", trader_trade.victim_item_rating_after);
+                child_eb.push_metadata_f64("playerRating", trader_trade.victim_rating);
+                child_eb.build(EventType::PlayerLostItem)
+            });
+
+            self.push_child(trader_trade.trader_gained_item_sub_event, |mut child_eb| {
+                child_eb.push_description(&format!("{} traded their {} for {} {}.", trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing"), Possessive(&trader_trade.victim_name), trader_trade.stolen_item_name));
+                child_eb.push_player_tag(trader_trade.trader_id);
+                child_eb.push_team_tag(trader_trade.trader_team_id);
+                child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
+                child_eb.push_metadata_str("itemName", trader_trade.stolen_item_name);
+                child_eb.push_metadata_str_vec("mods", trader_trade.stolen_item_mods);
+                child_eb.push_metadata_f64("playerItemRatingBefore", trader_trade.trader_item_rating_before);
+                child_eb.push_metadata_f64("playerItemRatingAfter", trader_trade.trader_item_rating_after);
+                child_eb.push_metadata_f64("playerRating", trader_trade.trader_rating);
+                child_eb.build(EventType::PlayerGainedItem)
+            });
+        }
     }
 
     pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F) where F: FnOnce(Self) -> EventuallyEvent {
