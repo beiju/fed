@@ -15,9 +15,8 @@ use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use derive_builder::Builder;
 use schemars::JsonSchema;
-use strum_macros::AsRefStr;
+use strum_macros::{AsRefStr, Display as StrumDisplay};
 use with_structure::WithStructure;
-use with_structure_derive::WithStructure;
 use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::FeedParseError;
@@ -2705,6 +2704,19 @@ pub struct RunStolenThroughTunnelsDetails {
     /// it. If you can see the pattern please let me know.
     // TODO Try to deduce this from data
     pub victim_event_first: bool,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
+pub enum RiffElement {
+    #[strum(to_string = "bow")] Bow,
+    #[strum(to_string = "bah")] Bah,
+    #[strum(to_string = "wah")] Wah,
+    #[strum(to_string = "ah")] Ah,
+    #[strum(to_string = "doo")] Doo,
+    #[strum(to_string = "la")] La,
+    #[strum(to_string = "ooo")] Ooo,
+    #[strum(to_string = "bee")] Bee,
+    #[strum(to_string = "ski")] Ski,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -6474,6 +6486,18 @@ pub enum FedEventData {
         /// Information associated with the victim team's player losing the item
         victim_lost_item: ItemLost,
     },
+
+    /// When a Riff opens in Jazz weather and changes the weather
+    RiffOpened {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// The riff that was played
+        riff: Vec<RiffElement>,
+
+        /// The weather that Jazz changed to
+        new_weather: Weather,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6723,6 +6747,7 @@ impl FedEventData {
             FedEventData::RoamFailed { .. } => { None }
             FedEventData::ThievesGuildStolePlayer { game, .. } => { Some(game) }
             FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }
+            FedEventData::RiffOpened { game, .. } => { Some(game) }
         }
     }
 }

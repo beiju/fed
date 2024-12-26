@@ -685,6 +685,7 @@ dependencies = [
  "serde_repr",
  "sled",
  "uuid",
+ "with_structure",
 ]
 
 [[package]]
@@ -3043,6 +3044,7 @@ dependencies = [
  "either",
  "perfect-derive",
  "uuid",
+ "with_structure_derive",
 ]
 
 [[package]]

@@ -5,7 +5,7 @@ use std::iter;
 
 use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive};
 use crate::parse::event_builder_new::{EventBuilder};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin, RunStolenThroughTunnelsDetails};
+use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin, RunStolenThroughTunnelsDetails, RiffElement};
 use crate::format_utils::Possessive;
 
 #[deprecated = "This is part of the old event builder"]
@@ -2886,7 +2886,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Runs are Overflowing!");
                 eb.push_description(&format!("{team_nickname} {} {num_runs} {}{}.",
-                                                    if gained { "gain" } else { "lose" },
+                                                    if self.season >= 22 { "collect" } else if gained { "gain" } else { "lose" },
                                                     if unruns { "Unrun" } else { "Run" },
                                                     if num_runs.abs() == 1.0 { "" } else { "s" }));
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
@@ -4079,6 +4079,13 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::ThievesGuildStoleItem)
+            },
+            FedEventData::RiffOpened { game, riff, new_weather } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("A Riff Opened.");
+                eb.push_description(&format!("🎵 {} {new_weather} 🎵", riff.iter().map(RiffElement::as_ref).join(" ")));
+                eb.build(EventType::RiffOpened)
             }
         };
 

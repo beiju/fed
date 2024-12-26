@@ -1,15 +1,16 @@
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
-use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats};
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
-use nom::multi::{many0, separated_list0, separated_list1};
+use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
 use uuid::Uuid;
+use eventually_api::Weather;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
@@ -2004,8 +2005,10 @@ pub(crate) fn parse_event_horizon(input: &str) -> ParserResult<(f32, &str)> {
 pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bool, bool)> {
     let (input, _) = tag("Runs are Overflowing!\n").parse(input)?;
     let (input, (team_nickname, gained)) = alt((
-         parse_terminated(" gain ").map(|n| (n, true)),
-         parse_terminated(" lose ").map(|n| (n, false)),
+        parse_terminated(" gain ").map(|n| (n, true)),
+        parse_terminated(" lose ").map(|n| (n, false)),
+        // In s23 they changed it to "collect"
+        parse_terminated(" collect ").map(|n| (n, true)),
     )).parse(input)?;
     let (input, num_runs) = double.parse(input)?;
     let (input, unruns) = alt((
@@ -3105,4 +3108,63 @@ pub(crate) fn parse_thieves_guild_stole_item(input: &str) -> ParserResult<(&str,
     let (input, beneficiary_player_name) = parse_until_period_eof.parse(input)?;
 
     Ok((input, (item_name, victim_team_nickname, victim_player_name, beneficiary_player_name)))
+}
+
+pub(crate) fn parse_weather(input: &str) -> ParserResult<Weather> {
+    // This has to be split up because alt only supports tuples up to 21 elements
+    alt((
+        alt((
+            tag(Weather::Void.to_str()).map(|_| Weather::Void),
+            tag(Weather::Sun2.to_str()).map(|_| Weather::Sun2),
+            tag(Weather::Overcast.to_str()).map(|_| Weather::Overcast),
+            tag(Weather::Rainy.to_str()).map(|_| Weather::Rainy),
+            tag(Weather::Sandstorm.to_str()).map(|_| Weather::Sandstorm),
+            tag(Weather::Snowy.to_str()).map(|_| Weather::Snowy),
+            tag(Weather::Acidic.to_str()).map(|_| Weather::Acidic),
+            tag(Weather::SolarEclipse.to_str()).map(|_| Weather::SolarEclipse),
+            tag(Weather::Glitter.to_str()).map(|_| Weather::Glitter),
+            tag(Weather::Blooddrain.to_str()).map(|_| Weather::Blooddrain),
+            tag(Weather::Peanuts.to_str()).map(|_| Weather::Peanuts),
+            tag(Weather::Birds.to_str()).map(|_| Weather::Birds),
+            tag(Weather::Feedback.to_str()).map(|_| Weather::Feedback),
+            tag(Weather::Reverb.to_str()).map(|_| Weather::Reverb),
+            tag(Weather::BlackHole.to_str()).map(|_| Weather::BlackHole),
+        )),
+        alt((
+            tag(Weather::Coffee.to_str()).map(|_| Weather::Coffee),
+            tag(Weather::Coffee2.to_str()).map(|_| Weather::Coffee2),
+            tag(Weather::Coffee3s.to_str()).map(|_| Weather::Coffee3s),
+            tag(Weather::Flooding.to_str()).map(|_| Weather::Flooding),
+            tag(Weather::Salmon.to_str()).map(|_| Weather::Salmon),
+            tag(Weather::PolarityPlus.to_str()).map(|_| Weather::PolarityPlus),
+            tag(Weather::PolarityMinus.to_str()).map(|_| Weather::PolarityMinus),
+            tag(Weather::Sun90.to_str()).map(|_| Weather::Sun90),
+            tag(Weather::SunPoint1.to_str()).map(|_| Weather::SunPoint1),
+            tag(Weather::SumSun.to_str()).map(|_| Weather::SumSun),
+            tag(Weather::SupernovaEclipse.to_str()).map(|_| Weather::SupernovaEclipse),
+            tag(Weather::BlackHoleBlackHole.to_str()).map(|_| Weather::BlackHoleBlackHole),
+            tag(Weather::Jazz.to_str()).map(|_| Weather::Jazz),
+            tag(Weather::Night.to_str()).map(|_| Weather::Night),
+        )),
+    )).parse(input)
+}
+
+pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, Weather)> {
+    let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
+    let (input, riff) = separated_list1(tag(" "), alt((
+        tag("bow").map(|_| RiffElement::Bow),
+        tag("bah").map(|_| RiffElement::Bah),
+        tag("wah").map(|_| RiffElement::Wah),
+        tag("ah").map(|_| RiffElement::Ah),
+        tag("doo").map(|_| RiffElement::Doo),
+        tag("la").map(|_| RiffElement::La),
+        tag("ooo").map(|_| RiffElement::Ooo),
+        tag("bee").map(|_| RiffElement::Bee),
+        tag("ski").map(|_| RiffElement::Ski),
+    ))).parse(input)?;
+    let (input, _) = tag(" ").parse(input)?;
+    let (input, weather) = parse_weather.parse(input)?;
+    let (input, _) = tag(" 🎵").parse(input)?;
+
+    Ok((input, (riff, weather)))
 }

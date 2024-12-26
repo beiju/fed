@@ -3850,6 +3850,15 @@ pub fn parse_next_event(
         EventType::TradeFailed => { todo!() }
         EventType::ItemTraded => { todo!() }
         EventType::BeingSpeechInTidings => { todo!() }
+        EventType::RiffOpened => {
+            let (riff, weather) = event.next_parse(parse_riff_opened)?;
+
+            FedEventData::RiffOpened {
+                game: event.game(unscatter, attractor_secret_base)?,
+                riff,
+                new_weather: weather,
+            }
+        }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
@@ -8,6 +9,7 @@ use derive_builder::Builder;
 use schemars::gen::SchemaGenerator;
 use schemars::JsonSchema;
 use schemars::schema::Schema;
+use with_structure::WithStructure;
 
 
 #[derive(Deserialize, Serialize)]
@@ -161,7 +163,7 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
 #[repr(i32)]
 pub enum Weather {
     Void = 0,
@@ -193,6 +195,48 @@ pub enum Weather {
     BlackHoleBlackHole = 27,
     Jazz = 28,
     Night = 29,
+}
+
+impl Weather {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Weather::Void => "Void",
+            Weather::Sun2 => "Sun 2",
+            Weather::Overcast => "Overcast",
+            Weather::Rainy => "Rainy",
+            Weather::Sandstorm => "Sandstorm",
+            Weather::Snowy => "Snowy",
+            Weather::Acidic => "Acidic",
+            Weather::SolarEclipse => "Solar Eclipse",
+            Weather::Glitter => "Glitter",
+            Weather::Blooddrain => "Blooddrain",
+            Weather::Peanuts => "Peanuts",
+            Weather::Birds => "Birds",
+            Weather::Feedback => "Feedback",
+            Weather::Reverb => "Reverb",
+            Weather::BlackHole => "BlackHole",
+            Weather::Coffee => "Coffee",
+            Weather::Coffee2 => "Coffee 2",
+            Weather::Coffee3s => "Coffee 3s",
+            Weather::Flooding => "Flooding",
+            Weather::Salmon => "Salmon",
+            Weather::PolarityPlus => "Polarity+",
+            Weather::PolarityMinus => "Polarity-",
+            Weather::Sun90 => "Sun 90",
+            Weather::SunPoint1 => "Sun .1",
+            Weather::SumSun => "Sum Sun",
+            Weather::SupernovaEclipse => "Supernova Eclipse",
+            Weather::BlackHoleBlackHole => "Black Hole (Black Hole)",
+            Weather::Jazz => "Jazz",
+            Weather::Night => "Night",
+        }
+    }
+}
+
+impl Display for Weather {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
 }
 
 //noinspection SpellCheckingInspection
@@ -390,6 +434,7 @@ pub enum EventType {
     TradeFailed = 234,
     ItemTraded = 236,
     BeingSpeechInTidings = 241,
+    RiffOpened = 251,
     StormWarning = 263,
     Snowflakes = 264,
 }
