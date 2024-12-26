@@ -1616,7 +1616,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary, flood_balloon } => {
+            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary, flood_balloon, anti_flood_pumps } => {
                 let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -1658,6 +1658,10 @@ impl FedEvent {
                 // Flood balloons are definitely before normal balloons
                 if flood_balloon {
                     eb.push_description("A Flood Balloon was filled!");
+                }
+
+                if anti_flood_pumps {
+                    eb.push_description("The Anti Flood Pumps activate!");
                 }
 
                 eb.push_free_refills(&free_refills);
@@ -4043,7 +4047,7 @@ impl FedEvent {
                 eb.push_player_tag(beneficiary_gained_item.player_id);
                 eb.push_player_tag(victim_player_id);
                 eb.push_description(&format!("{thieving_team_stadium_name} Thieves' Guild convened."));
-                eb.push_description(&format!("They stole {} from {victim_team_nickname}' Shadows player {victim_player_name} and gave it to {beneficiary_player_name}.", beneficiary_gained_item.item_name));
+                eb.push_description(&format!("They stole {} from {} Shadows player {victim_player_name} and gave it to {beneficiary_player_name}.", beneficiary_gained_item.item_name, Possessive(&victim_team_nickname)));
 
                 // Almost, but not quite, reusable from the above
                 let stolen_statement = format!("{thieving_team_stadium_name} Thieves' Guild stole {} from {victim_player_name} and give it to {beneficiary_player_name}.", beneficiary_gained_item.item_name);

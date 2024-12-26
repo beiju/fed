@@ -1274,7 +1274,7 @@ pub(crate) enum ParsedFloodingEffect<'a> {
     Ego(&'a str),
 }
 
-pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, bool, bool)> {
+pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFloodingEffect>, bool, bool, bool)> {
     let (input, _) = tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!").parse(input)?;
     let (input, mut effects) = many0(parse_flooding_swept_effect).parse(input)?;
 
@@ -1290,7 +1290,9 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
 
     let (mut input, flood_balloon) = opt(tag("\nA Flood Balloon was filled!")).parse(input)?;
 
-    Ok((input, (effects, flumps.is_some(), flood_balloon.is_some())))
+    let (mut input, anti_flumps) = opt(tag("\nThe Anti Flood Pumps activate!")).parse(input)?;
+
+    Ok((input, (effects, flumps.is_some(), flood_balloon.is_some(), anti_flumps.is_some())))
 }
 
 pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
@@ -3091,8 +3093,8 @@ pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<(&st
 pub(crate) fn parse_thieves_guild_stole_item(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
     let (input, _) = tag("They stole ").parse(input)?;
     let (input, item_name) = parse_terminated(" from ").parse(input)?;
-    // This may need to be more intelligent about pluralization, we'll see
-    let (input, victim_team_nickname) = parse_terminated("' Shadows player ").parse(input)?;
+    let (input, victim_team_nickname) = parse_terminated_by_possessive.parse(input)?;
+    let (input, _) = tag("Shadows player ").parse(input)?;
     let (input, victim_player_name) = parse_terminated(" and gave it to ").parse(input)?;
     let (input, beneficiary_player_name) = parse_until_period_eof.parse(input)?;
 

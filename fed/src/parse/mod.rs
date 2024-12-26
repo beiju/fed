@@ -1885,7 +1885,7 @@ pub fn parse_next_event(
             }
         }
         EventType::FloodingSwept => {
-            let (parsed_effects, flood_pumps, flood_balloon) = event.next_parse(parse_flooding_swept)?;
+            let (parsed_effects, flood_pumps, flood_balloon, anti_flood_pumps) = event.next_parse(parse_flooding_swept)?;
 
             let effects = parsed_effects.into_iter()
                 .map(|effect| {
@@ -1946,6 +1946,7 @@ pub fn parse_next_event(
                 flood_pumps,
                 score_summary,
                 flood_balloon,
+                anti_flood_pumps,
             }
         }
         EventType::SalmonSwim => {

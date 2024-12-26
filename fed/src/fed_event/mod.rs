@@ -4261,6 +4261,9 @@ pub enum FedEventData {
 
         /// Whether a flood balloon was filled
         flood_balloon: bool,
+
+        /// Whether the Anti Flood Pumps activated
+        anti_flood_pumps: bool,
     },
 
     /// Player(s) returned from Elsewhere
