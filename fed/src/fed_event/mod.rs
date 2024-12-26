@@ -2670,11 +2670,11 @@ pub struct TookTheFifthBase {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct PlayerLostTogethernessMod {
+pub struct PlayerTogethernessModChange {
     /// List of the other players with the same togetherness mod. May be empty.
     pub other_player_names: Vec<String>,
 
-    /// Metadata for the associated mod being removed
+    /// Metadata for the associated mod being added/removed
     pub sub_event: SubEvent,
 }
 
@@ -5682,6 +5682,11 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event associated with the shadow boost
         enter_shadows_sub_event: SubEvent,
+
+        /// If this player has the Yolked mod from being on a team with another Hard Boiled player,
+        /// it is momentarily lost and then regained. This is the events for those, in order.
+        // TODO Make struct not tuple
+        yolked_change: Option<(PlayerTogethernessModChange, PlayerTogethernessModChange)>
     },
 
     /// A Redacted event
@@ -5824,7 +5829,7 @@ pub enum FedEventData {
 
         /// If a replica of a Hard Boiled player fades to dust while Yolked, they'll lose the Yolked
         /// mod. This is metadata for that event.
-        weaker_apart_event: Option<PlayerLostTogethernessMod>,
+        weaker_apart_event: Option<PlayerTogethernessModChange>,
     },
 
     /// Team with A Blood gets A blood type at the beginning of a game

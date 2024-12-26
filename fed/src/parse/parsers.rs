@@ -3002,18 +3002,21 @@ pub(crate) fn parse_voicemail(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (replaced_player_nme, replacement_player_name)))
 }
 
-pub(crate) fn parse_weaker_apart(first_player_name: &str) -> impl Fn(&str) -> ParserResult<Vec<&str>> + '_ {
+pub(crate) fn parse_yolk_message<'a>(first_player_name: &'a str, descriptor: &'a str) -> impl Fn(&str) -> ParserResult<Vec<&str>> + 'a {
     move |input| {
         let (input, _) = tag(first_player_name).parse(input)?;
         let (input, _) = opt(tag(" and ")).parse(input)?;
         let (input, names) = many0(alt((
             parse_terminated(" and "),
             // In principle I should make this one only be allowed to match at the end, but... eh
-            parse_terminated(" are weaker apart."),
+            terminated(parse_terminated(" are "), pair(tag(descriptor), tag("."))),
         ))).parse(input)?;
 
         let (input, _) = if names.is_empty() {
-            tag(" are weaker apart.").parse(input)?
+            let (input, _) = tag(" are ").parse(input)?;
+            let (input, _) = tag(descriptor).parse(input)?;
+            let (input, _) = tag(".").parse(input)?;
+            (input, "")
         } else {
             (input, "")
         };

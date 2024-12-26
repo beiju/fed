@@ -2765,8 +2765,8 @@ pub fn parse_next_event(
             })
                 .map(|weaker_apart_event| {
                     let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
-                    let names = weaker_apart_event.next_parse(parse_weaker_apart(player_name))?;
-                    ParseOk(PlayerLostTogethernessMod {
+                    let names = weaker_apart_event.next_parse(parse_yolk_message(player_name, "weaker apart"))?;
+                    ParseOk(PlayerTogethernessModChange {
                         other_player_names: names.into_iter().map(str::to_string).collect(),
                         sub_event: weaker_apart_event.as_sub_event(),
                     })
@@ -3408,12 +3408,40 @@ pub fn parse_next_event(
             let (_exiting_pitcher_name, _entering_pitcher_name) = event.next_parse(parse_fax_machine)?;
             let move_child = event.next_child(EventType::PlayerSwap)?;
             let boost_child = event.next_child(EventType::PlayerStatIncrease)?;
+
+            let exiting_pitcher_name = move_child.metadata_str("aPlayerName")?;
+            let yolked_change = event.next_child_if_mod_effect(EventType::RemovedModFromOtherMod, "YOLKED")?
+                .map(|mut unyolk_event| {
+                    // This may need to be expanded to handle entering pitchers too
+                    let unyolk_names = unyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "weaker apart"))?;
+
+                    // I believe if there's an unyolk there has to be a reyolk
+                    let mut reyolk_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                    let reyolk_names = reyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "stronger together"))?;
+
+                    // TODO: If this assert never fires, remove unyolk_names and change the data
+                    //   structure accordingly
+                    assert!(unyolk_names.is_empty(), "If this assert fires, just remove it and the TODO comment above");
+
+                    ParseOk((
+                        PlayerTogethernessModChange {
+                            other_player_names: unyolk_names.into_iter().map(String::from).collect(),
+                            sub_event: unyolk_event.as_sub_event(),
+                        },
+                        PlayerTogethernessModChange {
+                            other_player_names: reyolk_names.into_iter().map(String::from).collect(),
+                            sub_event: reyolk_event.as_sub_event(),
+                        },
+                    ))
+                })
+                .transpose()?;
+
             FedEventData::Fax {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id: move_child.metadata_uuid("teamId")?,
                 team_nickname: move_child.metadata_str("teamName")?.to_string(),
                 exiting_pitcher_id: move_child.metadata_uuid("aPlayerId")?,
-                exiting_pitcher_name: move_child.metadata_str("aPlayerName")?.to_string(),
+                exiting_pitcher_name: exiting_pitcher_name.to_string(),
                 entering_pitcher_id: move_child.metadata_uuid("bPlayerId")?,
                 entering_pitcher_name: move_child.metadata_str("bPlayerName")?.to_string(),
                 shadows_location: move_child.metadata_enum("bLocation")?,
@@ -3421,6 +3449,7 @@ pub fn parse_next_event(
                 rating_after: boost_child.metadata_f64("after")?,
                 player_swap_sub_event: move_child.as_sub_event(),
                 enter_shadows_sub_event: boost_child.as_sub_event(),
+                yolked_change,
             }
         }
         EventType::HolidayInning => {

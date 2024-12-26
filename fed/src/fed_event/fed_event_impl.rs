@@ -3277,7 +3277,7 @@ impl FedEvent {
                 }
                 eb.build(EventType::CommunityChestOpens)
             }
-            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event } => {
+            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event, yolked_change } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("10 Runs collected.");
@@ -3317,6 +3317,32 @@ impl FedEvent {
                     child.push_metadata_i64("type", 4 /* "all" attribute category */);
                     child.build(EventType::PlayerStatIncrease)
                 });
+
+                if let Some((unyolk, reyolk)) = yolked_change {
+                    eb.push_child(unyolk.sub_event, |mut child_eb| {
+                        // Ignoring other_player_names until it becomes relevant
+                        child_eb.push_description(&format!("{exiting_pitcher_name} are weaker apart."));
+                        child_eb.push_player_tag(exiting_pitcher_id);
+                        child_eb.push_team_tag(team_id);
+                        child_eb.push_metadata_str("mod", "YOLKED");
+                        child_eb.push_metadata_str("source", "HARD_BOILED");
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        child_eb.build(EventType::RemovedModFromOtherMod)
+                    });
+                    eb.push_child(reyolk.sub_event, |mut child_eb| {
+                        let names_str = iter::once(&exiting_pitcher_name)
+                            .chain(reyolk.other_player_names.iter())
+                            .join(" and ");
+                        child_eb.push_description(&format!("{names_str} are stronger together."));
+                        child_eb.push_player_tag(exiting_pitcher_id);
+                        child_eb.push_team_tag(team_id);
+                        child_eb.push_metadata_str("mod", "YOLKED");
+                        child_eb.push_metadata_str("source", "HARD_BOILED");
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        child_eb.build(EventType::AddedModFromOtherMod)
+                    });
+                }
+
                 eb.build(EventType::FaxMachine)
             }
             FedEventData::Redacted { description, scales } => {
@@ -3433,8 +3459,8 @@ impl FedEvent {
                     let mut weaker_apart_eb = eb.connected_event(weaker_apart.sub_event);
                     weaker_apart_eb.set_category(EventCategory::Changes);
                     let names_str = iter::once(&player_name)
-                    .chain(weaker_apart.other_player_names.iter())
-                    .join(" and ");
+                        .chain(weaker_apart.other_player_names.iter())
+                        .join(" and ");
                     weaker_apart_eb.push_description(&format!("{names_str} are weaker apart."));
                     weaker_apart_eb.push_team_tag(team_id);
                     weaker_apart_eb.push_player_tag(player_id);
