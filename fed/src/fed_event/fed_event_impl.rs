@@ -281,7 +281,7 @@ impl FedEvent {
                 eb.push_parasite(parasite);
                 eb.build(EventType::FlyOut)
             }
-            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
+            FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, cooled_off, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {
                 let home_team_id = game.home_team; // Need this later
                 eb.set_game(game);
                 eb.push_pitch(pitch);
@@ -303,6 +303,7 @@ impl FedEvent {
                 // `scorers` is before spicy, but `score_event` is after
                 eb.push_scores_without_event(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
+                eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 if self.season >= 19 { eb.push_stopped_inhabiting(stopped_inhabiting.as_ref()); }
                 eb.push_score_summary(&scores);

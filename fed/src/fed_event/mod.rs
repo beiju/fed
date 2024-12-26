@@ -3133,6 +3133,12 @@ pub enum FedEventData {
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
 
+        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
+        /// Hot mod, otherwise null. The batter is not supposed to cool off when getting a hit, but
+        /// on at least one occasion (a16405db-107a-473c-acbf-2834d71834e0) it happened (and on the
+        /// same event as they became spicy), presumably because of a bug.
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
+
         /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
         /// Otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,

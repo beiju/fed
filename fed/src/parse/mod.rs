@@ -885,6 +885,10 @@ pub fn parse_next_event(
 
             let mut scores = event.parse_scores_without_summary(" scores!", false)?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
+            // On at least one occasion (a16405db-107a-473c-acbf-2834d71834e0) the player cooled off
+            // immediately after being red hot. Presumably this is a bug.
+            let cooled_off = event.parse_cooled_off(batter_name)?;
+
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
             // This should fire iff season >= 20
@@ -907,6 +911,7 @@ pub fn parse_next_event(
                 hit_type,
                 scores,
                 spicy_status,
+                cooled_off,
                 stopped_inhabiting,
                 is_special: event.category == EventCategory::Special,
                 pitcher_item_damage,
