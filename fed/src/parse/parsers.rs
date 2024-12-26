@@ -1892,6 +1892,9 @@ pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<(&str, &str, 
        parse_terminated(" CRANE KICKED A CONSUMER!").map(|n| (n, "CRANE KICKED")),
        parse_terminated(" PILEDRIVERED A CONSUMER!").map(|n| (n, "PILEDRIVERED")),
        parse_terminated(" NOSE SLAMMED A CONSUMER!").map(|n| (n, "NOSE SLAMMED")),
+       parse_terminated(" SLAMMED A CONSUMER!").map(|n| (n, "SLAMMED")),
+       parse_terminated(" CLOTHESLINED A CONSUMER!").map(|n| (n, "CLOTHESLINED")),
+       parse_terminated(" ELBOWED A CONSUMER!").map(|n| (n, "ELBOWED")),
     )).parse(input)?;
 
     Ok((input, (player_name, exclamation, verb)))
@@ -1902,16 +1905,18 @@ pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<()> {
     Ok((input, ()))
 }
 
-pub(crate) fn parse_repeat_mvp(input: &str) -> ParserResult<(&str, i32)> {
-    let (input, player_name) = parse_terminated(" is named a ").parse(input)?;
-    let (input, n_times) = parse_whole_number(input)?;
-    let (input, _) = match n_times {
-        // Why...
-        2 => { tag("-Time MVP.").parse(input)? }
-        _ => { tag("-Time MVP!").parse(input)? }
-    };
+pub(crate) fn parse_repeat_mvp(allow_exclamation_point: bool) -> impl Fn(&str) -> ParserResult<(&str, i32)> {
+    move |input| {
+        let (input, player_name) = parse_terminated(" is named a ").parse(input)?;
+        let (input, n_times) = parse_whole_number(input)?;
+        let (input, _) = if allow_exclamation_point && n_times > 2 {
+            tag("-Time MVP!").parse(input)?
+        } else {
+            tag("-Time MVP.").parse(input)?
+        };
 
-    Ok((input, (player_name, n_times)))
+        Ok((input, (player_name, n_times)))
+    }
 }
 
 

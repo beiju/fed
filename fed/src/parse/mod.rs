@@ -3138,8 +3138,10 @@ pub fn parse_next_event(
             }
         }
         EventType::ModChange => {
-            // This is only a top-level event for MVPs
-            let (player_name, level) = event.next_parse(parse_repeat_mvp)?;
+            // The only time this comes up as a top-level event is with MVP naming
+            // Prior to season 22, there would be an exclamation point if it was more than a 2-time
+            // MVP. In season 22 and later it's always a period.
+            let (player_name, level) = event.next_parse(parse_repeat_mvp(event.season < 21))?;
 
             FedEventData::PlayerNamedMvp {
                 team_id: event.next_team_id()?,
@@ -3847,6 +3849,7 @@ pub fn parse_next_event(
         }
         EventType::TradeFailed => { todo!() }
         EventType::ItemTraded => { todo!() }
+        EventType::BeingSpeechInTidings => { todo!() }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {

@@ -2338,41 +2338,23 @@ impl FedEvent {
                     .build()
             }
             FedEventData::PlayerNamedMvp { team_id, player_id, player_name, level } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_player_tag(player_id);
+                eb.push_team_tag(team_id);
+                eb.push_metadata_i64("type", ModDuration::Permanent);
                 let mod_name = format!("EGO{level}");
                 if level == 1 {
-                    event_builder
-                        .fill(EventBuilderUpdate {
-                            r#type: EventType::AddedMod,
-                            category: EventCategory::Changes,
-                            description: format!("{player_name} is named an MVP."),
-                            team_tags: vec![team_id],
-                            player_tags: vec![player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "mod": mod_name,
-                            "type": 0,
-                        }))
-                        .build()
+                    eb.push_description(&format!("{player_name} is named an MVP."));
+                    eb.push_metadata_str("mod", mod_name);
+                    eb.build(EventType::AddedMod)
                 } else {
                     let prev_mod_name = format!("EGO{}", level - 1);
-                    event_builder
-                        .fill(EventBuilderUpdate {
-                            r#type: EventType::ModChange,
-                            category: EventCategory::Changes,
-                            description: format!("{player_name} is named a {level}-Time MVP{}",
-                                                 // i dont like this
-                                                 if level == 2 { "." } else { "!" }),
-                            team_tags: vec![team_id],
-                            player_tags: vec![player_id],
-                            ..Default::default()
-                        })
-                        .metadata(json!({
-                            "from": prev_mod_name,
-                            "to": mod_name,
-                            "type": 0,
-                        }))
-                        .build()
+                    eb.push_description(&format!("{player_name} is named a {level}-Time MVP{}",
+                                                if self.season >= 21 || level == 2 { "." } else { "!" }));
+                    eb.push_metadata_str("from", prev_mod_name);
+                    eb.push_metadata_str("to", mod_name);
+
+                    eb.build(EventType::ModChange)
                 }
             }
             FedEventData::BirdsUnshell { game, team_id, player_id, player_name, pecked_free_event, superallergy_event } => {
@@ -3096,9 +3078,12 @@ impl FedEvent {
                 return events;
             }
             FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event } } => {
+                // In season 22 they capitalized the R
+                let r = if self.season < 21 { "r" } else { "R" };
+
                 let mut team_eb = eb.connected_event(sub_event);
                 team_eb.set_category(EventCategory::Changes);
-                team_eb.push_description(&format!("{player_name} roamed to The {new_team_nickname}."));
+                team_eb.push_description(&format!("{player_name} {r}oamed to The {new_team_nickname}."));
                 team_eb.push_player_tag(player_id);
                 team_eb.push_team_tag(new_team_id);
                 team_eb.push_metadata_i64("location", location);
@@ -3109,7 +3094,7 @@ impl FedEvent {
                 let added_to_team_event = team_eb.build(EventType::PlayerAddedToTeam);
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} roamed out of the Hall of Flame."));
+                eb.push_description(&format!("{player_name} {r}oamed out of the Hall of Flame."));
                 eb.push_player_tag(player_id);
                 let left_hall_event = eb.build(EventType::ExitHallOfFlame);
 
@@ -4058,7 +4043,7 @@ impl FedEvent {
 
                 eb.push_child(victim_lost_item.sub_event, |mut child_eb| {
                     // The missing space after the stolen_statement is game-accurate
-                    child_eb.push_description(&format!("{stolen_statement}{victim_player_name}'s {item_name} was taken by {beneficiary_player_name}!"));
+                    child_eb.push_description(&format!("{stolen_statement}{} {item_name} was taken by {beneficiary_player_name}!", Possessive(&victim_player_name)));
                     child_eb.push_player_tag(victim_player_id);
                     child_eb.push_team_tag(victim_team_id);
 
@@ -4079,7 +4064,7 @@ impl FedEvent {
                 // This is just different enough to not use eb.push_gained_item
                 eb.push_child(beneficiary_gained_item.sub_event, |mut child_eb| {
                     // The missing space after the stolen_statement is game-accurate
-                    child_eb.push_description(&format!("{stolen_statement}{beneficiary_player_name} took {victim_player_name}'s {item_name}!"));
+                    child_eb.push_description(&format!("{stolen_statement}{beneficiary_player_name} took {} {item_name}!", Possessive(&victim_player_name)));
                     child_eb.push_player_tag(beneficiary_gained_item.player_id);
                     child_eb.push_team_tag(beneficiary_gained_item.team_id);
 
