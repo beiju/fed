@@ -2799,7 +2799,9 @@ pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<(i32, f64, f64)>
     let (input, value) = parse_whole_number.parse(input)?;
     let (input, _) = tag(if value == 1 { " Run\n" } else { " Runs\n" }).parse(input)?;
     let (input, runs_before) = double.parse(input)?;
-    let (input, _) = tag(" + 1 = ").parse(input)?;
+    let (input, _) = tag(" + ").parse(input)?;
+    let (input, _) = tag(&*value.to_string()).parse(input)?;
+    let (input, _) = tag(" = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
     Ok((input, (value, runs_before, runs_after)))
 }
