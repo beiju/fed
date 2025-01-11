@@ -2808,6 +2808,19 @@ pub(crate) fn parse_ledger_sum_sun_non_opt(input: &str) -> ParserResult<i64> {
     Ok((input, value))
 }
 
+pub(crate) fn parse_ledger_equal_sun(input: &str) -> ParserResult<Option<i64>> {
+    opt(parse_ledger_equal_sun_non_opt).parse(input)
+}
+
+pub(crate) fn parse_ledger_equal_sun_non_opt(input: &str) -> ParserResult<i64> {
+    let (input, _) = tag("Equal Sun: ").parse(input)?;
+    let (input, value) = parse_whole_number.parse(input)?;
+    // Unlike most ledger parsers, I can always parse a newline here, because equal sun is always
+    // added on to some other score, so there's guaranteed to be a equalmation line
+    let (input, _) = tag(if value == 1 { " Run\n" } else { " Runs\n" }).parse(input)?;
+    Ok((input, value))
+}
+
 pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)> {
     let (input, _) = tag("\tAcidic Pitch: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;

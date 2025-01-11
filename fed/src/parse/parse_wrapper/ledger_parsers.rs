@@ -112,12 +112,14 @@ impl ParseableLedger for HomeRunLedger {
         };
 
         let (ledger, sum_sun) = parse_ledger(parse_ledger_sum_sun, ledger)?;
+        let (ledger, equal_sun) = parse_ledger(parse_ledger_equal_sun, ledger)?;
 
         Ok((ledger, Self {
             home_run,
             big_bucket,
             alley_oop,
             sum_sun,
+            equal_sun,
         }))
     }
 }
