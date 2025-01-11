@@ -3184,27 +3184,34 @@ pub(crate) fn parse_weather(input: &str) -> ParserResult<Weather> {
 
 pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, Weather)> {
     let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
+    // Needs a nested alt() because alt has a max of 21 sub-parsers
     let (input, riff) = separated_list1(tag(" "), alt((
-        tag("bow").map(|_| RiffElement::Bow),
-        tag("bah").map(|_| RiffElement::Bah),
-        tag("wah").map(|_| RiffElement::Wah),
-        tag("ah").map(|_| RiffElement::Ah),
-        tag("doo").map(|_| RiffElement::Doo),
-        tag("la").map(|_| RiffElement::La),
-        tag("ooo").map(|_| RiffElement::Ooo),
-        tag("bee").map(|_| RiffElement::Bee),
-        tag("ski").map(|_| RiffElement::Ski),
-        tag("ooie").map(|_| RiffElement::Ooie),
-        tag("da").map(|_| RiffElement::Da),
-        tag("louie").map(|_| RiffElement::Louie),
-        tag("shoo").map(|_| RiffElement::Shoo),
-        tag("boh").map(|_| RiffElement::Boh),
-        tag("dee").map(|_| RiffElement::Dee),
-        tag("sha").map(|_| RiffElement::Sha),
-        tag("doh").map(|_| RiffElement::Doh),
-        tag("bop").map(|_| RiffElement::Bop),
-        tag("boo").map(|_| RiffElement::Boo),
-        tag("do").map(|_| RiffElement::Do),
+        alt((
+            tag(RiffElement::Bow.as_ref()).map(|_| RiffElement::Bow),
+            tag(RiffElement::Bah.as_ref()).map(|_| RiffElement::Bah),
+            tag(RiffElement::Wah.as_ref()).map(|_| RiffElement::Wah),
+            tag(RiffElement::Ah.as_ref()).map(|_| RiffElement::Ah),
+            tag(RiffElement::Doo.as_ref()).map(|_| RiffElement::Doo),
+            tag(RiffElement::La.as_ref()).map(|_| RiffElement::La),
+            tag(RiffElement::Ooo.as_ref()).map(|_| RiffElement::Ooo),
+            tag(RiffElement::Bee.as_ref()).map(|_| RiffElement::Bee),
+            tag(RiffElement::Ski.as_ref()).map(|_| RiffElement::Ski),
+            tag(RiffElement::Ooie.as_ref()).map(|_| RiffElement::Ooie),
+            tag(RiffElement::Da.as_ref()).map(|_| RiffElement::Da),
+            tag(RiffElement::Louie.as_ref()).map(|_| RiffElement::Louie),
+            tag(RiffElement::Shoo.as_ref()).map(|_| RiffElement::Shoo),
+            tag(RiffElement::Boh.as_ref()).map(|_| RiffElement::Boh),
+            tag(RiffElement::Dee.as_ref()).map(|_| RiffElement::Dee),
+            tag(RiffElement::Sha.as_ref()).map(|_| RiffElement::Sha),
+            tag(RiffElement::Doh.as_ref()).map(|_| RiffElement::Doh),
+            tag(RiffElement::Bop.as_ref()).map(|_| RiffElement::Bop),
+            tag(RiffElement::Boo.as_ref()).map(|_| RiffElement::Boo),
+            tag(RiffElement::Do.as_ref()).map(|_| RiffElement::Do),
+            tag(RiffElement::Bip.as_ref()).map(|_| RiffElement::Bip),
+        )),
+        alt((
+            tag(RiffElement::Ska.as_ref()).map(|_| RiffElement::Ska),
+        )),
     ))).parse(input)?;
     let (input, _) = tag(" ").parse(input)?;
     let (input, weather) = parse_weather.parse(input)?;
