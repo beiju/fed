@@ -2726,6 +2726,13 @@ pub enum RiffElement {
     #[strum(to_string = "da")] Da,
     #[strum(to_string = "louie")] Louie,
     #[strum(to_string = "shoo")] Shoo,
+    #[strum(to_string = "boh")] Boh,
+    #[strum(to_string = "dee")] Dee,
+    #[strum(to_string = "sha")] Sha,
+    #[strum(to_string = "doh")] Doh,
+    #[strum(to_string = "bop")] Bop,
+    #[strum(to_string = "boo")] Boo,
+    #[strum(to_string = "do")] Do,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
