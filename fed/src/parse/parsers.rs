@@ -3166,6 +3166,10 @@ pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, 
         tag("ooo").map(|_| RiffElement::Ooo),
         tag("bee").map(|_| RiffElement::Bee),
         tag("ski").map(|_| RiffElement::Ski),
+        tag("ooie").map(|_| RiffElement::Ooie),
+        tag("da").map(|_| RiffElement::Da),
+        tag("louie").map(|_| RiffElement::Louie),
+        tag("shoo").map(|_| RiffElement::Shoo),
     ))).parse(input)?;
     let (input, _) = tag(" ").parse(input)?;
     let (input, weather) = parse_weather.parse(input)?;

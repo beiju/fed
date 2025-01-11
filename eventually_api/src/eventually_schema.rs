@@ -214,7 +214,7 @@ impl Weather {
             Weather::Birds => "Birds",
             Weather::Feedback => "Feedback",
             Weather::Reverb => "Reverb",
-            Weather::BlackHole => "BlackHole",
+            Weather::BlackHole => "Black Hole",
             Weather::Coffee => "Coffee",
             Weather::Coffee2 => "Coffee 2",
             Weather::Coffee3s => "Coffee 3s",
