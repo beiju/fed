@@ -3948,7 +3948,7 @@ impl FedEvent {
 
                 eb.push_child(victim_item_change_sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor} {trader_name}'s {donated_item_name}."));
+                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor} {} {donated_item_name}.", Possessive(&trader_name)));
                     child_eb.push_player_tag(victim_id);
                     // This event has no team tag, even though it probably should
                     child_eb.push_metadata_uuid("itemTradedId", taken_item_id);
