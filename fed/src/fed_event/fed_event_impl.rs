@@ -334,13 +334,12 @@ impl FedEvent {
                     }
                 }
 
-                eb.push_hotel_motel(&hotel_motel_parties);
-
-                // Not sure of the ordering here
                 if let Some(pop) = balloons_popped {
                     eb.push_description(format!("One of {} Balloons was struck and popped!", Possessive(&pop.stadium_name)));
                     eb.push_description(format!("{} Birds were scared away!", pop.birds_scared_away));
                 }
+
+                eb.push_hotel_motel(&hotel_motel_parties);
 
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refills(&free_refills);
