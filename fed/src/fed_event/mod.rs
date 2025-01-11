@@ -6589,6 +6589,21 @@ pub enum FedEventData {
 
         /// The weather that Jazz changed to
         new_weather: Weather,
+    },
+
+    /// When the Band begins to Play during Polarity weather and changes the weather to Jazz
+    ///
+    /// This only happened once ever:
+    /// https://reblase.sibr.dev/game/945e65e3-afb4-488b-84d0-613f5c39fa10#1a1471ec-406e-f315-8f57-daa15527fd88
+    BandBeginsToPlay {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Which variant of Polarity weather it was before the switch
+        numbers_went: NumbersGo,
+
+        /// Sub-event associated with the weather changing to Jazz
+        sub_event: SubEvent,
     }
 }
 
@@ -6840,6 +6855,7 @@ impl FedEventData {
             FedEventData::ThievesGuildStolePlayer { game, .. } => { Some(game) }
             FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }
             FedEventData::RiffOpened { game, .. } => { Some(game) }
+            FedEventData::BandBeginsToPlay { game, .. } => { Some(game) }
         }
     }
 }

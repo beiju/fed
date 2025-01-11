@@ -5,7 +5,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
 use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
-use nom::multi::{many0, many1, separated_list0, separated_list1};
+use nom::multi::{many0, separated_list0, separated_list1};
 use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
@@ -2548,7 +2548,19 @@ pub(crate) fn parse_a_blood(input: &str) -> ParserResult<&str> {
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_polarity(input: &str) -> ParserResult<NumbersGo> {
+pub(crate) enum ParsedPolarity {
+    NumbersGo(NumbersGo),
+    BandBeginsToPlay,
+}
+
+pub(crate) fn parse_polarity(input: &str) -> ParserResult<ParsedPolarity> {
+    alt((
+        parse_polarity_numbers_go.map(|n| ParsedPolarity::NumbersGo(n)),
+        tag("The Polarity shifted!\nThe Band began to play.").map(|_| ParsedPolarity::BandBeginsToPlay),
+    )).parse(input)
+}
+
+pub(crate) fn parse_polarity_numbers_go(input: &str) -> ParserResult<NumbersGo> {
     let (input, _) = tag("The Polarity shifted!\nNumbers go ").parse(input)?;
     let (input, numbers_go) = alt((
         tag("up.").map(|_| NumbersGo::Up),

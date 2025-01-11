@@ -4075,6 +4075,26 @@ impl FedEvent {
                 eb.push_description(format!("🎵 {} {new_weather} 🎵", riff.iter().map(RiffElement::as_ref).join(" ")));
                 eb.build(EventType::RiffOpened)
             }
+            FedEventData::BandBeginsToPlay { game, numbers_went, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Polarity shifted!");
+                eb.push_description("The Band began to play.");
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description("The Polarity shifted!");
+                    child_eb.push_description("The Band began to play.");
+                    // It's always a transition from Polarity to Jazz
+                    child_eb.push_metadata_i64("before", match numbers_went {
+                        NumbersGo::Up => { Weather::PolarityPlus }
+                        NumbersGo::Down => { Weather::PolarityMinus }
+                    });
+                    child_eb.push_metadata_i64("after", Weather::Jazz);
+                    child_eb.build(EventType::WeatherChange)
+                });
+
+                eb.build(EventType::PolarityShift)
+            }
         };
 
         vec![item]

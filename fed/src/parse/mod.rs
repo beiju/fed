@@ -1999,13 +1999,33 @@ pub fn parse_next_event(
             }
         }
         EventType::PolarityShift => {
-            let numbers_go = event.next_parse(parse_polarity)?;
-            let weather_change_event = event.next_child(EventType::WeatherChange)?;
-
-            FedEventData::PolarityShift {
-                game: event.game(unscatter, attractor_secret_base)?,
-                numbers_go,
-                sub_event: weather_change_event.as_sub_event(),
+            match event.next_parse(parse_polarity)? {
+                ParsedPolarity::NumbersGo(numbers_go) => {
+                    let weather_change_event = event.next_child(EventType::WeatherChange)?;
+                    FedEventData::PolarityShift {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        numbers_go,
+                        sub_event: weather_change_event.as_sub_event(),
+                    }
+                }
+                ParsedPolarity::BandBeginsToPlay => {
+                    let weather_change_event = event.next_child(EventType::WeatherChange)?;
+                    let numbers_went = match weather_change_event.metadata_enum("before")? {
+                        Weather::PolarityPlus => NumbersGo::Up,
+                        Weather::PolarityMinus => NumbersGo::Down,
+                        other => {
+                            return Err(FeedParseError::UnexpectedPolarityWeather {
+                                weather: other,
+                                event_type: event.event_type,
+                            })
+                        }
+                    };
+                    FedEventData::BandBeginsToPlay {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        numbers_went,
+                        sub_event: weather_change_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::EnterSecretBase => {

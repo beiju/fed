@@ -1,6 +1,6 @@
 use thiserror::Error;
 use uuid::Uuid;
-use eventually_api::EventType;
+use eventually_api::{EventType, Weather};
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {
@@ -151,6 +151,12 @@ pub enum FeedParseError {
 
     #[error("Found a compound {event_type:?} where a simple {event_type:?} was expected")]
     UnexpectedCompoundEvent {
+        event_type: EventType,
+    },
+
+    #[error("Expected a Polarity weather (PolarityPlus or PolarityMinus), but got {weather} in {event_type:?} event")]
+    UnexpectedPolarityWeather {
+        weather: Weather,
         event_type: EventType,
     },
 }
