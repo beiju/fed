@@ -2753,6 +2753,7 @@ pub enum RiffElement {
     #[strum(to_string = "bee")] Bee,
     #[strum(to_string = "ski")] Ski,
     #[strum(to_string = "ooie")] Ooie,
+    #[strum(to_string = "dah")] Dah,
     #[strum(to_string = "da")] Da,
     #[strum(to_string = "louie")] Louie,
     #[strum(to_string = "shoo")] Shoo,
