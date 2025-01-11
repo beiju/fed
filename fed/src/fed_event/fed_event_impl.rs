@@ -3992,7 +3992,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.push_player_tag(stolen_player_id);
                 eb.push_description(format!("{thieving_team_stadium_name} Thieves' Guild convened."));
-                eb.push_description(format!("They stole {victim_team_nickname}' Shadows player {stolen_player_name}!"));
+                eb.push_description(format!("They stole {} Shadows player {stolen_player_name}!", Possessive(&victim_team_nickname)));
 
                 eb.push_child(player_moved_teams_sub_event, |mut child_eb| {
                     child_eb.push_description(format!("The {victim_team_nickname} sent a player to the {thieving_team_nickname}."));

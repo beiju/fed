@@ -3097,8 +3097,8 @@ pub(crate) fn parse_thieves_guild_convened(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("They stole ").parse(input)?;
-    // This may need to be more intelligent about pluralization, we'll see
-    let (input, victim_team_nickname) = parse_terminated("' Shadows player ").parse(input)?;
+    let (input, victim_team_nickname) = parse_terminated_by_possessive.parse(input)?;
+    let (input, _) = tag("Shadows player ").parse(input)?;
     let (input, stolen_player_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (victim_team_nickname, stolen_player_name)))
