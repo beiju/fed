@@ -2057,6 +2057,7 @@ pub enum LedgerRunModifier {
         player_name: String,
     },
     NegativePolarity,
+    SumSun(i32), // Tempting the gods with an int here
 }
 
 impl LedgerRunModifier {
@@ -2070,6 +2071,7 @@ impl LedgerRunModifier {
             LedgerRunModifier::Wired { .. } => { in_value + 0.5 }
             LedgerRunModifier::Tired { .. } => { in_value - 0.5 }
             LedgerRunModifier::NegativePolarity => { in_value * -1.0 }
+            LedgerRunModifier::SumSun(amount) => { in_value + (*amount as f64) }
         }
     }
 
@@ -2099,6 +2101,9 @@ impl LedgerRunModifier {
             }
             LedgerRunModifier::NegativePolarity => {
                 write!(w, "\tNegative Polarity: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+            }
+            LedgerRunModifier::SumSun(runs) => {
+                write!(w, "Sum Sun: {}\n{} + {} = {}", Runs(*runs as f64), RunDisplay(run_value_before), RunDisplay(*runs as f64), RunDisplay(run_value_after))?;
             }
         }
 

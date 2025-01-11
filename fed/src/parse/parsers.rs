@@ -2655,7 +2655,12 @@ pub(crate) enum ParsedLedgerV2Modifier<'a> {
     NegativePolarity {
         runs_before: f64,
         runs_after: f64,
-    }
+    },
+    SumSun {
+        sun_runs: i32,
+        runs_before: f64,
+        runs_after: f64,
+    },
 }
 
 pub(crate) fn parse_score_ledger_v1(input: &str) -> ParserResult<Option<(f64, Vec<ParsedLedgerLineV1>)>> {
@@ -2746,6 +2751,12 @@ pub(crate) fn parse_ledger_v2_modifier(input: &str) -> ParserResult<Option<Parse
                 runs_before,
                 runs_after,
             }),
+        parse_ledger_sum_sun
+            .map(|(sun_runs, runs_before, runs_after)| ParsedLedgerV2Modifier::SumSun {
+                sun_runs,
+                runs_before,
+                runs_after,
+            }),
     )), opt(tag("\n")))).parse(input)
 }
 
@@ -2779,6 +2790,16 @@ pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f6
     let (input, _) = tag(" + ").parse(input)?;
     let (input, value) = double.parse(input)?;
     let (input, _) = tag(" = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (value, runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<(i32, f64, f64)> {
+    let (input, _) = tag("Sum Sun: ").parse(input)?;
+    let (input, value) = parse_whole_number.parse(input)?;
+    let (input, _) = tag(if value == 1 { " Run\n" } else { " Runs\n" }).parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" + 1 = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
     Ok((input, (value, runs_before, runs_after)))
 }
