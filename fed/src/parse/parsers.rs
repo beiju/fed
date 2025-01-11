@@ -1,6 +1,6 @@
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
-use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats};
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats, TraderTraitor};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
@@ -3043,6 +3043,7 @@ pub(crate) enum ParsedTrade<'a> {
         trader_name: &'a str,
     },
     Traded {
+        trader_traitor: TraderTraitor,
         trader_name: &'a str,
         donated_item_name: &'a str,
         victim_name: &'a str,
@@ -3058,8 +3059,8 @@ pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
     alt((
         parse_terminated(" sought out a trade, but nothing caught their eye.")
             .map(|trader_name| ParsedTrade::NothingCaughtTheirEye { trader_name }),
-        parse_successful_trade.map(|(trader_name, donated_item_name, victim_name, taken_item_name)| 
-            ParsedTrade::Traded { trader_name, donated_item_name, victim_name, taken_item_name }
+        parse_successful_trade.map(|(trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)|
+            ParsedTrade::Traded { trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name }
         ),
         parse_trade_nothing_to_offer.map(|(trader_name, victim_name)|
             ParsedTrade::NothingToOffer { trader_name, victim_name }
@@ -3068,14 +3069,17 @@ pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
 }
 
 
-pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
-    let (input, _) = tag("Trader ").parse(input)?;
+pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(TraderTraitor, &str, &str, &str, &str)> {
+    let (input, trader_traitor) = alt((
+        tag("Trader ").map(|_| TraderTraitor::Trader),
+        tag("Traitor ").map(|_| TraderTraitor::Traitor),
+    )).parse(input)?;
     let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
     let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
     let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, taken_item_name) = parse_terminated(".").parse(input)?;
 
-    Ok((input, (trader_name, donated_item_name, victim_name, taken_item_name)))
+    Ok((input, (trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)))
 }
 
 

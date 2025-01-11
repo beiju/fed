@@ -2719,6 +2719,21 @@ pub enum RiffElement {
     #[strum(to_string = "ski")] Ski,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum TraderTraitor {
+    Trader,
+    Traitor,
+}
+
+impl Display for TraderTraitor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TraderTraitor::Trader => { write!(f, "Trader") }
+            TraderTraitor::Traitor => { write!(f, "Traitor") }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -6313,10 +6328,14 @@ pub enum FedEventData {
         sub_event: SubEvent,
     },
 
-    /// Trader did a trade
+    /// Trader or Traitor did a trade
     Trade {
         #[serde(flatten)]
         game: GameEvent,
+
+        /// Whether the player who made this trade was a Trader (takes items from a member of the
+        /// opponent team) or Traitor (takes items from a member of their own team).
+        trader_traitor: TraderTraitor,
 
         /// Name of the player who sought out the trade
         trader_name: String,

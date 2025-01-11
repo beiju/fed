@@ -3804,12 +3804,13 @@ pub fn parse_next_event(
                         sub_event: child_event.as_sub_event(),
                     }
                 }
-                ParsedTrade::Traded { trader_name, donated_item_name, victim_name, taken_item_name } => {
+                ParsedTrade::Traded { trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name } => {
                     let mut trader_event = event.next_child(EventType::ItemTraded)?;
                     let mut victim_event = event.next_child(EventType::ItemTraded)?;
 
                     FedEventData::Trade {
                         game,
+                        trader_traitor,
                         trader_name: trader_name.to_string(),
                         trader_id: trader_event.next_player_id()?,
                         donated_item_name: donated_item_name.to_string(),
