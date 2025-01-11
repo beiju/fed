@@ -92,12 +92,13 @@ pub(crate) fn parse_integer(input: &str) -> ParserResult<i32> {
     map_res(recognize(pair(opt(tag("-")), digit1)), str::parse).parse(input)
 }
 
-pub(crate) fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>, bool)> {
+pub(crate) fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, &str, Option<&str>, bool, bool)> {
     let (input, repeating) = opt(parse_terminated("is Repeating!\n")).parse(input)?;
-    let (input, (batter_name, inhabiting_name)) = alt((
+    let (input, (batter_name, inhabiting_name, is_skipping)) = alt((
         // NOTE order matters here. inhabiting must be first
-        parse_batter_up_inhabiting,
-        parse_terminated(" batting for the ").map(|n| (n, None)),
+        parse_batter_up_inhabiting.map(|(n, i)| (n, i, false)),
+        parse_terminated(" batting for the ").map(|n| (n, None, false)),
+        parse_terminated(" skipped up to bat for the ").map(|n| (n, None, true)),
     )).parse(input)?;
     // This is going to fail if a team ever has a period or comma in it
     let (input, team_name) = take_till1(|c| c == ',' || c == '.').parse(input)?;
@@ -108,7 +109,7 @@ pub(crate) fn parse_batter_up(input: &str) -> ParserResult<(&str, Option<&str>, 
         parse_wielding_item.map(|s| Some(s))
     )).parse(input)?;
 
-    Ok((input, (batter_name, inhabiting_name, team_name, wielding_item, repeating.is_some())))
+    Ok((input, (batter_name, inhabiting_name, team_name, wielding_item, repeating.is_some(), is_skipping)))
 }
 
 pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>)> {

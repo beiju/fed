@@ -104,7 +104,7 @@ impl FedEvent {
                 match announcement {
                     GameStartAnnouncement::LetsGo => { eb.push_description("Let's Go!"); }
                     GameStartAnnouncement::TeamNames { away, home } => {
-                        eb.push_description(&format!("{away} vs. {home}"));
+                        eb.push_description(format!("{away} vs. {home}"));
                     }
                 }
                 eb.push_metadata_uuid("home", game.home_team);
@@ -129,62 +129,56 @@ impl FedEvent {
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, team_subseasonal_mod_changes } => {
                 eb.set_game(game);
                 eb.push_team_subseasonal_mod_changes(team_subseasonal_mod_changes, self.season, self.day);
-                eb.push_description(&format!("{} of {inning}, {batting_team_name} batting.",
+                eb.push_description(format!("{} of {inning}, {batting_team_name} batting.",
                                              if top_of_inning { "Top" } else { "Bottom" }));
                 eb.build(EventType::HalfInning)
             }
-            FedEventData::BatterUp { ref game, ref batter_name, team_nickname: ref team_name, ref wielding_item, ref inhabiting, is_repeating } => {
+            FedEventData::BatterUp { game, batter_name, team_nickname, wielding_item, inhabiting, is_repeating, is_skipping } => {
+                eb.set_game(game);
+                if inhabiting.is_some() || is_repeating {
+                    eb.set_category(EventCategory::Special);
+                }
+
+                if is_repeating {
+                    eb.push_description(format!("{batter_name} is Repeating!"));
+                }
+
+                if let Some(inhabiting) = inhabiting {
+                    let inhabiting_description = format!("{batter_name} is Inhabiting {}!", inhabiting.inhabited_player_name);
+
+                    if let Some(sub_event) = inhabiting.sub_event {
+                        eb.push_child(sub_event, |mut child_eb| {
+                            child_eb.push_description(&inhabiting_description);
+                            child_eb.push_player_tag(inhabiting.inhabiting_player_id);
+                            if let Some(team_id) = inhabiting.inhabiting_player_team_id {
+                                child_eb.push_team_tag(team_id);
+                            }
+                            child_eb.push_metadata_str("mod", "INHABITING");
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            child_eb.build(EventType::AddedMod)
+                        });
+                    }
+
+                    eb.push_description(inhabiting_description);
+                    eb.push_player_tag(inhabiting.inhabiting_player_id);
+                    eb.push_player_tag(inhabiting.inhabited_player_id);
+                }
+
                 let item_suffix = if let Some(item_name) = wielding_item {
                     format!(", wielding {}", item_name)
                 } else {
                     String::default()
                 };
 
-                let prefix = if is_repeating {
-                    format!("{batter_name} is Repeating!\n")
+                let action = if is_skipping {
+                    "skipped up to bat"
                 } else {
-                    String::default()
+                    "batting"
                 };
 
-                let inhabiting_child = inhabiting.as_ref()
-                    .and_then(|inhabiting| {
-                        inhabiting.sub_event.as_ref().map(|sub_event|
-                            EventBuilderChild::new(sub_event)
-                                .update(EventBuilderUpdate {
-                                    r#type: EventType::AddedMod,
-                                    category: EventCategory::Changes,
-                                    description: format!("{} is Inhabiting {}!",
-                                                         batter_name, inhabiting.inhabited_player_name),
-                                    player_tags: vec![inhabiting.inhabiting_player_id],
-                                    team_tags: inhabiting.inhabiting_player_team_id.iter().cloned().collect(),
-                                    ..Default::default()
-                                })
-                                .metadata(json!({
-                                    "mod": "INHABITING",
-                                    "type": 0, // ?
-                                }))
-                        )
-                    });
+                eb.push_description(format!("{batter_name} {action} for the {team_nickname}{item_suffix}."));
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BatterUp,
-                        category: EventCategory::special_if(inhabiting.is_some() || is_repeating),
-                        description: if let Some(inhabiting) = &inhabiting {
-                            format!("{prefix}{batter_name} is Inhabiting {}!\n{batter_name} batting for the {team_name}{item_suffix}.",
-                                    inhabiting.inhabited_player_name)
-                        } else {
-                            format!("{prefix}{batter_name} batting for the {team_name}{item_suffix}.")
-                        },
-                        player_tags: if let Some(inhabiting) = inhabiting {
-                            vec![inhabiting.inhabiting_player_id, inhabiting.inhabited_player_id]
-                        } else {
-                            vec![]
-                        },
-                        ..Default::default()
-                    })
-                    .children(inhabiting_child)
-                    .build()
+                eb.build(EventType::BatterUp)
             }
             FedEventData::SuperyummyGameStart { ref game, ref toggle } => {
                 let description = format!("{} {} Peanuts.", toggle.player_name,
@@ -214,7 +208,7 @@ impl FedEvent {
             FedEventData::Ball { game, pitch, balls, strikes, batter_item_damage } => {
                 eb.set_game(game);
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("Ball. {}-{}", balls, strikes));
+                eb.push_description(format!("Ball. {}-{}", balls, strikes));
                 // I think this conversion should be implicit but the compiler disagrees
                 eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Ball)
@@ -224,7 +218,7 @@ impl FedEvent {
                 let is_double_strike = pitch.double_strike.is_some();
                 if is_double_strike { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("Strike{}, swinging. {balls}-{strikes}",
+                eb.push_description(format!("Strike{}, swinging. {balls}-{strikes}",
                                              if is_double_strike { "s" } else { "" }));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
@@ -233,7 +227,7 @@ impl FedEvent {
                 eb.set_game(game);
                 if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("Strike, looking. {balls}-{strikes}"));
+                eb.push_description(format!("Strike, looking. {balls}-{strikes}"));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
@@ -241,7 +235,7 @@ impl FedEvent {
                 eb.set_game(game);
                 if pitch.double_strike.is_some() { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("Strike, flinching. {balls}-{strikes}"));
+                eb.push_description(format!("Strike, flinching. {balls}-{strikes}"));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::Strike)
             }
@@ -260,7 +254,7 @@ impl FedEvent {
                 let extra_space = if self.season < 19 { "" } else { " " };
 
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{offworld}{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
+                eb.push_description(format!("{offworld}{very}{extra_space}{foul_ball_text}. {balls}-{strikes}"));
                 eb.push_birds(birds);
                 eb.push_named_item_damage(batter_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::FoulBall)
@@ -270,7 +264,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{batter_name} hit a flyout to {fielder_name}."));
+                eb.push_description(format!("{batter_name} hit a flyout to {fielder_name}."));
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
                 eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
@@ -288,7 +282,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                eb.push_description(&format!("{batter_name} hits a {hit_type}!"));
+                eb.push_description(format!("{batter_name} hits a {hit_type}!"));
                 eb.push_player_tag(batter_id);
                 match hit_type {
                     HitType::Triple(power_charge) => {
@@ -324,7 +318,7 @@ impl FedEvent {
                 eb.push_magmatic(magmatic, &batter_name, batter_id);
 
                 // HR itself
-                eb.push_description(&format!("{batter_name} hits a {home_run_type}!"));
+                eb.push_description(format!("{batter_name} hits a {home_run_type}!"));
                 eb.push_player_tag(batter_id);
 
                 if big_bucket {
@@ -335,7 +329,7 @@ impl FedEvent {
                 }
 
                 if let Some((ooper, success)) = alley_oop {
-                    eb.push_description(&format!("{ooper} went up for the alley oop..."));
+                    eb.push_description(format!("{ooper} went up for the alley oop..."));
                     eb.push_description(if success {
                         "...they slammed it down for an extra Run!"
                     } else {
@@ -350,8 +344,8 @@ impl FedEvent {
 
                 // Not sure of the ordering here
                 if let Some(pop) = balloons_popped {
-                    eb.push_description(&format!("One of {} Balloons was struck and popped!", Possessive(&pop.stadium_name)));
-                    eb.push_description(&format!("{} Birds were scared away!", pop.birds_scared_away));
+                    eb.push_description(format!("One of {} Balloons was struck and popped!", Possessive(&pop.stadium_name)));
+                    eb.push_description(format!("{} Birds were scared away!", pop.birds_scared_away));
                 }
 
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
@@ -371,7 +365,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || cooled_off.is_some() || is_special));
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{batter_name} hit a ground out to {fielder_name}."));
+                eb.push_description(format!("{batter_name} hit a ground out to {fielder_name}."));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
                 eb.push_opt_item_damage(fielder_item_damage_from_out.as_ref(), &fielder_name);
                 eb.push_named_item_damage(pitcher_item_damage_from_out.as_ref().map(|(x, y)| (x.as_str(), y)));
@@ -390,22 +384,22 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.push_player_tag(runner_id);
                 eb.set_category(EventCategory::special_if(blaserunning || free_refill.is_some() || is_special));
-                eb.push_description(&format!("{runner_name} steals {base_stolen} base!"));
+                eb.push_description(format!("{runner_name} steals {base_stolen} base!"));
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
 
                 if blaserunning {
-                    eb.push_description(&format!("{runner_name} scores with Blaserunning!"));
+                    eb.push_description(format!("{runner_name} scores with Blaserunning!"));
                     // The player tag appears a second time when there's blaserunning
                     eb.push_player_tag(runner_id);
                 }
 
                 if let Some(ttfb) = took_the_fifth_base {
-                    eb.push_description(&format!("{runner_name} took The Fifth Base!"));
+                    eb.push_description(format!("{runner_name} took The Fifth Base!"));
                     // The player tag appears a second time when they take The Fifth Base
                     eb.push_player_tag(runner_id);
 
                     eb.push_child(ttfb.remove_mod_from_stadium_sub_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{runner_name} took The Fifth Base from {}.", ttfb.stadium_name));
+                        child_eb.push_description(format!("{runner_name} took The Fifth Base from {}.", ttfb.stadium_name));
                         // It's always the stadium you're playing in, which is by definition the
                         // home team's stadium
                         child_eb.push_team_tag(home_team_id);
@@ -420,7 +414,7 @@ impl FedEvent {
 
                     eb.push_child(ttfb.player_gained_item_sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Changes);
-                        child_eb.push_description(&format!("{runner_name} pocketed The Fifth Base."));
+                        child_eb.push_description(format!("{runner_name} pocketed The Fifth Base."));
                         child_eb.push_player_tag(runner_id);
                         child_eb.push_team_tag(ttfb.team_id);
                         // As with the PlacedFifthBase, decided to hard-code The Fifth Base's data
@@ -448,7 +442,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{} strikes out swinging.", batter_name));
+                eb.push_description(format!("{} strikes out swinging.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refill(free_refill);
@@ -460,7 +454,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{} strikes out looking.", batter_name));
+                eb.push_description(format!("{} strikes out looking.", batter_name));
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refill(free_refill);
@@ -473,9 +467,9 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special));
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{batter_name} draws a walk."));
+                eb.push_description(format!("{batter_name} draws a walk."));
                 if let Some(base) = base_instincts {
-                    eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
+                    eb.push_description(format!("Base Instincts take them directly to {base} base!"));
                 }
                 eb.push_player_tag(batter_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
@@ -486,7 +480,7 @@ impl FedEvent {
             }
             FedEventData::CaughtStealing { game, runner_name, base_stolen, fielder_item_damage } => {
                 eb.set_game(game);
-                eb.push_description(&format!("{runner_name} gets caught stealing {base_stolen} base."));
+                eb.push_description(format!("{runner_name} gets caught stealing {base_stolen} base."));
                 eb.push_named_item_damage(fielder_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::StolenBase)
             }
@@ -506,8 +500,8 @@ impl FedEvent {
             FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, stopped_inhabiting, num_swings } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{charmer_name} charmed {charmed_name}!"));
-                eb.push_description(&format!("{charmed_name} swings {num_swings} times to strike out willingly!"));
+                eb.push_description(format!("{charmer_name} charmed {charmed_name}!"));
+                eb.push_description(format!("{charmed_name} swings {num_swings} times to strike out willingly!"));
                 // I do not know why the charmer appears twice, but that seems to be accurate
                 eb.push_player_tag(charmer_id);
                 eb.push_player_tag(charmer_id);
@@ -520,11 +514,11 @@ impl FedEvent {
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special); }
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{runner_out_name} out at {out_at_base} base."));
+                eb.push_description(format!("{runner_out_name} out at {out_at_base} base."));
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_scorers(&scores.scores, home_team_id, "scores!", true, self.season < 21);
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
-                eb.push_description(&format!("{batter_name} reaches on fielder's choice."));
+                eb.push_description(format!("{batter_name} reaches on fielder's choice."));
                 // Unsure of order of free refills vs hotel motel parties
                 eb.push_free_refills(&scores.free_refills);
                 eb.push_scorer_hotel_motel_parties(&scores.scores);
@@ -559,7 +553,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 // I feel like there should be an easier way to do this ref conversion
                 eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(n, d)| (n.as_str(), d)));
-                eb.push_description(&format!("{batter_name} hit into a double play!"));
+                eb.push_description(format!("{batter_name} hit into a double play!"));
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_cooled_off(cooled_off, &batter_name);
@@ -571,7 +565,7 @@ impl FedEvent {
                 let away_team_id = game.away_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Outcomes);
-                eb.push_description(&format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"));
+                eb.push_description(format!("{winning_team_name} {winning_team_score}, {losing_team_name} {losing_team_score}"));
                 eb.push_metadata_uuid("winner", winner_id);
                 // It pushes them a second time. This has to be after set_game, as that overrides them
                 eb.push_team_tag(home_team_id);
@@ -587,8 +581,8 @@ impl FedEvent {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{pitcher_name} throws a Mild pitch!"));
-                eb.push_description(&format!("Ball, {balls}-{strikes}."));
+                eb.push_description(format!("{pitcher_name} throws a Mild pitch!"));
+                eb.push_description(format!("Ball, {balls}-{strikes}."));
                 if runners_advance {
                     eb.push_description("Runners advance on the pathetic play!");
                 }
@@ -650,9 +644,9 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 if is_unstable {
-                    eb.push_description(&format!("{player_name} is Unstable!"));
+                    eb.push_description(format!("{player_name} is Unstable!"));
                 }
-                eb.push_description(&format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"));
+                eb.push_description(format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"));
                 eb.push_player_tag(player_id);
                 if let Some(mod_added) = magmatic_mod_added {
                     eb.push_child(mod_added.sub_event, |mut child| {
@@ -693,16 +687,16 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Blooddrain gurgled!");
-                eb.push_description(&format!("{sipper_name}'s Siphon activates!"));
-                eb.push_description(&format!("{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!"));
-                eb.push_description(&format!("{sipper_name} {action}"));
+                eb.push_description(format!("{sipper_name}'s Siphon activates!"));
+                eb.push_description(format!("{sipper_name} siphoned some of {sipped_name}'s {sipped_category} ability!"));
+                eb.push_description(format!("{sipper_name} {action}"));
                 eb.push_player_tag(sipper_id);
                 eb.push_player_tag(sipped_id);
 
 
                 eb.push_child(sipped_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(&format!("{sipped_name} had blood drained by {sipper_name}."));
+                    child_eb.push_description(format!("{sipped_name} had blood drained by {sipper_name}."));
                     child_eb.push_team_tag(sipped_team_id);
                     child_eb.push_player_tag(sipped_id);
                     child_eb.push_metadata_i64("type", sipped_category);
@@ -734,7 +728,7 @@ impl FedEvent {
                         .map(|mod_removal| {
                             let mut child_eb = eb.connected_event(mod_removal.event);
                             child_eb.set_category(EventCategory::Changes);
-                            child_eb.push_description(&mod_removal.format_description_player(&player_name));
+                            child_eb.push_description(mod_removal.format_description_player(&player_name));
                             child_eb.push_player_tag(player_id);
                             child_eb.push_team_tag(team_id);
                             child_eb.push_metadata_json("removes", mod_removal.mods_removed.into());
@@ -744,7 +738,7 @@ impl FedEvent {
                     )
                     .collect();
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{} {mod_duration} mods wore off.", possessive(player_name)));
+                eb.push_description(format!("{} {mod_duration} mods wore off.", possessive(player_name)));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_str_vec("mods", mod_ids);
@@ -763,7 +757,7 @@ impl FedEvent {
                         .map(|mod_removal| {
                             let mut child_eb = eb.connected_event(mod_removal.event);
                             child_eb.set_category(EventCategory::Changes);
-                            child_eb.push_description(&mod_removal.format_description_team(&team_nickname));
+                            child_eb.push_description(mod_removal.format_description_team(&team_nickname));
                             child_eb.push_team_tag(team_id);
                             child_eb.push_metadata_json("removes", mod_removal.mods_removed.into());
                             child_eb.push_metadata_str("source", r.mod_id);
@@ -772,7 +766,7 @@ impl FedEvent {
                     )
                     .collect();
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("The {} {mod_duration} mods wore off.", possessive(team_nickname)));
+                eb.push_description(format!("The {} {mod_duration} mods wore off.", possessive(team_nickname)));
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str_vec("mods", mod_ids);
                 eb.push_metadata_i64("type", mod_duration);
@@ -835,14 +829,14 @@ impl FedEvent {
                 // The presence of win_event is not causally connected to the burp message, but I'm
                 // using it as a signal for now. iirc this will have to be changed later
                 if let Some(win_event) = win_event {
-                    eb.push_description(&format!("The {scoring_team_nickname} collected 10!"));
-                    eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
+                    eb.push_description(format!("The {scoring_team_nickname} collected 10!"));
+                    eb.push_description(format!("Sun 2 smiled at the {scoring_team_nickname}."));
                     // Two of them
-                    eb.push_description(&format!("Sun 2 smiled at the {scoring_team_nickname}."));
+                    eb.push_description(format!("Sun 2 smiled at the {scoring_team_nickname}."));
                     eb.push_balloons(win_event.balloons.as_deref(), 10.);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
-                        child_eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
+                        child_eb.push_description(format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
                         child_eb.push_team_tag(win_event.team_id);
                         child_eb.push_metadata_i64("amount", 1);
                         child_eb.push_metadata_i64("before", win_event.wins_after - 1);
@@ -855,15 +849,15 @@ impl FedEvent {
                         child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                     });
                 } else {
-                    eb.push_description(&format!("The {scoring_team_nickname} collect 10! Sun 2 smiles."));
-                    eb.push_description(&format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
+                    eb.push_description(format!("The {scoring_team_nickname} collect 10! Sun 2 smiles."));
+                    eb.push_description(format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
                 }
 
                 if let Some(rays) = caught_some_rays {
-                    eb.push_description(&format!("{} catches some rays.", rays.player_name));
+                    eb.push_description(format!("{} catches some rays.", rays.player_name));
                     eb.push_player_tag(rays.player_id);
                     eb.push_child(rays.sub_event, |mut child| {
-                        child.push_description(&format!("{} caught some rays.", rays.player_name));
+                        child.push_description(format!("{} caught some rays.", rays.player_name));
                         child.push_player_tag(rays.player_id);
                         child.push_team_tag(rays.team_id);
                         child.push_metadata_f64("before", rays.rating_before);
@@ -878,16 +872,16 @@ impl FedEvent {
             FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname, carcinization, compressed_by_gamma, win_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("The {scoring_team_nickname} collect 10!"));
+                eb.push_description(format!("The {scoring_team_nickname} collect 10!"));
 
                 // The presence of win_event is not causally connected to the burp message, but I'm
                 // using it as a signal for now. iirc this will have to be changed later
                 if let Some(win_event) = win_event {
-                    eb.push_description(&format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
+                    eb.push_description(format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
                     eb.push_balloons(win_event.balloons.as_deref(), 10.);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
-                        child_eb.push_description(&format!("The Black Hole burped a Win at the {victim_team_nickname}."));
+                        child_eb.push_description(format!("The Black Hole burped a Win at the {victim_team_nickname}."));
                         child_eb.push_team_tag(win_event.team_id);
                         child_eb.push_metadata_i64("amount", 1);
                         child_eb.push_metadata_i64("before", win_event.wins_after - 1);
@@ -900,7 +894,7 @@ impl FedEvent {
                         child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                     });
                 } else {
-                    eb.push_description(&format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));
+                    eb.push_description(format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));
                 }
 
                 if let Some(carc_full) = carcinization {
@@ -939,7 +933,7 @@ impl FedEvent {
                                                  carc_full.new_team_name, force.player_name);
                             eb.push_description(&description);
                             eb.push_description("Steal failed.");
-                            eb.push_description(&format!("{} was gripped by Force.", force.player_name));
+                            eb.push_description(format!("{} was gripped by Force.", force.player_name));
                             eb.push_child(force.sub_event, |mut child_eb| {
                                 child_eb.push_description(&description);
                                 child_eb.push_player_tag(force.player_id);
@@ -951,10 +945,10 @@ impl FedEvent {
 
                 if let Some(gamma) = compressed_by_gamma {
                     eb.push_description("The Black Hole burps!");
-                    eb.push_description(&format!("{} is compressed by gamma!", gamma.player_name));
+                    eb.push_description(format!("{} is compressed by gamma!", gamma.player_name));
                     eb.push_player_tag(gamma.player_id);
                     eb.push_child(gamma.sub_event, |mut child| {
-                        child.push_description(&format!("{} was compressed by gamma!", gamma.player_name));
+                        child.push_description(format!("{} was compressed by gamma!", gamma.player_name));
                         child.push_player_tag(gamma.player_id);
                         child.push_team_tag(gamma.team_id);
                         child.push_metadata_f64("before", gamma.rating_before);
@@ -1003,8 +997,8 @@ impl FedEvent {
                 eb.push_pitch(pitch);
                 eb.push_opt_item_damage(pitcher_item_damage.as_ref(), &pitcher_name);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
-                eb.push_description(&format!("{batter_name} charms {pitcher_name}!"));
-                eb.push_description(&format!("{batter_name} walks to first base."));
+                eb.push_description(format!("{batter_name} charms {pitcher_name}!"));
+                eb.push_description(format!("{batter_name} walks to first base."));
                 eb.push_player_tag(batter_id);
                 eb.push_player_tag(batter_id); // two of them
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
@@ -1039,13 +1033,13 @@ impl FedEvent {
             FedEventData::AllergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after, weather_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{player_name} swallowed a stray peanut and had an allergic reaction!"));
+                eb.push_description(format!("{player_name} swallowed a stray peanut and had an allergic reaction!"));
                 eb.push_player_tag(player_id);
 
                 if let Some(weather) = weather_event {
                     eb.push_child(weather, |mut child_eb| {
                         child_eb.set_category(EventCategory::Special);
-                        child_eb.push_description(&format!("{player_name} swallowed a stray peanut."));
+                        child_eb.push_description(format!("{player_name} swallowed a stray peanut."));
                         child_eb.push_team_tag(team_id);
                         child_eb.push_player_tag(player_id);
                         child_eb.push_metadata_str("effect", "Allergic Reaction");
@@ -1056,7 +1050,7 @@ impl FedEvent {
 
                 eb.push_child(sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(&format!("{player_name} had an allergic reaction."));
+                    child_eb.push_description(format!("{player_name} had an allergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
                     child_eb.push_metadata_i64("type", 4);
@@ -1070,12 +1064,12 @@ impl FedEvent {
             FedEventData::SuperallergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{player_name} swallowed a stray peanut and had a Superallergic reaction!"));
+                eb.push_description(format!("{player_name} swallowed a stray peanut and had a Superallergic reaction!"));
                 eb.push_player_tag(player_id);
 
                 eb.push_child(sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(&format!("{player_name} had a Superallergic reaction."));
+                    child_eb.push_description(format!("{player_name} had a Superallergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
                     child_eb.push_metadata_i64("type", 4);
@@ -1133,9 +1127,9 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Blooddrain gurgled!");
-                if is_siphon { eb.push_description(&format!("{}'s Siphon activates!", sipper.player_name)); }
-                eb.push_description(&format!("{} siphoned some of {}'s {sipped_category} ability!", sipper.player_name, sipped.player_name));
-                eb.push_description(&format!("{} increased their {sipped_category} ability!", sipper.player_name));
+                if is_siphon { eb.push_description(format!("{}'s Siphon activates!", sipper.player_name)); }
+                eb.push_description(format!("{} siphoned some of {}'s {sipped_category} ability!", sipper.player_name, sipped.player_name));
+                eb.push_description(format!("{} increased their {sipped_category} ability!", sipper.player_name));
 
                 // Can't put this in build_child because the player tags are in the opposite order
                 // from the child events, for some reason
@@ -1164,7 +1158,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Reality flickers. Things look different ...");
-                eb.push_description(&format!("{} and {} switch teams in the feedback!", player_a.player_name, player_b.player_name));
+                eb.push_description(format!("{} and {} switch teams in the feedback!", player_a.player_name, player_b.player_name));
                 eb.push_player_tag(player_a.player_id);
                 eb.push_player_tag(player_b.player_id);
 
@@ -1189,10 +1183,10 @@ impl FedEvent {
                         &player_b.team_nickname
                     };
 
-                    eb.push_description(&format!("The LCD Soundsystem is playing at the {team_nickname}' house!"));
+                    eb.push_description(format!("The LCD Soundsystem is playing at the {team_nickname}' house!"));
                     for (lcd, player) in [(lcd_a, &player_a), (lcd_b, &player_b)] {
                         eb.push_child(lcd.sub_event, |mut child| {
-                            child.push_description(&format!("The LCD Soundsystem boosted {}!", player.player_name));
+                            child.push_description(format!("The LCD Soundsystem boosted {}!", player.player_name));
                             child.push_player_tag(player.player_id);
                             child.push_team_tag(player.team_id);
                             child.build_boost(&lcd)
@@ -1200,12 +1194,12 @@ impl FedEvent {
                     }
                 }
 
-                eb.push_description(&format!("{} is now {}.", player_b.player_name, position_type.role()));
+                eb.push_description(format!("{} is now {}.", player_b.player_name, position_type.role()));
                 eb.push_child(sub_event, |mut child| {
                     if self.season < 19 {
                         child.push_description("Reality flickered in the Feedback.");
                     } else {
-                        child.push_description(&format!("{} and {} were swapped in Feedback.", player_a.player_name, player_b.player_name));
+                        child.push_description(format!("{} and {} were swapped in Feedback.", player_a.player_name, player_b.player_name));
                     }
                     child.push_player_tag(player_a.player_id);
                     child.push_player_tag(player_b.player_id);
@@ -1284,9 +1278,9 @@ impl FedEvent {
                         } else {
                             "Reverberations hit unsafe levels!"
                         });
-                        eb.push_description(&format!("The {team_nickname} had their lineup shuffled in the Reverb!"));
+                        eb.push_description(format!("The {team_nickname} had their lineup shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
-                            child.push_description(&format!("The {team_nickname} had their lineup shuffled."));
+                            child.push_description(format!("The {team_nickname} had their lineup shuffled."));
                             child.push_team_tag(team_id);
                             child.build(EventType::ReverbLineupShuffle)
                         });
@@ -1299,9 +1293,9 @@ impl FedEvent {
                         } else {
                             "Reverberations hit unsafe levels!"
                         });
-                        eb.push_description(&format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
+                        eb.push_description(format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
-                            child.push_description(&format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
+                            child.push_description(format!("The {team_nickname} had their rotation shuffled in the Reverb!"));
                             child.push_team_tag(team_id);
                             child.build(EventType::ReverbRotationShuffle)
                         });
@@ -1314,9 +1308,9 @@ impl FedEvent {
                         } else {
                             "Reverberations hit dangerous levels!"
                         });
-                        eb.push_description(&format!("The {team_nickname} were shuffled in the Reverb!"));
+                        eb.push_description(format!("The {team_nickname} were shuffled in the Reverb!"));
                         eb.push_child(sub_event, |mut child| {
-                            child.push_description(&format!("The {team_nickname} were shuffled in the Reverb!"));
+                            child.push_description(format!("The {team_nickname} were shuffled in the Reverb!"));
                             child.push_team_tag(team_id);
                             child.build(EventType::ReverbFullShuffle)
                         });
@@ -1329,7 +1323,7 @@ impl FedEvent {
                         } else {
                             "Reverberations hit high levels!"
                         });
-                        eb.push_description(&format!("The {team_nickname} had several players shuffled in the Reverb!"));
+                        eb.push_description(format!("The {team_nickname} had several players shuffled in the Reverb!"));
                         let common_description = format!("The {team_nickname} had several players shuffled in the Reverb!");
                         for player_reverb in player_reverbs {
                             match player_reverb {
@@ -1385,7 +1379,7 @@ impl FedEvent {
                     other_eb.set_category(EventCategory::Changes);
                     other_eb.push_team_tag(team_id);
                     if let Some(pid) = player_id { other_eb.push_player_tag(pid); }
-                    other_eb.push_description(&from_other_mod.format_description());
+                    other_eb.push_description(from_other_mod.format_description());
                     let removes: Vec<_> = from_other_mod.mods_removed.iter()
                         .map(|mod_desc| json!({ "type": mod_desc.mod_duration as i64, "mod": mod_desc.mod_id }))
                         .collect();
@@ -1634,12 +1628,12 @@ impl FedEvent {
                             eb.push_sent_elsewhere(sent_elsewhere, &description, &description);
                         }
                         FloodingSweptEffect::Flippers { player_name, player_id, hype, .. } => {
-                            eb.push_description(&format!("{player_name} uses their Flippers to slingshot home!"));
+                            eb.push_description(format!("{player_name} uses their Flippers to slingshot home!"));
                             eb.push_player_tag(*player_id);
                             eb.push_hype_opt(hype.as_ref(), home_team);
                         }
                         FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
-                            eb.push_description(&format!("{player_name}'s Ego keeps them on base!"));
+                            eb.push_description(format!("{player_name}'s Ego keeps them on base!"));
                             eb.push_player_tag(*player_id);
                         }
                     }
@@ -1694,7 +1688,7 @@ impl FedEvent {
 
                             if let Some(recongeal) = recongealed_differently {
                                 eb.push_child(recongeal.sub_event, |mut child| {
-                                    child.push_description(&format!("{} re-congealed differently.", recongeal.player_name));
+                                    child.push_description(format!("{} re-congealed differently.", recongeal.player_name));
                                     child.push_team_tag(recongeal.team_id);
                                     child.push_player_tag(recongeal.player_id);
                                     child.push_metadata_i64("type", ModDuration::Permanent as i64);
@@ -1726,7 +1720,7 @@ impl FedEvent {
                             eb.push_description(&description);
                         }
                         ReturnFromElsewhereFlavor::PulledBack { team_id, sought_player_id, seeker_player_id, seeker_player_name, scattered, sub_event, time_elsewhere } => {
-                            eb.push_description(&format!("{seeker_player_name} sought out Elsewhere teammate {player_name}..."));
+                            eb.push_description(format!("{seeker_player_name} sought out Elsewhere teammate {player_name}..."));
                             eb.push_player_tag(seeker_player_id);
                             let description = if let Some(time) = time_elsewhere {
                                 format!("{player_name} was pulled back from Elsewhere after {time}!")
@@ -1760,21 +1754,21 @@ impl FedEvent {
                 eb.push_player_tag(replacement_id);
 
                 if unstable_chain.is_some() {
-                    eb.push_description(&format!("{victim_name} is Unstable!"));
+                    eb.push_description(format!("{victim_name} is Unstable!"));
                     eb.push_description("A Debt was collected.");
                 }
 
-                eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
+                eb.push_description(format!("Rogue Umpire incinerated {victim_name}!"));
 
                 if heat_magnet.is_some() {
                     eb.push_description("The Heat Magnet catches. The Thermal Converter hums.");
-                    eb.push_description(&format!("5 Runs generated for the {team_nickname}!"));
+                    eb.push_description(format!("5 Runs generated for the {team_nickname}!"));
                 }
 
-                eb.push_description(&format!("They're replaced by {replacement_name}."));
+                eb.push_description(format!("They're replaced by {replacement_name}."));
 
                 eb.push_child(incin_child, |mut child_eb| {
-                    child_eb.push_description(&format!("Rogue Umpire incinerated {victim_name}!"));
+                    child_eb.push_description(format!("Rogue Umpire incinerated {victim_name}!"));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(team_id);
                     if self.season < 19 {
@@ -1788,7 +1782,7 @@ impl FedEvent {
                 });
 
                 eb.push_child(enter_hall_child, |mut child_eb| {
-                    child_eb.push_description(&format!("{victim_name} entered the Hall of Flame."));
+                    child_eb.push_description(format!("{victim_name} entered the Hall of Flame."));
                     child_eb.push_player_tag(victim_id);
                     child_eb.build(EventType::EnterHallOfFlame)
                 });
@@ -1804,14 +1798,14 @@ impl FedEvent {
                 }
 
                 eb.push_child(hatch_child, |mut child_eb| {
-                    child_eb.push_description(&format!("{replacement_name} has been hatched from the field of eggs."));
+                    child_eb.push_description(format!("{replacement_name} has been hatched from the field of eggs."));
                     child_eb.push_player_tag(replacement_id);
                     child_eb.push_metadata_uuid("id", replacement_id);
                     child_eb.build(EventType::PlayerHatched)
                 });
 
                 eb.push_child(replace_child, |mut child_eb| {
-                    child_eb.push_description(&format!("{replacement_name} replaced the incinerated {victim_name}."));
+                    child_eb.push_description(format!("{replacement_name} replaced the incinerated {victim_name}."));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_player_tag(replacement_id);
                     child_eb.push_team_tag(team_id);
@@ -1840,11 +1834,11 @@ impl FedEvent {
 
                 if let Some(ambush) = ambush {
                     eb.push_description("An Ambush.");
-                    eb.push_description(&format!("{} enters the {} shadows.", ambush.player_name, possessive(ambush.team_nickname.clone())));
+                    eb.push_description(format!("{} enters the {} shadows.", ambush.player_name, possessive(ambush.team_nickname.clone())));
 
                     if let Some(team) = ambush.former_team {
                         eb.push_child(team.sub_event, |mut child_eb| {
-                            child_eb.push_description(&format!("{} was pulled from the incinerated {}.", ambush.player_name, team.team_nickname));
+                            child_eb.push_description(format!("{} was pulled from the incinerated {}.", ambush.player_name, team.team_nickname));
                             child_eb.push_player_tag(ambush.player_id);
                             child_eb.push_team_tag(team.team_id);
                             child_eb.push_metadata_uuid("playerId", ambush.player_id);
@@ -1856,12 +1850,12 @@ impl FedEvent {
                     }
 
                     eb.push_child(ambush.exit_hall_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{} exited the Hall of Flame", ambush.player_name));
+                        child_eb.push_description(format!("{} exited the Hall of Flame", ambush.player_name));
                         child_eb.push_player_tag(ambush.player_id);
                         child_eb.build(EventType::ExitHallOfFlame)
                     });
                     eb.push_child(ambush.added_to_team_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{} joins the Ambush.", ambush.player_name));
+                        child_eb.push_description(format!("{} joins the Ambush.", ambush.player_name));
                         child_eb.push_player_tag(ambush.player_id);
                         child_eb.push_team_tag(ambush.team_id);
                         child_eb.push_metadata_uuid("playerId", ambush.player_id);
@@ -1874,7 +1868,7 @@ impl FedEvent {
                         child_eb.build(EventType::PlayerAddedToTeam)
                     });
                     eb.push_child(ambush.shadow_boost_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{} entered the Shadows.", ambush.player_name));
+                        child_eb.push_description(format!("{} entered the Shadows.", ambush.player_name));
                         child_eb.push_player_tag(ambush.player_id);
                         child_eb.push_team_tag(ambush.team_id);
                         child_eb.push_metadata_f64("after", ambush.player_rating_after);
@@ -1915,7 +1909,7 @@ impl FedEvent {
                 });
 
                 if let Some(stadium_name) = attracted_birds {
-                    eb.push_description(&format!("A flock of Birds are attracted to {stadium_name}!"));
+                    eb.push_description(format!("A flock of Birds are attracted to {stadium_name}!"));
                 }
 
                 eb.build(EventType::Party)
@@ -1989,7 +1983,7 @@ impl FedEvent {
             FedEventData::EarnedPostseasonSlot { team_id, team_nickname, postseason_birth_name, postseason_birth_id, postseason_birth_location, hatch_event_metadata, postseason_birth_event_metadata, shadow_boost, left_party_event_metadata } => {
                 let mut hatch_eb = eb.connected_event(hatch_event_metadata);
                 hatch_eb.set_category(EventCategory::Changes);
-                hatch_eb.push_description(&format!("{postseason_birth_name} has been hatched from the field of eggs."));
+                hatch_eb.push_description(format!("{postseason_birth_name} has been hatched from the field of eggs."));
                 hatch_eb.push_player_tag(postseason_birth_id);
                 hatch_eb.push_metadata_uuid("id", postseason_birth_id);
                 let hatch_event = hatch_eb.build(EventType::PlayerHatched);
@@ -1997,7 +1991,7 @@ impl FedEvent {
                 let birth_event = postseason_birth_event_metadata.map(|postseason_birth_event_metadata| {
                     let mut birth_eb = eb.connected_event(postseason_birth_event_metadata);
                     birth_eb.set_category(EventCategory::Changes);
-                    birth_eb.push_description(&format!("The {team_nickname} {} a Postseason Birth!", if self.season < 19 { "earn" } else { "earned" }));
+                    birth_eb.push_description(format!("The {team_nickname} {} a Postseason Birth!", if self.season < 19 { "earn" } else { "earned" }));
                     birth_eb.push_player_tag(postseason_birth_id);
                     birth_eb.push_team_tag(team_id);
                     birth_eb.push_metadata_i64("location", postseason_birth_location);
@@ -2011,7 +2005,7 @@ impl FedEvent {
                 let party_event = left_party_event_metadata.map(|left_party_time| {
                     let mut party_eb = eb.connected_event(left_party_time);
                     party_eb.set_category(EventCategory::Changes);
-                    party_eb.push_description(&format!("The {team_nickname} {} removed from Party Time to join the Postseason!", if self.season < 19 {
+                    party_eb.push_description(format!("The {team_nickname} {} removed from Party Time to join the Postseason!", if self.season < 19 {
                         "have been"
                     } else {
                         "were"
@@ -2026,7 +2020,7 @@ impl FedEvent {
                 let shadow_event = shadow_boost.map(|(boost, _)| {
                     let mut shadow_eb = eb.connected_event(boost.sub_event);
                     shadow_eb.set_category(EventCategory::Changes);
-                    shadow_eb.push_description(&format!("{postseason_birth_name} entered the Shadows."));
+                    shadow_eb.push_description(format!("{postseason_birth_name} entered the Shadows."));
                     shadow_eb.push_team_tag(team_id);
                     shadow_eb.push_player_tag(postseason_birth_id);
                     shadow_eb.push_known_boost(&boost);
@@ -2035,7 +2029,7 @@ impl FedEvent {
 
                 eb.set_category(EventCategory::Outcomes);
                 let overbracket_fmt = format!("Postseason Overbracket {}", self.season + 1); // wasted work but eh
-                eb.push_description(&format!("The {team_nickname} earned a spot in the Season {} {}.", self.season + 1, if self.season < 19 {
+                eb.push_description(format!("The {team_nickname} earned a spot in the Season {} {}.", self.season + 1, if self.season < 19 {
                     "Postseason"
                 } else {
                     &overbracket_fmt
@@ -2164,7 +2158,7 @@ impl FedEvent {
             }
             FedEventData::BlessingWon { team_tags, blessing_title, metadata } => {
                 eb.set_category(EventCategory::Outcomes);
-                eb.push_description(&format!("Blessing Won: {blessing_title}"));
+                eb.push_description(format!("Blessing Won: {blessing_title}"));
                 eb.set_team_tags(team_tags);
                 eb.set_full_metadata(metadata);
                 eb.build(EventType::BlessingOrGiftWon)
@@ -2222,9 +2216,9 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 if is_unstable {
-                    eb.push_description(&format!("{player_name} is Unstable!"));
+                    eb.push_description(format!("{player_name} is Unstable!"));
                 }
-                eb.push_description(&format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"));
+                eb.push_description(format!("Rogue Umpire tried to incinerate {player_name}, but they're Fireproof! The Umpire was incinerated instead!"));
                 eb.push_player_tag(player_id);
 
                 eb.build(EventType::IncinerationBlocked)
@@ -2291,7 +2285,7 @@ impl FedEvent {
                     }
                     RenovationBuiltEffect::LightSwitchFlipped { stadium_name, is_on, sub_event } => {
                         eb.push_child(sub_event, |mut child_eb| {
-                            child_eb.push_description(&format!("{stadium_name}'s Light Switch is now {}.",
+                            child_eb.push_description(format!("{stadium_name}'s Light Switch is now {}.",
                                                               if is_on { "ON" } else { "OFF" }));
                             child_eb.push_team_tag(team_id);
                             // Grumble grumble inconsistency
@@ -2344,12 +2338,12 @@ impl FedEvent {
                 eb.push_metadata_i64("type", ModDuration::Permanent);
                 let mod_name = format!("EGO{level}");
                 if level == 1 {
-                    eb.push_description(&format!("{player_name} is named an MVP."));
+                    eb.push_description(format!("{player_name} is named an MVP."));
                     eb.push_metadata_str("mod", mod_name);
                     eb.build(EventType::AddedMod)
                 } else {
                     let prev_mod_name = format!("EGO{}", level - 1);
-                    eb.push_description(&format!("{player_name} is named a {level}-Time MVP{}",
+                    eb.push_description(format!("{player_name} is named a {level}-Time MVP{}",
                                                 if self.season >= 21 || level == 2 { "." } else { "!" }));
                     eb.push_metadata_str("from", prev_mod_name);
                     eb.push_metadata_str("to", mod_name);
@@ -2433,7 +2427,7 @@ impl FedEvent {
             }
             FedEventData::TeamUsedFreeWill { team_id, team_nickname } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("The {team_nickname} used their Free Will."));
+                eb.push_description(format!("The {team_nickname} used their Free Will."));
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("mod", "FREE_WILL");
                 eb.push_metadata_i64("type", ModDuration::Permanent);
@@ -2441,7 +2435,7 @@ impl FedEvent {
             }
             FedEventData::TeamUsedFreeGift { team_id, team_nickname } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("The {team_nickname} used their Free Gift."));
+                eb.push_description(format!("The {team_nickname} used their Free Gift."));
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("mod", "FREE_GIFT");
                 eb.push_metadata_i64("type", ModDuration::Permanent);
@@ -2539,11 +2533,11 @@ impl FedEvent {
             FedEventData::Echo { game, echoee_name, primary_echo, receiver_echos, } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{} Echoed {echoee_name}!", primary_echo.receiver_name));
+                eb.push_description(format!("{} Echoed {echoee_name}!", primary_echo.receiver_name));
 
                 if let Some(mods_removed) = primary_echo.mods_removed {
                     eb.push_child(mods_removed.sub_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{}'s Echo faded.", primary_echo.receiver_name));
+                        child_eb.push_description(format!("{}'s Echo faded.", primary_echo.receiver_name));
                         child_eb.push_player_tag(primary_echo.receiver_id);
                         child_eb.push_team_tag(primary_echo.receiver_team_id);
 
@@ -2558,7 +2552,7 @@ impl FedEvent {
                 }
 
                 eb.push_child(primary_echo.mods_added.sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!( "{} Echoed {echoee_name}!", primary_echo.receiver_name));
+                    child_eb.push_description(format!( "{} Echoed {echoee_name}!", primary_echo.receiver_name));
                     child_eb.push_player_tag(primary_echo.receiver_id);
                     child_eb.push_team_tag(primary_echo.receiver_team_id);
 
@@ -2574,7 +2568,7 @@ impl FedEvent {
                 for receiver_echo in receiver_echos {
                     if let Some(mods_removed) = receiver_echo.mods_removed {
                         eb.push_child(mods_removed.sub_event, |mut child_eb| {
-                            child_eb.push_description(&format!( "{}'s Echoed Echo faded.", receiver_echo.receiver_name));
+                            child_eb.push_description(format!( "{}'s Echoed Echo faded.", receiver_echo.receiver_name));
                             child_eb.push_player_tag(receiver_echo.receiver_id);
                             child_eb.push_team_tag(receiver_echo.receiver_team_id);
 
@@ -2589,7 +2583,7 @@ impl FedEvent {
                     }
 
                     eb.push_child(receiver_echo.mods_added.sub_event, |mut child_eb| {
-                        child_eb.push_description(&format!( "{}'s Echoed an Echo from {}!", receiver_echo.receiver_name, primary_echo.receiver_name));
+                        child_eb.push_description(format!( "{}'s Echoed an Echo from {}!", receiver_echo.receiver_name, primary_echo.receiver_name));
                         child_eb.push_player_tag(receiver_echo.receiver_id);
                         child_eb.push_team_tag(receiver_echo.receiver_team_id);
 
@@ -2686,13 +2680,13 @@ impl FedEvent {
                     }
                     ConsumerAttackEffect::DefendedWithItem(damage) => {
                         // Sticking the extra \n here arbitrarily. There are two in a row.
-                        eb.push_description(&format!("{player_name_all_caps} DEFENDS\n"));
+                        eb.push_description(format!("{player_name_all_caps} DEFENDS\n"));
                         if damage.health > 0 {
-                            eb.push_description(&format!("{} DAMAGED", damage.item_name.to_ascii_uppercase()));
+                            eb.push_description(format!("{} DAMAGED", damage.item_name.to_ascii_uppercase()));
                         } else if damage.item_name_plural.expect("When item health > 0, whether its name is plural should be known") {
-                            eb.push_description(&format!("{} BREAK", damage.item_name.to_ascii_uppercase()));
+                            eb.push_description(format!("{} BREAK", damage.item_name.to_ascii_uppercase()));
                         } else {
-                            eb.push_description(&format!("{} BREAKS", damage.item_name.to_ascii_uppercase()));
+                            eb.push_description(format!("{} BREAKS", damage.item_name.to_ascii_uppercase()));
                         }
                         let description = eb.description().to_string();
                         eb.push_child(damage.sub_event, |mut child| {
@@ -2704,7 +2698,7 @@ impl FedEvent {
 
                 if let Some(fishy) = sensed_something_fishy {
                     eb.push_child(fishy.sub_event, |mut child| {
-                        child.push_description(&format!("{} sensed something fishy.", fishy.detective_name));
+                        child.push_description(format!("{} sensed something fishy.", fishy.detective_name));
                         child.build_detective_activity(fishy)
                     });
                 }
@@ -2811,8 +2805,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(player_expelled.is_some()));
                 eb.push_description("The Salmon swim upstream!");
-                eb.push_description(&format!("Inning {inning_num} begins again."));
-                eb.push_description(&run_losses.to_string());
+                eb.push_description(format!("Inning {inning_num} begins again."));
+                eb.push_description(run_losses.to_string());
 
                 if let Some(item_restored) = item_restored {
                     let item_base_name = item_restored.item_name.split(" of ").next()
@@ -2848,7 +2842,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
 
-                eb.push_description(&format!("{pitcher_name} hits {batter_name} with a pitch!"));
+                eb.push_description(format!("{pitcher_name} hits {batter_name} with a pitch!"));
                 let debt_description = match debt_type {
                     DebtType::Unstable => {
                         format!("{batter_name} became Unstable!")
@@ -2878,14 +2872,14 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Solar Panels absorb Sun 2's energy!");
-                eb.push_description(&format!("{num_runs} Runs are collected and saved for the {team_nickname}'s next game."));
+                eb.push_description(format!("{num_runs} Runs are collected and saved for the {team_nickname}'s next game."));
                 eb.build(EventType::SolarPanelsActivation)
             }
             FedEventData::RunsOverflowing { game, team_nickname, num_runs, unruns, gained, score_summary } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Runs are Overflowing!");
-                eb.push_description(&format!("{team_nickname} {} {num_runs} {}{}.",
+                eb.push_description(format!("{team_nickname} {} {num_runs} {}{}.",
                                                     if self.season >= 22 { "collect" } else if gained { "gain" } else { "lose" },
                                                     if unruns { "Unrun" } else { "Run" },
                                                     if num_runs.abs() == 1.0 { "" } else { "s" }));
@@ -2990,13 +2984,13 @@ impl FedEvent {
             FedEventData::EnterSecretBase { game, player_id, player_name, deep_darkness } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{player_name} enters the Secret Base..."));
+                eb.push_description(format!("{player_name} enters the Secret Base..."));
                 eb.push_player_tag(player_id);
 
                 if let Some(deep_darkness_event) = deep_darkness {
                     eb.push_child(deep_darkness_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Special);
-                        child_eb.push_description(&format!("{player_name} senses a Deep Darkness..."));
+                        child_eb.push_description(format!("{player_name} senses a Deep Darkness..."));
                         child_eb.push_player_tag(player_id);
 
                         child_eb.build(EventType::InvestigationMessage)
@@ -3008,7 +3002,7 @@ impl FedEvent {
             FedEventData::ExitSecretBase { game, player_id, player_name, to_fifth } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{player_name} exits the Secret Base to {} Base!",
+                eb.push_description(format!("{player_name} exits the Secret Base to {} Base!",
                                              if to_fifth { "the Fifth" } else { "Second" }));
                 eb.push_player_tag(player_id);
                 eb.build(EventType::ExitSecretBase)
@@ -3050,7 +3044,7 @@ impl FedEvent {
                 for party in good_riddance_parties {
                     let mut party_eb = eb.connected_event(party.sub_event);
                     party_eb.set_category(EventCategory::Changes);
-                    party_eb.push_description(&format!("{} is Partying!", party.player_name));
+                    party_eb.push_description(format!("{} is Partying!", party.player_name));
                     party_eb.push_player_tag(party.player_id);
                     party_eb.push_team_tag(previous_team_id);
                     party_eb.push_metadata_f64("before", party.rating_before);
@@ -3060,7 +3054,7 @@ impl FedEvent {
                 }
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} {} to a new team.",
+                eb.push_description(format!("{player_name} {} to a new team.",
                                              if self.season < 17 { "wandered" } else { "roamed" }));
                 eb.push_player_tag(player_id);
                 eb.push_team_tag(previous_team_id);
@@ -3083,7 +3077,7 @@ impl FedEvent {
 
                 let mut team_eb = eb.connected_event(sub_event);
                 team_eb.set_category(EventCategory::Changes);
-                team_eb.push_description(&format!("{player_name} {r}oamed to The {new_team_nickname}."));
+                team_eb.push_description(format!("{player_name} {r}oamed to The {new_team_nickname}."));
                 team_eb.push_player_tag(player_id);
                 team_eb.push_team_tag(new_team_id);
                 team_eb.push_metadata_i64("location", location);
@@ -3094,7 +3088,7 @@ impl FedEvent {
                 let added_to_team_event = team_eb.build(EventType::PlayerAddedToTeam);
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} {r}oamed out of the Hall of Flame."));
+                eb.push_description(format!("{player_name} {r}oamed out of the Hall of Flame."));
                 eb.push_player_tag(player_id);
                 let left_hall_event = eb.build(EventType::ExitHallOfFlame);
 
@@ -3102,7 +3096,7 @@ impl FedEvent {
             }
             FedEventData::SuperRoam { player_id, player_name, location, new_team_id, new_team_nickname, previous_team_id, previous_team_nickname } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} super roamed to a new team."));
+                eb.push_description(format!("{player_name} super roamed to a new team."));
                 eb.push_player_tag(player_id);
                 eb.push_team_tag(previous_team_id);
                 eb.push_team_tag(new_team_id);
@@ -3124,7 +3118,7 @@ impl FedEvent {
             }
             FedEventData::ModsFromAnotherModRemoved { team_id, player_id, player_name, mods_removed, source_mod_name, source_mod_id } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{} mods caused by {source_mod_name} were removed.", Possessive(&player_name)));
+                eb.push_description(format!("{} mods caused by {source_mod_name} were removed.", Possessive(&player_name)));
                 eb.push_player_tag(player_id);
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("source", source_mod_id);
@@ -3145,8 +3139,8 @@ impl FedEvent {
             FedEventData::ConsumerDefended { game, exclamation, verb, defender_name_caps, defender_id, targeted_player_id, } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{exclamation}!"));
-                eb.push_description(&format!("{defender_name_caps} {verb} A CONSUMER!"));
+                eb.push_description(format!("{exclamation}!"));
+                eb.push_description(format!("{defender_name_caps} {verb} A CONSUMER!"));
                 eb.push_player_tag(defender_id);
                 eb.push_player_tag(targeted_player_id);
                 eb.build(EventType::ConsumersAttack)
@@ -3156,11 +3150,11 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{batter_name} strikes out {strikeout_type}."));
-                eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
+                eb.push_description(format!("{batter_name} strikes out {strikeout_type}."));
+                eb.push_description(format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
                 if let Some(base) = base_instincts {
-                    eb.push_description(&format!("Base Instincts take them directly to {base} base!"));
+                    eb.push_description(format!("Base Instincts take them directly to {base} base!"));
                 }
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.push_player_tag(batter_id);
@@ -3171,9 +3165,9 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{pitcher_name} charmed {batter_name}!"));
-                eb.push_description(&format!("{batter_name} swings 3 times to strike out willingly!"));
-                eb.push_description(&format!("{batter_name} uses a Mind Trick!"));
+                eb.push_description(format!("{pitcher_name} charmed {batter_name}!"));
+                eb.push_description(format!("{batter_name} swings 3 times to strike out willingly!"));
+                eb.push_description(format!("{batter_name} uses a Mind Trick!"));
                 eb.push_description("The umpire sends them to first base.");
                 // There sure are a lot of redundant player ids in this event
                 eb.push_player_tag(pitcher_id);
@@ -3190,11 +3184,11 @@ impl FedEvent {
                 // Before s18d94 the mind trick strikeout was classed as a walk and had the
                 // batter_id in there twice.
                 if (self.season, self.day) < (17, 93) {
-                    eb.push_description(&format!("{batter_name} draws a walk."));
+                    eb.push_description(format!("{batter_name} draws a walk."));
                     eb.push_player_tag(batter_id);
                 }
-                eb.push_description(&format!("{pitcher_name} uses a Mind Trick!"));
-                eb.push_description(&format!("{batter_name} strikes out thinking."));
+                eb.push_description(format!("{pitcher_name} uses a Mind Trick!"));
+                eb.push_description(format!("{batter_name} strikes out thinking."));
                 eb.push_player_tag(batter_id); // batter twice, apparently
                 eb.build(if (self.season, self.day) < (17, 93) { EventType::Walk } else { EventType::Strikeout })
             }
@@ -3203,9 +3197,9 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Blooddrain gurgled!");
                 if is_siphon {
-                    eb.push_description(&format!("{sipper_name}'s Siphon activates!"));
+                    eb.push_description(format!("{sipper_name}'s Siphon activates!"));
                 }
-                eb.push_description(&format!("{sipper_name} tried to siphon blood from {sippee_name}, but they were Sealed!"));
+                eb.push_description(format!("{sipper_name} tried to siphon blood from {sippee_name}, but they were Sealed!"));
                 eb.push_player_tag(sipper_id);
                 eb.push_player_tag(sippee_id);
                 eb.build(EventType::BlooddrainBlocked)
@@ -3227,7 +3221,7 @@ impl FedEvent {
                 // Starting with the drop on season 18 day 59, the out-of-game community chest
                 // messages (but not the in game ones!) change category from Special to Changes
                 eb.set_category(if (self.season, self.day) < (17, 58) { EventCategory::Special } else { EventCategory::Changes });
-                eb.push_description(&format!("The Community Chest Opens! {player_name} gained {item_name}."));
+                eb.push_description(format!("The Community Chest Opens! {player_name} gained {item_name}."));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_uuid("itemId", item_id);
@@ -3240,7 +3234,7 @@ impl FedEvent {
             }
             FedEventData::PlayerDropsItem { item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating, team_id, player_name, player_id } => {
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} dropped {item_name}."));
+                eb.push_description(format!("{player_name} dropped {item_name}."));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_uuid("itemId", item_id);
@@ -3256,14 +3250,14 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Community Chest Opens!");
                 if let Some(dropped_item) = first_player_dropped_item {
-                    eb.push_description(&format!("{first_player_name} gained {first_player_item_name} and dropped {dropped_item}."));
+                    eb.push_description(format!("{first_player_name} gained {first_player_item_name} and dropped {dropped_item}."));
                 } else {
-                    eb.push_description(&format!("{first_player_name} gained {first_player_item_name}."));
+                    eb.push_description(format!("{first_player_name} gained {first_player_item_name}."));
                 }
                 if let Some(dropped_item) = second_player_dropped_item {
-                    eb.push_description(&format!("{second_player_name} gained {second_player_item_name} and dropped {dropped_item}."));
+                    eb.push_description(format!("{second_player_name} gained {second_player_item_name} and dropped {dropped_item}."));
                 } else {
-                    eb.push_description(&format!("{second_player_name} gained {second_player_item_name}."));
+                    eb.push_description(format!("{second_player_name} gained {second_player_item_name}."));
                 }
                 eb.build(EventType::CommunityChestOpens)
             }
@@ -3272,12 +3266,12 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description("10 Runs collected.");
                 eb.push_description("Incoming Shadow Fax...");
-                eb.push_description(&format!("{exiting_pitcher_name} is replaced by {entering_pitcher_name}."));
+                eb.push_description(format!("{exiting_pitcher_name} is replaced by {entering_pitcher_name}."));
                 eb.push_player_tag(exiting_pitcher_id);
                 eb.push_player_tag(entering_pitcher_id);
                 eb.push_child(player_swap_sub_event, |mut child| {
                     // They changed the text in season 18
-                    child.push_description(&if self.season < 17 {
+                    child.push_description(if self.season < 17 {
                         format!("The {team_nickname} made a roster move.")
                     } else {
                         format!("{exiting_pitcher_name} was replaced by an incoming Fax.")
@@ -3296,7 +3290,7 @@ impl FedEvent {
                     child.build(EventType::PlayerSwap)
                 });
                 eb.push_child(enter_shadows_sub_event, |mut child| {
-                    child.push_description(&format!("{exiting_pitcher_name} entered the Shadows."));
+                    child.push_description(format!("{exiting_pitcher_name} entered the Shadows."));
                     child.push_player_tag(exiting_pitcher_id);
                     // TODO: Why does this specific event not have a team tag here?
                     if self.id != uuid::uuid!("c341cd11-e218-4acf-baed-8521c8f62d5a") {
@@ -3311,7 +3305,7 @@ impl FedEvent {
                 if let Some((unyolk, reyolk)) = yolked_change {
                     eb.push_child(unyolk.sub_event, |mut child_eb| {
                         // Ignoring other_player_names until it becomes relevant
-                        child_eb.push_description(&format!("{exiting_pitcher_name} are weaker apart."));
+                        child_eb.push_description(format!("{exiting_pitcher_name} are weaker apart."));
                         child_eb.push_player_tag(exiting_pitcher_id);
                         child_eb.push_team_tag(team_id);
                         child_eb.push_metadata_str("mod", "YOLKED");
@@ -3323,7 +3317,7 @@ impl FedEvent {
                         let names_str = iter::once(&exiting_pitcher_name)
                             .chain(reyolk.other_player_names.iter())
                             .join(" and ");
-                        child_eb.push_description(&format!("{names_str} are stronger together."));
+                        child_eb.push_description(format!("{names_str} are stronger together."));
                         child_eb.push_player_tag(exiting_pitcher_id);
                         child_eb.push_team_tag(team_id);
                         child_eb.push_metadata_str("mod", "YOLKED");
@@ -3367,12 +3361,12 @@ impl FedEvent {
             FedEventData::Smithy { game, repair } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("Smithy beckons to {}.", repair.player_name));
+                eb.push_description(format!("Smithy beckons to {}.", repair.player_name));
                 eb.push_player_tag(repair.player_id);
                 // This one doesn't seem to do plurals
-                eb.push_description(&format!("{} is repaired!", repair.item_name));
+                eb.push_description(format!("{} is repaired!", repair.item_name));
                 eb.push_child(repair.sub_event, |mut child| {
-                    child.push_description(&format!("{} {} was repaired by Smithy.", Possessive(&repair.player_name), repair.item_name));
+                    child.push_description(format!("{} {} was repaired by Smithy.", Possessive(&repair.player_name), repair.item_name));
                     child.build_item_repaired(repair)
                 });
                 eb.build(EventType::Smithy)
@@ -3380,29 +3374,29 @@ impl FedEvent {
             FedEventData::HolidayInning { game, inning_number } => {
                 eb.set_game(game);
                 eb.push_description("Hotel Motel");
-                eb.push_description(&format!("Inning {inning_number} is a Holiday Inning!"));
+                eb.push_description(format!("Inning {inning_number} is a Holiday Inning!"));
                 eb.build(EventType::HolidayInning)
             }
             FedEventData::HomeFieldAdvantage { game, team_nickname } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("The {team_nickname} apply Home Field advantage!"));
+                eb.push_description(format!("The {team_nickname} apply Home Field advantage!"));
                 eb.build(EventType::HomeFieldAdvantage)
             }
             FedEventData::PrizeMatch { game, item_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("Prize Match!\nThe Winner gets {item_name}"));
+                eb.push_description(format!("Prize Match!\nThe Winner gets {item_name}"));
                 eb.build(EventType::PrizeMatch)
             }
             FedEventData::WonPrizeMatch { team_nickname_or_player_name, team_id, player_id, item_id, item_name, item_mods, player_item_rating_before, player_item_rating_after, player_rating } => {
                 eb.set_category(EventCategory::Changes);
                 match team_nickname_or_player_name {
                     TeamNicknameOrPlayerName::TeamNickname(team_nickname) => {
-                        eb.push_description(&format!("The {team_nickname} won the Prize Match!"));
+                        eb.push_description(format!("The {team_nickname} won the Prize Match!"));
                     }
                     TeamNicknameOrPlayerName::PlayerName(player_name) => {
-                        eb.push_description(&format!("{player_name} gained the Prized {item_name}."));
+                        eb.push_description(format!("{player_name} gained the Prized {item_name}."));
                     }
                 }
                 eb.push_team_tag(team_id);
@@ -3428,7 +3422,7 @@ impl FedEvent {
             }
             FedEventData::GiftReceived { team_id, title_and_recipient, metadata, mut successors } => {
                 eb.set_category(EventCategory::Outcomes);
-                eb.push_description(&format!("Gift Received: {title_and_recipient}"));
+                eb.push_description(format!("Gift Received: {title_and_recipient}"));
                 eb.push_team_tag(team_id);
                 eb.set_full_metadata(metadata);
                 let main = eb.build(EventType::BlessingOrGiftWon);
@@ -3438,7 +3432,7 @@ impl FedEvent {
             FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event, weaker_apart_event } => {
                 let mut dust_eb = eb.connected_event(mod_added_event);
                 dust_eb.set_category(EventCategory::Changes);
-                dust_eb.push_description(&format!("{player_name} faded to dust."));
+                dust_eb.push_description(format!("{player_name} faded to dust."));
                 dust_eb.push_team_tag(team_id);
                 dust_eb.push_player_tag(player_id);
                 dust_eb.push_metadata_str("mod", "DUST");
@@ -3451,7 +3445,7 @@ impl FedEvent {
                     let names_str = iter::once(&player_name)
                         .chain(weaker_apart.other_player_names.iter())
                         .join(" and ");
-                    weaker_apart_eb.push_description(&format!("{names_str} are weaker apart."));
+                    weaker_apart_eb.push_description(format!("{names_str} are weaker apart."));
                     weaker_apart_eb.push_team_tag(team_id);
                     weaker_apart_eb.push_player_tag(player_id);
                     weaker_apart_eb.push_metadata_str("mod", "YOLKED");
@@ -3461,7 +3455,7 @@ impl FedEvent {
                 });
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{player_name} faded away from the {team_nickname}."));
+                eb.push_description(format!("{player_name} faded away from the {team_nickname}."));
                 eb.push_team_tag(team_id);
                 eb.push_player_tag(player_id);
                 eb.push_metadata_uuid("playerId", player_id);
@@ -3478,9 +3472,9 @@ impl FedEvent {
             FedEventData::ABloodType { game, team_id, team_nickname, blood_type_mod_id, sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("The {team_nickname} have A Blood Type."));
+                eb.push_description(format!("The {team_nickname} have A Blood Type."));
                 eb.push_child(sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("The {team_nickname} have A Blood Type."));
+                    child_eb.push_description(format!("The {team_nickname} have A Blood Type."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_metadata_str("mod", blood_type_mod_id);
                     child_eb.push_metadata_str("source", "A");
@@ -3514,7 +3508,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Shame Donations are granted!");
-                eb.push_description(&format!("The {team_nickname} receive {unruns} Unruns."));
+                eb.push_description(format!("The {team_nickname} receive {unruns} Unruns."));
 
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
 
@@ -3536,7 +3530,7 @@ impl FedEvent {
             }
             FedEventData::BalloonsCollectedFromWin { game, stadium_name, earned_win } => {
                 eb.set_game(game);
-                eb.push_description(&format!("{stadium_name} {} 10 Balloons!", eb.inflated_or_inflates()));
+                eb.push_description(format!("{stadium_name} {} 10 Balloons!", eb.inflated_or_inflates()));
                 eb.push_earned_win_opt(earned_win);
 
                 eb.build(EventType::BalloonsInflatedFromWin)
@@ -3545,7 +3539,7 @@ impl FedEvent {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("The {team_nickname} practice Moderation."));
+                eb.push_description(format!("The {team_nickname} practice Moderation."));
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
                 eb.build(EventType::Moderation)
@@ -3553,11 +3547,11 @@ impl FedEvent {
             FedEventData::PlacedFifthBase { game, player_id, player_name, player_team_id, player_item_rating_before, player_item_rating_after, player_rating, stadium_name, player_lost_item_event, stadium_gained_mod_event } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
-                eb.push_description(&format!("{player_name} placed and stole to The Fifth Base!"));
+                eb.push_description(format!("{player_name} placed and stole to The Fifth Base!"));
                 eb.push_player_tag(player_id);
 
                 eb.push_child(player_lost_item_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{player_name} placed The Fifth Base in {stadium_name}."));
+                    child_eb.push_description(format!("{player_name} placed The Fifth Base in {stadium_name}."));
                     child_eb.push_player_tag(player_id);
                     child_eb.push_team_tag(player_team_id);
                     // Decided to hard-code the fifth base uuid under the "anything that can be
@@ -3573,7 +3567,7 @@ impl FedEvent {
                 });
 
                 eb.push_child(stadium_gained_mod_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{player_name} placed The Fifth Base in {stadium_name}."));
+                    child_eb.push_description(format!("{player_name} placed The Fifth Base in {stadium_name}."));
                     // Base is always placed in the home team's stadium
                     child_eb.push_team_tag(home_team_id);
                     child_eb.push_metadata_str("mod", "EXTRA_BASE");
@@ -3588,14 +3582,14 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("The Event Horizon activates!");
-                eb.push_description(&format!("It generates {num_unruns} Unruns for the {away_team_nickname}'s next game."));
+                eb.push_description(format!("It generates {num_unruns} Unruns for the {away_team_nickname}'s next game."));
                 eb.build(EventType::EventHorizonActivation)
             }
             FedEventData::RenovationRatified { renovation_name, renovation_id, mod_id, mod_removals } => {
                 let mut events = Vec::new();
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(&format!("{renovation_name} was Ratified into Non-Physical Law."));
+                eb.push_description(format!("{renovation_name} was Ratified into Non-Physical Law."));
                 eb.push_metadata_str("id", renovation_id);
                 eb.push_metadata_str("mod", &mod_id);
                 eb.push_metadata_str("title", renovation_name);
@@ -3617,8 +3611,8 @@ impl FedEvent {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{thieving_player_name} entered the Tunnels..."));
-                eb.push_description(&format!("{thieving_player_name} stole a Run from the {victim_team_nickname}!"));
+                eb.push_description(format!("{thieving_player_name} entered the Tunnels..."));
+                eb.push_description(format!("{thieving_player_name} stole a Run from the {victim_team_nickname}!"));
                 eb.push_free_refill(free_refill);
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
                 eb.push_balloons(balloons.as_deref(), 1.0);
@@ -3641,7 +3635,7 @@ impl FedEvent {
                         eb.push_child(sub_event, |mut child_eb| {
                             child_eb.set_category(EventCategory::Game);
                             child_eb.push_team_tag(team_id);
-                            child_eb.push_description(&format!("The {} scored!", team_nickname));
+                            child_eb.push_description(format!("The {} scored!", team_nickname));
                             child_eb.push_metadata_str("awayEmoji", &away_emoji);
                             child_eb.push_metadata_i64_or_f64("awayScore", away_score);
                             child_eb.push_metadata_str("homeEmoji", &home_emoji);
@@ -3659,10 +3653,10 @@ impl FedEvent {
                 let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
-                eb.push_description(&format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
+                eb.push_description(format!("{thief_name} entered the Tunnels..."));
+                eb.push_description(format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
                 eb.push_description("...but they were caught!");
-                eb.push_description(&format!("{thief_name} fled Elsewhere to escape."));
+                eb.push_description(format!("{thief_name} fled Elsewhere to escape."));
                 eb.push_player_tag(thief_id);
 
                 let description = eb.description().to_string();
@@ -3681,7 +3675,7 @@ impl FedEvent {
                     //   Discord diving suggests this is the case. Not sure if that's enough for me
                     //   to put it in the documentation though.
                     eb.push_child(sub_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{thief_name} fled Elsewhere to escape being caught in a Grand Heist."));
+                        child_eb.push_description(format!("{thief_name} fled Elsewhere to escape being caught in a Grand Heist."));
                         child_eb.push_team_tag(home_team);
                         child_eb.push_player_tag(thief_id);
                         child_eb.push_metadata_str("mod", "ELSEWHERE");
@@ -3698,9 +3692,9 @@ impl FedEvent {
                 let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
-                eb.push_description(&format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
-                eb.push_description(&format!("{thief_name} stole {item_name}!"));
+                eb.push_description(format!("{thief_name} entered the Tunnels..."));
+                eb.push_description(format!("{} {item_name} caught their eye...", Possessive(&victim_name)));
+                eb.push_description(format!("{thief_name} stole {item_name}!"));
                 eb.push_player_tag(thief_id);
 
                 let description = eb.description().to_string();
@@ -3717,7 +3711,7 @@ impl FedEvent {
                 // We'll see if that causes any errors
                 eb.push_child(item_lost_sub_event, |mut child_eb| {
                     let verb = if (self.season, self.day) > (21, 2) { "taken" } else { "stolen" };
-                    child_eb.push_description(&format!("{} {item_name} was {verb} by {thief_name}!", Possessive(&victim_name)));
+                    child_eb.push_description(format!("{} {item_name} was {verb} by {thief_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(victim_team_id);
 
@@ -3733,7 +3727,7 @@ impl FedEvent {
 
                 if let Some(item_dropped) = thief_item_dropped {
                     eb.push_child(item_dropped.sub_event, |mut child_eb| {
-                        child_eb.push_description(&format!("{thief_name} dropped {}.", item_dropped.item_name));
+                        child_eb.push_description(format!("{thief_name} dropped {}.", item_dropped.item_name));
                         child_eb.push_player_tag(thief_id);
                         child_eb.push_team_tag(home_team);
 
@@ -3750,7 +3744,7 @@ impl FedEvent {
 
                 eb.push_child(item_gained_sub_event, |mut child_eb| {
                     let verb = if (self.season, self.day) > (21, 2) { "took" } else { "stole" };
-                    child_eb.push_description(&format!("{thief_name} {verb} {} {item_name}!", Possessive(&victim_name)));
+                    child_eb.push_description(format!("{thief_name} {verb} {} {item_name}!", Possessive(&victim_name)));
                     child_eb.push_player_tag(thief_id);
                     child_eb.push_team_tag(home_team);
 
@@ -3769,7 +3763,7 @@ impl FedEvent {
             FedEventData::NothingInterestingInTunnels { game, thief_id, thief_name, sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
-                eb.push_description(&format!("{thief_name} entered the Tunnels..."));
+                eb.push_description(format!("{thief_name} entered the Tunnels..."));
                 eb.push_description("...but didn't find anything interesting.");
                 eb.push_player_tag(thief_id);
 
@@ -3806,9 +3800,9 @@ impl FedEvent {
                 };
 
                 if let Some(stadium_name) = balloons {
-                    eb.push_description(&format!("{stadium_name} inflates 10 Balloons!"));
+                    eb.push_description(format!("{stadium_name} inflates 10 Balloons!"));
                 }
-                eb.push_description(&format!("The {} and {} reached Extra Innings.", home_team_nickname, away.team_nickname));
+                eb.push_description(format!("The {} and {} reached Extra Innings.", home_team_nickname, away.team_nickname));
                 eb.push_description("Sun 30 smiled upon them.");
 
                 for (maybe_win, team_id) in [(home, home_team_id), (Either::Left(away), away_team_id)] {
@@ -3816,7 +3810,7 @@ impl FedEvent {
                         Either::Left(win) => {
                             eb.push_child(win.sub_event, |mut child_eb| {
                                 child_eb.set_category(EventCategory::Outcomes);
-                                child_eb.push_description(&format!("Sun 30 granted the {} a Win.", win.team_nickname));
+                                child_eb.push_description(format!("Sun 30 granted the {} a Win.", win.team_nickname));
                                 child_eb.push_team_tag(team_id);
                                 child_eb.push_metadata_i64("amount", 1);
                                 child_eb.push_metadata_i64("before", win.wins_after - 1);
@@ -3841,11 +3835,11 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Home Team Shutout.");
                 eb.push_description("Incoming Voicemail...");
-                eb.push_description(&format!("{replaced_player_name} is replaced by {replacement_player_name}."));
+                eb.push_description(format!("{replaced_player_name} is replaced by {replacement_player_name}."));
 
                 eb.push_player_tag(replaced_player_id);
                 eb.push_child(swap_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{replaced_player_name} was replaced by an incoming Voicemail."));
+                    child_eb.push_description(format!("{replaced_player_name} was replaced by an incoming Voicemail."));
                     // Voicemails always take from the lineup
                     child_eb.push_metadata_i64("aLocation", PositionType::Lineup);
                     child_eb.push_metadata_uuid("aPlayerId", replaced_player_id);
@@ -3866,7 +3860,7 @@ impl FedEvent {
                 });
 
                 eb.push_child(shadowed_sub_event.sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{replaced_player_name} entered the Shadows."));
+                    child_eb.push_description(format!("{replaced_player_name} entered the Shadows."));
                     child_eb.push_metadata_f64("before", shadowed_sub_event.rating_before);
                     child_eb.push_metadata_f64("after", shadowed_sub_event.rating_after);
                     child_eb.push_metadata_i64("type", 4); // what does this mean??
@@ -3896,8 +3890,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_pitch(pitch);
-                eb.push_description(&format!("{pitcher_name} senses foul play."));
-                eb.push_description(&format!("{batter_name} is intentionally walked."));
+                eb.push_description(format!("{pitcher_name} senses foul play."));
+                eb.push_description(format!("{batter_name} is intentionally walked."));
                 eb.push_player_tag(batter_id);
                 eb.push_player_tag(pitcher_id);
                 eb.push_player_tag(batter_id);  // Yes, batter again
@@ -3905,7 +3899,7 @@ impl FedEvent {
                 if let Some(sensed_foul_play_sub_event) = sensed_foul_play_sub_event {
                     eb.push_child(sensed_foul_play_sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Special);
-                        child_eb.push_description(&format!("{pitcher_name} sensed foul play."));
+                        child_eb.push_description(format!("{pitcher_name} sensed foul play."));
                         child_eb.push_player_tag(pitcher_id);
 
                         child_eb.build(EventType::InvestigationMessage)
@@ -3954,7 +3948,7 @@ impl FedEvent {
 
                 eb.push_child(victim_item_change_sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(&format!("{victim_name} traded their {taken_item_name} for Trader {trader_name}'s {donated_item_name}."));
+                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for Trader {trader_name}'s {donated_item_name}."));
                     child_eb.push_player_tag(victim_id);
                     // This event has no team tag, even though it probably should
                     child_eb.push_metadata_uuid("itemTradedId", taken_item_id);
@@ -3990,18 +3984,18 @@ impl FedEvent {
             FedEventData::RoamFailed { player_name, player_id } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description("Roam failed.");
-                eb.push_description(&format!("{player_name} was gripped by Force."));
+                eb.push_description(format!("{player_name} was gripped by Force."));
                 eb.push_player_tag(player_id);
                 eb.build(EventType::PlayerMoveFailedForce)
             }
             FedEventData::ThievesGuildStolePlayer { game, thieving_team_id, thieving_team_nickname, thieving_team_stadium_name, victim_team_id, victim_team_nickname, stolen_player_id, stolen_player_name, player_moved_teams_sub_event, player_shadows_boost } => {
                 eb.set_game(game);
                 eb.push_player_tag(stolen_player_id);
-                eb.push_description(&format!("{thieving_team_stadium_name} Thieves' Guild convened."));
-                eb.push_description(&format!("They stole {victim_team_nickname}' Shadows player {stolen_player_name}!"));
+                eb.push_description(format!("{thieving_team_stadium_name} Thieves' Guild convened."));
+                eb.push_description(format!("They stole {victim_team_nickname}' Shadows player {stolen_player_name}!"));
 
                 eb.push_child(player_moved_teams_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("The {victim_team_nickname} sent a player to the {thieving_team_nickname}."));
+                    child_eb.push_description(format!("The {victim_team_nickname} sent a player to the {thieving_team_nickname}."));
                     child_eb.push_player_tag(stolen_player_id);
                     child_eb.push_team_tag(victim_team_id);
                     child_eb.push_team_tag(thieving_team_id);
@@ -4019,7 +4013,7 @@ impl FedEvent {
                 });
 
                 eb.push_child(player_shadows_boost.sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("{stolen_player_name} entered the Shadows."));
+                    child_eb.push_description(format!("{stolen_player_name} entered the Shadows."));
                     child_eb.push_player_tag(stolen_player_id);
                     child_eb.push_team_tag(thieving_team_id);
 
@@ -4032,8 +4026,8 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.push_player_tag(beneficiary_gained_item.player_id);
                 eb.push_player_tag(victim_player_id);
-                eb.push_description(&format!("{thieving_team_stadium_name} Thieves' Guild convened."));
-                eb.push_description(&format!("They stole {} from {} Shadows player {victim_player_name} and gave it to {beneficiary_player_name}.", beneficiary_gained_item.item_name, Possessive(&victim_team_nickname)));
+                eb.push_description(format!("{thieving_team_stadium_name} Thieves' Guild convened."));
+                eb.push_description(format!("They stole {} from {} Shadows player {victim_player_name} and gave it to {beneficiary_player_name}.", beneficiary_gained_item.item_name, Possessive(&victim_team_nickname)));
 
                 // Almost, but not quite, reusable from the above
                 let stolen_statement = format!("{thieving_team_stadium_name} Thieves' Guild stole {} from {victim_player_name} and give it to {beneficiary_player_name}.", beneficiary_gained_item.item_name);
@@ -4043,7 +4037,7 @@ impl FedEvent {
 
                 eb.push_child(victim_lost_item.sub_event, |mut child_eb| {
                     // The missing space after the stolen_statement is game-accurate
-                    child_eb.push_description(&format!("{stolen_statement}{} {item_name} was taken by {beneficiary_player_name}!", Possessive(&victim_player_name)));
+                    child_eb.push_description(format!("{stolen_statement}{} {item_name} was taken by {beneficiary_player_name}!", Possessive(&victim_player_name)));
                     child_eb.push_player_tag(victim_player_id);
                     child_eb.push_team_tag(victim_team_id);
 
@@ -4064,7 +4058,7 @@ impl FedEvent {
                 // This is just different enough to not use eb.push_gained_item
                 eb.push_child(beneficiary_gained_item.sub_event, |mut child_eb| {
                     // The missing space after the stolen_statement is game-accurate
-                    child_eb.push_description(&format!("{stolen_statement}{beneficiary_player_name} took {} {item_name}!", Possessive(&victim_player_name)));
+                    child_eb.push_description(format!("{stolen_statement}{beneficiary_player_name} took {} {item_name}!", Possessive(&victim_player_name)));
                     child_eb.push_player_tag(beneficiary_gained_item.player_id);
                     child_eb.push_team_tag(beneficiary_gained_item.team_id);
 
@@ -4084,7 +4078,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A Riff Opened.");
-                eb.push_description(&format!("🎵 {} {new_weather} 🎵", riff.iter().map(RiffElement::as_ref).join(" ")));
+                eb.push_description(format!("🎵 {} {new_weather} 🎵", riff.iter().map(RiffElement::as_ref).join(" ")));
                 eb.build(EventType::RiffOpened)
             }
         };

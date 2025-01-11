@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use crate::format_utils::Possessive;
 use crate::{Attraction, AttractionWithPlayer, BalloonsPopped, BatterDebt, BracketType, DebtType, DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired, KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId, PlayerSentElsewhere, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject};
 use chrono::{DateTime, Utc};
@@ -82,7 +84,7 @@ impl EventBuilder {
 
         if let Some(unscatter) = game.unscatter {
             self.push_child(unscatter.sub_event, |mut child| {
-                child.push_description(&format!("{} was Unscattered.", unscatter.player_name));
+                child.push_description(format!("{} was Unscattered.", unscatter.player_name));
                 child.push_player_tag(unscatter.player_id);
                 child.push_team_tag(unscatter.team_id);
                 child.push_metadata_str("mod", "SCATTERED");
@@ -93,7 +95,7 @@ impl EventBuilder {
 
         if let Some(attractor) = game.attractor_secret_base {
             self.set_category(EventCategory::Special);
-            self.push_description(&format!("{} enters the Secret Base...", attractor.player_name));
+            self.push_description(format!("{} enters the Secret Base...", attractor.player_name));
             self.push_player_tag(attractor.player_id)
         }
 
@@ -101,7 +103,7 @@ impl EventBuilder {
         // end of the child list, but for now pretend it's at the beginning
         if let Some(trader_trade) = game.trader_trade {
             self.push_child(trader_trade.victim_lost_item_sub_event, |mut child_eb| {
-                child_eb.push_description(&format!("{} traded away {} to {} for {}.", trader_trade.victim_name, trader_trade.stolen_item_name, trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing")));
+                child_eb.push_description(format!("{} traded away {} to {} for {}.", trader_trade.victim_name, trader_trade.stolen_item_name, trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing")));
                 child_eb.push_player_tag(trader_trade.victim_id);
                 child_eb.push_team_tag(trader_trade.victim_team_id);
                 child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
@@ -114,7 +116,7 @@ impl EventBuilder {
             });
 
             self.push_child(trader_trade.trader_gained_item_sub_event, |mut child_eb| {
-                child_eb.push_description(&format!("{} traded their {} for {} {}.", trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing"), Possessive(&trader_trade.victim_name), trader_trade.stolen_item_name));
+                child_eb.push_description(format!("{} traded their {} for {} {}.", trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing"), Possessive(&trader_trade.victim_name), trader_trade.stolen_item_name));
                 child_eb.push_player_tag(trader_trade.trader_id);
                 child_eb.push_team_tag(trader_trade.trader_team_id);
                 child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
@@ -147,11 +149,12 @@ impl EventBuilder {
         self.event.metadata.sub_play = None;
     }
 
-    pub fn push_description(&mut self, desc: &str) {
+    pub fn push_description<'a>(&mut self, desc: impl std::fmt::Display) {
         if !self.event.description.is_empty() {
             self.event.description.push('\n');
         }
-        self.event.description += desc.into();
+        write!(self.event.description, "{desc}")
+            .expect("Write on &mut String can't fail");
     }
 
     pub fn push_player_tag(&mut self, player_id: Uuid) {
@@ -262,16 +265,16 @@ impl EventBuilder {
     pub fn push_gained_item(&mut self, player_name: &str, gained_item: ItemGained) {
         if let Some(lost_item) = gained_item.dropped_item {
             let dropped_or_ditched = if lost_item.item_was_broken { "ditched" } else { "dropped" };
-            self.push_description(&format!("{player_name} gained {} and {dropped_or_ditched} {}.",
+            self.push_description(format!("{player_name} gained {} and {dropped_or_ditched} {}.",
                                            gained_item.item_name, lost_item.item_name));
             self.push_dropped_item(&player_name, gained_item.player_id, gained_item.team_id, gained_item.player_rating, lost_item);
         } else {
-            self.push_description(&format!("{player_name} gained {}.", gained_item.item_name));
+            self.push_description(format!("{player_name} gained {}.", gained_item.item_name));
         }
 
         self.push_child(gained_item.sub_event, |mut child| {
             child.set_category(EventCategory::Changes);
-            child.push_description(&format!("{player_name} gained {}.", gained_item.item_name));
+            child.push_description(format!("{player_name} gained {}.", gained_item.item_name));
             child.push_player_tag(gained_item.player_id);
             child.push_team_tag(gained_item.team_id);
             child.push_metadata_uuid("itemId", gained_item.item_id);
@@ -287,7 +290,7 @@ impl EventBuilder {
     pub fn push_dropped_item(&mut self, player_name: &str, player_id: Uuid, team_id: Uuid, player_rating: f64, dropped_item: ItemDroppedForNewItem) {
         self.push_child(dropped_item.sub_event, |mut child| {
             child.set_category(EventCategory::Changes);
-            child.push_description(&format!("{player_name} dropped {}.", dropped_item.item_name));
+            child.push_description(format!("{player_name} dropped {}.", dropped_item.item_name));
             child.push_player_tag(player_id);
             child.push_team_tag(team_id);
             child.push_metadata_uuid("itemId", dropped_item.item_id);
@@ -355,7 +358,7 @@ impl EventBuilder {
     pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<&StoppedInhabiting>) {
         let Some(si) = stopped_inhabiting else { return; };
         self.push_child(si.sub_event, |mut child| {
-            child.push_description(&format!("{} stopped Inhabiting.", si.inhabiting_player_name));
+            child.push_description(format!("{} stopped Inhabiting.", si.inhabiting_player_name));
             child.push_player_tag(si.inhabiting_player_id);
             if let Some(team_id) = si.inhabiting_player_team_id {
                 child.push_team_tag(team_id);
@@ -370,7 +373,7 @@ impl EventBuilder {
         for fr in free_refills {
             let common_description = format!("{} used their Free Refill.", fr.player_name);
             self.push_description(&common_description);
-            self.push_description(&format!("{} Refills the In!", fr.player_name));
+            self.push_description(format!("{} Refills the In!", fr.player_name));
             self.push_child(fr.sub_event, |mut child| {
                 child.push_description(&common_description);
                 child.push_player_tag(fr.player_id);
@@ -387,7 +390,7 @@ impl EventBuilder {
 
     pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: f64) {
         if let Some(stadium_name) = balloons {
-            self.push_description(&format!("{stadium_name} {} {runs_scored} Balloons!", self.inflated_or_inflates()));
+            self.push_description(format!("{stadium_name} {} {runs_scored} Balloons!", self.inflated_or_inflates()));
         }
     }
 
@@ -423,7 +426,7 @@ impl EventBuilder {
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
             child_eb.push_team_tag(score.team_id);
-            child_eb.push_description(&format!("The {} scored!", score.team_nickname));
+            child_eb.push_description(format!("The {} scored!", score.team_nickname));
             child_eb.push_metadata_str("awayEmoji", &score.away_emoji);
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
             child_eb.push_metadata_str("homeEmoji", &score.home_emoji);
@@ -441,7 +444,7 @@ impl EventBuilder {
         });
 
         if let Some(stadium_name) = &score.balloons {
-            self.push_description(&format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored.round()));
+            self.push_description(format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored.round()));
         }
     }
 
@@ -451,9 +454,9 @@ impl EventBuilder {
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
-        self.push_description(&format!("The {} Attract {player_name}!", attraction.team_nickname));
+        self.push_description(format!("The {} Attract {player_name}!", attraction.team_nickname));
         self.push_child(attraction.sub_event, |mut child| {
-            child.push_description(&format!("The {} Attracted {player_name}!", attraction.team_nickname));
+            child.push_description(format!("The {} Attracted {player_name}!", attraction.team_nickname));
             child.push_player_tag(player_id);
             child.push_team_tag(attraction.team_id);
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
@@ -465,7 +468,7 @@ impl EventBuilder {
         });
         if let Some(boost) = &attraction.boost {
             self.push_child(boost.sub_event, |mut child| {
-                child.push_description(&format!("{player_name} entered the Shadows."));
+                child.push_description(format!("{player_name} entered the Shadows."));
                 child.push_player_tag(player_id);
                 child.push_team_tag(attraction.team_id);
                 child.build_boost(boost)
@@ -478,7 +481,7 @@ impl EventBuilder {
         let description = format!("{player_name} is Partying!");
         self.push_description(&description);
         if let Some(stadium_name) = &hotel_motel_party.birds {
-            self.push_description(&format!("A flock of Birds are attracted to {stadium_name}!"));
+            self.push_description(format!("A flock of Birds are attracted to {stadium_name}!"));
         }
         self.push_child(hotel_motel_party.boost.sub_event, |mut child| {
             child.push_description(&description);
@@ -490,9 +493,9 @@ impl EventBuilder {
     pub fn push_attraction_with_player(&mut self, attraction: Option<AttractionWithPlayer>) {
         let Some(at) = attraction else { return; };
         self.push_player_tag(at.player_id);
-        self.push_description(&format!("The {} Attract {}!", at.team_nickname, at.player_name));
+        self.push_description(format!("The {} Attract {}!", at.team_nickname, at.player_name));
         self.push_child(at.sub_event, |mut child| {
-            child.push_description(&format!("The {} Attracted {}!", at.team_nickname, at.player_name));
+            child.push_description(format!("The {} Attracted {}!", at.team_nickname, at.player_name));
             child.push_player_tag(at.player_id);
             child.push_team_tag(at.team_id);
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
@@ -514,11 +517,11 @@ impl EventBuilder {
             // Fielders Choice has scorer damage after the score message, just for fun. Everything
             // else has it before.
             if is_fc {
-                self.push_description(&format!("{} {score_label}", scorer.player_name));
+                self.push_description(format!("{} {score_label}", scorer.player_name));
                 self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
             } else {
                 self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
-                self.push_description(&format!("{} {score_label}", scorer.player_name));
+                self.push_description(format!("{} {score_label}", scorer.player_name));
             }
             if !hype_before_score {
                 self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
@@ -549,7 +552,7 @@ impl EventBuilder {
         match spicy {
             SpicyStatus::None => {}
             SpicyStatus::HeatingUp => {
-                self.push_description(&format!("{player_name} is Heating Up!"));
+                self.push_description(format!("{player_name} is Heating Up!"));
                 self.push_player_tag(player_id);
             }
             SpicyStatus::RedHot(mod_added) => {
@@ -590,7 +593,7 @@ impl EventBuilder {
 
     pub fn push_batter_debt(&mut self, batter_debt: Option<BatterDebt>, batter_name: &str, fielder_name: &str) {
         if let Some(bd) = batter_debt {
-            self.push_description(&format!("{batter_name} hit a ball at {fielder_name}..."));
+            self.push_description(format!("{batter_name} hit a ball at {fielder_name}..."));
             let common_description = match bd.debt_type {
                 DebtType::Observed => format!("{fielder_name} is now being Observed."),
                 DebtType::Unstable => format!("{fielder_name} became Unstable!"),
@@ -617,10 +620,10 @@ impl EventBuilder {
     pub fn push_pitch(&mut self, pitch: GamePitch) {
         if let Some(pitcher_name) = pitch.double_strike {
             self.set_category(EventCategory::Special);
-            self.push_description(&format!("{pitcher_name} fires a Double Strike!"));
+            self.push_description(format!("{pitcher_name} fires a Double Strike!"));
         }
         if let Some(pitcher_name) = pitch.acidic_pitch {
-            self.push_description(&format!("{pitcher_name} throws an Acidic pitch!"));
+            self.push_description(format!("{pitcher_name} throws an Acidic pitch!"));
         }
     }
 
@@ -642,18 +645,18 @@ impl EventBuilder {
 
     pub fn push_birds(&mut self, num_birds: Option<i32>) {
         if let Some(n) = num_birds {
-            self.push_description(&format!("A new Bird finds a Birdhouse. {n}"));
+            self.push_description(format!("A new Bird finds a Birdhouse. {n}"));
         }
     }
 
     pub fn push_parasite(&mut self, parasite: Option<Parasite>) {
         if let Some(parasite) = parasite {
-            self.push_description(&format!("{} parasitically drained some of {} {}.",
+            self.push_description(format!("{} parasitically drained some of {} {}.",
                                            parasite.pitcher_name, Possessive(&parasite.batter_name), parasite.attribute_name));
-            self.push_description(&format!("{} boosted their {}!",
+            self.push_description(format!("{} boosted their {}!",
                                            parasite.pitcher_name, parasite.attribute_name));
             self.push_child(parasite.batter_sub_event, |mut child| {
-                child.push_description(&format!("{} had blood drained by Parasite {}.",
+                child.push_description(format!("{} had blood drained by Parasite {}.",
                                                 parasite.batter_name, parasite.pitcher_name));
                 child.push_player_tag(parasite.batter_id);
                 child.push_team_tag(parasite.batter_team_id);
@@ -661,7 +664,7 @@ impl EventBuilder {
             });
             self.push_maintenance_mode(parasite.maintenance_mode);
             self.push_child(parasite.pitcher_sub_event, |mut child| {
-                child.push_description(&format!("Parasite {} drained blood from {}.",
+                child.push_description(format!("Parasite {} drained blood from {}.",
                                                 parasite.pitcher_name, parasite.batter_name));
                 child.push_player_tag(parasite.pitcher_id);
                 child.push_team_tag(parasite.pitcher_team_id);
@@ -672,9 +675,9 @@ impl EventBuilder {
 
     pub fn push_magmatic(&mut self, magmatic: Option<ModChangeSubEvent>, batter_name: &str, batter_id: Uuid) {
         if let Some(mod_change) = magmatic {
-            self.push_description(&format!("{batter_name} is Magmatic!"));
+            self.push_description(format!("{batter_name} is Magmatic!"));
             self.push_child(mod_change.sub_event, |mut child| {
-                child.push_description(&format!("{batter_name} hit a Magmatic home run!"));
+                child.push_description(format!("{batter_name} hit a Magmatic home run!"));
                 child.push_player_tag(batter_id);
                 child.push_team_tag(mod_change.team_id);
                 child.push_metadata_str("mod", "MAGMATIC");
@@ -692,7 +695,7 @@ impl EventBuilder {
 
     pub fn push_gravity(&mut self, gravity_players: Vec<PlayerNameId>) {
         for player in gravity_players {
-            self.push_description(&format!("{}'s Gravity kept them in place!", player.player_name));
+            self.push_description(format!("{}'s Gravity kept them in place!", player.player_name));
             self.push_player_tag(player.player_id);
         }
     }
@@ -717,11 +720,11 @@ impl EventBuilder {
 
     pub fn push_hype(&mut self, hype: &Hype, home_team_id: Uuid) {
         self.push_description("Shame!");
-        self.push_description(&format!("Hype Builds in {}!", hype.stadium_name));
+        self.push_description(format!("Hype Builds in {}!", hype.stadium_name));
         self.push_child(hype.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Changes);
             // Love how the descriptions are slightly different
-            child_eb.push_description(&format!("Hype built in {}!", hype.stadium_name));
+            child_eb.push_description(format!("Hype built in {}!", hype.stadium_name));
             child_eb.push_team_tag(home_team_id);
             child_eb.push_metadata_f64("before", hype.hype_before);
             child_eb.push_metadata_f64("after", hype.hype_after);
@@ -760,10 +763,10 @@ impl EventBuilder {
             });
 
             // Then the actual flipping
-            self.push_description(&format!("{} was flipped Negative!", elsewhere_player_name));
+            self.push_description(format!("{} was flipped Negative!", elsewhere_player_name));
             self.push_player_tag(elsewhere_player_id);
             self.push_child(flip.flip_negative_sub_event, |mut child_self| {
-                child_self.push_description(&format!("{} flipped {} Negative.", flip.undertaker_player_name, elsewhere_player_name));
+                child_self.push_description(format!("{} flipped {} Negative.", flip.undertaker_player_name, elsewhere_player_name));
                 child_self.push_team_tag(elsewhere_team_id);
                 child_self.push_player_tag(elsewhere_player_id);
                 child_self.push_metadata_str("mod", "NEGATIVE");
@@ -778,7 +781,7 @@ impl EventBuilder {
         let day = self.event.day;
         self.push_child(win.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Outcomes);
-            child_eb.push_description(&format!("The {} collected a Win.", win.winning_team_nickname));
+            child_eb.push_description(format!("The {} collected a Win.", win.winning_team_nickname));
             child_eb.push_team_tag(win.winning_team_id);
             // There were decrees that would have increased amount but they never won a vote
             child_eb.push_metadata_i64("amount", 1);
@@ -899,7 +902,7 @@ impl EventBuilder {
     pub fn push_scattered(&mut self, scattered: Option<Scattered>, player_id: Uuid, team_id: Uuid) {
         if let Some(Scattered { scattered_name, sub_event }) = scattered {
             self.push_child(sub_event, |mut child| {
-                child.push_description(&format!("{scattered_name} was Scattered..."));
+                child.push_description(format!("{scattered_name} was Scattered..."));
                 child.push_team_tag(team_id);
                 child.push_player_tag(player_id);
                 child.push_metadata_str("mod", "SCATTERED");
@@ -911,7 +914,7 @@ impl EventBuilder {
 
     pub fn push_temp_stolen_player_returned(&mut self, ret: &PlayerMovedTeams) {
         self.push_child(ret.sub_event, |mut child_eb| {
-            child_eb.push_description(&format!("{} is returned to the {}.", ret.player_name, ret.new_team_nickname));
+            child_eb.push_description(format!("{} is returned to the {}.", ret.player_name, ret.new_team_nickname));
             child_eb.push_player_tag(ret.player_id);
             child_eb.push_team_tag(ret.previous_team_id);
             child_eb.push_team_tag(ret.new_team_id);
@@ -931,8 +934,8 @@ impl EventBuilder {
 
     pub fn push_flood_balloon_popped(&mut self, pop: Option<BalloonsPopped>) {
         if let Some(pop) = pop {
-            self.push_description(&format!("One of {} Flooding Balloons was struck and popped!", Possessive(&pop.stadium_name)));
-            self.push_description(&format!("{} Birds were scared away!", pop.birds_scared_away));
+            self.push_description(format!("One of {} Flooding Balloons was struck and popped!", Possessive(&pop.stadium_name)));
+            self.push_description(format!("{} Birds were scared away!", pop.birds_scared_away));
         }
     }
 

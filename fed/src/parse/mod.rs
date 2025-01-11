@@ -938,7 +938,7 @@ pub fn parse_next_event(
             }
         }
         EventType::BatterUp => {
-            let (batter_name, inhabited, team_name, wielding_item, is_repeating) =
+            let (batter_name, inhabited, team_name, wielding_item, is_repeating, is_skipping) =
                 event.next_parse(parse_batter_up)?;
 
             // I missed `team_name: "Millennials, wielding An Actual Airplane"` once and I don't
@@ -970,6 +970,7 @@ pub fn parse_next_event(
                     })
                 }).transpose()?,
                 is_repeating,
+                is_skipping,
             }
         }
         EventType::Strike => {

@@ -2806,6 +2806,9 @@ pub enum FedEventData {
 
         /// True if the player is Repeating
         is_repeating: bool,
+
+        /// True if the player is Skipping
+        is_skipping: bool,
     },
 
     /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
