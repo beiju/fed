@@ -72,7 +72,11 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
             (ledger, parsed_run) = parse_ledger(parse_ledger_v2_run(RunSourceT::label()), ledger)?;
 
             if !parsed_run {
-                break Ok((ledger, SimpleLedgerV2::from_runs(runs)));
+                // This is the end of the loop. It doesn't look like it, because it's in the middle,
+                // but it is
+                let (ledger, sum_sun) = parse_ledger(parse_ledger_sum_sun, ledger)?;
+
+                break Ok((ledger, SimpleLedgerV2::from_runs(runs, sum_sun)));
             }
 
             let mut run = LedgerRun::default();
@@ -89,6 +93,10 @@ impl ParseableLedger for HomeRunLedger {
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, home_run) = SimpleLedgerV2::parse(ledger)?;
 
+        // TODO These can probably be collapsed with something like parse_ledger_run_if (but that
+        //   parses a whole ledger) (if these even need a whole ledger? can there be multiple of
+        //   these? no, right? there's only one ball? so these should be singular too.
+        //   TODO that then
         let (ledger, big_bucket) = if ledger.starts_with("Big Bucket") {
             let (rest, bucket) = SimpleLedgerV2::parse(&ledger)?;
             (rest, Some(bucket))
@@ -103,10 +111,13 @@ impl ParseableLedger for HomeRunLedger {
             (ledger, None)
         };
 
+        let (ledger, sum_sun) = parse_ledger(parse_ledger_sum_sun, ledger)?;
+
         Ok((ledger, Self {
             home_run,
             big_bucket,
             alley_oop,
+            sum_sun,
         }))
     }
 }
@@ -164,29 +175,29 @@ impl ParseableLedger for OverflowLedger {
     }
 }
 
+fn parse_ledger_run_if(ledger: &str, condition: bool) -> Result<(&str, Option<LedgerRun>), FeedParseError> {
+    Ok(if condition {
+        let (ledger, modifiers) = parse_modifiers(ledger)?;
+        (ledger, Some(LedgerRun::new(modifiers)))
+    } else {
+        (ledger, None)
+    })
+}
+
 impl ParseableLedger for StolenBaseLedger {
     type Ledger = Self;
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
-        // TODO This doesn't account for modifiers between stolen base and blaserunning
-        let (ledger, steal_home) = parse_ledger(parse_ledger_steal_home, ledger)?;
+        let (ledger, has_steal_home) = parse_ledger(parse_ledger_steal_home, ledger)?;
+        let (ledger, steal_home) = parse_ledger_run_if(ledger, has_steal_home)?;
 
-        let (ledger, steal_home) = if steal_home {
-            let (ledger, modifiers) = parse_modifiers(ledger)?;
-            (ledger, Some(LedgerRun::new(modifiers)))
-        } else {
-            (ledger, None)
-        };
+        let (ledger, has_blaserunning) = parse_ledger(parse_ledger_blaserunning, ledger)?;
+        let (ledger, blaserunning) = parse_ledger_run_if(ledger, has_blaserunning)?;
 
-        let (ledger, blaserunning) = parse_ledger(parse_ledger_blaserunning, ledger)?;
+        // Don't need to look for sum sun if neither of the other run types happened, but the code
+        // looks prettier if we just always look for it
+        let (ledger, sum_sun) = parse_ledger(parse_ledger_sum_sun, ledger)?;
 
-        let (ledger, blaserunning) = if blaserunning {
-            let (ledger, modifiers) = parse_modifiers(ledger)?;
-            (ledger, Some(LedgerRun::new(modifiers)))
-        } else {
-            (ledger, None)
-        };
-
-        Ok((ledger, Self { steal_home, blaserunning }))
+        Ok((ledger, Self { steal_home, blaserunning, sum_sun }))
     }
 }

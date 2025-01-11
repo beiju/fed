@@ -149,3 +149,17 @@ impl NewlineDelimiter {
         }
     }
 }
+
+// Like `Runs`, but for whole number runs. It accepts a signed int because I use that everywhere to
+// facilitate interoperability
+pub struct WholeRuns(pub i64);
+
+impl Display for WholeRuns {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.0 == 1 {
+            write!(f, "1 Run")
+        } else {
+            write!(f, "{} Runs", self.0)
+        }
+    }
+}

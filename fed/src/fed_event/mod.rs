@@ -1,5 +1,6 @@
 mod fed_event_impl;
 pub mod run_source;
+use crate::format_utils::WholeRuns;
 pub use run_source::RunSource;
 
 use std::cmp::Ordering;
@@ -2139,6 +2140,10 @@ impl LedgerRun {
     }
 }
 
+fn write_sum_sun(num_runs: i64, mut w: &mut impl Write) -> Result<(), std::fmt::Error> {
+    write!(w, "Sum Sun: {}", WholeRuns(num_runs))
+}
+
 pub trait LedgerV2: WithStructure {
     fn label() -> &'static str;
 
@@ -2153,13 +2158,15 @@ pub trait LedgerV2: WithStructure {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct SimpleLedgerV2<RunSourceT: WithStructure> {
     pub runs: Vec<LedgerRun>,
+    pub sum_sun: Option<i64>,
     source: PhantomData<RunSourceT>,
 }
 
 impl<RunSourceT: WithStructure> SimpleLedgerV2<RunSourceT> {
-    pub fn from_runs(runs: Vec<LedgerRun>) -> Self {
+    pub fn from_runs(runs: Vec<LedgerRun>, sum_sun: Option<i64>) -> Self {
         Self {
             runs,
+            sum_sun,
             source: Default::default(),
         }
     }
@@ -2172,26 +2179,27 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
     }
 
     fn len(&self) -> usize {
-        self.runs.len()
+        self.runs.len() + if self.sum_sun.is_some() { 1 } else { 0 }
     }
 
     fn run_values(&self) -> impl Iterator<Item=f64> {
         self.runs.iter()
             // SimpleLedger runs are always worth 1.0 before modifiers
             .map(|run| run.value(1.0))
+            .chain(self.sum_sun.map(|sum_sun_runs| sum_sun_runs as f64))
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
-        let mut is_first_run = true;
+        let mut delimiter = NewlineDelimiter::new();
 
         for run in &self.runs {
-            if is_first_run {
-                is_first_run = false;
-            } else {
-                write!(w, "\n")?;
-            }
+            delimiter.print(w)?;
+            run.compute_and_write(Self::label(), w)?;
+        }
 
-            let run_value = run.compute_and_write(Self::label(), w)?;
+        if let Some(sum_sun_runs) = self.sum_sun {
+            delimiter.print(w)?;
+            write_sum_sun(sum_sun_runs, w)?;
         }
 
         Ok(())
@@ -2203,6 +2211,7 @@ pub struct HomeRunLedger {
     pub home_run: SimpleLedgerV2<run_source::HomeRun>,
     pub big_bucket: Option<SimpleLedgerV2<run_source::HomeRunBigBucket>>,
     pub alley_oop: Option<SimpleLedgerV2<run_source::HomeRunSlamDunk>>,
+    pub sum_sun: Option<i64>,
 }
 
 impl LedgerV2 for HomeRunLedger {
@@ -2212,8 +2221,9 @@ impl LedgerV2 for HomeRunLedger {
 
     fn len(&self) -> usize {
         let mut len = self.home_run.len();
-        if let Some(oop) = &self.big_bucket { len += oop.len() }
+        if let Some(bucket) = &self.big_bucket { len += bucket.len() }
         if let Some(oop) = &self.alley_oop { len += oop.len() }
+        if self.sum_sun.is_some() { len += 1 }
         len
     }
 
@@ -2235,6 +2245,13 @@ impl LedgerV2 for HomeRunLedger {
                     Either::Right(iter::empty())
                 }
             )
+            .chain(
+                if let Some(sum_sun_runs) = self.sum_sun {
+                    Either::Left(iter::once(sum_sun_runs as f64))
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
     }
 
     fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result {
@@ -2246,6 +2263,10 @@ impl LedgerV2 for HomeRunLedger {
         if let Some(alley_oop) = &self.alley_oop {
             write!(w, "\n")?;
             alley_oop.write(season, day, w)?;
+        }
+        if let Some(sum_sun_runs) = self.sum_sun {
+            write!(w, "\n")?;
+            write_sum_sun(sum_sun_runs, w)?;
         }
 
         Ok(())
@@ -2408,6 +2429,7 @@ impl LedgerV2 for OverflowLedger {
 pub struct StolenBaseLedger {
     pub steal_home: Option<LedgerRun>,
     pub blaserunning: Option<LedgerRun>,
+    pub sum_sun: Option<i64>,
 }
 
 impl LedgerV2 for StolenBaseLedger {
@@ -2419,6 +2441,7 @@ impl LedgerV2 for StolenBaseLedger {
         let mut len = 0;
         if self.steal_home.is_some() { len += 1 }
         if self.blaserunning.is_some() { len += 1 }
+        if self.sum_sun.is_some() { len += 1 }
         len
     }
 
@@ -2440,6 +2463,13 @@ impl LedgerV2 for StolenBaseLedger {
                     Either::Right(iter::empty())
                 }
             )
+            .chain(
+                if let Some(sum_sun_runs) = self.sum_sun {
+                    Either::Left(iter::once(sum_sun_runs as f64))
+                } else {
+                    Either::Right(iter::empty())
+                }
+            )
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
@@ -2453,6 +2483,11 @@ impl LedgerV2 for StolenBaseLedger {
         if let Some(br) = &self.blaserunning {
             delimiter.print(w)?;
             br.compute_and_write_with_value(0.2, "Blaserunning", w)?;
+        }
+
+        if let Some(sum_sun_runs) = self.sum_sun {
+            delimiter.print(w)?;
+            write_sum_sun(sum_sun_runs, w)?;
         }
 
         Ok(())

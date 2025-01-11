@@ -2783,16 +2783,17 @@ pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f6
     Ok((input, (value, runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<(i64, f64, f64)> {
+pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<Option<i64>> {
+    opt(parse_ledger_sum_sun_non_opt).parse(input)
+}
+
+pub(crate) fn parse_ledger_sum_sun_non_opt(input: &str) -> ParserResult<i64> {
     let (input, _) = tag("Sum Sun: ").parse(input)?;
     let (input, value) = parse_whole_number.parse(input)?;
+    // Unlike most ledger parsers, I can always parse a newline here, because sum sun is always
+    // added on to some other score, so there's guaranteed to be a summation line
     let (input, _) = tag(if value == 1 { " Run\n" } else { " Runs\n" }).parse(input)?;
-    let (input, runs_before) = double.parse(input)?;
-    let (input, _) = tag(" + ").parse(input)?;
-    let (input, _) = tag(&*value.to_string()).parse(input)?;
-    let (input, _) = tag(" = ").parse(input)?;
-    let (input, runs_after) = double.parse(input)?;
-    Ok((input, (value, runs_before, runs_after)))
+    Ok((input, value))
 }
 
 pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)> {
