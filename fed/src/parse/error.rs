@@ -120,15 +120,15 @@ pub enum FeedParseError {
 
     #[error("Unknown phase {phase} for {event_type:?} event")]
     UnknownPhase {
-        phase: i32,
+        phase: i64,
         event_type: EventType
     },
 
     #[error("Unknown being id {0}")]
-    UnknownBeing(i32),
+    UnknownBeing(i64),
 
     #[error("Unknown weather {0}")]
-    UnknownWeather(i32),
+    UnknownWeather(i64),
 
     #[error("Expected location to be one of {expected:?} but it was {actual}")]
     InvalidLocation {

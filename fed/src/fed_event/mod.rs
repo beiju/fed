@@ -24,7 +24,7 @@ use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
 use crate::parse::builder::possessive;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
-#[repr(i32)]
+#[repr(i64)]
 pub enum Being {
     EmergencyAlert = -1,
     TheShelledOne = 0,
@@ -116,7 +116,7 @@ pub struct SubEvent {
     pub created: DateTime<Utc>,
 
     /// Number of upshells this event has received
-    pub nuts: i32,
+    pub nuts: i64,
 }
 
 impl SubEvent {
@@ -1006,8 +1006,8 @@ pub struct EchoIntoStatic {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
 #[serde(tag = "time_elsewhere_type", content = "time_elsewhere", rename_all = "camelCase")]
 pub enum TimeElsewhere {
-    Days(i32),
-    Seasons(i32),
+    Days(i64),
+    Seasons(i64),
 }
 
 impl Display for TimeElsewhere {
@@ -1263,7 +1263,7 @@ pub struct GrindRailTrick {
     pub trick_name: String,
 
     /// Point value of this grind rail trick
-    pub points: i32,
+    pub points: i64,
 }
 
 impl Display for GrindRailTrick {
@@ -2057,7 +2057,6 @@ pub enum LedgerRunModifier {
         player_name: String,
     },
     NegativePolarity,
-    SumSun(i32), // Tempting the gods with an int here
 }
 
 impl LedgerRunModifier {
@@ -2071,7 +2070,6 @@ impl LedgerRunModifier {
             LedgerRunModifier::Wired { .. } => { in_value + 0.5 }
             LedgerRunModifier::Tired { .. } => { in_value - 0.5 }
             LedgerRunModifier::NegativePolarity => { in_value * -1.0 }
-            LedgerRunModifier::SumSun(amount) => { in_value + (*amount as f64) }
         }
     }
 
@@ -2101,9 +2099,6 @@ impl LedgerRunModifier {
             }
             LedgerRunModifier::NegativePolarity => {
                 write!(w, "\tNegative Polarity: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
-            }
-            LedgerRunModifier::SumSun(runs) => {
-                write!(w, "Sum Sun: {}\n{} + {} = {}", Runs(*runs as f64), RunDisplay(run_value_before), RunDisplay(*runs as f64), RunDisplay(run_value_after))?;
             }
         }
 
@@ -2152,7 +2147,7 @@ pub trait LedgerV2: WithStructure {
 
     fn run_values(&self) -> impl Iterator<Item=f64>;
 
-    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result;
+    fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result;
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
@@ -2186,7 +2181,7 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
             .map(|run| run.value(1.0))
     }
 
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         let mut is_first_run = true;
 
         for run in &self.runs {
@@ -2242,7 +2237,7 @@ impl LedgerV2 for HomeRunLedger {
             )
     }
 
-    fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result {
         self.home_run.write(season, day, w)?;
         if let Some(big_bucket) = &self.big_bucket {
             write!(w, "\n")?;
@@ -2281,7 +2276,7 @@ impl LedgerV2 for ModerationLedger {
         iter::once(self.num_runs)
     }
 
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         write!(w, "Moderation: {} Unruns", RunDisplay(self.num_runs))
     }
 }
@@ -2325,7 +2320,7 @@ impl LedgerV2 for TripleThreatLedger {
 
     // TODO: This used to use season and day but it turns out that was the wrong signal. If this was
     //   the only use, remove them from the signature
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
         // was surprised too.
         write!(w, "Triple Threat: {}", Runs(self.value())
@@ -2360,7 +2355,7 @@ impl LedgerV2 for HeatMagnetLedger {
         iter::once(5.0)
     }
 
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         write!(w, "Heat Magnet: 5 Runs")
     }
 }
@@ -2371,12 +2366,12 @@ impl LedgerV2 for HeatMagnetLedger {
 pub struct OverflowLedger {
     // Apparently there's no instance of floating point runs here? Might be
     // wrong but I'm feeling hubrisy
-    pub num_runs: i32,
+    pub num_runs: i64,
     pub modifiers: Vec<LedgerRunModifier>,
 }
 
 impl OverflowLedger {
-    pub fn new(num_runs: i32, modifiers: Vec<LedgerRunModifier>) -> Self {
+    pub fn new(num_runs: i64, modifiers: Vec<LedgerRunModifier>) -> Self {
         Self { num_runs, modifiers }
     }
 }
@@ -2392,7 +2387,7 @@ impl LedgerV2 for OverflowLedger {
         iter::once(self.num_runs as f64)
     }
 
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         // Like with triple threat, this only gets pluralized if there are no modifiers.
         write!(w, "Overflow: {}",
                Runs(self.num_runs as f64)
@@ -2447,7 +2442,7 @@ impl LedgerV2 for StolenBaseLedger {
             )
     }
 
-    fn write(&self, _: i32, _: i32, w: &mut impl Write) -> std::fmt::Result {
+    fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         let mut delimiter = NewlineDelimiter::new();
 
         if let Some(sh) = &self.steal_home {
@@ -2476,13 +2471,13 @@ pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStr
 }
 
 impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
-    pub fn to_string(&self, season: i32, day: i32) -> String {
+    pub fn to_string(&self, season: i64, day: i64) -> String {
         let mut s = String::new();
         self.write(season, day, &mut s).expect("write() should not fail on a string formatter");
         s
     }
     
-    pub fn write(&self, season: i32, day: i32, w: &mut impl Write) -> std::fmt::Result {
+    pub fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result {
         match self {
             Ledger::None => {},
             Ledger::V1 { base_runs, lines } => {
@@ -2641,7 +2636,7 @@ pub struct BalloonsPopped {
     pub stadium_name: String,
 
     /// Number of Birds that were scared away
-    pub birds_scared_away: i32,
+    pub birds_scared_away: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -2820,7 +2815,7 @@ pub enum FedEventData {
         top_of_inning: bool,
 
         /// Zero-indexed inning number
-        inning: i32,
+        inning: i64,
 
         /// Full name of the team at bat
         batting_team_name: String,
@@ -2901,10 +2896,10 @@ pub enum FedEventData {
         pitch: GamePitch,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count
-        strikes: i32,
+        strikes: i64,
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
         batter_item_damage: Option<(String, ItemDamaged)>,
@@ -2920,10 +2915,10 @@ pub enum FedEventData {
         pitch: GamePitch,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count
-        strikes: i32,
+        strikes: i64,
 
         /// Meta about the batter's item breaking, if it broke, otherwise null.
         batter_item_damage: Option<(String, ItemDamaged)>,
@@ -2931,7 +2926,7 @@ pub enum FedEventData {
         /// If a new Bird found a Birdhouse, this is the total number of birds in this stadium.
         /// Otherwise null (null does not indicate there are no birds, just that there was no
         /// Birdhouse event on this foul ball). Note there can be negative birds.
-        birds: Option<i32>,
+        birds: Option<i64>,
 
         /// True if this was a Very foul ball (or balls), false otherwise.
         very_foul: bool,
@@ -2950,10 +2945,10 @@ pub enum FedEventData {
         pitch: GamePitch,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count
-        strikes: i32,
+        strikes: i64,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
         pitcher_item_damage: Option<(String, ItemDamaged)>,
@@ -2969,10 +2964,10 @@ pub enum FedEventData {
         pitch: GamePitch,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count
-        strikes: i32,
+        strikes: i64,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
         pitcher_item_damage: Option<(String, ItemDamaged)>,
@@ -2988,11 +2983,11 @@ pub enum FedEventData {
         pitch: GamePitch,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count. Should always be 0, but still present in the data for
         /// forward-compatibility and convenience.
-        strikes: i32,
+        strikes: i64,
 
         /// If the pitcher's item was damaged, information about the damage. Otherwise null
         pitcher_item_damage: Option<(String, ItemDamaged)>,
@@ -3482,7 +3477,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// Which inning just ended (one-indexed)
-        inning_num: i32,
+        inning_num: i64,
 
         /// List of pitchers who lost Triple Threat. Should be at most two players.
         lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>,
@@ -3512,7 +3507,7 @@ pub enum FedEventData {
 
         /// Number of swings the player was charmed into making. Should be 3 ordinarily and 4 for
         /// players with The Fourth Strike.
-        num_swings: i32,
+        num_swings: i64,
     },
 
     /// Zapped a strike
@@ -3572,10 +3567,10 @@ pub enum FedEventData {
         pitcher_name: String,
 
         /// Number of balls in the count
-        balls: i32,
+        balls: i64,
 
         /// Number of strikes in the count
-        strikes: i32,
+        strikes: i64,
 
         /// Whether runners advance on the pathetic play (I believe runners always advance if there
         /// are any runners at all)
@@ -4489,7 +4484,7 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// Place of team within the division
-        place: i32,
+        place: i64,
 
         /// Name of division
         division_name: String,
@@ -4549,10 +4544,10 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// Round to which the team advanced, or null for the Internet Series
-        round: Option<i32>,
+        round: Option<i64>,
 
         /// One-indexed season number
-        displayed_season: i32,
+        displayed_season: i64,
     },
 
     /// Team was eliminated from the postseason
@@ -4565,7 +4560,7 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// One-indexed season number
-        displayed_season: i32,
+        displayed_season: i64,
 
         /// In seasons with an overbracket and underbracket, indicates which bracket this event came
         /// from. Otherwise null.
@@ -4827,7 +4822,7 @@ pub enum FedEventData {
 
         /// Which level of MVP this player attained. The associated ego mod will be EGO{level}. This
         /// is 1-indexed.
-        level: i32,
+        level: i64,
     },
 
     /// The birds circle and peck a Shelled player free
@@ -5155,7 +5150,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// The inning number according to the event description. 1-indexed.
-        inning_num: i32,
+        inning_num: i64,
 
         /// Runs lost to the Salmon
         run_losses: RunLossesFromSalmon,
@@ -5794,7 +5789,7 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// One-indexed inning number
-        inning_number: i32,
+        inning_number: i64,
     },
 
     /// Team applies Home Field Advantage
@@ -6562,7 +6557,7 @@ pub enum FedEventData {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
-#[repr(i32)]
+#[repr(i64)]
 pub enum SimPhase {
     GodsDay = 0,
     Preseason = 1,
@@ -6612,20 +6607,20 @@ pub struct FedEvent {
     ///
     /// Previously, before the feed, tournament=0 was used in other API responses to indicate the
     /// Coffee Cup. It's unclear what, if anything, it will be used for in future.
-    pub tournament: i32,
+    pub tournament: i64,
 
     /// Zero-indexed season
-    pub season: i32,
+    pub season: i64,
 
     /// Zero-indexed day
-    pub day: i32,
+    pub day: i64,
 
     /// Phase of the sim. Corresponds to the schedule section on the Blaseball homepage, with a few
     /// extra entries.
     pub phase: SimPhase,
 
     /// The number of times this event has been upshelled
-    pub nuts: i32,
+    pub nuts: i64,
 
     /// The event type and specific event-specific data
     #[serde(flatten)]

@@ -21,7 +21,7 @@ fn reverse_performing(input: &str) -> &'static str {
 }
 
 impl EventBuilder {
-    pub fn new(id: Uuid, created: DateTime<Utc>, sim: String, day: i32, season: i32, tournament: i32, phase: i32, nuts: i32) -> Self {
+    pub fn new(id: Uuid, created: DateTime<Utc>, sim: String, day: i64, season: i64, tournament: i64, phase: i64, nuts: i64) -> Self {
         let mut builder = Self {
             event: EventuallyEvent {
                 id,
@@ -213,11 +213,6 @@ impl EventBuilder {
     }
 
     pub fn push_metadata_i64(&mut self, key: impl Into<String>, value: impl Into<i64>) {
-        self.metadata_mut()
-            .insert(key.into(), value.into().into());
-    }
-
-    pub fn push_metadata_i32(&mut self, key: impl Into<String>, value: impl Into<i32>) {
         self.metadata_mut()
             .insert(key.into(), value.into().into());
     }
@@ -643,7 +638,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_birds(&mut self, num_birds: Option<i32>) {
+    pub fn push_birds(&mut self, num_birds: Option<i64>) {
         if let Some(n) = num_birds {
             self.push_description(format!("A new Bird finds a Birdhouse. {n}"));
         }
@@ -822,13 +817,13 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_team_subseasonal_mod_changes(&mut self, changes: impl IntoIterator<Item=SubseasonalModChange<TeamModChangeSubject>>, season: i32, day: i32) {
+    pub fn push_team_subseasonal_mod_changes(&mut self, changes: impl IntoIterator<Item=SubseasonalModChange<TeamModChangeSubject>>, season: i64, day: i64) {
         for change in changes {
             self.push_team_subseasonal_mod_change(change, season, day);
         }
     }
 
-    pub fn push_team_subseasonal_mod_change(&mut self, change: SubseasonalModChange<TeamModChangeSubject>, season: i32, day: i32) {
+    pub fn push_team_subseasonal_mod_change(&mut self, change: SubseasonalModChange<TeamModChangeSubject>, season: i64, day: i64) {
         let display_team_nickname = change.subject.team_nickname.unwrap_or_else(|| "[object Object]".to_string());
         let description = if season < 15 {
             if let Some(prefix) = change.source_mod.prefix() {

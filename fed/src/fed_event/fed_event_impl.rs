@@ -89,16 +89,10 @@ impl FedEvent {
 
         let item = match self.data {
             FedEventData::BeingSpeech { being, message } => {
-                let being_id: i32 = being.into();
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BigDeal,
-                        category: EventCategory::Narrative,
-                        description: message,
-                        ..Default::default()
-                    })
-                    .metadata(json!({ "being": being_id }))
-                    .build()
+                eb.set_category(EventCategory::Narrative);
+                eb.set_description(message);
+                eb.push_metadata_i64("being", being);
+                eb.build(EventType::BigDeal)
             }
             FedEventData::GameStart { game, weather, stadium_id, announcement } => {
                 match announcement {
@@ -110,7 +104,7 @@ impl FedEvent {
                 eb.push_metadata_uuid("home", game.home_team);
                 eb.push_metadata_uuid("away", game.away_team);
                 eb.set_game(game);
-                eb.push_metadata_i32("weather", weather);
+                eb.push_metadata_i64("weather", weather);
                 if let Some(id) = stadium_id {
                     eb.push_metadata_uuid("stadium", id);
                 }
@@ -1043,7 +1037,7 @@ impl FedEvent {
                         child_eb.push_team_tag(team_id);
                         child_eb.push_player_tag(player_id);
                         child_eb.push_metadata_str("effect", "Allergic Reaction");
-                        child_eb.push_metadata_i32("weather", Weather::Peanuts);
+                        child_eb.push_metadata_i64("weather", Weather::Peanuts);
                         child_eb.build(EventType::WeatherEvent)
                     });
                 }
@@ -1171,7 +1165,7 @@ impl FedEvent {
                         child_eb.push_team_tag(player_a.team_id);
                         child_eb.push_team_tag(player_b.team_id);
                         child_eb.push_metadata_str("effect", "Feedback Swap");
-                        child_eb.push_metadata_i32("weather", Weather::Feedback);
+                        child_eb.push_metadata_i64("weather", Weather::Feedback);
                         child_eb.build(EventType::WeatherEvent)
                     });
                 }
@@ -1266,7 +1260,7 @@ impl FedEvent {
                             ReverbType::Full(_) => { "Roster Shuffle" }
                             ReverbType::SeveralPlayers(_) => { "Player Shuffle" }
                         });
-                        child_eb.push_metadata_i32("weather", Weather::Reverb);
+                        child_eb.push_metadata_i64("weather", Weather::Reverb);
                         child_eb.build(EventType::WeatherEvent)
                     });
                 }
@@ -1776,7 +1770,7 @@ impl FedEvent {
                     } else {
                         child_eb.set_category(EventCategory::Special);
                         child_eb.push_metadata_str("effect", "Incineration");
-                        child_eb.push_metadata_i32("weather", Weather::SolarEclipse);
+                        child_eb.push_metadata_i64("weather", Weather::SolarEclipse);
                         child_eb.build(EventType::WeatherEvent)
                     }
                 });
@@ -3492,12 +3486,12 @@ impl FedEvent {
                     child_eb.push_description(&description);
                     match numbers_go {
                         NumbersGo::Up => {
-                            child_eb.push_metadata_i32("before", Weather::PolarityMinus);
-                            child_eb.push_metadata_i32("after", Weather::PolarityPlus);
+                            child_eb.push_metadata_i64("before", Weather::PolarityMinus);
+                            child_eb.push_metadata_i64("after", Weather::PolarityPlus);
                         }
                         NumbersGo::Down => {
-                            child_eb.push_metadata_i32("before", Weather::PolarityPlus);
-                            child_eb.push_metadata_i32("after", Weather::PolarityMinus);
+                            child_eb.push_metadata_i64("before", Weather::PolarityPlus);
+                            child_eb.push_metadata_i64("after", Weather::PolarityMinus);
                         }
                     }
                     child_eb.build(EventType::WeatherChange)

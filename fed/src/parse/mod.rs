@@ -78,8 +78,8 @@ const TAROT_EVENTS: [Uuid; 40] = [
 pub struct PendingPrizeMatch {
     pub prize_item_name: String,
     pub game_id: Uuid,
-    pub season: i32,
-    pub day: i32,
+    pub season: i64,
+    pub day: i64,
     pub home_team_id: Uuid,
     pub away_team_id: Uuid,
 }
@@ -312,7 +312,7 @@ pub fn parse_next_event(
 
             FedEventData::GameStart {
                 game: event.game(unscatter, attractor_secret_base)?,
-                weather: Weather::try_from(event.metadata_i64("weather")? as i32)
+                weather: Weather::try_from(event.metadata_i64("weather")? as i64)
                     .map_err(|err| FeedParseError::UnknownWeather(err.number))?,
                 stadium_id: event.metadata_uuid("stadium").ok(),
                 announcement: match team_names {
@@ -1139,7 +1139,7 @@ pub fn parse_next_event(
         }
         EventType::BigDeal => {
             FedEventData::BeingSpeech {
-                being: Being::try_from(event.metadata_i64("being")? as i32)
+                being: Being::try_from(event.metadata_i64("being")? as i64)
                     .map_err(|e| FeedParseError::UnknownBeing(e.number))?,
                 message: event.consume_description().to_string(),
             }

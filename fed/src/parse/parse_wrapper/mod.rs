@@ -21,11 +21,11 @@ pub struct EventParseWrapper<'e> {
     pub id: Uuid,
     pub created: DateTime<Utc>,
     pub sim: &'e str,
-    pub tournament: i32,
-    pub season: i32,
-    pub day: i32,
+    pub tournament: i64,
+    pub season: i64,
+    pub day: i64,
     pub phase: SimPhase,
-    pub nuts: i32,
+    pub nuts: i64,
     pub play: Option<i64>,
 
     // Managed specially
@@ -895,7 +895,7 @@ impl<'e> EventParseWrapper<'e> {
             .transpose()
     }
 
-    pub fn parse_birds(&mut self) -> Option<i32> {
+    pub fn parse_birds(&mut self) -> Option<i64> {
         self.next_parse_opt(parse_birds)
     }
 

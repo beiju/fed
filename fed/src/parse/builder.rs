@@ -11,11 +11,11 @@ pub struct EventBuilderCommon {
     pub id: Uuid,
     pub created: DateTime<Utc>,
     pub sim: String,
-    pub day: i32,
-    pub phase: i32,
-    pub season: i32,
-    pub tournament: i32,
-    pub nuts: i32,
+    pub day: i64,
+    pub phase: i64,
+    pub season: i64,
+    pub tournament: i64,
+    pub nuts: i64,
 }
 
 impl EventBuilderCommon {

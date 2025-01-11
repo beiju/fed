@@ -83,7 +83,7 @@ impl EventMetadata {
 }
 
 #[derive(Copy, Clone, Debug, Default, Serialize_repr, Deserialize_repr, PartialEq, JsonSchema)]
-#[repr(i32)]
+#[repr(i64)]
 pub enum EventCategory {
     Redacted = -1,
     #[default]
@@ -120,11 +120,11 @@ pub struct EventuallyEvent {
     #[builder(default)] pub game_tags: Option<Vec<Uuid>>,
     #[builder(default)] pub team_tags: Option<Vec<Uuid>>,
     pub sim: String,
-    pub day: i32,
-    pub season: i32,
-    pub tournament: i32,
-    pub phase: i32,
-    pub nuts: i32,
+    pub day: i64,
+    pub season: i64,
+    pub tournament: i64,
+    pub phase: i64,
+    pub nuts: i64,
 }
 
 // impl EventuallyEvent {
@@ -164,7 +164,7 @@ pub struct EventuallyEvent {
 // }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
-#[repr(i32)]
+#[repr(i64)]
 pub enum Weather {
     Void = 0,
     Sun2 = 1,
@@ -241,7 +241,7 @@ impl Display for Weather {
 
 //noinspection SpellCheckingInspection
 #[derive(Debug, Copy, Clone, Default, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema)]
-#[repr(i32)]
+#[repr(i64)]
 pub enum EventType {
     #[default]
     Undefined = -1,
