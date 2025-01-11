@@ -3926,7 +3926,7 @@ impl FedEvent {
             }
             FedEventData::Trade { game, trader_traitor, trader_name, trader_id, donated_item_name, donated_item_id, trader_mods_gained, trader_mods_lost, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, taken_item_name, taken_item_id, victim_mods_gained, victim_mods_lost, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
                 eb.set_game(game);
-                let description = format!("{trader_traitor} {trader_name} traded their {donated_item_name} for {} {taken_item_name}.", Possessive(&victim_name));
+                let description = format!("{trader_traitor}{trader_name} traded their {donated_item_name} for {} {taken_item_name}.", Possessive(&victim_name));
                 eb.push_description(&description);
 
                 eb.push_child(trader_item_change_sub_event, |mut child_eb| {
@@ -3948,7 +3948,7 @@ impl FedEvent {
 
                 eb.push_child(victim_item_change_sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor} {} {donated_item_name}.", Possessive(&trader_name)));
+                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor}{} {donated_item_name}.", Possessive(&trader_name)));
                     child_eb.push_player_tag(victim_id);
                     // This event has no team tag, even though it probably should
                     child_eb.push_metadata_uuid("itemTradedId", taken_item_id);

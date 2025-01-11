@@ -2735,17 +2735,38 @@ pub enum RiffElement {
     #[strum(to_string = "do")] Do,
 }
 
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
 pub enum TraderTraitor {
+    /// The player is described as a Trader
     Trader,
+
+    /// The player is described as a Traitor
     Traitor,
+
+    /// The player is not described as either a Traitor or Trader, but formatting implies they would
+    /// be called one of the two.
+    ///
+    /// Specifically, there is an extra space before their name, which I assume is the space that
+    /// would be between the word "Traitor"/"Trader" and their name.
+    Unknown,
+
+    /// The player is not described as either a Traitor or Trader, and formatting implies they would
+    /// not be called either.
+    ///
+    /// This does not have the extra space that Unknown has. It appears exactly once, during the
+    /// Semi-Centennial, when New Megan Ito traded their nothing for Dunlap Figueroa's The Fifth
+    /// Base.
+    Neither,
 }
 
 impl Display for TraderTraitor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TraderTraitor::Trader => { write!(f, "Trader") }
-            TraderTraitor::Traitor => { write!(f, "Traitor") }
+            TraderTraitor::Trader => { write!(f, "Trader ") }
+            TraderTraitor::Traitor => { write!(f, "Traitor ") }
+            TraderTraitor::Unknown => { write!(f, " ") }
+            TraderTraitor::Neither => { write!(f, "") }
         }
     }
 }

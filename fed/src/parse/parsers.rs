@@ -3091,11 +3091,16 @@ pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
 
 
 pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(TraderTraitor, &str, &str, &str, &str)> {
+    // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
+    // must not be reordered.
     let (input, trader_traitor) = alt((
         tag("Trader ").map(|_| TraderTraitor::Trader),
         tag("Traitor ").map(|_| TraderTraitor::Traitor),
+        tag(" ").map(|_| TraderTraitor::Unknown),
+        tag("").map(|_| TraderTraitor::Neither),
     )).parse(input)?;
     let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
+    // TODO Special-case "traded their nothing"?
     let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
     let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, taken_item_name) = parse_terminated(".").parse(input)?;
