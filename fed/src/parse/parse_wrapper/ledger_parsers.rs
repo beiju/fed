@@ -75,8 +75,10 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
                 // This is the end of the loop. It doesn't look like it, because it's in the middle,
                 // but it is
                 let (ledger, sum_sun) = parse_ledger(parse_ledger_sum_sun, ledger)?;
+                // TODO either verify the value or provide it to the parser
+                let (ledger, maximum_sun) = parse_ledger(parse_ledger_maximum_sun, ledger)?;
 
-                break Ok((ledger, SimpleLedgerV2::from_runs(runs, sum_sun)));
+                break Ok((ledger, SimpleLedgerV2::new(runs, sum_sun, maximum_sun.is_some())));
             }
 
             let mut run = LedgerRun::default();

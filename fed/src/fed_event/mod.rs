@@ -2140,8 +2140,13 @@ impl LedgerRun {
     }
 }
 
-fn write_sum_sun(num_runs: i64, mut w: &mut impl Write) -> Result<(), std::fmt::Error> {
-    write!(w, "Sum Sun: {}", WholeRuns(num_runs))
+fn compute_and_write_sum_sun(num_runs: i64, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+    write!(w, "Sum Sun: {}", WholeRuns(num_runs))?;
+    Ok(num_runs as f64)
+}
+
+fn write_maximum_sun(num_runs: f64, mut w: &mut impl Write) -> Result<(), std::fmt::Error> {
+    write!(w, "Maximum Sun: {}", Runs(num_runs))
 }
 
 pub trait LedgerV2: WithStructure {
@@ -2159,16 +2164,58 @@ pub trait LedgerV2: WithStructure {
 pub struct SimpleLedgerV2<RunSourceT: WithStructure> {
     pub runs: Vec<LedgerRun>,
     pub sum_sun: Option<i64>,
+    pub maximum_sun: bool,
     source: PhantomData<RunSourceT>,
 }
 
 impl<RunSourceT: WithStructure> SimpleLedgerV2<RunSourceT> {
-    pub fn from_runs(runs: Vec<LedgerRun>, sum_sun: Option<i64>) -> Self {
+    pub fn new(runs: Vec<LedgerRun>, sum_sun: Option<i64>, maximum_sun: bool) -> Self {
         Self {
             runs,
             sum_sun,
+            maximum_sun,
             source: Default::default(),
         }
+    }
+}
+
+// A bookkeeping type to make it easier to output the additional ledger item for maximum sun runs
+struct MaximumSunRunValuesIterator<T: Iterator<Item = f64>> {
+    is_maximum_sun: bool,
+    child: T,
+    accumulated_value: f64,
+    accumulated_value_has_been_emitted: bool,
+}
+
+impl<ChildT: Iterator<Item = f64>> MaximumSunRunValuesIterator<ChildT> {
+    pub fn new(is_maximum_sun: bool, child: ChildT) -> Self {
+        Self { is_maximum_sun, child, accumulated_value: 0.0, accumulated_value_has_been_emitted: false }
+    }
+}
+
+impl<ChildT: Iterator<Item=f64>> Iterator for MaximumSunRunValuesIterator<ChildT> {
+    type Item = f64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(value) = self.child.next() {
+            self.accumulated_value += value;
+            Some(value)
+        } else if self.is_maximum_sun && !self.accumulated_value_has_been_emitted {
+            self.accumulated_value_has_been_emitted = true;
+            Some(self.accumulated_value * 2.0)
+        } else {
+            None
+        }
+    }
+}
+
+trait FedIteratorExtensions {
+    fn with_maximum_sun(self, is_maximum_sun: bool) -> impl Iterator<Item=f64>;
+}
+
+impl<ChildT: Iterator<Item=f64>> FedIteratorExtensions for ChildT {
+    fn with_maximum_sun(self, is_maximum_sun: bool) -> MaximumSunRunValuesIterator<ChildT> {
+        MaximumSunRunValuesIterator::new(is_maximum_sun, self)
     }
 }
 
@@ -2179,7 +2226,9 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
     }
 
     fn len(&self) -> usize {
-        self.runs.len() + if self.sum_sun.is_some() { 1 } else { 0 }
+        self.runs.len() +
+            if self.sum_sun.is_some() { 1 } else { 0 } +
+            if self.maximum_sun { 1 } else { 0 }
     }
 
     fn run_values(&self) -> impl Iterator<Item=f64> {
@@ -2187,19 +2236,26 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
             // SimpleLedger runs are always worth 1.0 before modifiers
             .map(|run| run.value(1.0))
             .chain(self.sum_sun.map(|sum_sun_runs| sum_sun_runs as f64))
+            .with_maximum_sun(self.maximum_sun)
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         let mut delimiter = NewlineDelimiter::new();
+        let mut total = 0.0;
 
         for run in &self.runs {
             delimiter.print(w)?;
-            run.compute_and_write(Self::label(), w)?;
+            total += run.compute_and_write(Self::label(), w)?;
         }
 
         if let Some(sum_sun_runs) = self.sum_sun {
             delimiter.print(w)?;
-            write_sum_sun(sum_sun_runs, w)?;
+            total += compute_and_write_sum_sun(sum_sun_runs, w)?;
+        }
+
+        if self.maximum_sun {
+            delimiter.print(w)?;
+            write_maximum_sun(total * 2.0, w)?;
         }
 
         Ok(())
@@ -2275,7 +2331,7 @@ impl LedgerV2 for HomeRunLedger {
         }
         if let Some(sum_sun_runs) = self.sum_sun {
             write!(w, "\n")?;
-            write_sum_sun(sum_sun_runs, w)?;
+            compute_and_write_sum_sun(sum_sun_runs, w)?;
         }
         if let Some(equal_sun_runs) = self.equal_sun {
             write!(w, "\n")?;
@@ -2500,7 +2556,7 @@ impl LedgerV2 for StolenBaseLedger {
 
         if let Some(sum_sun_runs) = self.sum_sun {
             delimiter.print(w)?;
-            write_sum_sun(sum_sun_runs, w)?;
+            compute_and_write_sum_sun(sum_sun_runs, w)?;
         }
 
         Ok(())
