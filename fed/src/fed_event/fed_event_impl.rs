@@ -3608,7 +3608,7 @@ impl FedEvent {
                 eb.push_description(format!("{thieving_player_name} stole a Run from the {victim_team_nickname}!"));
                 eb.push_free_refill(free_refill);
                 eb.push_hype_opt(hype.as_ref(), home_team_id);
-                eb.push_balloons(balloons.as_deref(), 1.0);
+                eb.push_unknown_number_of_balloons(balloons.as_ref());
                 eb.push_player_tag(thieving_player_id);
 
                 if let Some(RunStolenThroughTunnelsDetails { victim_team_id, thieving_team_nickname, thieving_team_id, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first }) = details {

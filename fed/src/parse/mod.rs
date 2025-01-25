@@ -296,6 +296,10 @@ pub fn parse_next_event(
         })
         .transpose()?;
 
+    if event.id == uuid!("b916a80a-7443-4a46-8a4f-2a6aed20e7fa") {
+        println!("Debug me");
+    }
+
     let data = match event.event_type {
         EventType::Undefined => {
             FedEventData::Redacted {
@@ -2219,7 +2223,7 @@ pub fn parse_next_event(
                         thieving_player_id: event.next_player_id()?,
                         victim_team_nickname: victim_team_nickname.to_string(),
                         details,
-                        balloons: event.parse_balloons(1)?,
+                        balloons: event.parse_unknown_number_of_balloons()?,
                         hype,
                         free_refill,
                     }

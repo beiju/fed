@@ -772,6 +772,18 @@ impl<'e> EventParseWrapper<'e> {
         Ok(stadium_name.map(str::to_string))
     }
 
+    pub fn parse_unknown_number_of_balloons(&mut self) -> Result<Option<Balloons>, FeedParseError> {
+        let before_s20d81 = (self.season, self.day) < (19, 80);
+        self.next_parse(opt(parse_unknown_number_of_balloons(before_s20d81)))
+            // map the Result
+            .map(|info| {
+                // map the Option
+                info.map(|(stadium_name, num_balloons)| {
+                    Balloons { stadium_name: stadium_name.to_string(), num_balloons }
+                })
+            })
+    }
+
     pub fn parse_scoring_players(&mut self, label: &'static str, is_fc: bool) -> Result<(Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>, Vec<(Uuid, String, String)>), FeedParseError> {
         let (scorers, attractions) = self.next_parse(parse_scores(
             label,

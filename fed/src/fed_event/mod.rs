@@ -2873,6 +2873,17 @@ impl Display for TraderTraitor {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Balloons {
+    /// The name of the stadium in which these balloons were inflated. This will always be the
+    /// home stadium.
+    pub stadium_name: String,
+
+    /// Number of balloons inflated. This is usually 1 but can be higher because of things like
+    /// Sum Sun
+    pub num_balloons: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
 #[serde(tag = "type")]
 pub enum FedEventData {
@@ -6202,9 +6213,9 @@ pub enum FedEventData {
         /// those children are where this info can be found.
         details: Option<RunStolenThroughTunnelsDetails>,
 
-        /// If balloons were inflated on this run theft, contains the name of the stadium. This will
-        /// always be the home stadium. Also, this will always be exactly 1 balloon.
-        balloons: Option<String>,
+        /// If balloons were inflated on this run theft, contains the name of the stadium and
+        /// number of balloons.
+        balloons: Option<Balloons>,
 
         /// If this run activated Hype, information about the hype. Ohterwise null.
         hype: Option<Hype>,

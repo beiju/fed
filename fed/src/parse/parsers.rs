@@ -389,6 +389,18 @@ pub(crate) fn parse_balloons(runs_scored: i64, before_s20d81: bool) -> impl Fn(&
     }
 }
 
+pub(crate) fn parse_unknown_number_of_balloons(before_s20d81: bool) -> impl Fn(&str) -> ParserResult<(&str, i64)> {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        // They changed from "inflates" to "inflated" on s20d72
+        let (input, stadium_name) = parse_terminated(if before_s20d81 { " inflated " } else { " inflates " }).parse(input)?;
+        let (input, runs_scored) = parse_whole_number.parse(input)?;
+        let (input, _) = tag(" Balloons!").parse(input)?;
+
+        Ok((input, (stadium_name, runs_scored)))
+    }
+}
+
 pub(crate) fn parse_score(score_label: &'static str, extra_space: bool, is_fc: bool, hype_before_score: bool) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
         // Prior to s22, hype was listed before the score and scorer name
