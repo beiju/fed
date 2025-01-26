@@ -1512,7 +1512,8 @@ pub struct ItemDroppedForNewItem {
 
     /// The increase or decrease that all the wielding player's items caused to their star rating
     /// before dropping this item
-    pub player_item_rating_before: f64,
+    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    pub player_item_rating_before: Option<f64>,
 
     /// The increase or decrease that all the wielding player's items now cause to their star rating
     pub player_item_rating_after: f64,
@@ -3479,6 +3480,9 @@ pub enum FedEventData {
 
         /// Which base they tried to steal
         base_stolen: Base,
+
+        /// Runner item damage if any, otherwise null
+        runner_item_damage: Option<ItemDamaged>,
 
         /// Fielder item damage if any, otherwise null
         // TODO do this in a way that serializes nicely

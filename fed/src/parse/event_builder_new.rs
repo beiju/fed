@@ -292,7 +292,7 @@ impl EventBuilder {
             child.push_metadata_str("itemName", dropped_item.item_name);
             child.push_metadata_str_vec("mods", dropped_item.item_mods);
             child.push_metadata_f64("playerItemRatingAfter", dropped_item.player_item_rating_after);
-            child.push_metadata_f64("playerItemRatingBefore", dropped_item.player_item_rating_before);
+            child.push_metadata_f64_opt("playerItemRatingBefore", dropped_item.player_item_rating_before);
             child.push_metadata_f64("playerRating", player_rating);
             child.build(EventType::PlayerLostItem)
         });

@@ -450,6 +450,7 @@ pub fn parse_next_event(
                             game: event.game(unscatter, attractor_secret_base)?,
                             runner_name: runner_name.to_string(),
                             base_stolen,
+                            runner_item_damage,
                             fielder_item_damage,
                         }
                     }
@@ -3762,7 +3763,7 @@ pub fn parse_next_event(
                         item_id: drop_event.metadata_uuid("itemId")?,
                         item_name: drop_event.metadata_str("itemName")?.to_string(),
                         item_mods: drop_event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                        player_item_rating_before: drop_event.metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_before: drop_event.metadata_f64_opt("playerItemRatingBefore")?,
                         player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
                         item_was_broken: false, // TODO
                         sub_event: drop_event.as_sub_event(),

@@ -338,7 +338,7 @@ impl<'e> EventParseWrapper<'e> {
             item_id: self.metadata_uuid("itemId")?,
             item_name: self.metadata_str("itemName")?.to_string(),
             item_mods: self.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
-            player_item_rating_before: self.metadata_f64("playerItemRatingBefore")?,
+            player_item_rating_before: self.metadata_f64_opt("playerItemRatingBefore")?,
             player_item_rating_after: self.metadata_f64("playerItemRatingAfter")?,
             item_was_broken,
             sub_event: self.as_sub_event(),

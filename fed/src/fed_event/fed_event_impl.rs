@@ -475,9 +475,10 @@ impl FedEvent {
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.build(EventType::Walk)
             }
-            FedEventData::CaughtStealing { game, runner_name, base_stolen, fielder_item_damage } => {
+            FedEventData::CaughtStealing { game, runner_name, base_stolen, runner_item_damage, fielder_item_damage } => {
                 eb.set_game(game);
                 eb.push_description(format!("{runner_name} gets caught stealing {base_stolen} base."));
+                eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
                 eb.push_named_item_damage(fielder_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::StolenBase)
             }
@@ -3737,7 +3738,7 @@ impl FedEvent {
                         child_eb.push_metadata_str("itemName", item_dropped.item_name.clone());
                         child_eb.push_metadata_str_vec("mods", item_dropped.item_mods.clone());
                         child_eb.push_metadata_f64("playerItemRatingAfter", item_dropped.player_item_rating_after);
-                        child_eb.push_metadata_f64("playerItemRatingBefore", item_dropped.player_item_rating_before);
+                        child_eb.push_metadata_f64_opt("playerItemRatingBefore", item_dropped.player_item_rating_before);
                         child_eb.push_metadata_f64("playerRating", thief_rating);
 
                         child_eb.build(EventType::PlayerLostItem)
