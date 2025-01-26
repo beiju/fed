@@ -2084,6 +2084,21 @@ impl LedgerRunModifier {
         }
     }
 
+    /// Returns True if this modifier is one that *only* negates the run count (and does not make
+    /// any other modifications)
+    pub fn is_pure_negating(&self) -> bool {
+        match self {
+            LedgerRunModifier::Magnified { .. } => { false }
+            LedgerRunModifier::Underhanded => { true }
+            LedgerRunModifier::SunPoint1 { .. } => { false }
+            LedgerRunModifier::Subtractor => { true }
+            LedgerRunModifier::AcidicPitch => { false }
+            LedgerRunModifier::Wired { .. } => { false }
+            LedgerRunModifier::Tired { .. } => { false }
+            LedgerRunModifier::NegativePolarity => { true }
+        }
+    }
+
     pub fn modify_and_write(&self, run_value_before: f64, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
         let run_value_after = self.modify(run_value_before);
         match self {
@@ -2402,8 +2417,15 @@ impl TripleThreatLedger {
         Self { threats, modifiers }
     }
 
-    pub fn value(&self) -> f64 {
+    pub fn base_value(&self) -> f64 {
         (self.threats as u8) as f64 * -0.3
+    }
+
+    pub fn value(&self) -> f64 {
+        self.modifiers.iter().fold(
+            self.base_value(),
+            |value, modifier| modifier.modify(value),
+        )
     }
 }
 
@@ -2421,14 +2443,14 @@ impl LedgerV2 for TripleThreatLedger {
     // TODO: This used to use season and day but it turns out that was the wrong signal. If this was
     //   the only use, remove them from the signature
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
+        let mut value = self.base_value();
         // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
         // was surprised too.
-        write!(w, "Triple Threat: {}", Runs(self.value())
-            .singular_if(!self.modifiers.is_empty()))?;
+        write!(w, "Triple Threat: {}", Runs(value).singular_if(!self.modifiers.is_empty()))?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
-            modifier.modify_and_write(self.value(), w)?;
+            value = modifier.modify_and_write(value, w)?;
         }
 
         Ok(())

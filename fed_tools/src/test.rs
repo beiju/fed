@@ -13,7 +13,7 @@ use clap::Parser;
 use itertools::Itertools;
 use eventually_api::EventuallyEvent;
 
-use fed::{FedEvent, InterEventStateSync, parse_next_event};
+use fed::{FedEvent, InterEventStateSync, parse_next_event, FedEventData};
 use fed::MakePeekableWithLogging;
 
 const SEASONS: [(&'static str, i64, i64); 12] = [
@@ -184,6 +184,15 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
 
         if stop_signal() {
             return Ok(());
+        }
+
+        // Some temp logging
+        if let FedEventData::StrikeoutSwinging { score_summary, ..} = &parsed_event.data &&
+            let Some(score_summary) = score_summary &&
+            let fed::Ledger::V2(ledger) = &score_summary.ledger &&
+            ledger.modifiers.iter().any(|r#mod| r#mod.is_pure_negating()) &&
+            ledger.modifiers.iter().any(|r#mod| !r#mod.is_pure_negating()) {
+            progress.println(format!("\"{}\" is a triple threat with complex modifiers", parsed_event.id));
         }
 
         let Some(ref sample_path) = args.sample_outputs else {
