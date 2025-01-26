@@ -263,10 +263,11 @@ impl FedEvent {
                 eb.push_opt_item_damage(fielder_item_damage.as_ref(), &fielder_name);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.push_batter_debt(batter_debt, &batter_name, &fielder_name);
-                eb.push_scores(&scores, home_team_id, "tags up and scores!", false, self.season < 21);
+                eb.push_scores_without_event(&scores, home_team_id, "tags up and scores!", false, self.season < 21);
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_parasite(parasite);
+                eb.push_score_summary(&scores);
                 eb.build(EventType::FlyOut)
             }
             FedEventData::Hit { game, pitch, batter_name, batter_id, hit_type, scores, spicy_status, cooled_off, stopped_inhabiting, is_special, pitcher_item_damage, batter_item_damage, other_player_item_damage } => {

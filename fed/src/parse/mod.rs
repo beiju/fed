@@ -645,11 +645,14 @@ pub fn parse_next_event(
             let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
             let fielder_item_damage = event.parse_item_damage(fielder_name)?;
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
-            let scores = event.parse_scores(" tags up and scores!", false)?;
+            let mut scores = event.parse_scores_without_summary(" tags up and scores!", false)?;
             let batter_item_damage = event.parse_item_damage(batter_name)?;
             let cooled_off = event.parse_cooled_off(batter_name)?;
             let stopped_inhabiting = event.parse_stopped_inhabiting(None)?; // Not sure about order here
             let parasite = event.parse_parasite()?;
+            //  Needs to be after cooled_off, but I have no idea about the other sub-events
+            scores.score_summary = event.parse_score_summary()?;
+            scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
             FedEventData::Flyout {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
