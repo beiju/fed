@@ -1909,6 +1909,7 @@ pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<(&str, &str, 
        parse_terminated(" SLAMMED A CONSUMER!").map(|n| (n, "SLAMMED")),
        parse_terminated(" CLOTHESLINED A CONSUMER!").map(|n| (n, "CLOTHESLINED")),
        parse_terminated(" ELBOWED A CONSUMER!").map(|n| (n, "ELBOWED")),
+       parse_terminated(" CHOPPED A CONSUMER!").map(|n| (n, "CHOPPED")),
     )).parse(input)?;
 
     Ok((input, (player_name, exclamation, verb)))
