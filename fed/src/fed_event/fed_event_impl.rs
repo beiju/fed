@@ -1160,20 +1160,6 @@ impl FedEvent {
                 eb.push_player_tag(player_a.player_id);
                 eb.push_player_tag(player_b.player_id);
 
-                if let Some(weather) = weather_event {
-                    eb.push_child(weather, |mut child_eb| {
-                        child_eb.set_category(EventCategory::Special);
-                        child_eb.push_description("Reality flickered in the Feedback...");
-                        child_eb.push_player_tag(player_a.player_id);
-                        child_eb.push_player_tag(player_b.player_id);
-                        child_eb.push_team_tag(player_a.team_id);
-                        child_eb.push_team_tag(player_b.team_id);
-                        child_eb.push_metadata_str("effect", "Feedback Swap");
-                        child_eb.push_metadata_i64("weather", Weather::Feedback);
-                        child_eb.build(EventType::WeatherEvent)
-                    });
-                }
-
                 if let Some((lcd_a, lcd_b)) = lcd_soundsystem {
                     let team_nickname = if player_a.team_id == home_team_id {
                         &player_a.team_nickname
@@ -1190,6 +1176,20 @@ impl FedEvent {
                             child.build_boost(&lcd)
                         });
                     }
+                }
+
+                if let Some(weather) = weather_event {
+                    eb.push_child(weather, |mut child_eb| {
+                        child_eb.set_category(EventCategory::Special);
+                        child_eb.push_description("Reality flickered in the Feedback...");
+                        child_eb.push_player_tag(player_a.player_id);
+                        child_eb.push_player_tag(player_b.player_id);
+                        child_eb.push_team_tag(player_a.team_id);
+                        child_eb.push_team_tag(player_b.team_id);
+                        child_eb.push_metadata_str("effect", "Feedback Swap");
+                        child_eb.push_metadata_i64("weather", Weather::Feedback);
+                        child_eb.build(EventType::WeatherEvent)
+                    });
                 }
 
                 eb.push_description(format!("{} is now {}.", player_b.player_name, position_type.role()));

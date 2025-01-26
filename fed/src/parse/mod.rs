@@ -1395,9 +1395,6 @@ pub fn parse_next_event(
         EventType::FeedbackSwap => {
             let (player1_name, player2_name, lcd_soundsystem, position) = event.next_parse(parse_feedback)?;
 
-            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
-                .map(|child| child.as_sub_event());
-
             let lcd_soundsystem = lcd_soundsystem
                 .map(|team_nickname| {
                     assert!(is_known_team_nickname(team_nickname));
@@ -1407,6 +1404,9 @@ pub fn parse_next_event(
                     ))
                 })
                 .transpose()?;
+
+            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+                .map(|child| child.as_sub_event());
 
             let sub_event = event.next_child(EventType::PlayerTraded)?;
 
