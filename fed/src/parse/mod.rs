@@ -3465,23 +3465,32 @@ pub fn parse_next_event(
             let boost_child = event.next_child(EventType::PlayerStatIncrease)?;
 
             let exiting_pitcher_name = move_child.metadata_str("aPlayerName")?;
-            let yolked_change = event.next_child_if_mod_effect(EventType::RemovedModFromOtherMod, "YOLKED")?
+            let yolked_blip = event.next_child_if_mod_effect(EventType::RemovedModFromOtherMod, "YOLKED")?
                 .map(|mut unyolk_event| {
                     // This may need to be expanded to handle entering pitchers too
                     let unyolk_names = unyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "weaker apart"))?;
+                    let unyolk_change = PlayerTogethernessModChange {
+                        other_player_names: unyolk_names.into_iter().map(String::from).collect(),
+                        sub_event: unyolk_event.as_sub_event(),
+                    };
 
                     // Not sure how but you can have an unyolk without a reyolk, even though I think
                     // shadowed players count for YOLKED? Maybe it just clears yolked statuses that
                     // should have been cleared already but weren't because of a bug. idk
-                    let reyolk_event = event.next_child_opt(EventType::AddedModFromOtherMod)?;
+                    let reyolk_change = event.next_child_opt(EventType::AddedModFromOtherMod)?
+                        .map(|mut reyolk_event| {
+                            let reyolk_names = reyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "stronger together"))?;
+                            ParseOk(PlayerTogethernessModChange {
+                                other_player_names: reyolk_names.into_iter().map(String::from).collect(),
+                                sub_event: reyolk_event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
 
-                    ParseOk((
-                        PlayerTogethernessModChange {
-                            other_player_names: unyolk_names.into_iter().map(String::from).collect(),
-                            sub_event: unyolk_event.as_sub_event(),
-                        },
-                        reyolk_event.as_ref().map(EventParseWrapper::as_sub_event),
-                    ))
+                    ParseOk(PlayerTogethernessModBlip {
+                        removal: unyolk_change,
+                        addition: reyolk_change,
+                    })
                 })
                 .transpose()?;
 
@@ -3498,7 +3507,7 @@ pub fn parse_next_event(
                 rating_after: boost_child.metadata_f64("after")?,
                 player_swap_sub_event: move_child.as_sub_event(),
                 enter_shadows_sub_event: boost_child.as_sub_event(),
-                yolked_change,
+                yolked_blip,
             }
         }
         EventType::HolidayInning => {

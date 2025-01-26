@@ -2786,6 +2786,24 @@ pub struct PlayerTogethernessModChange {
     pub sub_event: SubEvent,
 }
 
+
+/// Sometimes player togetherness "blips" (gets removed and then re-added) when a player is moved
+/// around a team, because it's technically them being removed and then re-added to the team. This
+/// contains metadata about that happening.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerTogethernessModBlip {
+    /// Metadata for the sub-event about (temporarily) removing the player's Togetherness mod
+    pub removal: PlayerTogethernessModChange,
+
+    /// Metadata for the sub-event about re-adding the players Togetherness mod
+    ///
+    /// This does not always exist, and my best theory for that is that it happens when the player
+    /// should have lost their Togetherness mod already but didn't due to a bug. This is unconfirmed
+    /// and it might just be that my understanding of Togetherness is incorrect (e.g. maybe players
+    /// in the shadows don't count?)
+    pub addition: Option<PlayerTogethernessModChange>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct RunStolenThroughTunnelsDetails {        
     /// Uuid of the team who had their run stolen
@@ -5899,10 +5917,9 @@ pub enum FedEventData {
         enter_shadows_sub_event: SubEvent,
 
         /// If this player has the Yolked mod from being on a team with another Hard Boiled player,
-        /// it is momentarily lost and then (usually) regained. This is the events for those, in
-        /// order.
-        // TODO Make struct not tuple
-        yolked_change: Option<(PlayerTogethernessModChange, Option<SubEvent>)>
+        /// it is momentarily lost and then (usually) regained. This is metadata about that
+        /// happening, if applicable
+        yolked_blip: Option<PlayerTogethernessModBlip>,
     },
 
     /// A Redacted event

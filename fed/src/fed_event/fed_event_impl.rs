@@ -3282,7 +3282,7 @@ impl FedEvent {
                 }
                 eb.build(EventType::CommunityChestOpens)
             }
-            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event, yolked_change } => {
+            FedEventData::Fax { game, team_id, team_nickname, exiting_pitcher_id, exiting_pitcher_name, entering_pitcher_id, entering_pitcher_name, shadows_location, rating_before, rating_after, player_swap_sub_event, enter_shadows_sub_event, yolked_blip } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("10 Runs collected.");
@@ -3323,8 +3323,8 @@ impl FedEvent {
                     child.build(EventType::PlayerStatIncrease)
                 });
 
-                if let Some((unyolk, reyolk)) = yolked_change {
-                    eb.push_child(unyolk.sub_event, |mut child_eb| {
+                if let Some(blip) = yolked_blip {
+                    eb.push_child(blip.removal.sub_event, |mut child_eb| {
                         // Ignoring other_player_names until it becomes relevant
                         child_eb.push_description(format!("{exiting_pitcher_name} are weaker apart."));
                         child_eb.push_player_tag(exiting_pitcher_id);
@@ -3334,10 +3334,10 @@ impl FedEvent {
                         child_eb.push_metadata_i64("type", ModDuration::Permanent);
                         child_eb.build(EventType::RemovedModFromOtherMod)
                     });
-                    if let Some(sub_event) = reyolk {
-                        eb.push_child(sub_event, |mut child_eb| {
+                    if let Some(addition) = blip.addition {
+                        eb.push_child(addition.sub_event, |mut child_eb| {
                             let names_str = iter::once(&exiting_pitcher_name)
-                                .chain(unyolk.other_player_names.iter())
+                                .chain(addition.other_player_names.iter())
                                 .join(" and ");
                             child_eb.push_description(format!("{names_str} are stronger together."));
                             child_eb.push_player_tag(exiting_pitcher_id);
