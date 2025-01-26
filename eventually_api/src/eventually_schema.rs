@@ -217,7 +217,7 @@ impl Weather {
             Weather::BlackHole => "Black Hole",
             Weather::Coffee => "Coffee",
             Weather::Coffee2 => "Coffee 2",
-            Weather::Coffee3s => "Coffee 3s",
+            Weather::Coffee3s => "Coffee Threes",
             Weather::Flooding => "Flooding",
             Weather::Salmon => "Salmon",
             Weather::PolarityPlus => "Polarity +",

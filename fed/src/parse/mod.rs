@@ -296,10 +296,6 @@ pub fn parse_next_event(
         })
         .transpose()?;
 
-    if event.id == uuid!("d6f4e7b4-cc4d-46da-b20e-90ac813120a9") || event.id == uuid!("db421f99-5ad9-40be-97c0-778d7367d3bb") {
-        println!("Debug me");
-    }
-
     let data = match event.event_type {
         EventType::Undefined => {
             FedEventData::Redacted {

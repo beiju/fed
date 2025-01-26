@@ -3204,9 +3204,10 @@ pub(crate) fn parse_weather(input: &str) -> ParserResult<Weather> {
             tag(Weather::BlackHole.to_str()).map(|_| Weather::BlackHole),
         )),
         alt((
-            tag(Weather::Coffee.to_str()).map(|_| Weather::Coffee),
             tag(Weather::Coffee2.to_str()).map(|_| Weather::Coffee2),
             tag(Weather::Coffee3s.to_str()).map(|_| Weather::Coffee3s),
+            // Coffee has to be after both Coffee 3s and Coffee 2 because it is a prefix of them
+            tag(Weather::Coffee.to_str()).map(|_| Weather::Coffee),
             tag(Weather::Flooding.to_str()).map(|_| Weather::Flooding),
             tag(Weather::Salmon.to_str()).map(|_| Weather::Salmon),
             tag(Weather::PolarityPlus.to_str()).map(|_| Weather::PolarityPlus),
