@@ -464,7 +464,7 @@ impl FedEvent {
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite, score_summary } => {
+            FedEventData::StrikeoutLooking { game, pitch, batter_name, stopped_inhabiting, pitcher_item_damage, free_refill, is_special, parasite, score_summary, balloons } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(is_special));
                 eb.push_pitch(pitch);
@@ -474,6 +474,7 @@ impl FedEvent {
                 eb.push_free_refill(free_refill);
                 eb.push_parasite(parasite);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+                eb.push_balloons_from_score_summary(score_summary.as_ref(), balloons.as_deref());
                 eb.build(EventType::Strikeout)
             }
             FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {

@@ -3605,6 +3605,10 @@ pub enum FedEventData {
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
         score_summary: Option<ScoreSummary<TripleThreatLedger>>,
+
+        /// If Balloons were inflated as a result of this Strikeout (via Triple Threat), this is the
+        /// name of the  Stadium. Otherwise `null`.
+        balloons: Option<String>,
     },
 
     /// Player drew a walk
