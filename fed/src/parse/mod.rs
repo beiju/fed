@@ -750,13 +750,14 @@ pub fn parse_next_event(
         EventType::HomeRun => {
             let pitch = event.parse_pitch()?;
 
-            let home_run_hype = event.parse_prefixed_hype()?;
-
-            let damaged_items = event.parse_item_damages_and_names(false)?;
-
             // In addition to getting a magmatic event, get a player name and id to check against
             // the batter name and id
-            let magmatic_expanded = event.next_parse(parse_magmatic)?
+            // Magmatic is weird, the text comes before hype but the event comes after
+            let magmatic_parsed = event.next_parse(parse_magmatic)?;
+
+            let home_run_hype = event.parse_prefixed_hype()?;
+
+            let magmatic_expanded = magmatic_parsed
                 .map(|player_name| {
                     let mut child = event.next_child(EventType::RemovedMod)?;
                     let magmatic = ModChangeSubEvent {
@@ -767,6 +768,8 @@ pub fn parse_next_event(
                     ParseOk((magmatic, player_name, child.next_player_id()?))
                 })
                 .transpose()?;
+
+            let damaged_items = event.parse_item_damages_and_names(false)?;
 
             let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 

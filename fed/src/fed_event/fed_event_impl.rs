@@ -305,12 +305,29 @@ impl FedEvent {
                 if is_special { eb.set_category(EventCategory::Special) }
                 eb.push_pitch(pitch);
 
+                // First, magmatic text...
+                if let Some(mod_change) = &magmatic {
+                    eb.push_description(format!("{batter_name} is Magmatic!"));
+                }
+
+                // ...then hype...
                 if let Some(h) = &hype && h.source == HomeRunHypeSource::HomeRun {
                     eb.push_hype(&h.hype, home_team_id);
                 }
 
+                // ...then the magmatic event
+                if let Some(mod_change) = &magmatic {
+                    eb.push_child(mod_change.sub_event, |mut child| {
+                        child.push_description(format!("{batter_name} hit a Magmatic home run!"));
+                        child.push_player_tag(batter_id);
+                        child.push_team_tag(mod_change.team_id);
+                        child.push_metadata_str("mod", "MAGMATIC");
+                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.build(EventType::RemovedMod)
+                    });
+                }
+
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
-                eb.push_magmatic(magmatic, &batter_name, batter_id);
 
                 // HR itself
                 eb.push_description(format!("{batter_name} hits a {home_run_type}!"));

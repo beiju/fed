@@ -677,20 +677,6 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_magmatic(&mut self, magmatic: Option<ModChangeSubEvent>, batter_name: &str, batter_id: Uuid) {
-        if let Some(mod_change) = magmatic {
-            self.push_description(format!("{batter_name} is Magmatic!"));
-            self.push_child(mod_change.sub_event, |mut child| {
-                child.push_description(format!("{batter_name} hit a Magmatic home run!"));
-                child.push_player_tag(batter_id);
-                child.push_team_tag(mod_change.team_id);
-                child.push_metadata_str("mod", "MAGMATIC");
-                child.push_metadata_i64("type", ModDuration::Permanent as i64);
-                child.build(EventType::RemovedMod)
-            });
-        }
-    }
-
     pub fn push_hotel_motel(&mut self, parties: &[HotelMotelScoringPlayer]) {
         for party in parties {
             self.push_hotel_motel_party(&party.party, &party.player_name, party.player_id);
