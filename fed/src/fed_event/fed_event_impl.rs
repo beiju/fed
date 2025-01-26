@@ -520,8 +520,8 @@ impl FedEvent {
                 // Unsure of order of free refills vs hotel motel parties
                 eb.push_free_refills(&scores.free_refills);
                 eb.push_scorer_hotel_motel_parties(&scores.scores);
-                eb.push_score_summary(&scores);
                 eb.push_cooled_off(cooled_off, &batter_name);
+                eb.push_score_summary(&scores);
                 eb.build(EventType::GroundOut)
             }
             FedEventData::StrikeZapped { game } => {

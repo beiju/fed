@@ -709,9 +709,11 @@ pub fn parse_next_event(
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
                     let (scoring_players, attractions) = event.parse_scoring_players(" scores!", true)?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, true)?;
+                    let mut scores = event.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
+                    scores.score_summary = event.parse_score_summary()?;
+                    scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
                     FedEventData::FieldersChoice {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
