@@ -2277,7 +2277,7 @@ pub struct HomeRunLedger {
     pub big_bucket: Option<SimpleLedgerV2<run_source::HomeRunBigBucket>>,
     pub alley_oop: Option<SimpleLedgerV2<run_source::HomeRunSlamDunk>>,
     pub sum_sun: Option<i64>,
-    pub equal_sun: Option<i64>,
+    pub equal_sun: Option<f64>,
 }
 
 impl LedgerV2 for HomeRunLedger {
@@ -2321,7 +2321,7 @@ impl LedgerV2 for HomeRunLedger {
             )
             .chain(
                 if let Some(equal_sun_runs) = self.equal_sun {
-                    Either::Left(iter::once(equal_sun_runs as f64))
+                    Either::Left(iter::once(equal_sun_runs))
                 } else {
                     Either::Right(iter::empty())
                 }
@@ -2344,7 +2344,7 @@ impl LedgerV2 for HomeRunLedger {
         }
         if let Some(equal_sun_runs) = self.equal_sun {
             write!(w, "\n")?;
-            write!(w, "Equal Sun: {}", WholeRuns(equal_sun_runs))?;
+            write!(w, "Equal Sun: {}", Runs(equal_sun_runs))?;
         }
 
         Ok(())
