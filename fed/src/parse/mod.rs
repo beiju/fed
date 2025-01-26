@@ -296,7 +296,7 @@ pub fn parse_next_event(
         })
         .transpose()?;
 
-    if event.id == uuid!("b916a80a-7443-4a46-8a4f-2a6aed20e7fa") {
+    if event.id == uuid!("d6f4e7b4-cc4d-46da-b20e-90ac813120a9") || event.id == uuid!("db421f99-5ad9-40be-97c0-778d7367d3bb") {
         println!("Debug me");
     }
 
@@ -421,6 +421,7 @@ pub fn parse_next_event(
                             .transpose()?;
 
                         let score_summary = event.parse_score_summary()?;
+                        let balloons = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
                         let hotel_motel_party = event.next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
                             .map(|birds| ParseOk(HotelMotelParty {
@@ -440,6 +441,7 @@ pub fn parse_next_event(
                             is_special: event.category == EventCategory::Special,
                             hype,
                             score_summary,
+                            balloons,
                             hotel_motel_party,
                             took_the_fifth_base,
                         }
@@ -827,6 +829,7 @@ pub fn parse_next_event(
 
             // I have no idea where this needs to go in relation to the other sub-events
             let score_summary = event.parse_score_summary()?;
+            let balloons_inflated = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -847,6 +850,7 @@ pub fn parse_next_event(
                 hype,
                 alley_oop: alley_oop.map(|(name, success)| (name.to_string(), success)),
                 score_summary,
+                balloons_inflated,
                 balloons_popped: balloons_popped.map(|(stadium_name, birds_scared_away)| {
                     BalloonsPopped { stadium_name: stadium_name.to_string(), birds_scared_away }
                 }),
@@ -907,6 +911,10 @@ pub fn parse_next_event(
             // in the way.
             assert!(scores.score_summary.is_none());
             scores.score_summary = event.parse_score_summary()?;
+
+            // Ditto for balloons
+            assert!(scores.balloons.is_none());
+            scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1027,6 +1035,7 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(team_nickname));
 
             let score_summary = event.parse_score_summary()?;
+            let balloons = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
             FedEventData::RunsOverflowing {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1035,6 +1044,7 @@ pub fn parse_next_event(
                 unruns,
                 gained,
                 score_summary,
+                balloons,
             }
         }
         EventType::HomeFieldAdvantage => {
@@ -1715,7 +1725,9 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let heat_magnet = event.parse_score_summary()?;
+            let heat_magnet = event.parse_score_summary()?
+                .map(|score| ParseOk((score, event.parse_balloons(5)?)))
+                .transpose()?;
             assert_eq!(heat_magnet.is_some(), heat_magnet_parsed.is_some());
 
             let team_nickname = replace_child.metadata_str("teamName")?;
@@ -1949,6 +1961,7 @@ pub fn parse_next_event(
 
             let free_refills = event.parse_free_refills()?;
             let score_summary = event.parse_score_summary()?;
+            let balloons = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
             FedEventData::FloodingSwept {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1956,6 +1969,7 @@ pub fn parse_next_event(
                 free_refills,
                 flood_pumps,
                 score_summary,
+                balloons,
                 flood_balloon,
                 anti_flood_pumps,
             }

@@ -220,6 +220,8 @@ pub struct HotelMotelScoringPlayer {
     pub party: HotelMotelParty,
 }
 
+// TODO Maybe come up with clearer terminology for scores Other events can happen between the two phases. It may be helpful to represent
+//   that in the type system.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores<LedgerRunT: LedgerV2> {
@@ -236,6 +238,13 @@ pub struct Scores<LedgerRunT: LedgerV2> {
     /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
     /// attaching effects (such as Balloons) to the score summary. This contains that information.
     pub score_summary: Option<ScoreSummary<LedgerRunT>>,
+
+    /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons were
+    /// inflated. Otherwise null.
+    // Note: Balloons get parsed along with score_summary, but they can't be inside score_summary
+    // because scores under HotelMotel don't have summaries but they can have balloons.
+    // This may need to be extended to support number of balloons.
+    pub balloons: Option<String>,
 }
 
 impl<T: LedgerV2> Scores<T> {
@@ -2641,11 +2650,6 @@ pub struct ScoreSummary<LedgerRunT: LedgerV2> {
     pub team_id: Uuid,
     pub team_nickname: String,
     pub sub_event: SubEvent,
-
-    /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons were
-    /// inflated. Otherwise null.
-    // This may need to be extended to support number of balloons.
-    pub balloons: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -3405,6 +3409,11 @@ pub enum FedEventData {
         /// individual Run scored, and those also appear here.
         score_summary: Option<ScoreSummary<HomeRunLedger>>,
 
+        /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons
+        /// were inflated. Otherwise null.
+        // This may need to be extended to support number of balloons.
+        balloons_inflated: Option<String>,
+
         /// If this home run popped some Balloons, this contains the name of the stadium whose
         /// balloons were popped and the number of birds that were scared away.
         balloons_popped: Option<BalloonsPopped>,
@@ -3446,6 +3455,10 @@ pub enum FedEventData {
         /// Score summary effects, if applicable. This will be populated if the season is 20 or
         /// later and either the base stolen was home or if blaserunning is true, otherwise null.
         score_summary: Option<ScoreSummary<StolenBaseLedger>>,
+
+        /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons
+        /// were inflated. Otherwise null.
+        balloons: Option<String>,
 
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<HotelMotelParty>,
@@ -4445,6 +4458,10 @@ pub enum FedEventData {
         /// information. Runs can be scored on Flooding events thanks to Flippers.
         score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::Flippers>>>,
 
+        /// If Balloons were inflated as a result of this Flooding score, this is the name of the
+        /// Stadium. Otherwise `null`.
+        balloons: Option<String>,
+
         /// Whether a flood balloon was filled
         flood_balloon: bool,
 
@@ -4508,8 +4525,9 @@ pub enum FedEventData {
         pressure_built: Option<PressureBuilt>,
 
         /// If the Heat Magnet activated on this Incineration, contains the score summary for the
-        /// resulting score. Otherwise `null`.
-        heat_magnet: Option<ScoreSummary<HeatMagnetLedger>>,
+        /// resulting score and, if applicable, the stadium in which Balloons were inflated.
+        /// Otherwise `null`.
+        heat_magnet: Option<(ScoreSummary<HeatMagnetLedger>, Option<String>)>,
     },
 
     /// Pitcher change event. This happens automatically when something incapacitates the active
@@ -5347,6 +5365,10 @@ pub enum FedEventData {
         /// attaching effects (such as Balloons) to the score summary. This contains that
         /// information.
         score_summary: Option<ScoreSummary<OverflowLedger>>,
+
+        /// If Balloons were inflated as a result of these runs, this is the name of the Stadium.
+        /// Otherwise `null`.
+        balloons: Option<String>,
     },
 
     /// Detective enters a Crime Scene

@@ -608,6 +608,7 @@ impl<'e> EventParseWrapper<'e> {
     ) -> Result<Scores<LedgerT>, FeedParseError> {
         let mut scores = self.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, is_fc)?;
         scores.score_summary = self.parse_score_summary()?;
+        scores.balloons = self.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
         Ok(scores)
     }
 
@@ -688,7 +689,10 @@ impl<'e> EventParseWrapper<'e> {
         Ok(Scores {
             scores,
             free_refills,
+            // TODO Consider changing around the types to make these Nones unnecessary (see TODO
+            //   comment on `Scores` struct
             score_summary: None, // Filled in by a later function
+            balloons: None, // Filled in by a later function
         })
     }
 
@@ -744,13 +748,6 @@ impl<'e> EventParseWrapper<'e> {
             Ledger::V2(ledger)
         };
 
-        // The number of balloons isn't `ledger.base_runs`, because balloons take Magnified into
-        // account: "55abf086-150f-47da-97cf-dd674e65f572"
-        // The number of runs isn't unrounded or truncated runs, because 1 balloon is inflated for
-        // an 0.9-run Acidic Pitch score: "d97cbebe-4357-4765-b221-c941878ef26e"
-        // Simplest remaining explanation is that it's rounded runs
-        let balloons = self.parse_balloons(runs_scored.round() as i64)?;
-
         Ok(Some(ScoreSummary {
             away_emoji: score_child.metadata_str("awayEmoji")?.to_string(),
             away_score: score_child.metadata_f64("awayScore")?,
@@ -761,8 +758,17 @@ impl<'e> EventParseWrapper<'e> {
             team_id: score_child.next_team_id()?,
             team_nickname: team_nickname.to_string(),
             sub_event: score_child.as_sub_event(),
-            balloons,
         }))
+    }
+
+    pub fn parse_balloons_from_score_summary<LedgerT: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<LedgerT>>) -> Result<Option<String>, FeedParseError> {
+        // The number of balloons isn't `ledger.base_runs`, because balloons take Magnified into
+        // account: "55abf086-150f-47da-97cf-dd674e65f572"
+        // The number of runs isn't unrounded or truncated runs, because 1 balloon is inflated for
+        // an 0.9-run Acidic Pitch score: "d97cbebe-4357-4765-b221-c941878ef26e"
+        // Simplest remaining explanation is that it's rounded runs
+        let runs_scored = score_summary.as_ref().map_or(1, |s| s.runs_scored.round() as i64);
+        self.parse_balloons(runs_scored)
     }
 
     pub fn parse_balloons(&mut self, runs_scored: i64) -> Result<Option<String>, FeedParseError> {

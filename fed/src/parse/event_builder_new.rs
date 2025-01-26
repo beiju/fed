@@ -383,7 +383,7 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: f64) {
+    pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: i64) {
         if let Some(stadium_name) = balloons {
             self.push_description(format!("{stadium_name} {} {runs_scored} Balloons!", self.inflated_or_inflates()));
         }
@@ -412,8 +412,15 @@ impl EventBuilder {
         self.push_score_summary(scores);
     }
 
+    // Also pushes balloons
     pub fn push_score_summary<T: LedgerV2>(&mut self, scores: &Scores<T>) {
-        self.push_opt_direct_score_summary(scores.score_summary.as_ref())
+        self.push_opt_direct_score_summary(scores.score_summary.as_ref());
+        self.push_balloons_from_score_summary(scores.score_summary.as_ref(), scores.balloons.as_deref());
+    }
+
+    pub fn push_balloons_from_score_summary<T: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<T>>, balloons: Option<&str>) {
+        let runs_scored = score_summary.as_ref().map_or(1, |s| s.runs_scored.round() as i64);
+        self.push_balloons(balloons, runs_scored);
     }
 
     pub fn push_opt_direct_score_summary<T: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<T>>) {
@@ -443,10 +450,6 @@ impl EventBuilder {
             });
             child_eb.build(EventType::RunsScored)
         });
-
-        if let Some(stadium_name) = &score.balloons {
-            self.push_description(format!("{stadium_name} {} {} Balloons!", self.inflated_or_inflates(), score.runs_scored.round()));
-        }
     }
 
     pub fn inflated_or_inflates(&self) -> &'static str {

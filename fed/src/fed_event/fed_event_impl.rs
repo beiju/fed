@@ -298,7 +298,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_summary, balloons_popped } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_summary, balloons_inflated, balloons_popped } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
@@ -350,6 +350,8 @@ impl FedEvent {
                 //   "additional scores" argument. This would be a large change, but it would make
                 //   that data obey the single-source-of-truth principle.
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+                let runs_scored = score_summary.as_ref().map_or(1, |s| s.runs_scored.round() as i64);
+                eb.push_balloons(balloons_inflated.as_deref(), runs_scored);
 
                 eb.build(EventType::HomeRun)
             }
@@ -372,7 +374,7 @@ impl FedEvent {
                 eb.push_flood_balloon_popped(flood_balloon_popped);
                 eb.build(EventType::GroundOut)
             }
-            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, hotel_motel_party, took_the_fifth_base } => {
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, balloons, hotel_motel_party, took_the_fifth_base } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.push_player_tag(runner_id);
@@ -424,6 +426,7 @@ impl FedEvent {
                 eb.push_free_refill(free_refill);
                 eb.push_opt_item_damage(runner_item_damage.as_ref(), &runner_name);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+                eb.push_balloons_from_score_summary(score_summary.as_ref(), balloons.as_deref());
 
                 if let Some(party) = hotel_motel_party {
                     eb.push_hotel_motel_party(&party, &runner_name, runner_id);
@@ -826,7 +829,7 @@ impl FedEvent {
                     eb.push_description(format!("Sun 2 smiled at the {scoring_team_nickname}."));
                     // Two of them
                     eb.push_description(format!("Sun 2 smiled at the {scoring_team_nickname}."));
-                    eb.push_balloons(win_event.balloons.as_deref(), 10.);
+                    eb.push_balloons(win_event.balloons.as_deref(), 10);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
                         child_eb.push_description(format!("Sun 2 set a Win upon the {scoring_team_nickname}."));
@@ -871,7 +874,7 @@ impl FedEvent {
                 // using it as a signal for now. iirc this will have to be changed later
                 if let Some(win_event) = win_event {
                     eb.push_description(format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
-                    eb.push_balloons(win_event.balloons.as_deref(), 10.);
+                    eb.push_balloons(win_event.balloons.as_deref(), 10);
                     eb.push_child(win_event.sub_event, |mut child_eb| {
                         child_eb.set_category(EventCategory::Outcomes);
                         child_eb.push_description(format!("The Black Hole burped a Win at the {victim_team_nickname}."));
@@ -1604,7 +1607,7 @@ impl FedEvent {
                     }))
                     .build()
             }
-            FedEventData::FloodingSwept { game, effects, free_refills, flood_pumps, score_summary, flood_balloon, anti_flood_pumps } => {
+            FedEventData::FloodingSwept { game, effects, free_refills, balloons, flood_pumps, score_summary, flood_balloon, anti_flood_pumps } => {
                 let home_team = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -1654,6 +1657,7 @@ impl FedEvent {
 
                 eb.push_free_refills(&free_refills);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+                eb.push_balloons_from_score_summary(score_summary.as_ref(), balloons.as_deref());
 
                 eb.build(EventType::FloodingSwept)
             }
@@ -1871,7 +1875,10 @@ impl FedEvent {
                     });
                 }
 
-                eb.push_opt_direct_score_summary(heat_magnet.as_ref());
+                if let Some((score_summary, balloons)) = &heat_magnet {
+                    eb.push_direct_score_summary(score_summary);
+                    eb.push_balloons(balloons.as_deref(), 5);
+                }
 
                 eb.build(EventType::Incineration)
             }
@@ -2868,7 +2875,7 @@ impl FedEvent {
                 eb.push_description(format!("{num_runs} Runs are collected and saved for the {team_nickname}'s next game."));
                 eb.build(EventType::SolarPanelsActivation)
             }
-            FedEventData::RunsOverflowing { game, team_nickname, num_runs, unruns, gained, score_summary } => {
+            FedEventData::RunsOverflowing { game, team_nickname, num_runs, unruns, gained, score_summary, balloons } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("Runs are Overflowing!");
@@ -2877,6 +2884,7 @@ impl FedEvent {
                                                     if unruns { "Unrun" } else { "Run" },
                                                     if num_runs.abs() == 1.0 { "" } else { "s" }));
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
+                eb.push_balloons_from_score_summary(score_summary.as_ref(), balloons.as_deref());
                 eb.build(EventType::RunsOverflowing)
             }
             FedEventData::EnterCrimeScene { game, player_id, player_name, previous_team_id, previous_team_name, previous_location, new_team_id, new_team_name, stadium_name, rating_before, rating_after, enter_crime_scene_sub_event: crime_scene_sub_event, enter_shadows_sub_event } => {
