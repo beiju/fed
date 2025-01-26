@@ -1414,7 +1414,7 @@ pub struct ItemGained {
     pub player_item_rating_before: f64,
 
     /// The increase or decrease that all the wielding player's items now cause to their star rating
-    pub player_item_rating_after: f64,
+    pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
     pub player_rating: f64,
@@ -6373,7 +6373,7 @@ pub enum FedEventData {
         thief_item_rating_before: f64,
 
         /// The increase/decrease that all the thief's items now cause to their star rating
-        thief_item_rating_after: f64,
+        thief_item_rating_after: Option<f64>,
 
         /// The thief's star rating. TODO: Is this with or without items?
         thief_rating: f64,

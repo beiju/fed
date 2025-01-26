@@ -3775,7 +3775,7 @@ impl FedEvent {
                     child_eb.push_metadata_uuid("itemId", item_id);
                     child_eb.push_metadata_str("itemName", item_name);
                     child_eb.push_metadata_str_vec("mods", item_mods);
-                    child_eb.push_metadata_f64("playerItemRatingAfter", thief_item_rating_after);
+                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", thief_item_rating_after);
                     child_eb.push_metadata_f64("playerItemRatingBefore", thief_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", thief_rating);
                     
@@ -4089,7 +4089,7 @@ impl FedEvent {
                     child_eb.push_metadata_uuid("itemId", beneficiary_gained_item.item_id);
                     child_eb.push_metadata_str("itemName", item_name);
                     child_eb.push_metadata_str_vec("mods", beneficiary_gained_item.item_mods);
-                    child_eb.push_metadata_f64("playerItemRatingAfter", beneficiary_gained_item.player_item_rating_after);
+                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", beneficiary_gained_item.player_item_rating_after);
                     child_eb.push_metadata_f64("playerItemRatingBefore", beneficiary_gained_item.player_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", beneficiary_gained_item.player_rating);
 

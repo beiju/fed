@@ -275,7 +275,7 @@ impl EventBuilder {
             child.push_metadata_uuid("itemId", gained_item.item_id);
             child.push_metadata_str("itemName", gained_item.item_name);
             child.push_metadata_str_vec("mods", gained_item.item_mods);
-            child.push_metadata_f64("playerItemRatingAfter", gained_item.player_item_rating_after);
+            child.push_metadata_f64_opt("playerItemRatingAfter", gained_item.player_item_rating_after);
             child.push_metadata_f64("playerItemRatingBefore", gained_item.player_item_rating_before);
             child.push_metadata_f64("playerRating", gained_item.player_rating);
             child.build(EventType::PlayerGainedItem)
