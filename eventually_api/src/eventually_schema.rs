@@ -433,6 +433,7 @@ pub enum EventType {
     Trade = 233,
     TradeFailed = 234,
     ItemTraded = 236,
+    BasesReloaded = 239,
     BeingSpeechInTidings = 241,
     RiffOpened = 251,
     StormWarning = 263,

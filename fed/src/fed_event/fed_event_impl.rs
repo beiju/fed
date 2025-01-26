@@ -4102,6 +4102,12 @@ impl FedEvent {
 
                 eb.build(EventType::PolarityShift)
             }
+            FedEventData::BasesReloaded { game, player_name, player_id } => {
+                eb.set_game(game);
+                eb.push_description(format!("{player_name} Reloaded all of the Bases!"));
+                eb.push_player_tag(player_id);
+                eb.build(EventType::BasesReloaded)
+            }
         };
 
         vec![item]

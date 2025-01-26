@@ -6706,7 +6706,21 @@ pub enum FedEventData {
 
         /// Sub-event associated with the weather changing to Jazz
         sub_event: SubEvent,
-    }
+    },
+
+    /// Player with Reload Reloaded the bases.
+    ///
+    /// This only ever happens immediately following a Grand Slam.
+    BasesReloaded {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who Reloaded the bases
+        player_name: String,
+
+        /// Uuid of the player who Reloaded the bases
+        player_id: Uuid,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -6958,6 +6972,7 @@ impl FedEventData {
             FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }
             FedEventData::RiffOpened { game, .. } => { Some(game) }
             FedEventData::BandBeginsToPlay { game, .. } => { Some(game) }
+            FedEventData::BasesReloaded { game, .. } => { Some(game) }
         }
     }
 }

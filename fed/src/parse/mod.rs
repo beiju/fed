@@ -3890,6 +3890,15 @@ pub fn parse_next_event(
         }
         EventType::TradeFailed => { todo!() }
         EventType::ItemTraded => { todo!() }
+        EventType::BasesReloaded => {
+            let player_name = event.next_parse(parse_terminated(" Reloaded all of the Bases!"))?;
+
+            FedEventData::BasesReloaded {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_name: player_name.to_string(),
+                player_id: event.next_player_id()?,
+            }
+        }
         EventType::BeingSpeechInTidings => { todo!() }
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened)?;
