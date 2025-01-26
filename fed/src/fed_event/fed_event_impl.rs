@@ -3317,18 +3317,20 @@ impl FedEvent {
                         child_eb.push_metadata_i64("type", ModDuration::Permanent);
                         child_eb.build(EventType::RemovedModFromOtherMod)
                     });
-                    eb.push_child(reyolk.sub_event, |mut child_eb| {
-                        let names_str = iter::once(&exiting_pitcher_name)
-                            .chain(reyolk.other_player_names.iter())
-                            .join(" and ");
-                        child_eb.push_description(format!("{names_str} are stronger together."));
-                        child_eb.push_player_tag(exiting_pitcher_id);
-                        child_eb.push_team_tag(team_id);
-                        child_eb.push_metadata_str("mod", "YOLKED");
-                        child_eb.push_metadata_str("source", "HARD_BOILED");
-                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
-                        child_eb.build(EventType::AddedModFromOtherMod)
-                    });
+                    if let Some(sub_event) = reyolk {
+                        eb.push_child(sub_event, |mut child_eb| {
+                            let names_str = iter::once(&exiting_pitcher_name)
+                                .chain(unyolk.other_player_names.iter())
+                                .join(" and ");
+                            child_eb.push_description(format!("{names_str} are stronger together."));
+                            child_eb.push_player_tag(exiting_pitcher_id);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_metadata_str("mod", "YOLKED");
+                            child_eb.push_metadata_str("source", "HARD_BOILED");
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            child_eb.build(EventType::AddedModFromOtherMod)
+                        });
+                    }
                 }
 
                 eb.build(EventType::FaxMachine)

@@ -3471,23 +3471,17 @@ pub fn parse_next_event(
                     // This may need to be expanded to handle entering pitchers too
                     let unyolk_names = unyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "weaker apart"))?;
 
-                    // I believe if there's an unyolk there has to be a reyolk
-                    let mut reyolk_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                    let reyolk_names = reyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "stronger together"))?;
-
-                    // TODO: If this assert never fires, remove unyolk_names and change the data
-                    //   structure accordingly
-                    assert!(unyolk_names.is_empty(), "If this assert fires, just remove it and the TODO comment above");
+                    // Not sure how but you can have an unyolk without a reyolk, even though I think
+                    // shadowed players count for YOLKED? Maybe it just clears yolked statuses that
+                    // should have been cleared already but weren't because of a bug. idk
+                    let reyolk_event = event.next_child_opt(EventType::AddedModFromOtherMod)?;
 
                     ParseOk((
                         PlayerTogethernessModChange {
                             other_player_names: unyolk_names.into_iter().map(String::from).collect(),
                             sub_event: unyolk_event.as_sub_event(),
                         },
-                        PlayerTogethernessModChange {
-                            other_player_names: reyolk_names.into_iter().map(String::from).collect(),
-                            sub_event: reyolk_event.as_sub_event(),
-                        },
+                        reyolk_event.as_ref().map(EventParseWrapper::as_sub_event),
                     ))
                 })
                 .transpose()?;

@@ -5899,9 +5899,10 @@ pub enum FedEventData {
         enter_shadows_sub_event: SubEvent,
 
         /// If this player has the Yolked mod from being on a team with another Hard Boiled player,
-        /// it is momentarily lost and then regained. This is the events for those, in order.
+        /// it is momentarily lost and then (usually) regained. This is the events for those, in
+        /// order.
         // TODO Make struct not tuple
-        yolked_change: Option<(PlayerTogethernessModChange, PlayerTogethernessModChange)>
+        yolked_change: Option<(PlayerTogethernessModChange, Option<SubEvent>)>
     },
 
     /// A Redacted event
