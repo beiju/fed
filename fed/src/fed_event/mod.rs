@@ -3636,6 +3636,12 @@ pub enum FedEventData {
         /// Damage that the batter's item took, if any
         batter_item_damage: Option<ItemDamaged>,
 
+        /// Damage that the pitcher's item took, if any, and the assumed pitcher's name
+        ///
+        /// The pitcher's name is not known outside of this case, so we assume that any item damage
+        /// for a player other than the batter is for the pitcher
+        pitcher_item_damage: Option<(String, ItemDamaged)>,
+
         /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
         /// Otherwise null.
         stopped_inhabiting: Option<StoppedInhabiting>,

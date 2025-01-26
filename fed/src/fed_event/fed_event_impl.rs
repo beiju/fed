@@ -477,7 +477,7 @@ impl FedEvent {
                 eb.push_balloons_from_score_summary(score_summary.as_ref(), balloons.as_deref());
                 eb.build(EventType::Strikeout)
             }
-            FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, stopped_inhabiting, is_special } => {
+            FedEventData::Walk { game, pitch, batter_name, batter_id, scores, base_instincts, batter_item_damage, pitcher_item_damage, stopped_inhabiting, is_special } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::special_if(scores.used_refill() || base_instincts.is_some() || is_special));
@@ -488,6 +488,7 @@ impl FedEvent {
                 }
                 eb.push_player_tag(batter_id);
                 eb.push_opt_item_damage(batter_item_damage.as_ref(), &batter_name);
+                eb.push_named_item_damage(pitcher_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 // Seems like Walks continue having hype before score even after s21 when the other events stop
                 eb.push_scores(&scores, home_team_id, "scores!", false, true);
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());

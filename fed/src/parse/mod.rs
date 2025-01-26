@@ -478,6 +478,7 @@ pub fn parse_next_event(
                     let scores = event.parse_scores(" scores!", false)?;
 
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
+                    let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
                     FedEventData::Walk {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -487,6 +488,7 @@ pub fn parse_next_event(
                         scores,
                         base_instincts,
                         batter_item_damage,
+                        pitcher_item_damage,
                         stopped_inhabiting,
                         is_special: event.category == EventCategory::Special,
                     }
