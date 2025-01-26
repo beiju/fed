@@ -728,10 +728,12 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedGroundOut::DoublePlay { batter_name } => {
-                    let scores = event.parse_scores(" scores!", false)?;
+                    let mut scores = event.parse_scores_without_summary(" scores!", false)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
+                    scores.score_summary = event.parse_score_summary()?;
+                    scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
                     FedEventData::DoublePlay {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
