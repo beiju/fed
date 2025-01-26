@@ -5649,7 +5649,7 @@ pub enum FedEventData {
         // batter_item_damage: Option<ItemDamaged>,
 
         #[serde(flatten)]
-        scores: Scores<SimpleLedgerV2<run_source::MindTrickWalk>>,
+        scores: Scores<SimpleLedgerV2<run_source::Walk>>,
     },
 
     /// Walk as a result of a Mind Trick which overrode a Charm strikeout

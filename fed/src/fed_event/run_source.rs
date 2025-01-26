@@ -41,6 +41,5 @@ run_source!(HomeRunBigBucket, "Big Bucket");
 run_source!(MildPitchCharmWalk, "Mild Pitch Charm Walk");
 run_source!(Flippers, "Flippers");
 run_source!(HitByPitch, "Hit By Pitch");
-run_source!(MindTrickWalk, "Mind Trick Walk");
 run_source!(CharmedMindTrickWalk, "Charmed Mind Trick Walk");
 run_source!(DonatedShame, "Donated Shame");
