@@ -322,8 +322,10 @@ impl EventBuilder {
                                   if (self.event.season, self.event.day) < (15, 3) { " " } else { "" },
                                   Possessive(player_name));
         self.push_description(&description);
-        // In season 17 days 7-10 inclusive, the Ambitious event type was accidentally used instead
-        // of ItemBreaks
+        self.push_item_damage_with_description(dmg, &description)
+    }
+
+    pub fn push_item_damage_with_description(&mut self, dmg: &ItemDamaged, description: &str) {
         let use_ambitious = self.event.season == 17 && self.event.day >= 7 && self.event.day <= 10;
         self.push_child(dmg.sub_event, |mut child| {
             child.push_description(&description);

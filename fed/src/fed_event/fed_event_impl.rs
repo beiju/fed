@@ -3168,6 +3168,21 @@ impl FedEvent {
                 eb.push_player_tag(targeted_player_id);
                 eb.build(EventType::ConsumersAttack)
             }
+            FedEventData::ConsumerCountered { game, defender_name, defender_id, item_damaged, targeted_player_id, } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("CONSUMERS ATTACK");
+                let defender_name_caps = defender_name.to_uppercase();
+                let item_name_caps = item_damaged.item_name.to_uppercase();
+                eb.push_description(format!("STEELED {defender_name_caps} COUNTERED WITH THE {item_name_caps}"));
+                eb.push_player_tag(defender_id);
+                eb.push_player_tag(targeted_player_id);
+
+                let damage_description = format!("{defender_name} damaged their {} on a Consumer.", item_damaged.item_name);
+                eb.push_item_damage_with_description(&item_damaged, &damage_description);
+
+                eb.build(EventType::ConsumersAttack)
+            }
             FedEventData::MindTrickWalk { game, pitch, strikeout_type, batter_id, batter_name, base_instincts, scores } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);

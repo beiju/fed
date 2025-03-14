@@ -316,6 +316,11 @@ impl<'e> EventParseWrapper<'e> {
 
         Ok(Some(child))
     }
+    
+    // I decided the API ergonomics are better if the result and option are transposed
+    pub fn peek_child(&self) -> Result<Option<Self>, FeedParseError> {
+        self.metadata.children.first().map(Self::new).transpose()
+    }
 
     pub fn as_sub_event(&self) -> SubEvent {
         SubEvent {

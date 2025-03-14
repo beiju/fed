@@ -1846,10 +1846,13 @@ pub(crate) enum ParsedConsumerAttack<'a> {
     Normal((&'a str, Option<(&'a str, Option<bool>)>, bool)),
     ConsumerExpelled,
     ConsumerDefended((&'a str, &'a str, &'a str)),
+    ConsumerCountered((&'a str, &'a str)),
 }
 
 pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerAttack> {
     alt((
+        // countered must be above normal, because normal has a false positive on countered
+        parse_consumer_countered.map(|val| ParsedConsumerAttack::ConsumerCountered(val)),
         parse_consumer_attack_normal.map(|out| ParsedConsumerAttack::Normal(out)),
         parse_consumer_expelled.map(|()| ParsedConsumerAttack::ConsumerExpelled),
         parse_consumer_defended.map(|val| ParsedConsumerAttack::ConsumerDefended(val)),
@@ -1872,6 +1875,22 @@ pub(crate) fn parse_consumer_attack_normal(input: &str) -> ParserResult<(&str, O
     };
 
     Ok((input, (victim_name, item_breaks, scattered.is_some())))
+}
+
+pub(crate) fn parse_consumer_countered(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("CONSUMERS ATTACK\nSTEELED ").parse(input)?;
+    // The item name is the very last thing in the event, so it takes the place of input
+    // and this parser always returns a remaining-input of ""
+    let (item_name, victim_name) = parse_terminated(" COUNTERED WITH THE ").parse(input)?;
+
+    Ok(("", (victim_name, item_name)))
+}
+
+pub(crate) fn parse_consumer_countered_child(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" damaged their ").parse(input)?;
+    let (input, item_name) = parse_terminated(" on a Consumer.").parse(input)?;
+
+    Ok((input, (player_name, item_name)))
 }
 
 pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<(&str, Option<bool>)> {

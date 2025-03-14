@@ -5675,6 +5675,25 @@ pub enum FedEventData {
         targeted_player_id: Uuid,
     },
 
+    /// A Consumer was countered with a Steel Chair
+    #[serde(rename_all = "camelCase")]
+    ConsumerCountered {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of player who countered the attack
+        defender_name: String,
+
+        /// Uuid of player who countered the attack
+        defender_id: Uuid,
+
+        /// Info about the damage done to the item used to counter the attack
+        item_damaged: ItemDamaged,
+
+        /// Uuid of player who was targeted by the Consumer
+        targeted_player_id: Uuid,
+    },
+
     /// Walk as a result of a Mind Trick
     #[serde(rename_all = "camelCase")]
     MindTrickWalk {
@@ -6986,6 +7005,7 @@ impl FedEventData {
             FedEventData::ModsFromAnotherModRemoved { .. } => { None }
             FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
             FedEventData::ConsumerDefended { game, .. } => { Some(game) }
+            FedEventData::ConsumerCountered { game, .. } => { Some(game) }
             FedEventData::MindTrickWalk { game, .. } => { Some(game) }
             FedEventData::CharmedMindTrickWalk { game, .. } => { Some(game) }
             FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }

@@ -2085,25 +2085,9 @@ pub fn parse_next_event(
             match event.next_parse(parse_consumer_attack)? {
                 ParsedConsumerAttack::Normal((player_name, item_breaks, scattered)) => {
                     let (team_id, effect) = if let Some((_, item_name_plural)) = item_breaks {
-                        let mut break_child = event.next_child_any(&[EventType::ItemBreaks, EventType::ItemDamaged])?;
-                        let team_id = break_child.next_team_id()?;
+                        let item_damaged = event.next_item_damage(item_name_plural)?;
 
-                        let item_breaks = ItemDamaged {
-                            item_id: break_child.metadata_uuid("itemId")?,
-                            item_name: break_child.metadata_str("itemName")?.to_string(),
-                            item_name_plural,
-                            item_mods: break_child.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
-                            durability: break_child.metadata_i64("itemDurability")?,
-                            health: break_child.metadata_i64("itemHealthAfter")?,
-                            player_item_rating_before: break_child.metadata_f64_opt("playerItemRatingBefore")?,
-                            player_item_rating_after: break_child.metadata_f64_opt("playerItemRatingAfter")?,
-                            player_rating: break_child.metadata_f64("playerRating")?,
-                            team_id,
-                            player_id: break_child.next_player_id()?,
-                            sub_event: break_child.as_sub_event(),
-                        };
-
-                        (team_id, ConsumerAttackEffect::DefendedWithItem(item_breaks))
+                        (item_damaged.team_id, ConsumerAttackEffect::DefendedWithItem(item_damaged))
                     } else {
                         // I'm hoping that detectives only sense something fishy if the attack hit
                         // TODO: If this is true, move the something fishy inside the effect
@@ -2152,6 +2136,28 @@ pub fn parse_next_event(
                         verb: verb.to_string(),
                         defender_name_caps: player_name.to_string(),
                         defender_id,
+                        targeted_player_id,
+                    }
+                }
+                ParsedConsumerAttack::ConsumerCountered((_player_name_caps, _item_name_caps)) => {
+                    let defender_id = event.next_player_id()?;
+                    let targeted_player_id = event.next_player_id()?;
+                    // next_item_damage pops the event itself, so we can't pop it here. We can
+                    // peek it though
+                    let (player_name, _item_name) = event.peek_child()?
+                        .ok_or_else(|| FeedParseError::NotEnoughChildren {
+                            event_type: event.event_type,
+                            expected_at_least: 1,
+                        })?
+                        .next_parse(parse_consumer_countered_child)?;
+
+                    // This event type never gives us an item_name_plural
+                    let item_damaged = event.next_item_damage(None)?;
+                    FedEventData::ConsumerCountered {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        defender_name: player_name.to_string(),
+                        defender_id,
+                        item_damaged,
                         targeted_player_id,
                     }
                 }
