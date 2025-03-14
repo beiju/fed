@@ -436,6 +436,7 @@ pub enum EventType {
     BasesReloaded = 239,
     BeingSpeechInTidings = 241,
     RiffOpened = 251,
+    NightShift = 252,
     StormWarning = 263,
     Snowflakes = 264,
 }

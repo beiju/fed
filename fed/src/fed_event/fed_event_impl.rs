@@ -3934,7 +3934,7 @@ impl FedEvent {
                     child_eb.push_metadata_str("aPlayerName", &replaced_player_name);
                     // Voicemails always put you in the shadows (which shares an id with Bench after
                     // the unification
-                    child_eb.push_metadata_i64("bLocation", PositionType::Bench);
+                    child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows);
                     child_eb.push_metadata_uuid("bPlayerId", replacement_player_id);
                     child_eb.push_player_tag(replacement_player_id);
                     child_eb.push_metadata_str("bPlayerName", &replacement_player_name);
@@ -4193,6 +4193,44 @@ impl FedEvent {
                 eb.push_description(format!("{player_name} Reloaded all of the Bases!"));
                 eb.push_player_tag(player_id);
                 eb.build(EventType::BasesReloaded)
+            }
+            FedEventData::NightShift { game, team_id, team_nickname, shadowed_player_id, shadowed_player_name, unshadowed_player_id, unshadowed_player_name, active_location, player_swap_sub_event, player_shadowed_sub_event, player_unshadowed_sub_event } => {
+                eb.set_game(game);
+                eb.push_description("Night Shift.");
+                eb.push_description(format!("Deep Darkness took {shadowed_player_name}."));
+                eb.push_description(format!("{unshadowed_player_name} clocked in."));
+
+                eb.push_child(player_swap_sub_event, |mut child_eb| {
+                    child_eb.push_description(&format!("The {team_nickname} swapped two players on their roster."));
+                    child_eb.push_player_tag(shadowed_player_id);
+                    child_eb.push_player_tag(unshadowed_player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_i64("aLocation", active_location as i64);
+                    child_eb.push_metadata_uuid("aPlayerId", shadowed_player_id);
+                    child_eb.push_metadata_str("aPlayerName", &shadowed_player_name);
+                    child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows as i64);
+                    child_eb.push_metadata_uuid("bPlayerId", unshadowed_player_id);
+                    child_eb.push_metadata_str("bPlayerName", &unshadowed_player_name);
+                    child_eb.push_metadata_uuid("teamId", team_id);
+                    child_eb.push_metadata_str("teamName", &team_nickname);
+                    child_eb.build(EventType::PlayerSwap)
+                });
+
+                eb.push_child(player_shadowed_sub_event.sub_event, |mut child_eb| {
+                    child_eb.push_description(format!("{shadowed_player_name} entered the Shadows."));
+                    child_eb.push_player_tag(shadowed_player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.build_boost(&player_shadowed_sub_event)
+                });
+
+                eb.push_child(player_unshadowed_sub_event.sub_event, |mut child_eb| {
+                    child_eb.push_description(format!("{unshadowed_player_name} clocked in."));
+                    child_eb.push_player_tag(unshadowed_player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.build_boost(&player_unshadowed_sub_event)
+                });
+
+                eb.build(EventType::NightShift)
             }
         };
 

@@ -782,7 +782,9 @@ pub enum ShadowPositionType {
 pub enum PositionType {
     Lineup = 0,
     Rotation = 1,
-    Bench = 2,
+    // At some point bench and bullpen got merged into "shadows", which got the ID that bench had
+    // previously been using
+    BenchOrShadows = 2,
     Bullpen = 3,
 }
 
@@ -5643,7 +5645,7 @@ pub enum FedEventData {
         // TODO document these
         previous_team_id: Uuid,
         previous_team_nickname: String,
-        
+
         /// If the player roamed to the Shadows, contains info about the shadow boost they recieved
         shadow_boost: Option<PlayerBoostSubEvent>,
     },
@@ -6848,6 +6850,46 @@ pub enum FedEventData {
         /// Uuid of the player who Reloaded the bases
         player_id: Uuid,
     },
+
+    /// Night Shift happened and a player clocked in
+    NightShift {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the team who had the Night Shift
+        team_id: Uuid,
+
+        /// Nickname of the team who had the Night Shift
+        team_nickname: String,
+
+        /// Uuid of the player who was taken by the Deep Darkness
+        shadowed_player_id: Uuid,
+
+        /// Name of the player who was taken by the Deep Darkness
+        shadowed_player_name: String,
+
+        /// Uuid of the player who clocked in
+        unshadowed_player_id: Uuid,
+
+        /// Name of the player who clocked in
+        unshadowed_player_name: String,
+
+        /// The position that the outgoing player used to occupy, and the incoming player now
+        /// occupies.
+        ///
+        /// This may only be lineup or rotation. The other location is not stored, because it's
+        /// always the shadows (and Night Shift was added after bench and bullpen were merged)
+        active_location: ActivePositionType,
+
+        /// Metadata for the sub-event for the players being swapped
+        player_swap_sub_event: SubEvent,
+
+        /// Metadata for the sub-event for the player being shadowed
+        player_shadowed_sub_event: PlayerBoostSubEvent,
+
+        /// Metadata for the sub-event for the player being unshadowed
+        player_unshadowed_sub_event: PlayerBoostSubEvent,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -7101,6 +7143,7 @@ impl FedEventData {
             FedEventData::RiffOpened { game, .. } => { Some(game) }
             FedEventData::BandBeginsToPlay { game, .. } => { Some(game) }
             FedEventData::BasesReloaded { game, .. } => { Some(game) }
+            FedEventData::NightShift { game, .. } => { Some(game) }
         }
     }
 }

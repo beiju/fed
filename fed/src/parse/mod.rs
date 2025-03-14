@@ -3985,6 +3985,25 @@ pub fn parse_next_event(
                 new_weather: weather,
             }
         }
+        EventType::NightShift => {
+            let player_swap_child = event.next_child(EventType::PlayerSwap)?;
+            let player_shadowed_child = event.next_boost_child()?;
+            let player_unshadowed_child = event.next_boost_child()?;
+
+            FedEventData::NightShift {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_id: player_swap_child.metadata_uuid("teamId")?,
+                team_nickname: player_swap_child.metadata_str("teamName")?.to_string(),
+                shadowed_player_id: player_swap_child.metadata_uuid("aPlayerId")?,
+                shadowed_player_name: player_swap_child.metadata_str("aPlayerName")?.to_string(),
+                unshadowed_player_id: player_swap_child.metadata_uuid("bPlayerId")?,
+                unshadowed_player_name: player_swap_child.metadata_str("bPlayerName")?.to_string(),
+                active_location: player_swap_child.metadata_enum("aLocation")?,
+                player_swap_sub_event: player_swap_child.as_sub_event(),
+                player_shadowed_sub_event: player_shadowed_child,
+                player_unshadowed_sub_event: player_unshadowed_child,
+            }
+        }
         EventType::StormWarning => { todo!() }
         EventType::Snowflakes => { todo!() }
         EventType::Sun2SetWin => {
