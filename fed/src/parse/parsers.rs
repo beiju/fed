@@ -2862,7 +2862,10 @@ pub(crate) fn parse_ledger_maximum_sun_non_opt(input: &str) -> ParserResult<f64>
     let (input, value) = double.parse(input)?;
     // Unlike most ledger parsers, I can always parse a newline here, because maximum sun is always
     // added on to some other score, so there's guaranteed to be a maximummation line
-    let (input, _) = tag(if value == 1.0 { " Run\n" } else { " Runs\n" }).parse(input)?;
+    let (input, _) = alt((
+         tag(if value == 1.0 { " Run\n" } else { " Runs\n" }),
+         tag(if value == 1.0 { " Unrun\n" } else { " Unruns\n" }),
+    )).parse(input)?;
     Ok((input, value))
 }
 

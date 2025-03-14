@@ -5643,6 +5643,9 @@ pub enum FedEventData {
         // TODO document these
         previous_team_id: Uuid,
         previous_team_nickname: String,
+        
+        /// If the player roamed to the Shadows, contains info about the shadow boost they recieved
+        shadow_boost: Option<PlayerBoostSubEvent>,
     },
 
     /// A shimmering Crate descends during Glitter weather

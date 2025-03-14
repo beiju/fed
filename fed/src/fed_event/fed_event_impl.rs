@@ -3117,7 +3117,17 @@ impl FedEvent {
 
                 return vec![left_hall_event, added_to_team_event];
             }
-            FedEventData::SuperRoam { player_id, player_name, location, new_team_id, new_team_nickname, previous_team_id, previous_team_nickname } => {
+            FedEventData::SuperRoam { player_id, player_name, location, new_team_id, new_team_nickname, previous_team_id, previous_team_nickname, shadow_boost } => {
+                let boost_event = shadow_boost.map(|boost| {
+                    let mut boost_eb = eb.connected_event(boost.sub_event);
+
+                    boost_eb.set_category(EventCategory::Changes);
+                    boost_eb.push_description(&format!("{player_name} entered the Shadows."));
+                    boost_eb.push_player_tag(player_id);
+                    boost_eb.push_team_tag(new_team_id);
+                    boost_eb.build_boost(&boost)
+                });
+
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(format!("{player_name} super roamed to a new team."));
                 eb.push_player_tag(player_id);
@@ -3131,7 +3141,13 @@ impl FedEvent {
                 eb.push_metadata_str("receiveTeamName", new_team_nickname);
                 eb.push_metadata_uuid("sendTeamId", previous_team_id);
                 eb.push_metadata_str("sendTeamName", previous_team_nickname);
-                eb.build(EventType::PlayerMoved)
+
+                let main_event = eb.build(EventType::PlayerMoved);
+                if let Some(boost_event) = boost_event {
+                    return vec![main_event, boost_event];
+                } else {
+                    main_event
+                }
             }
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);

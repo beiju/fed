@@ -125,10 +125,23 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
 
 // Maybe this should be a newtype instead and keep track of the prev emitted event for error reporting purposes?
 trait EventIterator {
+    fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
 }
 
 impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
+    fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent> {
+        let Some(event) = self.peek() else {
+            return None;
+        };
+
+        if event.r#type == ty {
+            self.next()
+        } else {
+            None
+        }
+    }
+
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
         let Some(event) = self.peek() else {
             Err(FeedParseError::MissingFollowingEvent {
@@ -2917,6 +2930,21 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedPlayerMoved::SuperRoamin(player_name) => {
+                    // If the player Roamed to the shadows, there will be a top-level boost event
+                    // (erroneously) emitted _after_ this one (and not as a child, which is what
+                    // you would expect). We yoink that and include it as part of this event.
+                    let shadow_boost = event_iter.next_if_type(EventType::PlayerStatIncrease)
+                        .map(|event| {
+                            let mut event = EventParseWrapper::new(&event)?;
+                            
+                            ParseOk(PlayerBoostSubEvent {
+                                rating_before: event.metadata_f64("before")?,
+                                rating_after: event.metadata_f64("after")?,
+                                sub_event: event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
+
                     FedEventData::SuperRoam {
                         player_id: event.metadata_uuid("playerId")?,
                         player_name: player_name.to_string(),
@@ -2925,6 +2953,7 @@ pub fn parse_next_event(
                         new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
                         previous_team_id: event.metadata_uuid("sendTeamId")?,
                         previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                        shadow_boost,
                     }
                 }
             }
