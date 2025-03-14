@@ -1435,6 +1435,13 @@ pub struct ItemGained {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemLost {
+    /// Mods removed as a result of this item being deleted, according to the event. Note that
+    /// this is apparently not always accurate: See event ac968608-2620-48ce-870e-2858b71baeeb,
+    /// where Rush Valenzuela's Chorby's Uncertain Soul was taken, causing Valenzuela to lose the
+    /// Uncertain mod (Chronicler data confirms that it was lost). However, the Uncertian mod is
+    /// not listed in the event.
+    pub item_mods: Vec<String>,
+
     /// The increase or decrease that all the wielding player's items caused to their star rating
     /// before losing this item
     pub player_item_rating_before: f64,

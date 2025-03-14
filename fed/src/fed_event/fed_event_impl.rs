@@ -4068,7 +4068,7 @@ impl FedEvent {
 
                     child_eb.push_metadata_uuid("itemId", beneficiary_gained_item.item_id);
                     child_eb.push_metadata_str("itemName", item_name);
-                    child_eb.push_metadata_str_vec("mods", beneficiary_gained_item.item_mods.clone());
+                    child_eb.push_metadata_str_vec("mods", victim_lost_item.item_mods);
                     child_eb.push_metadata_f64("playerItemRatingAfter", victim_lost_item.player_item_rating_after);
                     child_eb.push_metadata_f64("playerItemRatingBefore", victim_lost_item.player_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", victim_lost_item.player_rating);

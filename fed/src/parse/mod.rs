@@ -3803,6 +3803,7 @@ pub fn parse_next_event(
                 victim_player_id: item_lost_child.next_player_id()?,
                 victim_player_name: victim_player_name.to_string(),
                 victim_lost_item: ItemLost {
+                    item_mods: item_lost_child.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
                     player_item_rating_before: item_lost_child.metadata_f64("playerItemRatingBefore")?,
                     player_item_rating_after: item_lost_child.metadata_f64("playerItemRatingAfter")?,
                     player_rating: item_lost_child.metadata_f64("playerRating")?,
