@@ -2218,35 +2218,61 @@ pub fn parse_next_event(
                     // without any children. I have no idea why that happened.
                     let details = event.next_child_opt(EventType::RunsScored)?
                         .map(|mut runs_scored_a| {
-                            // If there was one child, there must also be a second child
-                            let mut runs_scored_b = event.next_child(EventType::RunsScored)?;
+                            // Exactly one time, ddf2df8a-946d-4785-bb75-84233d01e927, there was
+                            // only one scored event. It was the one for the victim team.
+                            if let Some(mut runs_scored_b) = event.next_child_opt(EventType::RunsScored)? {
+                                let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                assert!(is_known_team_nickname(team_nickname_a));
+                                let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
+                                assert!(is_known_team_nickname(team_nickname_b));
 
-                            let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
-                            assert!(is_known_team_nickname(team_nickname_a));
-                            let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
-                            assert!(is_known_team_nickname(team_nickname_b));
+                                let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
+                                    if team_nickname_a == victim_team_nickname {
+                                        (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                                    } else {
+                                        (runs_scored_a, runs_scored_b, team_nickname_a, false)
+                                    };
+                                ParseOk(RunStolenThroughTunnelsDetails::BothKnown {
+                                    victim_team_id: run_lost_event.next_team_id()?,
+                                    thieving_team_nickname: thieving_team_nickname.to_string(),
+                                    thieving_team_id: run_gained_event.next_team_id()?,
+                                    away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
+                                    away_score: run_gained_event.metadata_f64("awayScore")?,
+                                    home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
+                                    home_score: run_gained_event.metadata_f64("homeScore")?,
+                                    run_gained_sub_event: run_gained_event.as_sub_event(),
+                                    run_lost_sub_event: run_lost_event.as_sub_event(),
+                                    victim_event_first,
+                                })
+                            } else {
+                                let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                assert!(is_known_team_nickname(team_nickname_a));
 
-                            let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
                                 if team_nickname_a == victim_team_nickname {
-                                    (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                                    ParseOk(RunStolenThroughTunnelsDetails::VictimKnown {
+                                        victim_team_id: runs_scored_a.next_team_id()?,
+                                        away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                        away_score: runs_scored_a.metadata_f64("awayScore")?,
+                                        home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                        home_score: runs_scored_a.metadata_f64("homeScore")?,
+                                        run_lost_sub_event: runs_scored_a.as_sub_event(),
+                                    })
                                 } else {
-                                    assert_eq!(team_nickname_b, victim_team_nickname);
-                                    (runs_scored_a, runs_scored_b, team_nickname_a, false)
-                                };
-                            ParseOk(RunStolenThroughTunnelsDetails {
-                                thieving_team_id: run_gained_event.next_team_id()?,
-                                victim_team_id: run_lost_event.next_team_id()?,
-                                thieving_team_nickname: thieving_team_nickname.to_string(),
-                                away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
-                                away_score: run_gained_event.metadata_f64("awayScore")?,
-                                home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
-                                home_score: run_gained_event.metadata_f64("homeScore")?,
-                                run_gained_sub_event: run_gained_event.as_sub_event(),
-                                run_lost_sub_event: run_lost_event.as_sub_event(),
-                                victim_event_first,
-                            })
+                                    // This branch has never happened, but it's included for completeness
+                                    ParseOk(RunStolenThroughTunnelsDetails::ThiefKnown {
+                                        thieving_team_nickname: team_nickname_a.to_string(),
+                                        thieving_team_id: runs_scored_a.next_team_id()?,
+                                        away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                        away_score: runs_scored_a.metadata_f64("awayScore")?,
+                                        home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                        home_score: runs_scored_a.metadata_f64("homeScore")?,
+                                        run_gained_sub_event: runs_scored_a.as_sub_event(),
+                                    })
+                                }
+                            }
                         })
-                        .transpose()?;
+                        .transpose()?
+                        .unwrap_or(RunStolenThroughTunnelsDetails::NeitherKnown);
 
                     FedEventData::RunStolenThroughTunnels {
                         game: event.game(unscatter, attractor_secret_base)?,

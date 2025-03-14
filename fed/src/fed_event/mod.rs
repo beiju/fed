@@ -2833,36 +2833,78 @@ pub struct PlayerTogethernessModBlip {
     pub addition: Option<PlayerTogethernessModChange>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct RunStolenThroughTunnelsDetails {        
-    /// Uuid of the team who had their run stolen
-    pub victim_team_id: Uuid,
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+pub enum RunStolenThroughTunnelsDetails {
+    /// Neither scoring event was available, so no details are known
+    NeitherKnown,
 
-    /// Name of the team whose player stole the run
-    pub thieving_team_nickname: String,
+    /// Only the victim team's scoring event was available, so only its details are known
+    VictimKnown {
+        /// Uuid of the team who had their run stolen
+        victim_team_id: Uuid,
 
-    /// Uuid of the team whose player stole the run
-    pub thieving_team_id: Uuid,
+        // TODO document fields
+        away_emoji: String,
+        away_score: f64,
+        home_emoji: String,
+        home_score: f64,
 
-    // TODO document fields
-    pub away_emoji: String,
-    pub away_score: f64,
-    pub home_emoji: String,
-    pub home_score: f64,
+        /// Metadata for the RunsScored event for the team who lost a run
+        run_lost_sub_event: SubEvent,
+    },
 
-    /// Metadata for the RunsScored event for the team who gained a run
-    pub run_gained_sub_event: SubEvent,
+    /// Only the thieving team's scoring event was available, so only its details are known
+    ThiefKnown {
+        /// Name of the team whose player stole the run
+        thieving_team_nickname: String,
 
-    /// Metadata for the RunsScored event for the team who lost a run
-    pub run_lost_sub_event: SubEvent,
+        /// Uuid of the team whose player stole the run
+        thieving_team_id: Uuid,
 
-    /// I can't figure out what determines which team's sub-event goes first, so I have to store
-    /// it. If you can see the pattern please let me know.
-    // TODO Try to deduce this from data
-    pub victim_event_first: bool,
+        // TODO document fields
+        away_emoji: String,
+        away_score: f64,
+        home_emoji: String,
+        home_score: f64,
+
+        /// Metadata for the RunsScored event for the team who gained a run
+        run_gained_sub_event: SubEvent,
+    },
+
+    /// Both scoring events were available, so all details are known
+    BothKnown {
+        /// Uuid of the team who had their run stolen
+        victim_team_id: Uuid,
+
+        /// Name of the team whose player stole the run
+        thieving_team_nickname: String,
+
+        /// Uuid of the team whose player stole the run
+        thieving_team_id: Uuid,
+
+        // TODO document fields
+        away_emoji: String,
+        away_score: f64,
+        home_emoji: String,
+        home_score: f64,
+
+        /// Metadata for the RunsScored event for the team who gained a run
+        run_gained_sub_event: SubEvent,
+
+        /// Metadata for the RunsScored event for the team who lost a run
+        run_lost_sub_event: SubEvent,
+
+        /// I can't figure out what determines which team's sub-event goes first, so I have to store
+        /// it. If you can see the pattern please let me know.
+        // TODO Try to deduce this from data
+        victim_event_first: bool,
+    }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
+#[derive(
+    Debug,
+    Copy,
+    Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
 pub enum RiffElement {
     #[strum(to_string = "bow")] Bow,
     #[strum(to_string = "bah")] Bah,
@@ -6312,8 +6354,10 @@ pub enum FedEventData {
         /// event of this type, but presumably due to a bug there were two occasions where a 
         /// RunStolenThroughTunnels event did not have any children (event ids 
         /// dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and 4338a482-f7eb-448c-9827-e9220f2e86a4), and 
-        /// those children are where this info can be found.
-        details: Option<RunStolenThroughTunnelsDetails>,
+        /// those children are where this info can be found. Also, for event
+        /// ddf2df8a-946d-4785-bb75-84233d01e927, only the victim team's details were found. The
+        /// last combination (thief only) is included for completeness.
+        details: RunStolenThroughTunnelsDetails,
 
         /// If balloons were inflated on this run theft, contains the name of the stadium and
         /// number of balloons.

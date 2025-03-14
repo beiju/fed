@@ -3658,24 +3658,13 @@ impl FedEvent {
                 eb.push_unknown_number_of_balloons(balloons.as_ref());
                 eb.push_player_tag(thieving_player_id);
 
-                if let Some(RunStolenThroughTunnelsDetails { victim_team_id, thieving_team_nickname, thieving_team_id, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first }) = details {
-                    let order = if victim_event_first {
-                        [
-                            (run_lost_sub_event, victim_team_id, victim_team_nickname),
-                            (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
-                        ]
-                    } else {
-                        [
-                            (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
-                            (run_lost_sub_event, victim_team_id, victim_team_nickname),
-                        ]
-                    };
-
-                    for (sub_event, team_id, team_nickname) in order {
-                        eb.push_child(sub_event, |mut child_eb| {
+                match details {
+                    RunStolenThroughTunnelsDetails::NeitherKnown => {}
+                    RunStolenThroughTunnelsDetails::VictimKnown { victim_team_id, away_emoji, away_score, home_emoji, home_score, run_lost_sub_event } => {
+                        eb.push_child(run_lost_sub_event, |mut child_eb| {
                             child_eb.set_category(EventCategory::Game);
-                            child_eb.push_team_tag(team_id);
-                            child_eb.push_description(format!("The {} scored!", team_nickname));
+                            child_eb.push_team_tag(victim_team_id);
+                            child_eb.push_description(format!("The {victim_team_nickname} scored!"));
                             child_eb.push_metadata_str("awayEmoji", &away_emoji);
                             child_eb.push_metadata_i64_or_f64("awayScore", away_score);
                             child_eb.push_metadata_str("homeEmoji", &home_emoji);
@@ -3684,6 +3673,48 @@ impl FedEvent {
                             child_eb.push_metadata_str("ledger", "");
                             child_eb.build(EventType::RunsScored)
                         });
+                    }
+                    RunStolenThroughTunnelsDetails::ThiefKnown { thieving_team_nickname, thieving_team_id, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event } => {
+                        eb.push_child(run_gained_sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Game);
+                            child_eb.push_team_tag(thieving_team_id);
+                            child_eb.push_description(format!("The {thieving_team_nickname} scored!"));
+                            child_eb.push_metadata_str("awayEmoji", &away_emoji);
+                            child_eb.push_metadata_i64_or_f64("awayScore", away_score);
+                            child_eb.push_metadata_str("homeEmoji", &home_emoji);
+                            child_eb.push_metadata_i64_or_f64("homeScore", home_score);
+                            child_eb.push_metadata_str("update", "");
+                            child_eb.push_metadata_str("ledger", "");
+                            child_eb.build(EventType::RunsScored)
+                        });
+                    }
+                    RunStolenThroughTunnelsDetails::BothKnown { victim_team_id, thieving_team_nickname, thieving_team_id, away_emoji, away_score, home_emoji, home_score, run_gained_sub_event, run_lost_sub_event, victim_event_first } => {
+                        let order = if victim_event_first {
+                            [
+                                (run_lost_sub_event, victim_team_id, victim_team_nickname),
+                                (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
+                            ]
+                        } else {
+                            [
+                                (run_gained_sub_event, thieving_team_id, thieving_team_nickname),
+                                (run_lost_sub_event, victim_team_id, victim_team_nickname),
+                            ]
+                        };
+
+                        for (sub_event, team_id, team_nickname) in order {
+                            eb.push_child(sub_event, |mut child_eb| {
+                                child_eb.set_category(EventCategory::Game);
+                                child_eb.push_team_tag(team_id);
+                                child_eb.push_description(format!("The {team_nickname} scored!"));
+                                child_eb.push_metadata_str("awayEmoji", &away_emoji);
+                                child_eb.push_metadata_i64_or_f64("awayScore", away_score);
+                                child_eb.push_metadata_str("homeEmoji", &home_emoji);
+                                child_eb.push_metadata_i64_or_f64("homeScore", home_score);
+                                child_eb.push_metadata_str("update", "");
+                                child_eb.push_metadata_str("ledger", "");
+                                child_eb.build(EventType::RunsScored)
+                            });
+                        }
                     }
                 }
 
