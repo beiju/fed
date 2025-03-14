@@ -316,7 +316,7 @@ impl<'e> EventParseWrapper<'e> {
 
         Ok(Some(child))
     }
-    
+
     // I decided the API ergonomics are better if the result and option are transposed
     pub fn peek_child(&self) -> Result<Option<Self>, FeedParseError> {
         self.metadata.children.first().map(Self::new).transpose()
@@ -1098,16 +1098,19 @@ impl<'e> EventParseWrapper<'e> {
                 }
 
                 ParseOk(SubseasonalModChange {
+                    source_mod,
+                    active,
                     subject: TeamModChangeSubject {
                         team_id,
                         team_nickname: team_nickname.map(str::to_string),
                     },
-                    source_mod,
-                    active,
-                    sub_event: child.as_ref().map(EventParseWrapper::as_sub_event),
-                    // There's probably a way to get around the to_string here, but it's not
-                    // important enough to worry about
-                    dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
+                    details: Some(SubseasonalModChangeDetails {
+                        subject: (),
+                        sub_event: child.as_ref().map(EventParseWrapper::as_sub_event),
+                        // There's probably a way to get around the to_string here, but it's not
+                        // important enough to worry about
+                        dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
+                    })
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1138,23 +1141,39 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     fn parse_player_subseasonal_mod_change_internal(&mut self, state: &InterEventState, source_mod: SubseasonalMod, player_name: &str, is_active: bool) -> Result<SubseasonalModChange<PlayerModChangeSubject>, FeedParseError> {
-        let mut child = self.next_child(if is_active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })?;
-        let player_id = child.next_player_id()?;
-        let team_id = child.next_team_id()?;
+        // Sandy Crossing once didn't have a child event: e704e4ae-e453-403d-bb8c-b1584503967e
+        let player_id = self.next_player_id()?;
+        if let Some(mut child) = self.next_child_opt(if is_active { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })? {
+            let team_id = child.next_team_id()?;
 
-        ParseOk(SubseasonalModChange {
-            subject: PlayerModChangeSubject {
-                team_id,
-                player_id,
-                player_name: player_name.to_string(),
-            },
-            source_mod,
-            active: child.event_type == EventType::AddedModFromOtherMod,
-            sub_event: Some(child.as_sub_event()),
-            // There's probably a way to get around the to_string here, but it's not
-            // important enough to worry about
-            dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
-        })
+            ParseOk(SubseasonalModChange {
+                source_mod,
+                active: child.event_type == EventType::AddedModFromOtherMod,
+                subject: PlayerModChangeSubject {
+                    player_id,
+                    player_name: player_name.to_string(),
+                },
+                details: Some(SubseasonalModChangeDetails {
+                    subject: PlayerModChangeSubjectDetails {
+                        team_id,
+                    },
+                    sub_event: Some(child.as_sub_event()),
+                    // There's probably a way to get around the to_string here, but it's not
+                    // important enough to worry about
+                    dependent_mod_change: state.extract_dependent_mod(&(team_id, source_mod.mod_id().to_string())),
+                })
+            })
+        } else {
+            ParseOk(SubseasonalModChange {
+                source_mod,
+                active: is_active,
+                subject: PlayerModChangeSubject {
+                    player_id,
+                    player_name: player_name.to_string(),
+                },
+                details: None,
+            })
+        }
     }
 
     pub fn parse_win_event(&mut self) -> Result<Option<WinSubEvent>, FeedParseError> {

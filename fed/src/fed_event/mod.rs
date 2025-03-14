@@ -542,12 +542,15 @@ pub enum SpicyStatus {
     RedHot(Option<ModChangeSubEvent>),
 }
 
+trait ModChangeSubject {
+    // For this ModChangeSubject, the corresponding struct containing the subject-related info that
+    // can only be gotten from the child event
+    type Details;
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerModChangeSubject {
-    /// Uuid of the team whose player's mod changed
-    pub team_id: Uuid,
-
     /// Uuid of the player whose mod changed
     pub player_id: Uuid,
 
@@ -555,6 +558,16 @@ pub struct PlayerModChangeSubject {
     pub player_name: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerModChangeSubjectDetails {
+    /// Uuid of the team whose player's mod changed
+    pub team_id: Uuid,
+}
+
+impl ModChangeSubject for PlayerModChangeSubject {
+    type Details = PlayerModChangeSubjectDetails;
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -567,6 +580,10 @@ pub struct TeamModChangeSubject {
     /// field will be null (to try to encourage clients to handle this edge case). If you want
     /// to replicate the displayed event, replace nulls with "\[object Object]".
     pub team_nickname: Option<String>,
+}
+
+impl ModChangeSubject for TeamModChangeSubject {
+    type Details = ();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -662,16 +679,9 @@ impl SubseasonalMod {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
-pub struct SubseasonalModChange<SubjectType: WithStructure> {
-    /// Team or player whose subseasonal mod (de)activated
-    pub subject: SubjectType,
-
-    /// Mod which caused the addition or removal. Whether over/underperforming was added or removed
-    /// is not stored, but is inferred from this ID.
-    pub source_mod: SubseasonalMod,
-
-    /// True if the over/underperforming mod was added, false if it was removed
-    pub active: bool,
+pub struct SubseasonalModChangeDetails<SubjectDetails: WithStructure> {
+    /// Details about the subject of this mod change
+    pub subject: SubjectDetails,
 
     /// Metadata for the sub-event associated with the mod change. In Season 13, Late to the Party
     /// announced itself on every game during lateseason, but it only had a sub-event the first time
@@ -682,6 +692,28 @@ pub struct SubseasonalModChange<SubjectType: WithStructure> {
     /// If this mod change caused a dependent mod to be removed, this is the information about that
     /// mod removal.
     pub dependent_mod_change: Option<ModsFromAnotherModRemoved>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct SubseasonalModChange<SubjectType>
+where
+    SubjectType: WithStructure + ModChangeSubject,
+    for<'a> SubjectType::Details: Serialize + Deserialize<'a> + JsonSchema + WithStructure,
+{
+    /// Mod which caused the addition or removal. Whether over/underperforming was added or removed
+    /// is not stored, but is inferred from this ID.
+    pub source_mod: SubseasonalMod,
+
+    /// True if the over/underperforming mod was added, false if it was removed
+    pub active: bool,
+
+    /// Team or player whose subseasonal mod (de)activated
+    pub subject: SubjectType,
+
+    /// Details about the subseasonal mod change that are extracted from a sub-event. These are
+    /// not available for the few (one) occasion where the sub-event was not added.
+    pub details: Option<SubseasonalModChangeDetails<SubjectType::Details>>
 }
 
 impl SpicyStatus {
