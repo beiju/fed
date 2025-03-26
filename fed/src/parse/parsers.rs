@@ -3285,3 +3285,15 @@ pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, 
 
     Ok((input, (riff, weather)))
 }
+
+pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_name) = parse_terminated(" formed.").parse(input)?;
+
+    Ok((input, team_name))
+}
+
+
+pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<&str> {
+    parse_terminated(" are stronger together.").parse(input)
+}

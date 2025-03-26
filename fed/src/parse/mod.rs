@@ -125,21 +125,31 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
 
 // Maybe this should be a newtype instead and keep track of the prev emitted event for error reporting purposes?
 trait EventIterator {
+    fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
+    fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent>;
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
 }
 
 impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
-    fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent> {
+    fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent> {
         let Some(event) = self.peek() else {
             return None;
         };
 
-        if event.r#type == ty {
+        if cond(event) {
             self.next()
         } else {
             None
         }
+    }
+
+    fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent> {
+        self.next_if(|event| event.r#type == ty)
+    }
+
+    fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent> {
+        self.next_if(|event| types.contains(&event.r#type))
     }
 
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
@@ -3182,6 +3192,198 @@ pub fn parse_next_event(
             // EventuallyEvent but the return statement at the end of the function uses `event`
             return Ok(Some(earned_spot_event.to_fed(data)?));
         }
+        EventType::TeamFormed => {
+            // This event is a mess, there are so many subsequent events that should be part of this
+            // event instead
+            let team_name = event.next_parse(parse_team_formed)?;
+
+            // This gets set by get_position_players
+            let mut team_nickname = None;
+
+            let mut get_position_players = |position_type: PositionType| {
+                let players_added_event = event_iter.next_expect_type(EventType::PlayersAddedToTeam, EventType::TeamFormed)?;
+                let players_added_event = EventParseWrapper::new(&players_added_event)?;
+                // TODO Instead of asserting, be robust to reordering
+                assert_eq!(players_added_event.metadata_enum::<PositionType>("location")?, position_type);
+
+                if team_nickname.is_none() {
+                    team_nickname = Some(players_added_event.metadata_str("teamName")?.to_string());
+                }
+
+                let mut players: Vec<_> = std::iter::zip(
+                    players_added_event.metadata_uuid_vec("playerIds")?,
+                    players_added_event.metadata_str_vec("playerNames")?,
+                )
+                    .map(|(player_id, player_name)| {
+                        // See if this player is On an Odyssey
+                        let odyssey_boost = event_iter
+                            .next_if(|event| {
+                                event.r#type == EventType::PlayerStatIncrease && event.player_tags.as_ref()
+                                    .map_or(false, |player_tags| {
+                                        let Some((player_tag, )) = player_tags.iter().collect_tuple() else {
+                                            return false;
+                                        };
+                                        *player_tag == player_id
+                                    })
+                            })
+                            .map(|odyssey_event| {
+                                let odyssey_event = EventParseWrapper::new(&odyssey_event)?;
+
+                                ParseOk(PlayerBoostSubEvent {
+                                    rating_before: odyssey_event.metadata_f64("before")?,
+                                    rating_after: odyssey_event.metadata_f64("after")?,
+                                    sub_event: odyssey_event.as_sub_event(),
+                                })
+                            })
+                            .transpose()?;
+
+                        ParseOk(PlayerAddedToTeam {
+                            player_id,
+                            player_name: player_name.to_string(),
+                            odyssey_boost,
+                            shadow_boost: None, // Gets filled in by a later step
+                            replica_dusted_off: None, // Gets filled in by a later step
+                            yolked_removed: None, // Gets filled in by a later step
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                let stronger_together = event_iter.next_if_type(EventType::AddedModFromOtherMod)
+                    .map(|togetherness_event| {
+                        let mut togetherness_event = EventParseWrapper::new(&togetherness_event)?;
+                        let mut names = togetherness_event.next_parse(parse_togetherness_mod)?
+                            .split(", ")
+                            .collect_vec();
+                        if let Some(last) = names.last_mut() {
+                            // Strip an "and"
+                            * last = &last[4..];
+                        }
+
+                        // So the way `names` works is weird. It lists the first player who gained
+                        // a togetherness mod, then all players who already had it, then the rest
+                        // of the players who got it. But there's only a player tag for the ones
+                        // who got the mod added, so they need to be separated into two groups.
+                        let player_tags = togetherness_event.player_tags()?;
+                        assert!(names.len() >= player_tags.len());
+                        let num_extra_players = names.len() - player_tags.len();
+
+                        // Rotate names so all the extra players are at the front
+                        names[0..num_extra_players + 1].rotate_left(1);
+
+                        let extra_player_names = names.iter()
+                            .take(num_extra_players)
+                            .map(|name| name.to_string())
+                            .collect();
+
+                        let players = names.iter()
+                            .skip(num_extra_players)
+                            .zip(player_tags)
+                            .map(|(player_name, &player_id)| {
+                                ParseOk(PlayerNameId {
+                                    player_id,
+                                    player_name: player_name.to_string(),
+                                })
+                            })
+                            .collect::<Result<_, _>>()?;
+
+                        ParseOk(PlayerMultiTogethernessModChange {
+                            players,
+                            extra_player_names,
+                            sub_event: togetherness_event.as_sub_event(),
+                        })
+                    })
+                    .transpose()?;
+                
+                fn find_player_added_to_team<'p>(players: &'p mut [PlayerAddedToTeam], sub_event: &mut EventParseWrapper, preceding_event_type: EventType) -> Result<&'p mut PlayerAddedToTeam, FeedParseError> {
+                    let player_id = sub_event.next_player_id()?;
+                    players.iter_mut()
+                        .find(|p| p.player_id == player_id)
+                        .ok_or_else(|| {
+                            FeedParseError::TagNotFoundInPrecedingEvent {
+                                preceding_event_type,
+                                following_event_type: sub_event.event_type,
+                                tag_type: "player",
+                                tag_value: player_id,
+                            }
+                        })
+                }
+
+                let mut order = 0;
+                while let Some(subsequent_event) = event_iter.next_if_type_any(&[
+                    EventType::PlayerStatIncrease, // Shadow boost
+                    EventType::RemovedMod, // Replica dusts off
+                    EventType::RemovedModFromOtherMod, // Togetherness mod removed
+                ]) {
+                    match subsequent_event.r#type {
+                        EventType::PlayerStatIncrease => { // Shadow boost
+                            let mut player_shadow_boost = EventParseWrapper::new(&subsequent_event)?;
+                            let player = find_player_added_to_team(&mut players, &mut player_shadow_boost, event.event_type)?;
+                            let shadow_boost = PlayerBoostSubEvent {
+                                rating_before: player_shadow_boost.metadata_f64("before")?,
+                                rating_after: player_shadow_boost.metadata_f64("after")?,
+                                sub_event: player_shadow_boost.as_sub_event(),
+                            };
+                            player.shadow_boost = Some((shadow_boost, order));
+                        },
+                        EventType::RemovedMod => { // Replica dusts off
+                            let mut player_dusts_off = EventParseWrapper::new(&subsequent_event)?;
+                            let player = find_player_added_to_team(&mut players, &mut player_dusts_off, event.event_type)?;
+                            player.replica_dusted_off = Some((player_dusts_off.as_sub_event(), order));
+                        },
+                        EventType::RemovedModFromOtherMod => { // Togetherness mod removed
+                            let mut yolked_removed = EventParseWrapper::new(&subsequent_event)?;
+                            let player = find_player_added_to_team(&mut players, &mut yolked_removed, event.event_type)?;
+                            player.yolked_removed = Some((yolked_removed.as_sub_event(), order));
+                        },
+                        unexpected_event_type => {
+                            panic!("{:?} handler asked for subsequent event of type {unexpected_event_type:?}, then failed to handle it. This is a programming error!", event.event_type);
+                        }
+                    }
+                    order += 1;
+                }
+                
+                let mut order = 0;
+                while let Some(player_shadow_boost) = event_iter.next_if_type(EventType::PlayerStatIncrease) {
+                    let mut player_shadow_boost = EventParseWrapper::new(&player_shadow_boost)?;
+                    let player = find_player_added_to_team(&mut players, &mut player_shadow_boost, event.event_type)?;
+                    let shadow_boost = PlayerBoostSubEvent {
+                        rating_before: player_shadow_boost.metadata_f64("before")?,
+                        rating_after: player_shadow_boost.metadata_f64("after")?,
+                        sub_event: player_shadow_boost.as_sub_event(),
+                    };
+                    player.shadow_boost = Some((shadow_boost, order));
+                    order += 1;
+                }
+
+                ParseOk(PlayersAddedToTeam {
+                    players,
+                    stronger_together,
+                    sub_event: players_added_event.as_sub_event(),
+                })
+            };
+
+            let rotation_players = get_position_players(PositionType::Rotation)?;
+            let lineup_players = get_position_players(PositionType::Lineup)?;
+            let shadows_players = get_position_players(PositionType::BenchOrShadows)?;
+
+            // TODO Save these
+            loop {
+                // TODO "is weaker on their own" events are intermingled with these
+                let Some(player_dusts_off) = event_iter.next_if_type(EventType::RemovedMod) else {
+                    break;
+                };
+            }
+
+            FedEventData::TeamFormed {
+                team_id: event.metadata_uuid("id")?,
+                team_name: team_name.to_string(),
+                // TODO Use Result instead of unwrap
+                team_nickname: team_nickname.unwrap(),
+                rotation_players,
+                lineup_players,
+                shadows_players,
+            }
+        }
         EventType::PlayerEvolves => { todo!() }
         EventType::TeamDivisionMove => {
             // For now this only has the breach events, it will need to be updated for s24
@@ -3976,6 +4178,7 @@ pub fn parse_next_event(
             }
         }
         EventType::BeingSpeechInTidings => { todo!() }
+        EventType::PlayersAddedToTeam => { todo!() }
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened)?;
 

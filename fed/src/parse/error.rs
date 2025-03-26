@@ -100,7 +100,7 @@ pub enum FeedParseError {
     #[error("Couldn't convert field \"{field}\" for {event_type:?} event to Uuid: {err}")]
     MetadataStrToUuidError {
         event_type: EventType,
-        field: &'static str,
+        field: String,
         err: uuid::Error,
     },
 
@@ -158,6 +158,14 @@ pub enum FeedParseError {
     UnexpectedPolarityWeather {
         weather: Weather,
         event_type: EventType,
+    },
+
+    #[error("{following_event_type:?} following a {preceding_event_type:?} had {tag_type} tag {tag_value}, but that tag was not found on the {preceding_event_type:?}")]
+    TagNotFoundInPrecedingEvent {
+        preceding_event_type: EventType,
+        following_event_type: EventType,
+        tag_type: &'static str,
+        tag_value: Uuid,
     },
 }
 

@@ -1,17 +1,42 @@
+use crate::PlayersAddedToTeam;
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
-use itertools::{Either, Itertools};
+use itertools::{Either, Itertools, Position};
 use serde_json::json;
 use std::iter;
 
-use crate::parse::builder::{EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive};
-use crate::parse::event_builder_new::{EventBuilder};
-use crate::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect, HitType, ModChangeSubEventWithNamedPlayer, ModDuration, PitcherNameId, PlayerNameId, PlayerReverb, PositionType, TeamNicknameOrPlayerName, ReturnFromElsewhereFlavor, ReverbType, Scattered, StatChangeCategory, SubEvent, TimeElsewhere, TogglePerforming, PlayerStatChange, ReturnFromElsewhere, SubseasonalModChange, SubseasonalMod, PostseasonBirthBoostEventOrder, NumbersGo, RenovationVotes, HomeRunHypeSource, RoamFromLocation, GameStartAnnouncement, PlayerMaybeCarcinized, RenovationBuiltEffect, BracketType, TeamModChangeSubject, EarnedWin, ItemGained, DebtType, ShortEarnedWin, RunStolenThroughTunnelsDetails, RiffElement};
 use crate::format_utils::Possessive;
+use crate::parse::builder::{
+    possessive, EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate,
+};
+use crate::parse::event_builder_new::EventBuilder;
+use crate::{
+    BatterSkippedReason, BracketType, CoffeeBeanMod, ConsumerAttackEffect, DebtType, EarnedWin,
+    EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect,
+    GameStartAnnouncement, HitType, HomeRunHypeSource, ItemGained,
+    ModChangeSubEventWithNamedPlayer, ModDuration, NumbersGo, PitcherNameId, PlayerMaybeCarcinized,
+    PlayerNameId, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder,
+    RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor,
+    ReverbType, RiffElement, RoamFromLocation, RunStolenThroughTunnelsDetails, Scattered,
+    ShortEarnedWin, StatChangeCategory, SubEvent, SubseasonalMod, SubseasonalModChange,
+    TeamModChangeSubject, TeamNicknameOrPlayerName, TimeElsewhere, TogglePerforming,
+};
 
 #[deprecated = "This is part of the old event builder"]
-fn make_switch_performing_child(toggle: &TogglePerforming, description: &str, mod_source: &str) -> EventBuilderChildFull {
-    let mod_name = if toggle.is_overperforming { "OVERPERFORMING" } else { "UNDERPERFORMING" };
-    let opposite_mod_name = if toggle.is_overperforming { "UNDERPERFORMING" } else { "OVERPERFORMING" };
+fn make_switch_performing_child(
+    toggle: &TogglePerforming,
+    description: &str,
+    mod_source: &str,
+) -> EventBuilderChildFull {
+    let mod_name = if toggle.is_overperforming {
+        "OVERPERFORMING"
+    } else {
+        "UNDERPERFORMING"
+    };
+    let opposite_mod_name = if toggle.is_overperforming {
+        "UNDERPERFORMING"
+    } else {
+        "OVERPERFORMING"
+    };
     if toggle.is_first_proc {
         EventBuilderChild::new(&toggle.sub_event)
             .update(EventBuilderUpdate {
@@ -56,11 +81,11 @@ impl FedEvent {
         match self.data {
             // I know it makes no sense to have a match statement with only a wildcard match but
             // trust me, there will be special cases in the future.
-            _ => {
-                self.into_feed_events().into_iter()
-                    .map(|event| event.description)
-                    .join("\n")
-            }
+            _ => self
+                .into_feed_events()
+                .into_iter()
+                .map(|event| event.description)
+                .join("\n"),
         }
     }
 
@@ -3808,7 +3833,7 @@ impl FedEvent {
                     child_eb.push_metadata_f64("playerItemRatingAfter", victim_item_rating_after);
                     child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", victim_rating);
-                    
+
                     child_eb.build(EventType::PlayerLostItem)
                 });
 
@@ -3841,7 +3866,7 @@ impl FedEvent {
                     child_eb.push_metadata_f64_opt("playerItemRatingAfter", thief_item_rating_after);
                     child_eb.push_metadata_f64("playerItemRatingBefore", thief_item_rating_before);
                     child_eb.push_metadata_f64("playerRating", thief_rating);
-                    
+
                     child_eb.build(EventType::PlayerGainedItem)
                 });
 
@@ -4232,18 +4257,154 @@ impl FedEvent {
 
                 eb.build(EventType::NightShift)
             }
+            FedEventData::TeamFormed { team_id, team_name, team_nickname, rotation_players, lineup_players, shadows_players } => {
+                let mut events = Vec::new();
+                // These events are in a big block and not in order, so they need to be collected,
+                // ordered properly, and then added to `events`.
+                let mut shuffled_events = Vec::new();
+
+                let team_nickname_ref = &team_nickname;
+                let mut push_events_for_position = |players: PlayersAddedToTeam, position: PositionType| {
+                    let mut position_eb = eb.connected_event(players.sub_event);
+
+                    let who_entered = match position {
+                        PositionType::Lineup | PositionType::Rotation => { "Players" }
+                        PositionType::BenchOrShadows | PositionType::Bullpen => { "Replicas" }
+                    };
+
+                    position_eb.set_category(EventCategory::Changes);
+                    position_eb.push_description(format!("{} {who_entered} entered The Legends' {}.", players.players.len(), position.name_post_merge()));
+                    position_eb.push_team_tag(team_id);
+                    for player in &players.players {
+                        position_eb.push_player_tag(player.player_id);
+                    }
+                    position_eb.push_metadata_i64("location", position);
+                    position_eb.push_metadata_uuid_vec("playerIds", players.players.iter()
+                        .map(|player| &player.player_id)
+                    );
+                    position_eb.push_metadata_str_vec("playerNames", players.players.iter()
+                        // This clone could be avoided with some reordering, but the reordering
+                        // itself would require allocations, so this is probably better
+                        .map(|player| player.player_name.clone())
+                        .collect()
+                    );
+                    position_eb.push_metadata_uuid("teamId", team_id);
+                    position_eb.push_metadata_str("teamName", team_nickname_ref);
+
+                    let ev = position_eb.build(EventType::PlayersAddedToTeam);
+                    events.push(ev);
+
+                    for player in &players.players {
+                        if let Some(on_an_odyssey) = &player.odyssey_boost {
+                            let mut odyssey_eb = eb.connected_event(on_an_odyssey.sub_event);
+                            odyssey_eb.set_category(EventCategory::Changes);
+                            odyssey_eb.push_player_tag(player.player_id);
+                            odyssey_eb.push_team_tag(team_id);
+                            odyssey_eb.push_description(format!("{} was boosted.", player.player_name));
+                            events.push(odyssey_eb.build_boost(&on_an_odyssey))
+                        }
+
+                        if let Some((boost_event, order)) = &player.shadow_boost {
+                            let mut successor_eb = eb.connected_event(boost_event.sub_event);
+                            successor_eb.set_category(EventCategory::Changes);
+                            successor_eb.push_player_tag(player.player_id);
+                            successor_eb.push_team_tag(team_id);
+                            successor_eb.push_description(format!("{} entered the Shadows.", player.player_name));
+                            shuffled_events.push((*order, successor_eb.build_boost(&boost_event)));
+                        }
+
+                        if let Some((dusted_off_event, order)) = player.replica_dusted_off {
+                            let mut successor_eb = eb.connected_event(dusted_off_event);
+                            successor_eb.set_category(EventCategory::Changes);
+                            successor_eb.push_player_tag(player.player_id);
+                            successor_eb.push_team_tag(team_id);
+                            successor_eb.push_description(format!("{} dusts off.", player.player_name));
+                            successor_eb.push_metadata_str("mod", "DUST");
+                            successor_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            shuffled_events.push((order, successor_eb.build(EventType::RemovedMod)));
+                        }
+
+                        if let Some((yolked_removed_event, order)) = player.yolked_removed {
+                            let mut successor_eb = eb.connected_event(yolked_removed_event);
+                            successor_eb.set_category(EventCategory::Changes);
+                            successor_eb.push_player_tag(player.player_id);
+                            successor_eb.push_team_tag(team_id);
+                            successor_eb.push_description(format!("{} is weaker on their own.", player.player_name));
+                            successor_eb.push_metadata_str("mod", "YOLKED");
+                            successor_eb.push_metadata_str("source", "HARD_BOILED");
+                            successor_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            shuffled_events.push((order, successor_eb.build(EventType::RemovedModFromOtherMod)));
+                        }
+                    }
+
+                    if let Some(togetherness) = players.stronger_together {
+                        let mut togetherness_eb = eb.connected_event(togetherness.sub_event);
+                        togetherness_eb.set_category(EventCategory::Changes);
+                        togetherness_eb.push_team_tag(team_id);
+                        for player in &togetherness.players {
+                            togetherness_eb.push_player_tag(player.player_id);
+                        }
+
+                        let (first, rest) = togetherness.players.split_first()
+                            .expect("This event should never have an empty list of names");
+                        let description = iter::once(&first.player_name)
+                            .chain(&togetherness.extra_player_names)
+                            .chain(rest.iter().map(|p| &p.player_name))
+                            .with_position()
+                            .flat_map(|(position, name)| {
+                                match position {
+                                    Position::First | Position::Only => ["", name.as_str()],
+                                    Position::Middle => [", ", name.as_str()],
+                                    Position::Last =>  [", and ", name.as_str()],
+                                }
+                            })
+                            .chain(iter::once(" are stronger together."))
+                            .join("");
+
+                        togetherness_eb.push_description(description);
+                        togetherness_eb.push_metadata_str("mod", "YOLKED");
+                        togetherness_eb.push_metadata_str("source", "HARD_BOILED");
+                        togetherness_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        events.push(togetherness_eb.build(EventType::AddedModFromOtherMod))
+                    }
+                };
+
+                push_events_for_position(rotation_players, PositionType::Rotation);
+                push_events_for_position(lineup_players, PositionType::Lineup);
+                push_events_for_position(shadows_players, PositionType::BenchOrShadows);
+
+                // Now is the time to sort the shuffled events and add them
+                shuffled_events.sort_unstable_by_key(|(order, _)| *order);
+                events.extend(shuffled_events.into_iter().map(|(_, event)| event));
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(&format!("The {team_name} formed."));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_uuid("id", team_id);
+
+                events.insert(0, eb.build(EventType::TeamFormed));
+                return events;
+            }
         };
 
         vec![item]
     }
 
     #[deprecated = "This is part of the old event builder"]
-    fn make_mod_change_sub_events<'a>(&self, mod_changes: &[ModChangeSubEventWithNamedPlayer], event_type: EventType, message: &str, mod_name: &str) -> (Vec<EventBuilderChildFull>, String) {
-        let suffix = mod_changes.iter()
+    fn make_mod_change_sub_events<'a>(
+        &self,
+        mod_changes: &[ModChangeSubEventWithNamedPlayer],
+        event_type: EventType,
+        message: &str,
+        mod_name: &str,
+    ) -> (Vec<EventBuilderChildFull>, String) {
+        let suffix = mod_changes
+            .iter()
             .map(|e| format!("\n{} {message}", e.player_name))
             .join("");
 
-        let children = mod_changes.iter()
+        let children = mod_changes
+            .iter()
             .map(|e| {
                 EventBuilderChild::new(&e.sub_event)
                     .update(EventBuilderUpdate {

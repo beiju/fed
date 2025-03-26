@@ -820,6 +820,18 @@ pub enum PositionType {
     Bullpen = 3,
 }
 
+impl PositionType {
+    pub fn name_post_merge(self) -> &'static str {
+        match self {
+            PositionType::Lineup => { "Lineup" }
+            PositionType::Rotation => { "Rotation" }
+            PositionType::BenchOrShadows => { "Shadows" }
+            // This should never be used, but if it were the most correct value is "Shadows"
+            PositionType::Bullpen => { "Shadows" }
+        }
+    }
+}
+
 impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
     fn from(value: TryFromPrimitiveError<ActivePositionType>) -> Self {
         FeedParseError::InvalidLocation {
@@ -2849,6 +2861,22 @@ pub struct PlayerTogethernessModChange {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerMultiTogethernessModChange {
+    /// List of players with this mod and their ids
+    pub players: Vec<PlayerNameId>,
+    
+    /// List of players who are named but whose ids are not in playerTags
+    /// 
+    /// These are existing players on the team who already had the togetherness 
+    /// mod. In the event description, these players are named after the first 
+    /// player in `players` and before all the rest.
+    pub extra_player_names: Vec<String>,
+
+    /// Metadata for the associated mod being added/removed
+    pub sub_event: SubEvent,
+}
+
 
 /// Sometimes player togetherness "blips" (gets removed and then re-added) when a player is moved
 /// around a team, because it's technically them being removed and then re-added to the team. This
@@ -3010,6 +3038,63 @@ pub struct Balloons {
     /// Number of balloons inflated. This is usually 1 but can be higher because of things like
     /// Sum Sun
     pub num_balloons: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerAddedToTeam {
+    /// Uuid of player who was added to the team
+    pub player_id: Uuid,
+
+    /// Name of player who was added to the team
+    pub player_name: String,
+
+    /// If the player is On an Odyssey, this is the boost resulting from them 
+    /// joining a new team
+    pub odyssey_boost: Option<PlayerBoostSubEvent>,
+
+    /// If the player received a shadow boost, this contains the information 
+    /// about that boost plus an index.
+    ///
+    /// The index tells you the order in which the subsequent events were
+    /// emitted, which appears to be independent of any other observable piece
+    /// of information. Indices are not necessarily consecutive. The index may
+    /// be interleaved with indices from `replica_dusted_off` and
+    /// `yolked_removed`.
+    pub shadow_boost: Option<(PlayerBoostSubEvent, usize)>,
+
+    /// If the player is a Replica which dusted off (had their Dusted mod
+    /// removed) this event, this contains the metadata about the dusting-off
+    /// sub-event, plus an index.
+    ///
+    /// The index tells you the order in which the subsequent events were
+    /// emitted, which appears to be independent of any other observable piece
+    /// of information. Indices are not necessarily consecutive. The index may
+    /// be interleaved  with indices from `shadow_boost` and `yolked_removed`.
+    pub replica_dusted_off: Option<(SubEvent, usize)>,
+
+    /// If the player was formerly Yolked, and became no longer Yolked as a
+    /// result of being added this team, this contains the metadata about the
+    /// Yolked mod being removed, plus an index.
+    ///
+    /// The index tells you the order in which the subsequent events were
+    /// emitted, which appears to be independent of any other observable piece
+    /// of information. Indices are not necessarily consecutive. The index may
+    /// be interleaved  with indices from `shadow_boost` and
+    /// `replica_dusted_off`.
+    pub yolked_removed: Option<(SubEvent, usize)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayersAddedToTeam {
+    /// Players added to team
+    pub players: Vec<PlayerAddedToTeam>,
+
+    /// If these players being added to this team caused any of them to activate a togetherness mod,
+    /// this is the metadata about that mod activating
+    pub stronger_together: Option<PlayerMultiTogethernessModChange>,
+
+    /// Sub-event associated with adding these players to the team
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
@@ -6921,6 +7006,29 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event for the player being unshadowed
         player_unshadowed_sub_event: PlayerBoostSubEvent,
+    },
+
+    /// A new Team was formed
+    ///
+    /// This happened for the Vault Legends, the Rising Stars, and the Oxford Paws.
+    TeamFormed {
+        /// The Uuid of the newly formed team
+        team_id: Uuid,
+
+        /// The full name of the newly formed team
+        team_name: String,
+
+        /// The nickname of the newly formed team
+        team_nickname: String,
+
+        /// Players added to the Rotation
+        rotation_players: PlayersAddedToTeam,
+
+        /// Players added to the Lineup
+        lineup_players: PlayersAddedToTeam,
+
+        /// Players added to the Shadows
+        shadows_players: PlayersAddedToTeam,
     }
 }
 
@@ -7176,6 +7284,7 @@ impl FedEventData {
             FedEventData::BandBeginsToPlay { game, .. } => { Some(game) }
             FedEventData::BasesReloaded { game, .. } => { Some(game) }
             FedEventData::NightShift { game, .. } => { Some(game) }
+            FedEventData::TeamFormed { .. } => { None }
         }
     }
 }

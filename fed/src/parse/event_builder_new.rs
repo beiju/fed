@@ -212,6 +212,14 @@ impl EventBuilder {
             .insert(key.into(), Value::String(value.to_string()));
     }
 
+    pub fn push_metadata_uuid_vec<'a>(&mut self, key: impl Into<String>, value: impl IntoIterator<Item=&'a Uuid>) {
+        let value = Value::Array(value.into_iter().map(|id| {
+            let id_str = id.to_string();
+            Value::String(id_str)
+        }).collect());
+        self.metadata_mut().insert(key.into(), value);
+    }
+
     pub fn push_metadata_i64(&mut self, key: impl Into<String>, value: impl Into<i64>) {
         self.metadata_mut()
             .insert(key.into(), value.into().into());

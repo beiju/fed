@@ -454,9 +454,43 @@ impl<'e> EventParseWrapper<'e> {
             .map_err(|err| {
                 FeedParseError::MetadataStrToUuidError {
                     event_type: self.event_type,
-                    field: key,
+                    field: key.to_string(),
                     err,
                 }
+            })
+    }
+
+    pub fn metadata_uuid_vec(&self, key: &'static str) -> Result<Vec<Uuid>, FeedParseError> {
+        self.get_metadata(key)?
+            .as_array()
+            .ok_or_else(|| {
+                FeedParseError::MetadataTypeError {
+                    event_type: self.event_type,
+                    field: key.to_string(),
+                    ty: "array",
+                }
+            })
+            .and_then(|vec| {
+                vec.iter()
+                    .enumerate()
+                    .map(|(i, item)| {
+                        let item_str = item.as_str()
+                            .ok_or_else(|| {
+                                FeedParseError::MetadataTypeError {
+                                    event_type: self.event_type,
+                                    field: format!("{key}[{i}]"),
+                                    ty: "str",
+                                }
+                            })?;
+                        
+                        Uuid::parse_str(item_str)
+                            .map_err(|err| FeedParseError::MetadataStrToUuidError {
+                                event_type: self.event_type,
+                                field: format!("{key}[{i}]"),
+                                err,
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
             })
     }
 
