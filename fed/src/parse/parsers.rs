@@ -3297,3 +3297,15 @@ pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
 pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<&str> {
     parse_terminated(" are stronger together.").parse(input)
 }
+
+pub(crate) fn parse_weather_report(weather_flavor: &str) -> impl Fn(&str) -> ParserResult<(i64, &str)> + '_ {
+    move |input| {
+        let (input, _) = tag("A new Weather Report arrived from History.\nSEASON ").parse(input)?;
+        let (input, season_num) = parse_whole_number(input)?;
+        let (input, _) = tag(": ").parse(input)?;
+        let (input, weather_name_all_caps) = parse_terminated("\n\n").parse(input)?;
+        let (input, _) = tag(weather_flavor).parse(input)?;
+
+        Ok((input, (season_num, weather_name_all_caps)))
+    }
+}

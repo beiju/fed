@@ -4367,7 +4367,7 @@ impl FedEvent {
 
                     // The only time the message said "Replicas" instead of "Players" was for the
                     // Vault Legends' shadows, which was formed by taking all Dusted Replicas. That
-                    // can be detected by looking for the undusting message, but we can't know 
+                    // can be detected by looking for the undusting message, but we can't know
                     // exactly what criteria would have caused the game to say "Replicas".
                     let who_entered = if players.players.iter().all(|p| p.replica_dusted_off.is_some()) {
                         "Replicas"
@@ -4487,7 +4487,24 @@ impl FedEvent {
 
                 events.insert(0, eb.build(EventType::TeamFormed));
                 return events;
-            }
+            },
+            FedEventData::WeatherReport { game, original_season, weather_before, weather_after, sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("A new Weather Report arrived from History.");
+                eb.push_description(format!("SEASON {original_season}: {}", weather_after.to_str().to_uppercase()));
+                eb.push_description("");
+                eb.push_description(weather_after.weather_report());
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(weather_after.weather_report());
+                    child_eb.push_metadata_i64("before", weather_before);
+                    child_eb.push_metadata_i64("after", weather_after);
+                    child_eb.build(EventType::WeatherChange)
+                });
+
+                eb.build(EventType::WeatherReport)
+            },
         };
 
         vec![item]

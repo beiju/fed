@@ -25,11 +25,11 @@ use crate::format_utils::Possessive;
 // pub use stream::expansion_era_events;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 25] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 27] = [
     "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
     "Flowers", "Millennials", "Millenials", "Pies", "Garages", "Dale", "Lift", "Firefighters",
     "Steaks", "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms",
-    "Crabs", "Mechanics",
+    "Crabs", "Mechanics", "Legends", "Rising Stars",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -4304,6 +4304,18 @@ pub fn parse_next_event(
             }
         }
         EventType::BeingSpeechInTidings => { todo!() }
+        EventType::WeatherReport => {
+            let weather_change_event = event.next_child(EventType::WeatherChange)?;
+            let (season_num, _) = event.next_parse(parse_weather_report(weather_change_event.description()))?;
+
+            FedEventData::WeatherReport {
+                game: event.game(unscatter, attractor_secret_base)?,
+                original_season: season_num,
+                weather_before: weather_change_event.metadata_enum("before")?,
+                weather_after: weather_change_event.metadata_enum("after")?,
+                sub_event: weather_change_event.as_sub_event(),
+            }
+        }
         EventType::PlayersAddedToTeam => { todo!() }
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened)?;
@@ -4629,7 +4641,7 @@ fn is_known_team_name(name: &str) -> bool {
          "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
          "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
          "Houston Spies", "Charleston Shoe Thieves", "LA Unlimited Tacos", "Atlantis Georgias",
-         "Ohio Worms", "Baltimore Crabs", "Core Mechanics",
+         "Ohio Worms", "Baltimore Crabs", "Core Mechanics", "Vault Legends", "Rising Stars",
     ].contains(&name)
 }
 

@@ -7092,7 +7092,27 @@ pub enum FedEventData {
 
         /// Players added to the Shadows
         shadows_players: PlayersAddedToTeam,
-    }
+    },
+
+    /// A Weather Report arrived from History
+    ///
+    /// Happened during the Semicentennial
+    WeatherReport {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Season that this Weather was introduced in
+        original_season: i64,
+
+        /// The weather before this Weather Report came in
+        weather_before: Weather,
+
+        /// The weather after this Weather Report came in
+        weather_after: Weather,
+
+        /// Metadata for the sub-event for the weather change
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -7348,6 +7368,7 @@ impl FedEventData {
             FedEventData::BasesReloaded { game, .. } => { Some(game) }
             FedEventData::NightShift { game, .. } => { Some(game) }
             FedEventData::TeamFormed { .. } => { None }
+            FedEventData::WeatherReport { game, .. } => { Some(game) }
         }
     }
 }
