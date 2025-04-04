@@ -164,38 +164,26 @@ impl<'e> EventParseWrapper<'e> {
         Ok(id)
     }
 
-    pub fn next_team_id_opt(&mut self) -> Result<Option<Uuid>, FeedParseError> {
-        Ok(if let Some((&id, rest)) = self.team_ids
-            .ok_or_else(|| {
-                FeedParseError::MissingTags {
-                    event_type: self.event_type,
-                    tag_type: "team",
-                }
-            })?
+    pub fn next_team_id_opt(&mut self) -> Option<Uuid> {
+        if let Some((&id, rest)) = self.team_ids?
             .split_first() {
             self.consumed_team_id_count += 1;
             self.team_ids = Some(rest);
             Some(id)
         } else {
             None
-        })
+        }
     }
 
-    pub fn next_player_id_opt(&mut self) -> Result<Option<Uuid>, FeedParseError> {
-        Ok(if let Some((&id, rest)) = self.player_ids
-            .ok_or_else(|| {
-                FeedParseError::MissingTags {
-                    event_type: self.event_type,
-                    tag_type: "player",
-                }
-            })?
+    pub fn next_player_id_opt(&mut self) -> Option<Uuid> {
+        if let Some((&id, rest)) = self.player_ids?
             .split_first() {
             self.consumed_player_id_count += 1;
             self.player_ids = Some(rest);
             Some(id)
         } else {
             None
-        })
+        }
     }
 
     fn next_game_id(&mut self) -> Result<Uuid, FeedParseError> {
@@ -623,7 +611,7 @@ impl<'e> EventParseWrapper<'e> {
                     sub_event: child.as_sub_event(),
                     inhabiting_player_name: name.to_string(),
                     inhabiting_player_id: child.next_player_id()?,
-                    inhabiting_player_team_id: child.next_team_id_opt()?,
+                    inhabiting_player_team_id: child.next_team_id_opt(),
                 })
             })
             .transpose()
@@ -1404,7 +1392,7 @@ impl<'e> EventParseWrapper<'e> {
             sub_event: child.as_sub_event(),
             player_name: name.to_string(),
             player_id: child.next_player_id()?,
-            team_id: child.next_team_id_opt()?,
+            team_id: child.next_team_id_opt(),
         })
     }
 }

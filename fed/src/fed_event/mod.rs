@@ -3040,6 +3040,59 @@ pub struct Balloons {
     pub num_balloons: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+pub enum PlayerMovedFrom {
+    Unspecified,
+    LeagueTeam {
+        /// Uuid of the team the player was cut from
+        former_team_id: Uuid,
+
+        /// Nickname of the team the player was cut from
+        former_team_nickname: String,
+
+        /// Metadata associated with the player-cut-from-roster event
+        sub_event: SubEvent,
+    },
+    IncineratedTeam {
+        /// Uuid of the team the player was pulled from
+        former_team_id: Uuid,
+
+        /// Nickname of the team the player was pulled from
+        former_team_nickname: String,
+
+        /// Metadata associated with the pulled-from-incinerated-team event
+        pulled_from_team_sub_event: SubEvent,
+
+        /// Metadata associated with the player exiting the Hall of Flame
+        exited_hall_sub_event: SubEvent,
+
+        /// Metadata associated with the player gaining the Returned mod
+        gained_returned_sub_event: SubEvent,
+    },
+    OtherTeam {
+        /// Uuid of the team the player was cut from
+        former_team_id: Uuid,
+
+        /// Nickname of the team the player was cut from
+        former_team_nickname: String,
+
+        /// Metadata associated with the player-cut-from-roster event
+        sub_event: SubEvent,
+    },
+    HallOfFlame {
+        /// Uuid of the team the player was pulled from, if there was one
+        ///
+        /// Incinerated players do not necessarily have a team ID
+        former_team_id: Option<Uuid>,
+
+        /// Metadata associated with the player exiting the Hall of Flame
+        exited_hall_sub_event: SubEvent,
+
+        /// Metadata associated with the player gaining the Returned mod
+        gained_returned_sub_event: SubEvent,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerAddedToTeam {
     /// Uuid of player who was added to the team
@@ -3047,6 +3100,16 @@ pub struct PlayerAddedToTeam {
 
     /// Name of player who was added to the team
     pub player_name: String,
+
+    /// Data associated with the player moving from their previous location
+    pub player_moved_from: PlayerMovedFrom,
+
+    /// If the player was not formerly in the vault, this is the metadata
+    /// associated with the player-visited-vault event
+    ///
+    /// Note that Dusted Replicas apparently reside in the Vault, as evidenced
+    /// by their lack of this event
+    pub player_visited_vault: Option<SubEvent>,
 
     /// If the player is On an Odyssey, this is the boost resulting from them 
     /// joining a new team

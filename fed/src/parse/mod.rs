@@ -129,6 +129,7 @@ trait EventIterator {
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
     fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent>;
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
+    fn next_expect_type_any(&mut self, types: &[EventType], after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
 }
 
 impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
@@ -153,20 +154,23 @@ impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T>
     }
 
     fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
+        self.next_expect_type_any(&[ty], after_type)
+    }
+
+    fn next_expect_type_any(&mut self, types: &[EventType], after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
         let Some(event) = self.peek() else {
             Err(FeedParseError::MissingFollowingEvent {
-                expected_types: vec![ty], // after refactor this might not need to be a vec
-                found_type: None,
+                expected_types: Vec::from(types),
                 after_type,
             })?
         };
 
-        if event.r#type == ty {
+        if types.contains(&event.r#type) {
             Ok(self.next().expect("This call is always after a successful peek()"))
         } else {
-            Err(FeedParseError::MissingFollowingEvent {
-                expected_types: vec![ty], // after refactor this might not need to be a vec
-                found_type: Some(event.r#type),
+            Err(FeedParseError::UnexpectedFollowingEvent {
+                expected_types: Vec::from(types),
+                found_type: event.r#type,
                 after_type,
             })
         }
@@ -434,7 +438,7 @@ pub fn parse_next_event(
                                     sub_event: sub_event.as_sub_event(),
                                     player_name: refiller_name.to_string(),
                                     player_id: sub_event.next_player_id()?,
-                                    team_id: sub_event.next_team_id_opt()?,
+                                    team_id: sub_event.next_team_id_opt(),
                                 })
                             })
                             .transpose()?;
@@ -1011,9 +1015,7 @@ pub fn parse_next_event(
                         inhabited_player_name: inhabited.to_string(),
                         inhabiting_player_id,
                         inhabited_player_id,
-                        inhabiting_player_team_id: child
-                            .and_then(|mut c| c.next_team_id_opt().transpose())
-                            .transpose()?,
+                        inhabiting_player_team_id: child.and_then(|mut c| c.next_team_id_opt()),
                     })
                 }).transpose()?,
                 is_repeating,
@@ -1363,7 +1365,7 @@ pub fn parse_next_event(
                 ingredient1: ingredient1.to_string(),
                 ingredient2: ingredient2.to_string(),
                 sub_event: sub_event.as_sub_event(),
-                team_id: sub_event.next_team_id_opt()?,
+                team_id: sub_event.next_team_id_opt(),
             }
         }
         EventType::CoffeeBean => {
@@ -1392,7 +1394,7 @@ pub fn parse_next_event(
                 which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
                 gained_mod,
                 sub_event: sub_event.as_sub_event(),
-                team_id: sub_event.next_team_id_opt()?,
+                team_id: sub_event.next_team_id_opt(),
                 previous: prev_mod.map(|s| s.try_into()
                     .map_err(|_| FeedParseError::UnexpectedMetadataValue {
                         event_type: sub_event.event_type,
@@ -1569,7 +1571,7 @@ pub fn parse_next_event(
                 ParsedReverbType::SeveralPlayers => {
                     let mut reverbs = Vec::new();
                     let mut team_id = None;
-                    while let Some(first_player_id) = event.next_player_id_opt()? {
+                    while let Some(first_player_id) = event.next_player_id_opt() {
                         // Player IDs must come in pairs
                         let second_player_id = event.next_player_id()?;
                         if first_player_id == second_player_id {
@@ -2192,7 +2194,7 @@ pub fn parse_next_event(
             let mut child = event.next_child(EventType::AddedMod)?;
             FedEventData::EchoChamber {
                 game: event.game(unscatter, attractor_secret_base)?,
-                team_id: child.next_team_id_opt()?,
+                team_id: child.next_team_id_opt(),
                 player_id: child.next_player_id()?,
                 player_name: player_name.to_string(),
                 which_mod,
@@ -2786,7 +2788,7 @@ pub fn parse_next_event(
         EventType::ModExpires => {
             let mods: Vec<_> = event.metadata_str_vec("mods")?
                 .into_iter().map(String::from).collect();
-            if let Some(player_id) = event.next_player_id_opt()? {
+            if let Some(player_id) = event.next_player_id_opt() {
                 let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
                 FedEventData::PlayerModExpires {
                     team_id: event.next_team_id()?,
@@ -2867,7 +2869,6 @@ pub fn parse_next_event(
             })
                 .ok_or_else(|| FeedParseError::MissingFollowingEvent {
                     expected_types: vec![EventType::AddedMod],
-                    found_type: None,
                     after_type: EventType::PlayerRemovedFromTeam,
                 })?;
             let mod_event = EventParseWrapper::new(&mod_event)?;
@@ -3197,6 +3198,62 @@ pub fn parse_next_event(
             // event instead
             let team_name = event.next_parse(parse_team_formed)?;
 
+            #[derive(Debug)]
+            struct PrecedingEvents {
+                player_id: Uuid,
+                removed_from_team: Option<EventuallyEvent>,
+                enter_vault: Option<EventuallyEvent>,
+                exit_hall: Option<EventuallyEvent>,
+                added_returned_mod: Option<EventuallyEvent>,
+            }
+
+            impl PrecedingEvents {
+                pub fn new(player_id: Uuid) -> Self {
+                    Self {
+                        player_id,
+                        enter_vault: None,
+                        removed_from_team: None,
+                        exit_hall: None,
+                        added_returned_mod: None,
+                    }
+                }
+            }
+
+            // Get the events that precede the PlayersAddedToTeam and collect them for later use
+            let mut preceding_events = Vec::new();
+            let mut current_player: Option<PrecedingEvents> = None;
+            while event_iter.peek().map_or(false, |e| e.r#type != EventType::PlayersAddedToTeam) {
+                let event = event_iter.next_expect_type_any(&[
+                    EventType::PlayerEnteredVault,
+                    EventType::PlayerRemovedFromTeam,
+                    EventType::ExitHallOfFlame,
+                    EventType::AddedMod,
+                ], EventType::TeamFormed)?;
+
+                let mut event_wrapper = EventParseWrapper::new(&event)?;
+                let event_type = event_wrapper.event_type;
+                let player_id = event_wrapper.next_player_id()?;
+
+                let player = current_player.get_or_insert_with(|| PrecedingEvents::new(player_id));
+                if player.player_id != player_id {
+                    preceding_events.push(std::mem::replace(player, PrecedingEvents::new(player_id)));
+                }
+
+                match event_type {
+                    EventType::PlayerEnteredVault => player.enter_vault = Some(event),
+                    EventType::PlayerRemovedFromTeam => player.removed_from_team = Some(event),
+                    EventType::ExitHallOfFlame => player.exit_hall = Some(event),
+                    EventType::AddedMod => player.added_returned_mod = Some(event),
+                    _ => panic!("next_expect_type_any returned an event of a type we didn't ask for"),
+                }
+            }
+
+            if let Some(player) = current_player {
+                preceding_events.push(player);
+            }
+
+            let mut preceding_events_iter = preceding_events.into_iter().peekable();
+
             // This gets set by get_position_players
             let mut team_nickname = None;
 
@@ -3215,16 +3272,83 @@ pub fn parse_next_event(
                     players_added_event.metadata_str_vec("playerNames")?,
                 )
                     .map(|(player_id, player_name)| {
+                        let (player_moved_from, player_visited_vault) = if let Some(e) = (
+                            preceding_events_iter.next_if(|e| e.player_id == player_id)
+                        ) {
+                            let player_visited_vault = e.enter_vault
+                                .as_ref().map(|enter_vault_event| {
+                                    EventParseWrapper::new(&enter_vault_event)
+                                        .map(|enter_vault_event| enter_vault_event.as_sub_event())
+                                })
+                                .transpose()?;
+                            if let Some(removed_from_team_event) = e.removed_from_team {
+                                let mut removed_from_team_event = EventParseWrapper::new(&removed_from_team_event)?;
+                                let former_team_id = removed_from_team_event.metadata_uuid("teamId")?;
+                                let former_team_nickname = removed_from_team_event.metadata_str("teamName")?;
+                                let moved_from_team = if let Some(exit_hall_event) = e.exit_hall {
+                                    let mut exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
+                                    let added_returned_mod_event = e.added_returned_mod.ok_or_else(|| FeedParseError::MissingEventInGroup {
+                                        group_indicator_type: EventType::ExitHallOfFlame,
+                                        expected_type: EventType::AddedMod,
+                                    })?;
+                                    let mut added_returned_mod_event = EventParseWrapper::new(&added_returned_mod_event)?;
+
+                                    PlayerMovedFrom::IncineratedTeam {
+                                        former_team_id,
+                                        former_team_nickname: former_team_nickname.to_string(),
+                                        pulled_from_team_sub_event: removed_from_team_event.as_sub_event(),
+                                        exited_hall_sub_event: exit_hall_event.as_sub_event(),
+                                        gained_returned_sub_event: added_returned_mod_event.as_sub_event(),
+                                    }
+                                } else if let Some(name) = removed_from_team_event.next_parse_opt(parse_terminated(" was Collected.")) {
+                                    assert_eq!(name, player_name);
+                                    PlayerMovedFrom::OtherTeam {
+                                        former_team_id,
+                                        former_team_nickname: former_team_nickname.to_string(),
+                                        sub_event: removed_from_team_event.as_sub_event(),
+                                    }
+                                } else {
+                                    PlayerMovedFrom::LeagueTeam {
+                                        former_team_id,
+                                        former_team_nickname: former_team_nickname.to_string(),
+                                        sub_event: removed_from_team_event.as_sub_event(),
+                                    }
+                                };
+                                (moved_from_team, player_visited_vault)
+                            } else if let Some(added_returned_mod_event) = e.added_returned_mod {
+                                let mut added_returned_mod_event = EventParseWrapper::new(&added_returned_mod_event)?;
+                                // If there's an added_returned_mod, there must also be an exit_hall
+                                let exit_hall_event = e.exit_hall.ok_or_else(|| FeedParseError::MissingEventInGroup {
+                                    group_indicator_type: EventType::AddedMod,
+                                    expected_type: EventType::ExitHallOfFlame,
+                                })?;
+                                let mut exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
+                                let moved_from_team = PlayerMovedFrom::HallOfFlame {
+                                    former_team_id: added_returned_mod_event.next_team_id_opt(),
+                                    exited_hall_sub_event: exit_hall_event.as_sub_event(),
+                                    gained_returned_sub_event: added_returned_mod_event.as_sub_event(),
+                                };
+                                (moved_from_team, player_visited_vault)
+                            } else {
+                                (PlayerMovedFrom::Unspecified, player_visited_vault)
+                            }
+                        } else {
+                            (PlayerMovedFrom::Unspecified, None)
+                        };
+
                         // See if this player is On an Odyssey
                         let odyssey_boost = event_iter
                             .next_if(|event| {
-                                event.r#type == EventType::PlayerStatIncrease && event.player_tags.as_ref()
-                                    .map_or(false, |player_tags| {
-                                        let Some((player_tag, )) = player_tags.iter().collect_tuple() else {
-                                            return false;
-                                        };
-                                        *player_tag == player_id
-                                    })
+                                event.r#type == EventType::PlayerStatIncrease &&
+                                    // description filter prevents matching shadow boosts
+                                    event.description.ends_with(" was boosted.") &&
+                                    event.player_tags.as_ref()
+                                        .map_or(false, |player_tags| {
+                                            let Some((player_tag, )) = player_tags.iter().collect_tuple() else {
+                                                return false;
+                                            };
+                                            *player_tag == player_id
+                                        })
                             })
                             .map(|odyssey_event| {
                                 let odyssey_event = EventParseWrapper::new(&odyssey_event)?;
@@ -3240,6 +3364,8 @@ pub fn parse_next_event(
                         ParseOk(PlayerAddedToTeam {
                             player_id,
                             player_name: player_name.to_string(),
+                            player_moved_from,
+                            player_visited_vault,
                             odyssey_boost,
                             shadow_boost: None, // Gets filled in by a later step
                             replica_dusted_off: None, // Gets filled in by a later step
@@ -3572,7 +3698,7 @@ pub fn parse_next_event(
         EventType::AddedModsFromAnotherMod => { todo!() }
         EventType::RemovedModsFromAnotherMod => {
             // What the hell did I just write
-            let player_or_team_id = Ok(event.next_player_id_opt()?).transpose()
+            let player_or_team_id = Ok(event.next_player_id_opt()).transpose()
                 .unwrap_or_else(|| event.next_team_id())?;
             let source_name = event.metadata_str("source")?;
             let event = ModsFromAnotherModRemoved::from_event(&mut event)?;
@@ -4301,7 +4427,7 @@ fn parse_subseasonal_mod_change_event(state: &InterEventState, mut event: EventP
 fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool, mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedMod {
         team_id: event.next_team_id()?,
-        player_id: event.next_player_id_opt()?,
+        player_id: event.next_player_id_opt(),
         description: event.description().into(),
         r#mod: event.metadata_str("mod")?.to_string(),
         mod_duration: event.metadata_enum("type")?,

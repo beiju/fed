@@ -136,11 +136,23 @@ pub enum FeedParseError {
         actual: i64,
     },
 
-    #[error("Expected one of {expected_types:?} event after {after_type:?} event but found {found_type:?}")]
+    #[error("Expected one of {expected_types:?} event after {after_type:?} event but there were no more events")]
     MissingFollowingEvent {
         expected_types: Vec<EventType>,
-        found_type: Option<EventType>,
         after_type: EventType,
+    },
+
+    #[error("Expected one of {expected_types:?} event after {after_type:?} event but found {found_type:?}")]
+    UnexpectedFollowingEvent {
+        expected_types: Vec<EventType>,
+        found_type: EventType,
+        after_type: EventType,
+    },
+
+    #[error("Expected a {expected_type:?} event along with a {group_indicator_type:?} event but it wasn't found")]
+    MissingEventInGroup {
+        group_indicator_type: EventType,
+        expected_type: EventType,
     },
 
     #[error("Cannot have a {preceding_type:?} event following a {illegal_type:?} event")]

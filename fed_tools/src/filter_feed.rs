@@ -5,9 +5,10 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde_json::Value;
 
-const ALWAYS_SORT_FIRST: [i64; 2] = [
+const ALWAYS_SORT_FIRST: [i64; 3] = [
     171,
     203,
+    244, // TeamFormed events must be before the corresponding following events
 ];
 
 #[derive(PartialEq, Eq)]

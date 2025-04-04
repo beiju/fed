@@ -1,4 +1,4 @@
-use crate::PlayersAddedToTeam;
+use crate::{PlayerMovedFrom, PlayersAddedToTeam};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use itertools::{Either, Itertools, Position};
 use serde_json::json;
@@ -4259,6 +4259,104 @@ impl FedEvent {
             }
             FedEventData::TeamFormed { team_id, team_name, team_nickname, rotation_players, lineup_players, shadows_players } => {
                 let mut events = Vec::new();
+
+                // These events precede all the position events
+                for position in [&rotation_players, &lineup_players, &shadows_players] {
+                    for player in &position.players {
+                        match &player.player_moved_from {
+                            PlayerMovedFrom::Unspecified => { /* No events */}
+                            PlayerMovedFrom::LeagueTeam { former_team_id, former_team_nickname, sub_event } => {
+                                let mut cut_from_team_eb = eb.connected_event(*sub_event);
+                                cut_from_team_eb.set_category(EventCategory::Changes);
+                                cut_from_team_eb.push_description(format!("The {former_team_nickname} cut a player from their roster."));
+                                cut_from_team_eb.push_player_tag(player.player_id);
+                                cut_from_team_eb.push_team_tag(*former_team_id);
+
+                                cut_from_team_eb.push_metadata_uuid("playerId", player.player_id);
+                                cut_from_team_eb.push_metadata_str("playerName", &player.player_name);
+                                cut_from_team_eb.push_metadata_uuid("teamId", *former_team_id);
+                                cut_from_team_eb.push_metadata_str("teamName", former_team_nickname);
+
+                                events.push(cut_from_team_eb.build(EventType::PlayerRemovedFromTeam));
+                            }
+                            PlayerMovedFrom::IncineratedTeam { former_team_id, former_team_nickname, pulled_from_team_sub_event, exited_hall_sub_event, gained_returned_sub_event } => {
+                                let mut pulled_from_team_eb = eb.connected_event(*pulled_from_team_sub_event);
+                                pulled_from_team_eb.set_category(EventCategory::Changes);
+                                pulled_from_team_eb.push_description(format!("{} was pulled from the incinerated {former_team_nickname}.", player.player_name));
+                                pulled_from_team_eb.push_player_tag(player.player_id);
+                                pulled_from_team_eb.push_team_tag(*former_team_id);
+
+                                pulled_from_team_eb.push_metadata_uuid("playerId", player.player_id);
+                                pulled_from_team_eb.push_metadata_str("playerName", &player.player_name);
+                                pulled_from_team_eb.push_metadata_uuid("teamId", *former_team_id);
+                                pulled_from_team_eb.push_metadata_str("teamName", former_team_nickname);
+
+                                events.push(pulled_from_team_eb.build(EventType::PlayerRemovedFromTeam));
+
+                                let mut exited_hall_eb = eb.connected_event(*exited_hall_sub_event);
+                                exited_hall_eb.set_category(EventCategory::Changes);
+                                exited_hall_eb.push_description(format!("{} exited the Hall of Flame", player.player_name));
+                                exited_hall_eb.push_player_tag(player.player_id);
+
+                                events.push(exited_hall_eb.build(EventType::ExitHallOfFlame));
+
+                                let mut gained_returned_eb = eb.connected_event(*gained_returned_sub_event);
+                                gained_returned_eb.set_category(EventCategory::Changes);
+                                gained_returned_eb.push_description(format!("{} gained the Returned mod.", player.player_name));
+                                gained_returned_eb.push_player_tag(player.player_id);
+                                gained_returned_eb.push_team_tag(*former_team_id);
+                                gained_returned_eb.push_metadata_str("mod", "RETURNED");
+                                gained_returned_eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                                events.push(gained_returned_eb.build(EventType::AddedMod));
+                            }
+                            PlayerMovedFrom::OtherTeam { former_team_id, former_team_nickname, sub_event } => {
+                                let mut cut_from_team_eb = eb.connected_event(*sub_event);
+                                cut_from_team_eb.set_category(EventCategory::Changes);
+                                cut_from_team_eb.push_description(format!("{} was Collected.", player.player_name));
+                                cut_from_team_eb.push_player_tag(player.player_id);
+                                cut_from_team_eb.push_team_tag(*former_team_id);
+
+                                cut_from_team_eb.push_metadata_uuid("playerId", player.player_id);
+                                cut_from_team_eb.push_metadata_str("playerName", &player.player_name);
+                                cut_from_team_eb.push_metadata_uuid("teamId", *former_team_id);
+                                cut_from_team_eb.push_metadata_str("teamName", former_team_nickname);
+
+                                events.push(cut_from_team_eb.build(EventType::PlayerRemovedFromTeam));
+                            }
+                            PlayerMovedFrom::HallOfFlame { former_team_id, exited_hall_sub_event, gained_returned_sub_event } => {
+                                let mut exited_hall_eb = eb.connected_event(*exited_hall_sub_event);
+                                exited_hall_eb.set_category(EventCategory::Changes);
+                                exited_hall_eb.push_description(format!("{} exited the Hall of Flame", player.player_name));
+                                exited_hall_eb.push_player_tag(player.player_id);
+
+                                events.push(exited_hall_eb.build(EventType::ExitHallOfFlame));
+                                
+                                let mut gained_returned_eb = eb.connected_event(*gained_returned_sub_event);
+                                gained_returned_eb.set_category(EventCategory::Changes);
+                                gained_returned_eb.push_description(format!("{} gained the Returned mod.", player.player_name));
+                                gained_returned_eb.push_player_tag(player.player_id);
+                                if let Some(team_id) = former_team_id {
+                                    gained_returned_eb.push_team_tag(*team_id);
+                                }
+                                gained_returned_eb.push_metadata_str("mod", "RETURNED");
+                                gained_returned_eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                                events.push(gained_returned_eb.build(EventType::AddedMod));
+                            }
+                        }
+
+                        if let Some(sub_event) = player.player_visited_vault {
+                            let mut visited_vault_eb = eb.connected_event(sub_event);
+                            visited_vault_eb.set_category(EventCategory::Changes);
+                            visited_vault_eb.push_description(format!("{} visited the Vault.", &player.player_name));
+                            visited_vault_eb.push_player_tag(player.player_id);
+
+                            events.push(visited_vault_eb.build(EventType::PlayerEnteredVault));
+                        }
+                    }
+                }
+
                 // These events are in a big block and not in order, so they need to be collected,
                 // ordered properly, and then added to `events`.
                 let mut shuffled_events = Vec::new();
@@ -4267,13 +4365,18 @@ impl FedEvent {
                 let mut push_events_for_position = |players: PlayersAddedToTeam, position: PositionType| {
                     let mut position_eb = eb.connected_event(players.sub_event);
 
-                    let who_entered = match position {
-                        PositionType::Lineup | PositionType::Rotation => { "Players" }
-                        PositionType::BenchOrShadows | PositionType::Bullpen => { "Replicas" }
+                    // The only time the message said "Replicas" instead of "Players" was for the
+                    // Vault Legends' shadows, which was formed by taking all Dusted Replicas. That
+                    // can be detected by looking for the undusting message, but we can't know 
+                    // exactly what criteria would have caused the game to say "Replicas".
+                    let who_entered = if players.players.iter().all(|p| p.replica_dusted_off.is_some()) {
+                        "Replicas"
+                    } else {
+                        "Players"
                     };
 
                     position_eb.set_category(EventCategory::Changes);
-                    position_eb.push_description(format!("{} {who_entered} entered The Legends' {}.", players.players.len(), position.name_post_merge()));
+                    position_eb.push_description(format!("{} {who_entered} entered The {team_nickname}' {}.", players.players.len(), position.name_post_merge()));
                     position_eb.push_team_tag(team_id);
                     for player in &players.players {
                         position_eb.push_player_tag(player.player_id);
