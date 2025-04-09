@@ -4227,12 +4227,6 @@ pub fn parse_next_event(
             }
         }
         EventType::Trade => {
-            // This was moved outside because of the order of ride-along trades (those that can be
-            // attached to any event) related to the trade that's announced in this event.
-            // TODO: If this is not the only event where ride-along trades are first, move them to
-            //   be handled the same as unscatter and attractor_secret_base (and probably make a
-            //   RideAlongEventData struct at that point)
-            let game = event.game(unscatter, attractor_secret_base)?;
             match event.next_parse(parse_trade)? {
                 ParsedTrade::NothingCaughtTheirEye { trader_name } => {
                     let mut child_event = event.next_child(EventType::TradeFailed)?;
@@ -4240,7 +4234,7 @@ pub fn parse_next_event(
                     let victim_id = child_event.next_player_id()?;
 
                     FedEventData::NothingToTrade {
-                        game,
+                        game: event.game(unscatter, attractor_secret_base)?,
                         trader_name: trader_name.to_string(),
                         trader_id,
                         victim_id,
@@ -4248,28 +4242,60 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedTrade::Traded { trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name } => {
-                    let mut trader_event = event.next_child(EventType::ItemTraded)?;
-                    let mut victim_event = event.next_child(EventType::ItemTraded)?;
+                    let is_trade_for_nothing = trader_traitor == ParsedTraderTraitor::Neither;
+                    let (game, mut trader_event, mut victim_event) = if is_trade_for_nothing {
+                        let victim_event = event.next_child(EventType::PlayerLostItem)?;
+                        let trader_event = event.next_child(EventType::PlayerGainedItem)?;
+
+                        // In this case game is after all the other children, as usual
+                        let game = event.game(unscatter, attractor_secret_base)?;
+
+                        (game, trader_event, victim_event)
+                    } else {
+                        // For this event specifically, ride-along trades' children appear before
+                        // the other children, so game has to be constructed first.
+                        let game = event.game(unscatter, attractor_secret_base)?;
+
+                        let trader_event = event.next_child(EventType::ItemTraded)?;
+                        let victim_event = event.next_child(EventType::ItemTraded)?;
+
+                        (game, trader_event, victim_event)
+                    };
+
+                    let build_trade_for_something = || {
+                        ParseOk(TradeForSomething {
+                            donated_item_name: donated_item_name.to_string(),
+                            donated_item_id: trader_event.metadata_uuid("itemTradedId")?,
+                            trader_mods_lost: trader_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
+                            victim_mods_gained: victim_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
+                        })
+                    };
+
+                    let trader_traitor = match trader_traitor {
+                        ParsedTraderTraitor::Trader => TraderTraitor::Trader(build_trade_for_something()?),
+                        ParsedTraderTraitor::Traitor => TraderTraitor::Traitor(build_trade_for_something()?),
+                        ParsedTraderTraitor::Unknown => TraderTraitor::Unknown(build_trade_for_something()?),
+                        ParsedTraderTraitor::Neither => TraderTraitor::Neither(TradeForNothing {
+                            victim_team_id: victim_event.next_team_id()?,
+                            trader_team_id: trader_event.next_team_id()?,
+                        }),
+                    };
 
                     FedEventData::Trade {
                         game,
                         trader_traitor,
+                        taken_item_name: taken_item_name.to_string(),
+                        taken_item_id: victim_event.metadata_uuid(if is_trade_for_nothing { "itemId" } else { "itemTradedId" })?,
+                        victim_mods_lost: victim_event.metadata_str_vec(if is_trade_for_nothing { "mods" } else { "modsLost" })?.into_iter().map(str::to_string).collect(),
+                        trader_mods_gained: trader_event.metadata_str_vec(if is_trade_for_nothing { "mods" } else { "modsGained" })?.into_iter().map(str::to_string).collect(),
                         trader_name: trader_name.to_string(),
                         trader_id: trader_event.next_player_id()?,
-                        donated_item_name: donated_item_name.to_string(),
-                        donated_item_id: trader_event.metadata_uuid("itemTradedId")?,
-                        trader_mods_gained: trader_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
-                        trader_mods_lost: trader_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
                         trader_item_rating_before: trader_event.metadata_f64_opt("playerItemRatingBefore")?,
                         trader_item_rating_after: trader_event.metadata_f64_opt("playerItemRatingAfter")?,
                         trader_rating: trader_event.metadata_f64("playerRating")?,
                         trader_item_change_sub_event: trader_event.as_sub_event(),
                         victim_name: victim_name.to_string(),
                         victim_id: victim_event.next_player_id()?,
-                        taken_item_name: taken_item_name.to_string(),
-                        taken_item_id: victim_event.metadata_uuid("itemTradedId")?,
-                        victim_mods_gained: victim_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
-                        victim_mods_lost: victim_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
                         victim_item_rating_before: victim_event.metadata_f64_opt("playerItemRatingBefore")?,
                         victim_item_rating_after: victim_event.metadata_f64_opt("playerItemRatingAfter")?,
                         victim_rating: victim_event.metadata_f64("playerRating")?,
@@ -4282,7 +4308,7 @@ pub fn parse_next_event(
                     let victim_id = child_event.next_player_id()?;
 
                     FedEventData::NothingToOffer {
-                        game,
+                        game: event.game(unscatter, attractor_secret_base)?,
                         trader_name: trader_name.to_string(),
                         trader_id,
                         victim_name: victim_name.to_string(),

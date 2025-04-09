@@ -1,6 +1,6 @@
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
-use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats, TraderTraitor};
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats, TraderTraitor, TradeForSomething, TradeForNothing};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
@@ -3124,12 +3124,21 @@ pub(crate) fn parse_yolk_message<'a>(first_player_name: &'a str, descriptor: &'a
     }
 }
 
+#[derive(PartialEq)]
+pub(crate) enum ParsedTraderTraitor {
+    Trader,
+    Traitor,
+    Unknown,
+    Neither,
+}
+
+
 pub(crate) enum ParsedTrade<'a> {
     NothingCaughtTheirEye {
         trader_name: &'a str,
     },
     Traded {
-        trader_traitor: TraderTraitor,
+        trader_traitor: ParsedTraderTraitor,
         trader_name: &'a str,
         donated_item_name: &'a str,
         victim_name: &'a str,
@@ -3155,20 +3164,20 @@ pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
 }
 
 
-pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(TraderTraitor, &str, &str, &str, &str)> {
+pub(crate) fn parse_successful_trade(input: &str) -> ParserResult<(ParsedTraderTraitor, &str, &str, &str, &str)> {
     // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
     // must not be reordered.
     let (input, trader_traitor) = alt((
-        tag("Trader ").map(|_| TraderTraitor::Trader),
-        tag("Traitor ").map(|_| TraderTraitor::Traitor),
-        tag(" ").map(|_| TraderTraitor::Unknown),
-        tag("").map(|_| TraderTraitor::Neither),
+        tag("Trader ").map(|_| ParsedTraderTraitor::Trader),
+        tag("Traitor ").map(|_| ParsedTraderTraitor::Traitor),
+        tag(" ").map(|_| ParsedTraderTraitor::Unknown),
+        tag("").map(|_| ParsedTraderTraitor::Neither),
     )).parse(input)?;
     let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
     // TODO Special-case "traded their nothing"?
     let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
     let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
-    let (input, taken_item_name) = parse_terminated(".").parse(input)?;
+    let (input, taken_item_name) = parse_terminated(if trader_traitor == ParsedTraderTraitor::Neither { "!" } else { "." }).parse(input)?;
 
     Ok((input, (trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)))
 }

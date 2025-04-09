@@ -9,17 +9,7 @@ use crate::parse::builder::{
     possessive, EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate,
 };
 use crate::parse::event_builder_new::EventBuilder;
-use crate::{
-    BatterSkippedReason, BracketType, CoffeeBeanMod, ConsumerAttackEffect, DebtType, EarnedWin,
-    EchoChamberModAdded, EchoIntoStatic, FedEvent, FedEventData, FloodingSweptEffect,
-    GameStartAnnouncement, HitType, HomeRunHypeSource, ItemGained,
-    ModChangeSubEventWithNamedPlayer, ModDuration, NumbersGo, PitcherNameId, PlayerMaybeCarcinized,
-    PlayerNameId, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder,
-    RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor,
-    ReverbType, RiffElement, RoamFromLocation, RunStolenThroughTunnelsDetails, Scattered,
-    ShortEarnedWin, StatChangeCategory, SubEvent, SubseasonalMod, SubseasonalModChange,
-    TeamModChangeSubject, TeamNicknameOrPlayerName, TimeElsewhere, TogglePerforming,
-};
+use crate::*;
 
 #[deprecated = "This is part of the old event builder"]
 fn make_switch_performing_child(
@@ -4036,44 +4026,93 @@ impl FedEvent {
 
                 eb.build(EventType::Trade)
             }
-            FedEventData::Trade { game, trader_traitor, trader_name, trader_id, donated_item_name, donated_item_id, trader_mods_gained, trader_mods_lost, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, taken_item_name, taken_item_id, victim_mods_gained, victim_mods_lost, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
+            FedEventData::Trade { game, trader_traitor, taken_item_name, taken_item_id, victim_mods_lost, trader_mods_gained, trader_name, trader_id, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
                 eb.set_game(game);
-                let description = format!("{trader_traitor}{trader_name} traded their {donated_item_name} for {} {taken_item_name}.", Possessive(&victim_name));
+                let description = match &trader_traitor {
+                    TraderTraitor::Trader(TradeForSomething { donated_item_name, ..}) |
+                    TraderTraitor::Traitor(TradeForSomething { donated_item_name, ..}) |
+                    TraderTraitor::Unknown(TradeForSomething { donated_item_name, ..}) => {
+                        format!("{trader_traitor}{trader_name} traded their {donated_item_name} for {} {taken_item_name}.", Possessive(&victim_name))
+                    }
+                    TraderTraitor::Neither(TradeForNothing { .. }) => {
+                        format!("{trader_name} traded their nothing for {} {taken_item_name}!", Possessive(&victim_name))
+                    }
+                };
                 eb.push_description(&description);
 
-                eb.push_child(trader_item_change_sub_event, |mut child_eb| {
-                    child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(&description);
-                    child_eb.push_player_tag(trader_id);
-                    // This event has no team tag, although it probably shouldReceived
-                    child_eb.push_metadata_uuid("itemTradedId", donated_item_id);
-                    child_eb.push_metadata_str("itemTradedName", &donated_item_name);
-                    child_eb.push_metadata_uuid("itemReceivedId", taken_item_id);
-                    child_eb.push_metadata_str("itemReceivedName", &taken_item_name);
-                    child_eb.push_metadata_str_vec("modsGained", trader_mods_gained);
-                    child_eb.push_metadata_str_vec("modsLost", trader_mods_lost);
-                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", trader_item_rating_after);
-                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", trader_item_rating_before);
-                    child_eb.push_metadata_f64("playerRating", trader_rating);
-                    child_eb.build(EventType::ItemTraded)
-                });
+                let trader_traitor_label = trader_traitor.to_string();
+                // The trade-for-nothing event (there only ever was one) has its sub-events in a
+                // different order and with slightly different info / metadata keys
+                match trader_traitor {
+                    TraderTraitor::Trader(TradeForSomething { donated_item_name, donated_item_id, trader_mods_lost, victim_mods_gained }) |
+                    TraderTraitor::Traitor(TradeForSomething { donated_item_name, donated_item_id, trader_mods_lost, victim_mods_gained }) |
+                    TraderTraitor::Unknown(TradeForSomething { donated_item_name, donated_item_id, trader_mods_lost, victim_mods_gained }) => {
+                        eb.push_child(trader_item_change_sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(&description);
+                            child_eb.push_player_tag(trader_id);
+                            // This event has no team tag, although it probably should
+                            child_eb.push_metadata_uuid("itemTradedId", donated_item_id);
+                            child_eb.push_metadata_str("itemTradedName", &donated_item_name);
+                            child_eb.push_metadata_uuid("itemReceivedId", taken_item_id);
+                            child_eb.push_metadata_str("itemReceivedName", &taken_item_name);
+                            child_eb.push_metadata_str_vec("modsGained", trader_mods_gained);
+                            child_eb.push_metadata_str_vec("modsLost", trader_mods_lost);
+                            child_eb.push_metadata_f64_opt("playerItemRatingAfter", trader_item_rating_after);
+                            child_eb.push_metadata_f64_opt("playerItemRatingBefore", trader_item_rating_before);
+                            child_eb.push_metadata_f64("playerRating", trader_rating);
+                            child_eb.build(EventType::ItemTraded)
+                        });
 
-                eb.push_child(victim_item_change_sub_event, |mut child_eb| {
-                    child_eb.set_category(EventCategory::Changes);
-                    child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor}{} {donated_item_name}.", Possessive(&trader_name)));
-                    child_eb.push_player_tag(victim_id);
-                    // This event has no team tag, even though it probably should
-                    child_eb.push_metadata_uuid("itemTradedId", taken_item_id);
-                    child_eb.push_metadata_str("itemTradedName", &taken_item_name);
-                    child_eb.push_metadata_uuid("itemReceivedId", donated_item_id);
-                    child_eb.push_metadata_str("itemReceivedName", &donated_item_name);
-                    child_eb.push_metadata_str_vec("modsGained", victim_mods_gained);
-                    child_eb.push_metadata_str_vec("modsLost", victim_mods_lost);
-                    child_eb.push_metadata_f64_opt("playerItemRatingAfter", victim_item_rating_after);
-                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
-                    child_eb.push_metadata_f64("playerRating", victim_rating);
-                    child_eb.build(EventType::ItemTraded)
-                });
+                        eb.push_child(victim_item_change_sub_event, move |mut child_eb| {
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(format!("{victim_name} traded their {taken_item_name} for {trader_traitor_label}{} {donated_item_name}.", Possessive(&trader_name)));
+                            child_eb.push_player_tag(victim_id);
+                            // This event has no team tag, even though it probably should
+                            child_eb.push_metadata_uuid("itemTradedId", taken_item_id);
+                            child_eb.push_metadata_str("itemTradedName", &taken_item_name);
+                            child_eb.push_metadata_uuid("itemReceivedId", donated_item_id);
+                            child_eb.push_metadata_str("itemReceivedName", donated_item_name);
+                            child_eb.push_metadata_str_vec("modsGained", victim_mods_gained);
+                            child_eb.push_metadata_str_vec("modsLost", victim_mods_lost);
+                            child_eb.push_metadata_f64_opt("playerItemRatingAfter", victim_item_rating_after);
+                            child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
+                            child_eb.push_metadata_f64("playerRating", victim_rating);
+                            child_eb.build(EventType::ItemTraded)
+                        });
+                    }
+                    TraderTraitor::Neither(TradeForNothing { victim_team_id, trader_team_id }) => {
+                        eb.push_child(victim_item_change_sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(format!("{victim_name} traded away {taken_item_name} to {trader_name} for nothing!"));
+                            child_eb.push_team_tag(victim_team_id);
+                            child_eb.push_player_tag(victim_id);
+                            // This event has no team tag, even though it probably should
+                            child_eb.push_metadata_uuid("itemId", taken_item_id);
+                            child_eb.push_metadata_str("itemName", &taken_item_name);
+                            child_eb.push_metadata_str_vec("mods", victim_mods_lost);
+                            child_eb.push_metadata_f64_opt("playerItemRatingAfter", victim_item_rating_after);
+                            child_eb.push_metadata_f64_opt("playerItemRatingBefore", victim_item_rating_before);
+                            child_eb.push_metadata_f64("playerRating", victim_rating);
+                            child_eb.build(EventType::PlayerLostItem)
+                        });
+
+                        eb.push_child(trader_item_change_sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Changes);
+                            child_eb.push_description(&description);
+                            child_eb.push_team_tag(trader_team_id);
+                            child_eb.push_player_tag(trader_id);
+                            child_eb.push_metadata_uuid("itemId", taken_item_id);
+                            child_eb.push_metadata_str("itemName", &taken_item_name);
+                            child_eb.push_metadata_str_vec("mods", trader_mods_gained);
+                            child_eb.push_metadata_f64_opt("playerItemRatingAfter", trader_item_rating_after);
+                            child_eb.push_metadata_f64_opt("playerItemRatingBefore", trader_item_rating_before);
+                            child_eb.push_metadata_f64("playerRating", trader_rating);
+                            child_eb.build(EventType::PlayerGainedItem)
+                        });
+
+                    }
+                }
 
                 eb.build(EventType::Trade)
             }

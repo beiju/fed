@@ -2963,10 +2963,7 @@ pub enum RunStolenThroughTunnelsDetails {
     }
 }
 
-#[derive(
-    Debug,
-    Copy,
-    Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
 pub enum RiffElement {
     #[strum(to_string = "bow")] Bow,
     #[strum(to_string = "bah")] Bah,
@@ -2993,21 +2990,43 @@ pub enum RiffElement {
     #[strum(to_string = "ska")] Ska,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TradeForSomething {
+    /// Name of the item that the trader gave to the victim
+    pub donated_item_name: String,
+
+    /// Uuid of the item that the trader gave to the victim
+    pub donated_item_id: Uuid,
+
+    /// Mods the trader lost by switching items
+    pub trader_mods_lost: Vec<String>,
+
+    /// Mods the victim gained by switching items
+    pub victim_mods_gained: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TradeForNothing {
+    // TODO Document
+    pub victim_team_id: Uuid,
+    pub trader_team_id: Uuid,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[serde(tag = "trader_traitor")]
 pub enum TraderTraitor {
     /// The player is described as a Trader
-    Trader,
+    Trader(TradeForSomething),
 
     /// The player is described as a Traitor
-    Traitor,
+    Traitor(TradeForSomething),
 
     /// The player is not described as either a Traitor or Trader, but formatting implies they would
     /// be called one of the two.
     ///
     /// Specifically, there is an extra space before their name, which I assume is the space that
     /// would be between the word "Traitor"/"Trader" and their name.
-    Unknown,
+    Unknown(TradeForSomething),
 
     /// The player is not described as either a Traitor or Trader, and formatting implies they would
     /// not be called either.
@@ -3015,16 +3034,27 @@ pub enum TraderTraitor {
     /// This does not have the extra space that Unknown has. It appears exactly once, during the
     /// Semi-Centennial, when New Megan Ito traded their nothing for Dunlap Figueroa's The Fifth
     /// Base.
-    Neither,
+    Neither(TradeForNothing),
 }
 
 impl Display for TraderTraitor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TraderTraitor::Trader => { write!(f, "Trader ") }
-            TraderTraitor::Traitor => { write!(f, "Traitor ") }
-            TraderTraitor::Unknown => { write!(f, " ") }
-            TraderTraitor::Neither => { write!(f, "") }
+            TraderTraitor::Trader(_) => { write!(f, "Trader ") }
+            TraderTraitor::Traitor(_) => { write!(f, "Traitor ") }
+            TraderTraitor::Unknown(_) => { write!(f, " ") }
+            TraderTraitor::Neither(_) => { write!(f, "") }
+        }
+    }
+}
+
+impl TraderTraitor {
+    pub fn is_trade_for_nothing(&self) -> bool {
+        match self {
+            TraderTraitor::Trader(_) => { false }
+            TraderTraitor::Traitor(_) => { false }
+            TraderTraitor::Unknown(_) => { false }
+            TraderTraitor::Neither(_) => { true }
         }
     }
 }
@@ -6816,25 +6846,26 @@ pub enum FedEventData {
 
         /// Whether the player who made this trade was a Trader (takes items from a member of the
         /// opponent team) or Traitor (takes items from a member of their own team).
+        #[serde(flatten)] // Is internally tagged with trader_traitor
         trader_traitor: TraderTraitor,
+
+        /// Name of the item that the trader took from the victim
+        taken_item_name: String,
+
+        /// Uuid of the item that the trader took from the victim
+        taken_item_id: Uuid,
+
+        /// Mods the victim lost by switching items
+        victim_mods_lost: Vec<String>,
+
+        /// Mods the trader gained by switching items
+        trader_mods_gained: Vec<String>,
 
         /// Name of the player who sought out the trade
         trader_name: String,
 
         /// Uuid of the player who sought out the trade
         trader_id: Uuid,
-
-        /// Name of the item that the trader gave to the victim
-        donated_item_name: String,
-
-        /// Uuid of the item that the trader gave to the victim
-        donated_item_id: Uuid,
-
-        /// Mods the trader gained by switching items
-        trader_mods_gained: Vec<String>,
-
-        /// Mods the trader lost by switching items
-        trader_mods_lost: Vec<String>,
 
         /// Trader's item rating before the swap
         ///
@@ -6857,18 +6888,6 @@ pub enum FedEventData {
 
         /// Uuid of the player whose item the trader took
         victim_id: Uuid,
-
-        /// Name of the item that the trader took from the victim
-        taken_item_name: String,
-
-        /// Uuid of the item that the trader took from the victim
-        taken_item_id: Uuid,
-
-        /// Mods the victim gained by switching items
-        victim_mods_gained: Vec<String>,
-
-        /// Mods the victim lost by switching items
-        victim_mods_lost: Vec<String>,
 
         /// Victim's item rating before the swap
         ///
