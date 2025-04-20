@@ -4527,16 +4527,16 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::TeamFormed));
                 return events;
             },
-            FedEventData::WeatherReport { game, original_season, weather_before, weather_after, sub_event } => {
+            FedEventData::WeatherReport { game, original_season, original_season_tagline_all_caps, weather_report, weather_before, weather_after, sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A new Weather Report arrived from History.");
-                eb.push_description(format!("SEASON {original_season}: {}", weather_after.to_str().to_uppercase()));
+                eb.push_description(format!("SEASON {original_season}: {original_season_tagline_all_caps}"));
                 eb.push_description("");
-                eb.push_description(weather_after.weather_report());
+                eb.push_description(&weather_report);
 
                 eb.push_child(sub_event, |mut child_eb| {
-                    child_eb.push_description(weather_after.weather_report());
+                    child_eb.push_description(weather_report);
                     child_eb.push_metadata_i64("before", weather_before);
                     child_eb.push_metadata_i64("after", weather_after);
                     child_eb.build(EventType::WeatherChange)
@@ -4571,6 +4571,11 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("But {target_player_name} evaded them!"));
                 eb.build(EventType::TunnelsUsed)
+            }
+            FedEventData::PitcherCyclesOut { game, team_nickname, outgoing_pitcher_name, incoming_pitcher_name } => {
+                eb.set_game(game);
+                eb.push_description(format!("{team_nickname}' pitcher {outgoing_pitcher_name} Cycles out for {incoming_pitcher_name}!"));
+                eb.build(EventType::PitcherCyclesOut)
             }
         };
 

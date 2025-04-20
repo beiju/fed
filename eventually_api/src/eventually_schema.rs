@@ -231,40 +231,6 @@ impl Weather {
             Weather::Night => "Night",
         }
     }
-
-    pub fn weather_report(&self) -> &'static str {
-        match self {
-            Weather::Void => "TODO",
-            Weather::Sun2 => "TODO",
-            Weather::Overcast => "TODO",
-            Weather::Rainy => "TODO",
-            Weather::Sandstorm => "TODO",
-            Weather::Snowy => "TODO",
-            Weather::Acidic => "TODO",
-            Weather::SolarEclipse => "TODO",
-            Weather::Glitter => "TODO",
-            Weather::Blooddrain => "TODO",
-            Weather::Peanuts => "TODO",
-            Weather::Birds => "TODO",
-            Weather::Feedback => "TODO",
-            Weather::Reverb => "A wave washed over the plane.",
-            Weather::BlackHole => "TODO",
-            Weather::Coffee => "TODO",
-            Weather::Coffee2 => "TODO",
-            Weather::Coffee3s => "TODO",
-            Weather::Flooding => "TODO",
-            Weather::Salmon => "TODO",
-            Weather::PolarityPlus => "TODO",
-            Weather::PolarityMinus => "TODO",
-            Weather::Sun90 => "TODO",
-            Weather::SunPoint1 => "TODO",
-            Weather::SumSun => "TODO",
-            Weather::SupernovaEclipse => "TODO",
-            Weather::BlackHoleBlackHole => "TODO",
-            Weather::Jazz => "TODO",
-            Weather::Night => "TODO",
-        }
-    }
 }
 
 impl Display for Weather {
@@ -384,7 +350,6 @@ pub enum EventType {
     ReverbFullShuffle = 130,
     ReverbLineupShuffle = 131,
     ReverbRotationShuffle = 132,
-    // At this point I got bored typing them all and only filled in the ones I encountered
     TeamDivisionMove = 135,
     PlayerDivisionMove = 136,
     PlayerHatched = 137,
@@ -468,6 +433,7 @@ pub enum EventType {
     Trade = 233,
     TradeFailed = 234,
     ItemTraded = 236,
+    PitcherCyclesOut = 237,
     BasesReloaded = 239,
     BeingSpeechInTidings = 241,
     WeatherReport = 243,

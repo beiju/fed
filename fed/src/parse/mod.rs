@@ -4352,6 +4352,16 @@ pub fn parse_next_event(
         }
         EventType::TradeFailed => { todo!() }
         EventType::ItemTraded => { todo!() }
+        EventType::PitcherCyclesOut => {
+            let (team_nickname, outgoing_pitcher_name, incoming_pitcher_name) = event.next_parse(parse_pitcher_cycles_out)?;
+
+            FedEventData::PitcherCyclesOut {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                outgoing_pitcher_name: outgoing_pitcher_name.to_string(),
+                incoming_pitcher_name: incoming_pitcher_name.to_string(),
+            }
+        }
         EventType::BasesReloaded => {
             let player_name = event.next_parse(parse_terminated(" Reloaded all of the Bases!"))?;
 
@@ -4364,11 +4374,13 @@ pub fn parse_next_event(
         EventType::BeingSpeechInTidings => { todo!() }
         EventType::WeatherReport => {
             let weather_change_event = event.next_child(EventType::WeatherChange)?;
-            let (season_num, _) = event.next_parse(parse_weather_report(weather_change_event.description()))?;
+            let (season_num, season_tagline_all_caps) = event.next_parse(parse_weather_report(weather_change_event.description()))?;
 
             FedEventData::WeatherReport {
                 game: event.game(unscatter, attractor_secret_base)?,
                 original_season: season_num,
+                original_season_tagline_all_caps: season_tagline_all_caps.to_string(),
+                weather_report: weather_change_event.description().to_string(),
                 weather_before: weather_change_event.metadata_enum("before")?,
                 weather_after: weather_change_event.metadata_enum("after")?,
                 sub_event: weather_change_event.as_sub_event(),

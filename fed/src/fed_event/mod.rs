@@ -7123,6 +7123,12 @@ pub enum FedEventData {
         /// Season that this Weather was introduced in
         original_season: i64,
 
+        /// Tagline for the season that this Weather was introduced in
+        original_season_tagline_all_caps: String,
+
+        /// The flavor text for this Weather Report
+        weather_report: String,
+
         /// The weather before this Weather Report came in
         weather_before: Weather,
 
@@ -7197,6 +7203,22 @@ pub enum FedEventData {
 
         /// Name of the intended target player
         target_player_name: String,
+    },
+
+    /// A pitcher Cycles out due to the Cycling mod
+    #[serde(rename_all = "camelCase")]
+    PitcherCyclesOut {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the team whose pitcher Cycled out
+        team_nickname: String,
+
+        /// Name of the outgoing pitcher
+        outgoing_pitcher_name: String,
+
+        /// Name of the incoming pitcher
+        incoming_pitcher_name: String,
     },
 }
 
@@ -7457,6 +7479,7 @@ impl FedEventData {
             FedEventData::TeamTunnelHeistBegins { game, .. } => { Some(game) }
             FedEventData::TeamTunnelHeistContinues { game, .. } => { Some(game) }
             FedEventData::TeamTunnelHeistConcludes { game, .. } => { Some(game) }
+            FedEventData::PitcherCyclesOut { game, .. } => { Some(game) }
         }
     }
 }

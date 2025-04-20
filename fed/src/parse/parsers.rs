@@ -3377,9 +3377,17 @@ pub(crate) fn parse_weather_report(weather_flavor: &str) -> impl Fn(&str) -> Par
         let (input, _) = tag("A new Weather Report arrived from History.\nSEASON ").parse(input)?;
         let (input, season_num) = parse_whole_number(input)?;
         let (input, _) = tag(": ").parse(input)?;
-        let (input, weather_name_all_caps) = parse_terminated("\n\n").parse(input)?;
+        let (input, season_tagline_all_caps) = parse_terminated("\n\n").parse(input)?;
         let (input, _) = tag(weather_flavor).parse(input)?;
 
-        Ok((input, (season_num, weather_name_all_caps)))
+        Ok((input, (season_num, season_tagline_all_caps)))
     }
+}
+
+pub(crate) fn parse_pitcher_cycles_out(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, team_nickname) = parse_terminated("' pitcher ").parse(input)?;
+    let (input, outgoing_pitcher_name) = parse_terminated(" Cycles out for ").parse(input)?;
+    let (input, incoming_pitcher_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (team_nickname, outgoing_pitcher_name, incoming_pitcher_name)))
 }
