@@ -2230,151 +2230,183 @@ pub fn parse_next_event(
             }
         }
         EventType::TunnelsUsed => {
-            let (thief_name, tunnels_effect) = event.next_parse(parse_tunnels)?;
-            match tunnels_effect {
-                ParsedTunnels::StoleRun { victim_team_nickname } => {
-                    assert!(is_known_team_nickname(victim_team_nickname));
+            match event.next_parse(parse_tunnels)? {
+                ParsedTunnels::Player { player_name, tunnels_effect } => match tunnels_effect {
+                    ParsedPlayerTunnels::StoleRun { victim_team_nickname } => {
+                        assert!(is_known_team_nickname(victim_team_nickname));
 
-                    let free_refill = event.parse_free_refill()?;
-                    let hype = event.parse_hype()?;
+                        let free_refill = event.parse_free_refill()?;
+                        let hype = event.parse_hype()?;
 
-                    // On exactly two occasions (dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
-                    // 4338a482-f7eb-448c-9827-e9220f2e86a4) a RunStolenThroughTunnels was emitted
-                    // without any children. I have no idea why that happened.
-                    let details = event.next_child_opt(EventType::RunsScored)?
-                        .map(|mut runs_scored_a| {
-                            // Exactly one time, ddf2df8a-946d-4785-bb75-84233d01e927, there was
-                            // only one scored event. It was the one for the victim team.
-                            if let Some(mut runs_scored_b) = event.next_child_opt(EventType::RunsScored)? {
-                                let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
-                                assert!(is_known_team_nickname(team_nickname_a));
-                                let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
-                                assert!(is_known_team_nickname(team_nickname_b));
+                        // On exactly two occasions (dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
+                        // 4338a482-f7eb-448c-9827-e9220f2e86a4) a RunStolenThroughTunnels was emitted
+                        // without any children. I have no idea why that happened.
+                        let details = event.next_child_opt(EventType::RunsScored)?
+                            .map(|mut runs_scored_a| {
+                                // Exactly one time, ddf2df8a-946d-4785-bb75-84233d01e927, there was
+                                // only one scored event. It was the one for the victim team.
+                                if let Some(mut runs_scored_b) = event.next_child_opt(EventType::RunsScored)? {
+                                    let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                    assert!(is_known_team_nickname(team_nickname_a));
+                                    let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
+                                    assert!(is_known_team_nickname(team_nickname_b));
 
-                                let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
-                                    if team_nickname_a == victim_team_nickname {
-                                        (runs_scored_b, runs_scored_a, team_nickname_b, true)
-                                    } else {
-                                        (runs_scored_a, runs_scored_b, team_nickname_a, false)
-                                    };
-                                ParseOk(RunStolenThroughTunnelsDetails::BothKnown {
-                                    victim_team_id: run_lost_event.next_team_id()?,
-                                    thieving_team_nickname: thieving_team_nickname.to_string(),
-                                    thieving_team_id: run_gained_event.next_team_id()?,
-                                    away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
-                                    away_score: run_gained_event.metadata_f64("awayScore")?,
-                                    home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
-                                    home_score: run_gained_event.metadata_f64("homeScore")?,
-                                    run_gained_sub_event: run_gained_event.as_sub_event(),
-                                    run_lost_sub_event: run_lost_event.as_sub_event(),
-                                    victim_event_first,
-                                })
-                            } else {
-                                let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
-                                assert!(is_known_team_nickname(team_nickname_a));
-
-                                if team_nickname_a == victim_team_nickname {
-                                    ParseOk(RunStolenThroughTunnelsDetails::VictimKnown {
-                                        victim_team_id: runs_scored_a.next_team_id()?,
-                                        away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
-                                        away_score: runs_scored_a.metadata_f64("awayScore")?,
-                                        home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
-                                        home_score: runs_scored_a.metadata_f64("homeScore")?,
-                                        run_lost_sub_event: runs_scored_a.as_sub_event(),
+                                    let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
+                                        if team_nickname_a == victim_team_nickname {
+                                            (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                                        } else {
+                                            (runs_scored_a, runs_scored_b, team_nickname_a, false)
+                                        };
+                                    ParseOk(RunStolenThroughTunnelsDetails::BothKnown {
+                                        victim_team_id: run_lost_event.next_team_id()?,
+                                        thieving_team_nickname: thieving_team_nickname.to_string(),
+                                        thieving_team_id: run_gained_event.next_team_id()?,
+                                        away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
+                                        away_score: run_gained_event.metadata_f64("awayScore")?,
+                                        home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
+                                        home_score: run_gained_event.metadata_f64("homeScore")?,
+                                        run_gained_sub_event: run_gained_event.as_sub_event(),
+                                        run_lost_sub_event: run_lost_event.as_sub_event(),
+                                        victim_event_first,
                                     })
                                 } else {
-                                    // This branch has never happened, but it's included for completeness
-                                    ParseOk(RunStolenThroughTunnelsDetails::ThiefKnown {
-                                        thieving_team_nickname: team_nickname_a.to_string(),
-                                        thieving_team_id: runs_scored_a.next_team_id()?,
-                                        away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
-                                        away_score: runs_scored_a.metadata_f64("awayScore")?,
-                                        home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
-                                        home_score: runs_scored_a.metadata_f64("homeScore")?,
-                                        run_gained_sub_event: runs_scored_a.as_sub_event(),
-                                    })
+                                    let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                    assert!(is_known_team_nickname(team_nickname_a));
+
+                                    if team_nickname_a == victim_team_nickname {
+                                        ParseOk(RunStolenThroughTunnelsDetails::VictimKnown {
+                                            victim_team_id: runs_scored_a.next_team_id()?,
+                                            away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                            away_score: runs_scored_a.metadata_f64("awayScore")?,
+                                            home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                            home_score: runs_scored_a.metadata_f64("homeScore")?,
+                                            run_lost_sub_event: runs_scored_a.as_sub_event(),
+                                        })
+                                    } else {
+                                        // This branch has never happened, but it's included for completeness
+                                        ParseOk(RunStolenThroughTunnelsDetails::ThiefKnown {
+                                            thieving_team_nickname: team_nickname_a.to_string(),
+                                            thieving_team_id: runs_scored_a.next_team_id()?,
+                                            away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                            away_score: runs_scored_a.metadata_f64("awayScore")?,
+                                            home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                            home_score: runs_scored_a.metadata_f64("homeScore")?,
+                                            run_gained_sub_event: runs_scored_a.as_sub_event(),
+                                        })
+                                    }
                                 }
-                            }
-                        })
-                        .transpose()?
-                        .unwrap_or(RunStolenThroughTunnelsDetails::NeitherKnown);
+                            })
+                            .transpose()?
+                            .unwrap_or(RunStolenThroughTunnelsDetails::NeitherKnown);
 
-                    FedEventData::RunStolenThroughTunnels {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        thieving_player_name: thief_name.to_string(),
-                        thieving_player_id: event.next_player_id()?,
-                        victim_team_nickname: victim_team_nickname.to_string(),
-                        details,
-                        balloons: event.parse_unknown_number_of_balloons()?,
-                        hype,
-                        free_refill,
+                        FedEventData::RunStolenThroughTunnels {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            thieving_player_name: player_name.to_string(),
+                            thieving_player_id: event.next_player_id()?,
+                            victim_team_nickname: victim_team_nickname.to_string(),
+                            details,
+                            balloons: event.parse_unknown_number_of_balloons()?,
+                            hype,
+                            free_refill,
+                        }
+                    }
+                    ParsedPlayerTunnels::CaughtStealingItem { victim_name, item_name } => {
+                        let mut caught_stealing_item_event = event.next_child(EventType::FailedTunnelsSteal)?;
+                        let mut fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
+
+                        let thief_id = caught_stealing_item_event.next_player_id()?;
+                        let victim_id = caught_stealing_item_event.next_player_id()?;
+                        FedEventData::CaughtStealingItemWithTunnels {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            thief_id,
+                            thief_name: player_name.to_string(),
+                            victim_id,
+                            victim_name: victim_name.to_string(),
+                            item_name: item_name.to_string(),
+                            caught_stealing_item_sub_event: caught_stealing_item_event.as_sub_event(),
+                            fled_elsewhere_sub_event: fled_elsewhere_event.map(|e| e.as_sub_event()),
+                            flipped_negative: None, // TODO
+                        }
+                    }
+                    ParsedPlayerTunnels::StoleItem { victim_name, item_name } => {
+                        let mut stole_item_event = event.next_child(EventType::StoleItemFromTunnels)?;
+                        let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
+                        let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
+                        let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
+
+                        let thief_id = stole_item_event.next_player_id()?;
+                        let victim_id = stole_item_event.next_player_id()?;
+                        let victim_team_id = item_lost_event.next_team_id()?;
+
+                        let thief_item_dropped = item_dropped_event
+                            // TODO If this `false` is still hardcoded when tunnels is finished, find
+                            //   some way to remove it
+                            .map(|e| e.as_item_dropped(false))
+                            .transpose()?;
+
+                        FedEventData::StoleItemWithTunnels {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            thief_id,
+                            thief_name: player_name.to_string(),
+                            victim_id,
+                            victim_name: victim_name.to_string(),
+                            victim_team_id,
+                            item_id: item_lost_event.metadata_uuid("itemId")?,
+                            item_name: item_name.to_string(),
+                            item_mods: item_lost_event.metadata_str_vec("mods")?
+                                .into_iter().map(str::to_string).collect(),
+                            thief_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
+                            thief_item_rating_after: item_gained_event.metadata_f64_opt("playerItemRatingAfter")?,
+                            thief_rating: item_gained_event.metadata_f64("playerRating")?,
+                            victim_item_rating_before: item_lost_event.metadata_f64_opt("playerItemRatingBefore")?,
+                            victim_item_rating_after: item_lost_event.metadata_f64("playerItemRatingAfter")?,
+                            victim_rating: item_lost_event.metadata_f64("playerRating")?,
+                            stole_item_sub_event: stole_item_event.as_sub_event(),
+                            item_lost_sub_event: item_lost_event.as_sub_event(),
+                            thief_item_dropped,
+                            item_gained_sub_event: item_gained_event.as_sub_event(),
+                        }
+                    }
+                    ParsedPlayerTunnels::NothingInteresting => {
+                        let mut nothing_interesting_event = event.next_child(EventType::FoundNothingInterestingInTunnels)?;
+
+                        FedEventData::NothingInterestingInTunnels {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            thief_id: nothing_interesting_event.next_player_id()?,
+                            thief_name: player_name.to_string(),
+                            sub_event: nothing_interesting_event.as_sub_event(),
+                        }
                     }
                 }
-                ParsedTunnels::CaughtStealingItem { victim_name, item_name } => {
-                    let mut caught_stealing_item_event = event.next_child(EventType::CaughtStealingItemFromTunnels)?;
-                    let mut fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
+                ParsedTunnels::Team(tunnels_effect) => match tunnels_effect {
+                    ParsedTeamTunnels::HeistBegins { team_nickname } => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        let mut failed_heist_event = event.next_child(EventType::FailedTunnelsSteal)?;
+                        let target_player_name = failed_heist_event.next_parse(parse_team_tunnels_sub_event(team_nickname))?;
+                        let target_team_id = failed_heist_event.next_team_id()?;
+                        let thieving_team_id = failed_heist_event.next_team_id()?;
 
-                    let thief_id = caught_stealing_item_event.next_player_id()?;
-                    let victim_id = caught_stealing_item_event.next_player_id()?;
-                    FedEventData::CaughtStealingItemWithTunnels {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        thief_id,
-                        thief_name: thief_name.to_string(),
-                        victim_id,
-                        victim_name: victim_name.to_string(),
-                        item_name: item_name.to_string(),
-                        caught_stealing_item_sub_event: caught_stealing_item_event.as_sub_event(),
-                        fled_elsewhere_sub_event: fled_elsewhere_event.map(|e| e.as_sub_event()),
-                        flipped_negative: None, // TODO
+                        FedEventData::TeamTunnelHeistBegins {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            thieving_team_id,
+                            thieving_team_nickname: team_nickname.to_string(),
+                            target_team_id,
+                            target_player_id: failed_heist_event.next_player_id()?,
+                            target_player_name: target_player_name.to_string(),
+                            sub_event: failed_heist_event.as_sub_event(),
+                        }
                     }
-                }
-                ParsedTunnels::StoleItem { victim_name, item_name } => {
-                    let mut stole_item_event = event.next_child(EventType::StoleItemFromTunnels)?;
-                    let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
-                    let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
-                    let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
-
-                    let thief_id = stole_item_event.next_player_id()?;
-                    let victim_id = stole_item_event.next_player_id()?;
-                    let victim_team_id = item_lost_event.next_team_id()?;
-
-                    let thief_item_dropped = item_dropped_event
-                        // TODO If this `false` is still hardcoded when tunnels is finished, find
-                        //   some way to remove it
-                        .map(|e| e.as_item_dropped(false))
-                        .transpose()?;
-
-                    FedEventData::StoleItemWithTunnels {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        thief_id,
-                        thief_name: thief_name.to_string(),
-                        victim_id,
-                        victim_name: victim_name.to_string(),
-                        victim_team_id,
-                        item_id: item_lost_event.metadata_uuid("itemId")?,
-                        item_name: item_name.to_string(),
-                        item_mods: item_lost_event.metadata_str_vec("mods")?
-                            .into_iter().map(str::to_string).collect(),
-                        thief_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
-                        thief_item_rating_after: item_gained_event.metadata_f64_opt("playerItemRatingAfter")?,
-                        thief_rating: item_gained_event.metadata_f64("playerRating")?,
-                        victim_item_rating_before: item_lost_event.metadata_f64_opt("playerItemRatingBefore")?,
-                        victim_item_rating_after: item_lost_event.metadata_f64("playerItemRatingAfter")?,
-                        victim_rating: item_lost_event.metadata_f64("playerRating")?,
-                        stole_item_sub_event: stole_item_event.as_sub_event(),
-                        item_lost_sub_event: item_lost_event.as_sub_event(),
-                        thief_item_dropped,
-                        item_gained_sub_event: item_gained_event.as_sub_event(),
+                    ParsedTeamTunnels::HeistContinues { player_name } => {
+                        FedEventData::TeamTunnelHeistContinues {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            target_player_name: player_name.to_string(),
+                        }
                     }
-                }
-                ParsedTunnels::NothingInteresting => {
-                    let mut nothing_interesting_event = event.next_child(EventType::FoundNothingInterestingInTunnels)?;
-
-                    FedEventData::NothingInterestingInTunnels {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        thief_id: nothing_interesting_event.next_player_id()?,
-                        thief_name: thief_name.to_string(),
-                        sub_event: nothing_interesting_event.as_sub_event(),
+                    ParsedTeamTunnels::HeistConcludes { player_name } => {
+                        FedEventData::TeamTunnelHeistConcludes {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            target_player_name: player_name.to_string(),
+                        }
                     }
                 }
             }
@@ -4066,7 +4098,7 @@ pub fn parse_next_event(
             }
         }
         EventType::FoundNothingInterestingInTunnels => { todo!() }
-        EventType::CaughtStealingItemFromTunnels => { todo!() }
+        EventType::FailedTunnelsSteal => { todo!() }
         EventType::StoleItemFromTunnels => { todo!() }
         EventType::WeatherEvent => { todo!() }
         EventType::ElementAddedToItem => { todo!() }

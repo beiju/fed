@@ -3767,7 +3767,7 @@ impl FedEvent {
                     child_eb.set_category(EventCategory::Outcomes);
                     child_eb.push_player_tag(thief_id);
                     child_eb.push_player_tag(victim_id);
-                    child_eb.build(EventType::CaughtStealingItemFromTunnels)
+                    child_eb.build(EventType::FailedTunnelsSteal)
                 });
 
                 if let Some(sub_event) = fled_elsewhere_sub_event {
@@ -4544,6 +4544,34 @@ impl FedEvent {
 
                 eb.build(EventType::WeatherReport)
             },
+            FedEventData::TeamTunnelHeistBegins { game, thieving_team_id, thieving_team_nickname, target_team_id, target_player_id, target_player_name, sub_event } => {
+                eb.set_game(game);
+                eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
+                    child_eb.push_description(format!("...but {target_player_name} evaded them!"));
+                    child_eb.push_player_tag(target_player_id);
+                    child_eb.push_team_tag(target_team_id);
+                    child_eb.push_team_tag(thieving_team_id);
+                    child_eb.build(EventType::FailedTunnelsSteal)
+                });
+
+                eb.build(EventType::TunnelsUsed)
+            }
+            FedEventData::TeamTunnelHeistContinues { game, target_player_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("...They approached {target_player_name}."));
+                eb.build(EventType::TunnelsUsed)
+            }
+            FedEventData::TeamTunnelHeistConcludes { game, target_player_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("But {target_player_name} evaded them!"));
+                eb.build(EventType::TunnelsUsed)
+            }
         };
 
         vec![item]

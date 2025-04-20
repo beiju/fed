@@ -7132,6 +7132,72 @@ pub enum FedEventData {
         /// Metadata for the sub-event for the weather change
         sub_event: SubEvent,
     },
+
+    /// A Team began an attempt to steal a Player through the Tunnels
+    ///
+    /// This is one of a trio of events: `TeamTunnelHeistBegins`,
+    /// `TeamTunnelHeistContinues`, and `TeamTunnelHeistConcludes`. While these
+    /// are part of the same logical event, they occur on different ticks so
+    /// they are not grouped.
+    ///
+    /// Only seen by the Vault Legends during the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    TeamTunnelHeistBegins {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of the team that did the heist
+        thieving_team_id: Uuid,
+
+        /// Nickname of the team that did the heist
+        thieving_team_nickname: String,
+
+        /// Uuid of the intended target player's team
+        target_team_id: Uuid,
+
+        /// Uuid of the intended target player
+        target_player_id: Uuid,
+
+        /// Name of the intended target player
+        target_player_name: String,
+
+        /// Metadata for the heist sub-event
+        sub_event: SubEvent,
+    },
+
+    /// A Team continued an attempt to steal a Player through the Tunnels
+    ///
+    /// This is one of a trio of events: `TeamTunnelHeistBegins`,
+    /// `TeamTunnelHeistContinues`, and `TeamTunnelHeistConcludes`. While these
+    /// are part of the same logical event, they occur on different ticks so
+    /// they are not grouped.
+    ///
+    /// Only seen by the Vault Legends during the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    TeamTunnelHeistContinues {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the intended target player
+        target_player_name: String,
+    },
+
+    /// A Team concluded an attempt to steal a Player through the Tunnels
+    ///
+    /// This is one of a trio of events: `TeamTunnelHeistBegins`,
+    /// `TeamTunnelHeistContinues`, and `TeamTunnelHeistConcludes`. While these
+    /// are part of the same logical event, they occur on different ticks so
+    /// they are not grouped.
+    ///
+    /// Only seen by the Vault Legends during the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    TeamTunnelHeistConcludes {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the intended target player
+        target_player_name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
@@ -7388,6 +7454,9 @@ impl FedEventData {
             FedEventData::NightShift { game, .. } => { Some(game) }
             FedEventData::TeamFormed { .. } => { None }
             FedEventData::WeatherReport { game, .. } => { Some(game) }
+            FedEventData::TeamTunnelHeistBegins { game, .. } => { Some(game) }
+            FedEventData::TeamTunnelHeistContinues { game, .. } => { Some(game) }
+            FedEventData::TeamTunnelHeistConcludes { game, .. } => { Some(game) }
         }
     }
 }

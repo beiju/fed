@@ -2958,6 +2958,14 @@ pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, boo
 }
 
 pub(crate) enum ParsedTunnels<'a> {
+    Player {
+        player_name: &'a str,
+        tunnels_effect: ParsedPlayerTunnels<'a>,
+    },
+    Team(ParsedTeamTunnels<'a>),
+}
+
+pub(crate) enum ParsedPlayerTunnels<'a> {
     StoleRun {
         victim_team_nickname: &'a str,
     },
@@ -2972,27 +2980,84 @@ pub(crate) enum ParsedTunnels<'a> {
     NothingInteresting,
 }
 
+pub(crate) enum ParsedTeamTunnels<'a> {
+    HeistBegins {
+        team_nickname: &'a str,
+    },
+    HeistContinues {
+        player_name: &'a str,
+    },
+    HeistConcludes {
+        player_name: &'a str,
+    },
+}
 
-pub(crate) fn parse_tunnels(input: &str) -> ParserResult<(&str, ParsedTunnels)> {
+pub(crate) fn parse_tunnels(input: &str) -> ParserResult<ParsedTunnels> {
+    alt((
+        parse_player_tunnels.map(|(player_name, tunnels_effect)| ParsedTunnels::Player { player_name, tunnels_effect }),
+        parse_team_tunnels.map(|tunnels_effect| ParsedTunnels::Team(tunnels_effect)),
+    )).parse(input)
+}
+
+pub(crate) fn parse_player_tunnels(input: &str) -> ParserResult<(&str, ParsedPlayerTunnels)> {
     let (input, thief_name) = parse_terminated(" entered the Tunnels...\n").parse(input)?;
     let (input, tunnels) = alt((
         parse_tunnels_stole_run(thief_name).map(|victim_team_nickname| {
-            ParsedTunnels::StoleRun { victim_team_nickname }
+            ParsedPlayerTunnels::StoleRun { victim_team_nickname }
         }),
         parse_tunnels_caught_stealing_item(thief_name).map(|(victim_name, item_name)| {
-            ParsedTunnels::CaughtStealingItem { victim_name, item_name }
+            ParsedPlayerTunnels::CaughtStealingItem { victim_name, item_name }
         }),
         parse_tunnels_stole_item(thief_name).map(|(victim_name, item_name)| {
-            ParsedTunnels::StoleItem { victim_name, item_name }
+            ParsedPlayerTunnels::StoleItem { victim_name, item_name }
         }),
         tag("...but didn't find anything interesting.").map(|_| {
-            ParsedTunnels::NothingInteresting
+            ParsedPlayerTunnels::NothingInteresting
         }),
     )).parse(input)?;
 
     Ok((input, (thief_name, tunnels)))
 }
 
+pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<ParsedTeamTunnels> {
+    alt((
+        parse_team_tunnels_begins.map(|team_nickname| ParsedTeamTunnels::HeistBegins { team_nickname }),
+        parse_team_tunnels_continues.map(|player_name| ParsedTeamTunnels::HeistContinues { player_name }),
+        parse_team_tunnels_concludes.map(|player_name| ParsedTeamTunnels::HeistConcludes { player_name }),
+    )).parse(input)
+}
+
+pub(crate) fn parse_team_tunnels_begins(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" attempted a Heist...").parse(input)?;
+
+    Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_team_tunnels_continues(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("...They approached ").parse(input)?;
+    let (input, player_name) = parse_until_period_eof.parse(input)?;
+
+    Ok((input, player_name))
+}
+
+pub(crate) fn parse_team_tunnels_concludes(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("But ").parse(input)?;
+    let (input, player_name) = parse_terminated(" evaded them!").parse(input)?;
+
+    Ok((input, player_name))
+}
+
+pub(crate) fn parse_team_tunnels_sub_event(thieving_team_nickname: &str) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
+    move |input| {
+        let (input, _) = tag("The ").parse(input)?;
+        let (input, _) = tag(thieving_team_nickname).parse(input)?;
+        let (input, _) = tag(" attempted a Heist...\n...but ").parse(input)?;
+        let (input, player_name) = parse_terminated(" evaded them!").parse(input)?;
+
+        Ok((input, player_name))
+    }
+}
 
 pub(crate) fn parse_tunnels_stole_run(thief_name: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
     move |input| {
