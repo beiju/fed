@@ -218,8 +218,13 @@ fn impl_enum_flatten_for_struct(item_vis: Visibility, name: Ident, s: DataStruct
 
     let fields = s.fields.iter()
         .filter_map(|field| {
-            if let Some(ident) = &field.ident && ident != &flatten_field_name {
-                Some(field.into())
+            // TODO Make this a let chain
+            if let Some(ident) = &field.ident {
+                if ident != &flatten_field_name {
+                    Some(field.into())
+                } else {
+                    None
+                }
             } else {
                 None
             }
