@@ -653,28 +653,33 @@ impl<'e> EventParseWrapper<'e> {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
-                let attraction = if let Some((attracted_player_id, _, _)) = attractions.peek() && attracted_player_id == &player_id {
-                    let (_, attracted_team_nickname, attracted_player_name) = attractions.next()
-                        .expect("This code should only run when there is a next item in the iterator");
-                    assert!(is_known_team_nickname(&attracted_team_nickname));
-                    // If these ever don't match that will be fun
-                    assert_eq!(player_name, attracted_player_name);
-                    let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
-                    let boost = self.next_child_opt(EventType::PlayerStatIncrease)?
-                        .map(|child| {
-                            ParseOk(PlayerBoostSubEvent {
-                                rating_before: child.metadata_f64("before")?,
-                                rating_after: child.metadata_f64("after")?,
-                                sub_event: child.as_sub_event(),
+                // TODO Change back to a let chain
+                let attraction = if let Some((attracted_player_id, _, _)) = attractions.peek() {
+                    if attracted_player_id == &player_id {
+                        let (_, attracted_team_nickname, attracted_player_name) = attractions.next()
+                            .expect("This code should only run when there is a next item in the iterator");
+                        assert!(is_known_team_nickname(&attracted_team_nickname));
+                        // If these ever don't match that will be fun
+                        assert_eq!(player_name, attracted_player_name);
+                        let mut child = self.next_child(EventType::PlayerAddedToTeam)?;
+                        let boost = self.next_child_opt(EventType::PlayerStatIncrease)?
+                            .map(|child| {
+                                ParseOk(PlayerBoostSubEvent {
+                                    rating_before: child.metadata_f64("before")?,
+                                    rating_after: child.metadata_f64("after")?,
+                                    sub_event: child.as_sub_event(),
+                                })
                             })
+                            .transpose()?;
+                        Some(Attraction {
+                            team_nickname: attracted_team_nickname,
+                            team_id: child.next_team_id()?,
+                            sub_event: child.as_sub_event(),
+                            boost,
                         })
-                        .transpose()?;
-                    Some(Attraction {
-                        team_nickname: attracted_team_nickname,
-                        team_id: child.next_team_id()?,
-                        sub_event: child.as_sub_event(),
-                        boost,
-                    })
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };

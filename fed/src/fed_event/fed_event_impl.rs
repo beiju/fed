@@ -326,8 +326,11 @@ impl FedEvent {
                 }
 
                 // ...then hype...
-                if let Some(h) = &hype && h.source == HomeRunHypeSource::HomeRun {
-                    eb.push_hype(&h.hype, home_team_id);
+                // TODO Let chain
+                if let Some(h) = &hype {
+                    if h.source == HomeRunHypeSource::HomeRun {
+                        eb.push_hype(&h.hype, home_team_id);
+                    }
                 }
 
                 // ...then the magmatic event
@@ -350,8 +353,11 @@ impl FedEvent {
 
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
-                    if let Some(h) = &hype && h.source == HomeRunHypeSource::Buckets {
-                        eb.push_hype(&h.hype, home_team_id);
+                    if let Some(h) = &hype {
+                        // TODO let chain
+                        if h.source == HomeRunHypeSource::Buckets {
+                            eb.push_hype(&h.hype, home_team_id);
+                        }
                     }
                 }
 
@@ -362,8 +368,11 @@ impl FedEvent {
                     } else {
                         "...but they can't connect."
                     });
-                    if let Some(h) = &hype && h.source == HomeRunHypeSource::Hoops {
-                        eb.push_hype(&h.hype, home_team_id);
+                    if let Some(h) = &hype {
+                        // TODO Let chain
+                        if h.source == HomeRunHypeSource::Hoops {
+                            eb.push_hype(&h.hype, home_team_id);
+                        }
                     }
                 }
 

@@ -5,8 +5,13 @@ pub struct Possessive<'a>(pub &'a str);
 
 impl Display for Possessive<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(l) = self.0.chars().last() && l == 's' {
-            write!(f, "{}'", self.0)
+        // TODO Let chain
+        if let Some(l) = self.0.chars().last() {
+            if l == 's' {
+                write!(f, "{}'", self.0)
+            } else {
+                write!(f, "{}'s", self.0)
+            }
         } else {
             write!(f, "{}'s", self.0)
         }
