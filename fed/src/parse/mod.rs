@@ -2381,20 +2381,27 @@ pub fn parse_next_event(
                 ParsedTunnels::Team(tunnels_effect) => match tunnels_effect {
                     ParsedTeamTunnels::HeistBegins { team_nickname } => {
                         assert!(is_known_team_nickname(team_nickname));
-                        let mut failed_heist_event = event.next_child(EventType::FailedTunnelsSteal)?;
-                        let target_player_name = failed_heist_event.next_parse(parse_team_tunnels_sub_event(team_nickname))?;
-                        let target_team_id = failed_heist_event.next_team_id()?;
-                        let thieving_team_id = failed_heist_event.next_team_id()?;
+                        let mut outcome_sub_event = event.next_child_any(&[EventType::FailedTunnelsSteal, EventType::StoleItemFromTunnels])?;
+                        let (successful, target_player_name) = if outcome_sub_event.event_type == EventType::FailedTunnelsSteal {
+                            (false, outcome_sub_event.next_parse(parse_failed_team_tunnels_steal_outcome(team_nickname))?)
+                        } else {
+                            assert_eq!(outcome_sub_event.event_type, EventType::StoleItemFromTunnels, "Call to event.next_child_any must return an event with one of the types it was passed.");
+                            (true, outcome_sub_event.next_parse(parse_successful_team_tunnels_steal_outcome(team_nickname))?)
+                        };
+                        let target_team_id = outcome_sub_event.next_team_id()?;
+                        let thieving_team_id = outcome_sub_event.next_team_id()?;
 
                         FedEventData::TeamTunnelHeistBegins {
                             game: event.game(unscatter, attractor_secret_base)?,
+                            successful,
                             thieving_team_id,
                             thieving_team_nickname: team_nickname.to_string(),
                             target_team_id,
-                            target_player_id: failed_heist_event.next_player_id()?,
+                            target_player_id: outcome_sub_event.next_player_id()?,
                             target_player_name: target_player_name.to_string(),
-                            sub_event: failed_heist_event.as_sub_event(),
+                            sub_event: outcome_sub_event.as_sub_event(),
                         }
+
                     }
                     ParsedTeamTunnels::HeistContinues { player_name } => {
                         FedEventData::TeamTunnelHeistContinues {

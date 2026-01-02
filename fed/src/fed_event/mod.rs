@@ -7152,6 +7152,12 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
+        /// Whether the heist will be successful
+        ///
+        /// At this point, the game log hasn't said that the heist succeeded,
+        /// but there's already a sub-event indicating the outcome. Spoilers!
+        successful: bool,
+
         /// Uuid of the team that did the heist
         thieving_team_id: Uuid,
 

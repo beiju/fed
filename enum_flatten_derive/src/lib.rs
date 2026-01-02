@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 use ::proc_macro::TokenStream;
 use std::collections::HashMap;
 use ::proc_macro2::{TokenStream as TokenStream2};

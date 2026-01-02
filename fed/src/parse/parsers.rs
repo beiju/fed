@@ -3048,12 +3048,23 @@ pub(crate) fn parse_team_tunnels_concludes(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_team_tunnels_sub_event(thieving_team_nickname: &str) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
+pub(crate) fn parse_failed_team_tunnels_steal_outcome(thieving_team_nickname: &str) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
     move |input| {
         let (input, _) = tag("The ").parse(input)?;
         let (input, _) = tag(thieving_team_nickname).parse(input)?;
         let (input, _) = tag(" attempted a Heist...\n...but ").parse(input)?;
         let (input, player_name) = parse_terminated(" evaded them!").parse(input)?;
+
+        Ok((input, player_name))
+    }
+}
+
+pub(crate) fn parse_successful_team_tunnels_steal_outcome(thieving_team_nickname: &str) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
+    move |input| {
+        let (input, _) = tag("The ").parse(input)?;
+        let (input, _) = tag(thieving_team_nickname).parse(input)?;
+        let (input, _) = tag(" collected ").parse(input)?;
+        let (input, player_name) = parse_terminated(" in a Heist!").parse(input)?;
 
         Ok((input, player_name))
     }

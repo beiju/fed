@@ -4544,18 +4544,26 @@ impl FedEvent {
 
                 eb.build(EventType::WeatherReport)
             },
-            FedEventData::TeamTunnelHeistBegins { game, thieving_team_id, thieving_team_nickname, target_team_id, target_player_id, target_player_name, sub_event } => {
+            FedEventData::TeamTunnelHeistBegins { game, successful, thieving_team_id, thieving_team_nickname, target_team_id, target_player_id, target_player_name, sub_event } => {
                 eb.set_game(game);
                 eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
 
                 eb.push_child(sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Outcomes);
-                    child_eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
-                    child_eb.push_description(format!("...but {target_player_name} evaded them!"));
+                    if successful {
+                        child_eb.push_description(format!("The {thieving_team_nickname} collected {target_player_name} in a Heist!"));
+                    } else {
+                        child_eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
+                        child_eb.push_description(format!("...but {target_player_name} evaded them!"));
+                    }
                     child_eb.push_player_tag(target_player_id);
                     child_eb.push_team_tag(target_team_id);
                     child_eb.push_team_tag(thieving_team_id);
-                    child_eb.build(EventType::FailedTunnelsSteal)
+                    if successful {
+                        child_eb.build(EventType::StoleItemFromTunnels)
+                    } else {
+                        child_eb.build(EventType::FailedTunnelsSteal)
+                    }
                 });
 
                 eb.build(EventType::TunnelsUsed)
