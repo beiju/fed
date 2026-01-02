@@ -18,7 +18,6 @@ use derive_builder::Builder;
 use schemars::JsonSchema;
 use strum_macros::{AsRefStr, Display as StrumDisplay};
 use with_structure::WithStructure;
-use enum_flatten_derive::{EnumFlatten, EnumFlattenable};
 
 use crate::FeedParseError;
 use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
@@ -1873,7 +1872,7 @@ pub struct NamedPlayerBoostSubEvent {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 pub enum TeamNicknameOrPlayerName {
     TeamNickname(String),
     PlayerName(String),
@@ -1885,7 +1884,7 @@ pub struct MaintenanceMode {
     pub team_id: Uuid,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 pub enum PostseasonBirthBoostEventOrder {
     // TODO Do all 3 of these actually appear in real data?
     AfterHatch,
@@ -1968,7 +1967,7 @@ pub struct Hype {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum HomeRunHypeSource {
     HomeRun,
     Buckets,
@@ -1990,7 +1989,7 @@ impl HomeRunHype {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum NumbersGo {
     Up,
     Down,
@@ -2043,7 +2042,7 @@ pub struct Ambush {
     pub player_rating_after: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum RoamFromLocation {
     Team {
         /// Uuid of player's previous team
@@ -2061,7 +2060,7 @@ pub enum RoamFromLocation {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum GameStartAnnouncement {
     LetsGo,
     TeamNames {
@@ -2073,7 +2072,7 @@ pub enum GameStartAnnouncement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum LedgerLineV1 {
     NegativePolarity,
     Underachiever,
@@ -2100,7 +2099,7 @@ impl Display for LedgerLineV1 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum LedgerRunModifier {
     Magnified {
         position: ActivePositionType,
@@ -2449,7 +2448,7 @@ impl LedgerV2 for ModerationLedger {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[repr(u8)]
 pub enum TripleThreats {
     One = 1,
@@ -2648,7 +2647,7 @@ impl LedgerV2 for StolenBaseLedger {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
     None,
     // TODO: If possible, have the V1 parser convert to V2 and always store V2
@@ -2737,7 +2736,7 @@ pub struct PressureBuilt {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 pub enum RenovationBuiltEffect {
     None,
     ModAdded {
@@ -2776,7 +2775,7 @@ pub struct ModRemovedFromRatification {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, IntoPrimitive, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, IntoPrimitive, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 #[repr(i64)]
 pub enum BracketType {
     Overbracket = 0,
@@ -2895,7 +2894,7 @@ pub struct PlayerTogethernessModBlip {
     pub addition: Option<PlayerTogethernessModChange>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 pub enum RunStolenThroughTunnelsDetails {
     /// Neither scoring event was available, so no details are known
     NeitherKnown,
@@ -3012,7 +3011,7 @@ pub struct TradeForNothing {
     pub trader_team_id: Uuid,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 #[serde(tag = "trader_traitor")]
 pub enum TraderTraitor {
     /// The player is described as a Trader
@@ -3070,7 +3069,7 @@ pub struct Balloons {
     pub num_balloons: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumFlattenable)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum PlayerMovedFrom {
     Unspecified,
     LeagueTeam {
@@ -3190,7 +3189,7 @@ pub struct PlayersAddedToTeam {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay, EnumFlattenable)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -7249,9 +7248,8 @@ pub enum SimPhase {
 }
 
 /// Represents the parsed data for any Feed event
-#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, WithStructure, EnumFlatten)]
+#[derive(Clone, Debug, Builder, JsonSchema, Serialize, Deserialize, WithStructure)]
 #[serde(rename_all = "camelCase")]
-#[enum_flatten(data)]
 pub struct FedEvent {
     /// Uuid of the event itself
     pub id: Uuid,

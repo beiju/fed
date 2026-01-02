@@ -8,7 +8,6 @@ use json_structural_diff::JsonDiff;
 use anyhow::{anyhow, Context};
 use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
 use with_structure::WithStructure;
-use enum_flatten::{EnumFlatten, EnumFlattened};
 use clap::Parser;
 use itertools::Itertools;
 use eventually_api::EventuallyEvent;
@@ -34,11 +33,6 @@ const SEASONS: [(&'static str, i64, i64); 11] = [
 ];
 
 fn check_parse(parsed_event: &FedEvent, source_events: &[EventuallyEvent]) -> anyhow::Result<()> {
-    let parsed_event_flat = EnumFlatten::flatten(parsed_event.clone());
-    let parsed_event_inflat = EnumFlattened::unflatten(parsed_event_flat.clone());
-
-    assert!(&parsed_event_inflat == parsed_event);
-
     let reconstructed_events = parsed_event.clone().into_feed_events();
 
     // JsonDiff is expensive. Only run it if the events don't compare equal.

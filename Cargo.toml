@@ -1,8 +1,6 @@
 [workspace]
 
 members = [
-    "enum_flatten",
-    "enum_flatten_derive",
     "eventually_api",
     "fed",
     "fed_server",

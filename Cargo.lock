@@ -503,17 +503,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-syn-parse"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e79116f119dd1dba1abf1f3405f03b9b0e79a27a3883864bfebded8a3dc768cd"
-dependencies = [
- "proc-macro2 1.0.104",
- "quote 1.0.42",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "derive_builder"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -637,23 +626,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum_flatten"
-version = "0.1.0"
-
-[[package]]
-name = "enum_flatten_derive"
-version = "0.1.0"
-dependencies = [
- "itertools",
- "macro_state",
- "proc-macro2 1.0.104",
- "quote 1.0.42",
- "serde",
- "serde_json",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -704,8 +676,6 @@ dependencies = [
  "derive_builder",
  "either",
  "enum_access",
- "enum_flatten",
- "enum_flatten_derive",
  "eventually_api",
  "flate2",
  "itertools",
@@ -747,7 +717,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "enum_flatten",
  "eventually_api",
  "fed",
  "flate2",
@@ -1415,28 +1384,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "macro_state"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589abf95dc56083803fad8a5d41bd6828a11e248dbb5648c2d2c141bd981bd83"
-dependencies = [
- "lazy_static",
- "macro_state_macros",
-]
-
-[[package]]
-name = "macro_state_macros"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0a7012ddae0ba8421fd36c6260439e25f01053882f68b4cadf53639c97727bb"
-dependencies = [
- "derive-syn-parse",
- "lazy_static",
- "quote 1.0.42",
- "syn 1.0.109",
 ]
 
 [[package]]
