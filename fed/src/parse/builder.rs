@@ -132,7 +132,7 @@ impl EventBuilderForGame {
     }
 }
 
-trait ErasedScores {
+pub trait ErasedScores {
     fn print(&self) -> String;
 
     #[deprecated = "This is part of the old builder"]

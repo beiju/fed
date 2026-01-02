@@ -10,7 +10,6 @@ use crate::PeekableWithLogging;
 use std::sync::{Arc, Mutex};
 use itertools::{Either, Itertools};
 use nom::combinator::opt;
-use nom::Parser;
 use serde::Deserialize;
 // the second one is a macro
 use uuid::{Uuid, uuid};
@@ -3311,9 +3310,7 @@ pub fn parse_next_event(
                     players_added_event.metadata_str_vec("playerNames")?,
                 )
                     .map(|(player_id, player_name)| {
-                        let (player_moved_from, player_visited_vault) = if let Some(e) = (
-                            preceding_events_iter.next_if(|e| e.player_id == player_id)
-                        ) {
+                        let (player_moved_from, player_visited_vault) = if let Some(e) = preceding_events_iter.next_if(|e| e.player_id == player_id) {
                             let player_visited_vault = e.enter_vault
                                 .as_ref().map(|enter_vault_event| {
                                     EventParseWrapper::new(&enter_vault_event)

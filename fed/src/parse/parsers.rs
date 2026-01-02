@@ -1,6 +1,7 @@
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
-use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats, TraderTraitor, TradeForSomething, TradeForNothing};
+use crate::{Base, BracketType, DebtType, EchoChamberModAdded, HomeRunType, NumbersGo, RiffElement, StrikeoutType, SubseasonalMod, TimeElsewhere, TripleThreats};
+use eventually_api::Weather;
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
@@ -10,16 +11,9 @@ use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
 use uuid::Uuid;
-use eventually_api::Weather;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
-
-pub(crate) fn parse_opt_newline(input: &str) -> ParserResult<bool> {
-    let (input, newline) = opt(tag("\n")).parse(input)?;
-
-    Ok((input, newline.is_some()))
-}
 
 pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<&str> {
     move |input| {
@@ -1302,9 +1296,9 @@ pub(crate) fn parse_flooding_swept(input: &str) -> ParserResult<(Vec<ParsedFlood
         }
     }
 
-    let (mut input, flood_balloon) = opt(tag("\nA Flood Balloon was filled!")).parse(input)?;
+    let (input, flood_balloon) = opt(tag("\nA Flood Balloon was filled!")).parse(input)?;
 
-    let (mut input, anti_flumps) = opt(tag("\nThe Anti Flood Pumps activate!")).parse(input)?;
+    let (input, anti_flumps) = opt(tag("\nThe Anti Flood Pumps activate!")).parse(input)?;
 
     Ok((input, (effects, flumps.is_some(), flood_balloon.is_some(), anti_flumps.is_some())))
 }

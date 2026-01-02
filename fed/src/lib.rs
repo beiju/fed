@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 #![feature(adt_const_params)]
 
 mod parse;
