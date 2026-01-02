@@ -128,12 +128,10 @@ async fn get_events<'a>(uri: &'a Origin<'_>, client: &State<reqwest::Client>) ->
         .await?
         .text()
         .await?;
-    let eventually_events = eventually_api::events_from_str(&eventually_response)?;
-    let fed_events = eventually_events.iter()
-        .map(fed::parse_feed_event)
-        .collect::<Result<Vec<_>, _>>()?;
+    let _eventually_events = eventually_api::events_from_str(&eventually_response)?;
 
-    ApiResult::Success(Json(fed_events))
+    // TODO Re-enable parsing
+    ApiResult::NotImplemented("Fed server has been disabled for now".to_string())
 }
 
 #[rocket::main]
