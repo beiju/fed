@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 use fed::FedEvent;
 use itertools::Itertools;
 use schemars::Schema;
