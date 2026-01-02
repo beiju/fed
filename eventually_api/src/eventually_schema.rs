@@ -6,7 +6,7 @@ use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
-use schemars::gen::SchemaGenerator;
+use schemars::r#gen::SchemaGenerator;
 use schemars::JsonSchema;
 use schemars::schema::Schema;
 use with_structure::WithStructure;
