@@ -6,7 +6,7 @@ pub trait RunSource {
 }
 
 macro_rules! run_source {
-    ($name:ident, $label:expr) => {
+    ($name:ident, $label:expr_2021) => {
         #[derive(Debug, Clone, Copy, JsonSchema)]
         pub struct $name;
         impl RunSource for $name {

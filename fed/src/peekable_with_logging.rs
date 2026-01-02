@@ -18,11 +18,11 @@ impl<IterT: Iterator> PeekableWithLogging<IterT> where IterT::Item: Clone {
     }
 
     fn raw_next(&mut self) -> Option<IterT::Item> {
-        if let Some(item) = self.peeked.pop_front() {
+        match self.peeked.pop_front() { Some(item) => {
             Some(item)
-        } else {
+        } _ => {
             self.iter.next()
-        }
+        }}
     }
 
     fn yield_item(&mut self, item: Option<IterT::Item>) -> Option<IterT::Item> {
