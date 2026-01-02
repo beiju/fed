@@ -8,7 +8,7 @@ use schemars::{
     visit::Visitor,
     visit::visit_schema_object,
 };
-use schemars::gen::SchemaSettings;
+use schemars::r#gen::SchemaSettings;
 use schemars::schema::Schema::Object;
 
 #[derive(Debug, Clone)]

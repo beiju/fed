@@ -119,12 +119,12 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut err_lock = err.lock().unwrap();
-    if let Some(e) = err_lock.take() {
+    match err_lock.take() { Some(e) => {
         Err(e)
-    } else {
+    } _ => {
         println!("Done");
         Ok(())
-    }
+    }}
 }
 
 fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, stop_signal: impl Fn() -> bool, args: Args) -> anyhow::Result<()> {
