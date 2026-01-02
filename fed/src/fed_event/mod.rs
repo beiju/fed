@@ -3,27 +3,37 @@ pub mod run_source;
 use crate::format_utils::WholeRuns;
 pub use run_source::RunSource;
 
+use chrono::{DateTime, Utc};
+use derive_builder::Builder;
+use enum_access::EnumDisplay;
+use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
+use itertools::{Either, Itertools};
+use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use std::marker::PhantomData;
-use chrono::{DateTime, Utc};
-use enum_access::EnumDisplay;
-use itertools::{Either, Itertools};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
-use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
-use derive_builder::Builder;
-use schemars::JsonSchema;
 use strum_macros::{AsRefStr, Display as StrumDisplay};
+use uuid::Uuid;
 use with_structure::WithStructure;
 
 use crate::FeedParseError;
 use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
 use crate::parse::builder::possessive;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    IntoPrimitive,
+    TryFromPrimitive,
+    WithStructure,
+)]
 #[repr(i64)]
 pub enum Being {
     EmergencyAlert = -1,
@@ -248,35 +258,58 @@ pub struct Scores<LedgerRunT: LedgerV2> {
 
 impl<T: LedgerV2> Scores<T> {
     #[deprecated = "This is part of the old event builder"]
-    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str, extra_space: bool) -> String {
+    pub fn to_description_with_text_between(
+        &self,
+        score_text: &str,
+        text_between: &str,
+        extra_space: bool,
+    ) -> String {
         let mut output = String::new();
         for score in &self.scores {
             if let Some(damage) = &score.item_damage {
-                write!(output, "\n{}{} {} {}", if extra_space { " " } else { "" },
-                       possessive(score.player_name.clone()), damage.item_name,
-                       if damage.health == 0 { "broke!" } else { "was damaged." }).unwrap();
+                write!(
+                    output,
+                    "\n{}{} {} {}",
+                    if extra_space { " " } else { "" },
+                    possessive(score.player_name.clone()),
+                    damage.item_name,
+                    if damage.health == 0 {
+                        "broke!"
+                    } else {
+                        "was damaged."
+                    }
+                )
+                .unwrap();
             }
 
             write!(output, "\n{}{}", score.player_name, score_text).unwrap();
 
             if let Some(attraction) = &score.attraction {
-                write!(output, "\nThe {} Attract {}!", attraction.team_nickname, score.player_name).unwrap();
+                write!(
+                    output,
+                    "\nThe {} Attract {}!",
+                    attraction.team_nickname, score.player_name
+                )
+                .unwrap();
             }
         }
 
         write!(output, "{}", text_between).unwrap();
 
         for refill in &self.free_refills {
-            write!(output, "\n{} used their Free Refill.\n{} Refills the In!", refill.player_name, refill.player_name).unwrap();
+            write!(
+                output,
+                "\n{} used their Free Refill.\n{} Refills the In!",
+                refill.player_name, refill.player_name
+            )
+            .unwrap();
         }
 
         output
     }
 
     pub fn scorer_ids(&self) -> Vec<Uuid> {
-        self.scores.iter()
-            .map(|p| p.player_id)
-            .collect()
+        self.scores.iter().map(|p| p.player_id).collect()
     }
 
     pub fn used_refill(&self) -> bool {
@@ -306,16 +339,19 @@ impl Score {
         write!(output, "{}", text_between).unwrap();
 
         for refill in &self.free_refills {
-            write!(output, "\n{} used their Free Refill.\n{} Refills the In!", refill.player_name, refill.player_name).unwrap();
+            write!(
+                output,
+                "\n{} used their Free Refill.\n{} Refills the In!",
+                refill.player_name, refill.player_name
+            )
+            .unwrap();
         }
 
         output
     }
 
     pub fn scorer_ids(&self) -> Vec<Uuid> {
-        self.score.iter()
-            .map(|p| p.player_id)
-            .collect()
+        self.score.iter().map(|p| p.player_id).collect()
     }
 
     pub fn used_refill(&self) -> bool {
@@ -374,8 +410,8 @@ pub enum CoffeeBeanMod {
 impl CoffeeBeanMod {
     fn to_str(&self) -> &'static str {
         match self {
-            CoffeeBeanMod::Wired => { "WIRED" }
-            CoffeeBeanMod::Tired => { "TIRED" }
+            CoffeeBeanMod::Wired => "WIRED",
+            CoffeeBeanMod::Tired => "TIRED",
         }
     }
 }
@@ -387,12 +423,23 @@ impl TryFrom<&str> for CoffeeBeanMod {
         match value {
             "WIRED" => Ok(Self::Wired),
             "TIRED" => Ok(Self::Tired),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    IntoPrimitive,
+    TryFromPrimitive,
+    WithStructure,
+)]
 #[serde(rename_all = "camelCase")]
 #[repr(i64)]
 pub enum AttrCategory {
@@ -405,16 +452,28 @@ pub enum AttrCategory {
 impl Display for AttrCategory {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AttrCategory::Batting => { write!(f, "hitting") }
-            AttrCategory::Pitching => { write!(f, "pitching") }
-            AttrCategory::Defense => { write!(f, "defensive") }
-            AttrCategory::Baserunning => { write!(f, "baserunning") }
+            AttrCategory::Batting => {
+                write!(f, "hitting")
+            }
+            AttrCategory::Pitching => {
+                write!(f, "pitching")
+            }
+            AttrCategory::Defense => {
+                write!(f, "defensive")
+            }
+            AttrCategory::Baserunning => {
+                write!(f, "baserunning")
+            }
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-#[serde(rename_all = "camelCase", tag = "action", content = "strikeoutBatterName")]
+#[serde(
+    rename_all = "camelCase",
+    tag = "action",
+    content = "strikeoutBatterName"
+)]
 pub enum BlooddrainAction {
     AddBall,
     RemoveBall,
@@ -428,20 +487,46 @@ pub enum BlooddrainAction {
 impl Display for BlooddrainAction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BlooddrainAction::AddBall => { write!(f, "adds a Ball!") }
-            BlooddrainAction::RemoveBall => { write!(f, "removes a Ball!") }
-            BlooddrainAction::AddStrike(None) => { write!(f, "adds a Strike!") }
-            BlooddrainAction::AddStrike(Some(player_struck_out_name)) => {
-                write!(f, "adds a Strike!\n{player_struck_out_name} strikes out looking.")
+            BlooddrainAction::AddBall => {
+                write!(f, "adds a Ball!")
             }
-            BlooddrainAction::RemoveStrike => { write!(f, "removes a Strike!") }
-            BlooddrainAction::AddOut => { write!(f, "adds a Out!") }
-            BlooddrainAction::RemoveOut => { write!(f, "removes a Out!") }
+            BlooddrainAction::RemoveBall => {
+                write!(f, "removes a Ball!")
+            }
+            BlooddrainAction::AddStrike(None) => {
+                write!(f, "adds a Strike!")
+            }
+            BlooddrainAction::AddStrike(Some(player_struck_out_name)) => {
+                write!(
+                    f,
+                    "adds a Strike!\n{player_struck_out_name} strikes out looking."
+                )
+            }
+            BlooddrainAction::RemoveStrike => {
+                write!(f, "removes a Strike!")
+            }
+            BlooddrainAction::AddOut => {
+                write!(f, "adds a Out!")
+            }
+            BlooddrainAction::RemoveOut => {
+                write!(f, "removes a Out!")
+            }
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure, TryFromPrimitive, IntoPrimitive)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    WithStructure,
+    TryFromPrimitive,
+    IntoPrimitive,
+)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ModDuration {
@@ -454,10 +539,18 @@ pub enum ModDuration {
 impl Display for ModDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ModDuration::Permanent => { write!(f, "permanent") }
-            ModDuration::Seasonal => { write!(f, "seasonal") }
-            ModDuration::Weekly => { write!(f, "weekly") }
-            ModDuration::Game => { write!(f, "game") }
+            ModDuration::Permanent => {
+                write!(f, "permanent")
+            }
+            ModDuration::Seasonal => {
+                write!(f, "seasonal")
+            }
+            ModDuration::Weekly => {
+                write!(f, "weekly")
+            }
+            ModDuration::Game => {
+                write!(f, "game")
+            }
         }
     }
 }
@@ -604,74 +697,74 @@ pub enum SubseasonalMod {
 impl SubseasonalMod {
     pub fn performing_mod_id(&self) -> &'static str {
         match self {
-            SubseasonalMod::Earlbirds => { "OVERPERFORMING" }
-            SubseasonalMod::Middling => { "OVERPERFORMING" }
-            SubseasonalMod::Coasting => { "UNDERPERFORMING" }
-            SubseasonalMod::LateToTheParty => { "OVERPERFORMING" }
-            SubseasonalMod::EarlyToTheParty => { "UNDERPERFORMING" }
-            SubseasonalMod::Ambitious => { "OVERPERFORMING" }
-            SubseasonalMod::Unambitious => { "UNDERPERFORMING" }
+            SubseasonalMod::Earlbirds => "OVERPERFORMING",
+            SubseasonalMod::Middling => "OVERPERFORMING",
+            SubseasonalMod::Coasting => "UNDERPERFORMING",
+            SubseasonalMod::LateToTheParty => "OVERPERFORMING",
+            SubseasonalMod::EarlyToTheParty => "UNDERPERFORMING",
+            SubseasonalMod::Ambitious => "OVERPERFORMING",
+            SubseasonalMod::Unambitious => "UNDERPERFORMING",
         }
     }
 
     pub fn mod_id(&self) -> &'static str {
         match self {
-            SubseasonalMod::Earlbirds => { "EARLBIRDS" }
-            SubseasonalMod::Middling => { "MIDDLING" }
-            SubseasonalMod::Coasting => { "COASTING" }
-            SubseasonalMod::LateToTheParty => { "LATE_TO_PARTY" }
-            SubseasonalMod::EarlyToTheParty => { "EARLY_TO_PARTY" }
-            SubseasonalMod::Ambitious => { "AMBITIOUS" }
-            SubseasonalMod::Unambitious => { "UNAMBITIOUS" }
+            SubseasonalMod::Earlbirds => "EARLBIRDS",
+            SubseasonalMod::Middling => "MIDDLING",
+            SubseasonalMod::Coasting => "COASTING",
+            SubseasonalMod::LateToTheParty => "LATE_TO_PARTY",
+            SubseasonalMod::EarlyToTheParty => "EARLY_TO_PARTY",
+            SubseasonalMod::Ambitious => "AMBITIOUS",
+            SubseasonalMod::Unambitious => "UNAMBITIOUS",
         }
     }
 
     pub fn label_for_teams(&self) -> &'static str {
         match self {
-            SubseasonalMod::Earlbirds => { "Earlbirds" }
-            SubseasonalMod::Middling => { "Middling" }
-            SubseasonalMod::Coasting => { "Coasting" }
-            SubseasonalMod::LateToTheParty => { "Late to the Party" }
-            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
-            SubseasonalMod::Ambitious => { "Ambitious" }
-            SubseasonalMod::Unambitious => { "Unambitious" }
+            SubseasonalMod::Earlbirds => "Earlbirds",
+            SubseasonalMod::Middling => "Middling",
+            SubseasonalMod::Coasting => "Coasting",
+            SubseasonalMod::LateToTheParty => "Late to the Party",
+            SubseasonalMod::EarlyToTheParty => "Early to the Party",
+            SubseasonalMod::Ambitious => "Ambitious",
+            SubseasonalMod::Unambitious => "Unambitious",
         }
     }
 
     pub fn label_for_players(&self) -> &'static str {
         match self {
-            SubseasonalMod::Earlbirds => { "an Earlbird" }
-            SubseasonalMod::Middling => { "Middling" }
-            SubseasonalMod::Coasting => { "Coasting" }
-            SubseasonalMod::LateToTheParty => { "Late to the Party" }
-            SubseasonalMod::EarlyToTheParty => { "Early to the Party" }
+            SubseasonalMod::Earlbirds => "an Earlbird",
+            SubseasonalMod::Middling => "Middling",
+            SubseasonalMod::Coasting => "Coasting",
+            SubseasonalMod::LateToTheParty => "Late to the Party",
+            SubseasonalMod::EarlyToTheParty => "Early to the Party",
             // The 2/3 ellipsis is a little hack. The "period" after the label will complete it.
-            SubseasonalMod::Ambitious => { "feeling Ambitious.." }
-            SubseasonalMod::Unambitious => { "feeling Unambitious.." }
+            SubseasonalMod::Ambitious => "feeling Ambitious..",
+            SubseasonalMod::Unambitious => "feeling Unambitious..",
         }
     }
 
     pub fn prefix(&self) -> Option<&'static str> {
         match self {
-            SubseasonalMod::Earlbirds => { Some("Happy Earlseason!") }
-            SubseasonalMod::Middling => { Some("Happy Midseason!") }
-            SubseasonalMod::Coasting => { None }
-            SubseasonalMod::LateToTheParty => { Some("Late to the Party!") }
-            SubseasonalMod::EarlyToTheParty => { Some("Early to the Party!") }
-            SubseasonalMod::Ambitious => { None }
-            SubseasonalMod::Unambitious => { None }
+            SubseasonalMod::Earlbirds => Some("Happy Earlseason!"),
+            SubseasonalMod::Middling => Some("Happy Midseason!"),
+            SubseasonalMod::Coasting => None,
+            SubseasonalMod::LateToTheParty => Some("Late to the Party!"),
+            SubseasonalMod::EarlyToTheParty => Some("Early to the Party!"),
+            SubseasonalMod::Ambitious => None,
+            SubseasonalMod::Unambitious => None,
         }
     }
 
     pub fn event_type(&self) -> EventType {
         match self {
-            SubseasonalMod::Earlbirds => { EventType::Earlbird }
-            SubseasonalMod::Middling => { EventType::Middling }
-            SubseasonalMod::Coasting => { EventType::Coasting }
-            SubseasonalMod::LateToTheParty => { EventType::LateToTheParty }
-            SubseasonalMod::EarlyToTheParty => { EventType::EarlyToTheParty }
-            SubseasonalMod::Ambitious => { EventType::Ambitious }
-            SubseasonalMod::Unambitious => { EventType::Unambitious }
+            SubseasonalMod::Earlbirds => EventType::Earlbird,
+            SubseasonalMod::Middling => EventType::Middling,
+            SubseasonalMod::Coasting => EventType::Coasting,
+            SubseasonalMod::LateToTheParty => EventType::LateToTheParty,
+            SubseasonalMod::EarlyToTheParty => EventType::EarlyToTheParty,
+            SubseasonalMod::Ambitious => EventType::Ambitious,
+            SubseasonalMod::Unambitious => EventType::Unambitious,
         }
     }
 }
@@ -712,20 +805,20 @@ where
 
     /// Details about the subseasonal mod change that are extracted from a sub-event. These are
     /// not available for the few (one) occasion where the sub-event was not added.
-    pub details: Option<SubseasonalModChangeDetails<SubjectType::Details>>
+    pub details: Option<SubseasonalModChangeDetails<SubjectType::Details>>,
 }
 
 impl SpicyStatus {
     pub fn is_none(&self) -> bool {
         match self {
             SpicyStatus::None => true,
-            _ => false
+            _ => false,
         }
     }
     pub fn is_special(&self) -> bool {
         match self {
             SpicyStatus::RedHot { .. } => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -768,7 +861,18 @@ pub struct KnownPlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    TryFromPrimitive,
+    IntoPrimitive,
+    WithStructure,
+)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ActivePositionType {
@@ -799,7 +903,18 @@ impl ActivePositionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    TryFromPrimitive,
+    IntoPrimitive,
+    WithStructure,
+)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum ShadowPositionType {
@@ -807,7 +922,18 @@ pub enum ShadowPositionType {
     Bullpen = 3,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, TryFromPrimitive, IntoPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    TryFromPrimitive,
+    IntoPrimitive,
+    WithStructure,
+)]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
 pub enum PositionType {
@@ -822,11 +948,11 @@ pub enum PositionType {
 impl PositionType {
     pub fn name_post_merge(self) -> &'static str {
         match self {
-            PositionType::Lineup => { "Lineup" }
-            PositionType::Rotation => { "Rotation" }
-            PositionType::BenchOrShadows => { "Shadows" }
+            PositionType::Lineup => "Lineup",
+            PositionType::Rotation => "Rotation",
+            PositionType::BenchOrShadows => "Shadows",
             // This should never be used, but if it were the most correct value is "Shadows"
-            PositionType::Bullpen => { "Shadows" }
+            PositionType::Bullpen => "Shadows",
         }
     }
 }
@@ -866,7 +992,7 @@ pub enum PlayerReverb {
         /// Name of the first player involved in this reverb
         first_player_name: String,
 
-        /// New location (lineup or rotation) of the first player involved in this reverb. Also the 
+        /// New location (lineup or rotation) of the first player involved in this reverb. Also the
         /// previous location of the second player in the reverb.
         first_player_new_location: ActivePositionType,
 
@@ -876,7 +1002,7 @@ pub enum PlayerReverb {
         /// Name of the second player involved in this reverb
         second_player_name: String,
 
-        /// New location (lineup or rotation) of the second player involved in this reverb. Also the 
+        /// New location (lineup or rotation) of the second player involved in this reverb. Also the
         /// previous location of the second player in the reverb.
         second_player_new_location: ActivePositionType,
 
@@ -935,7 +1061,7 @@ pub struct KnownPlayerRemovedFromTeam {
 
     /// Nickname of team the player was removed from
     pub team_nickname: String,
-    
+
     /// Metadata for the player removed from team sub-event
     pub sub_event: SubEvent,
 }
@@ -977,7 +1103,7 @@ pub struct PlayerSentElsewhere {
     pub sub_event: SubEvent,
 
     /// If the player was flipped negative, this is information about that
-    pub flipped_negative: Option<FlipNegative>
+    pub flipped_negative: Option<FlipNegative>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -1059,7 +1185,11 @@ pub struct EchoIntoStatic {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr)]
-#[serde(tag = "time_elsewhere_type", content = "time_elsewhere", rename_all = "camelCase")]
+#[serde(
+    tag = "time_elsewhere_type",
+    content = "time_elsewhere",
+    rename_all = "camelCase"
+)]
 pub enum TimeElsewhere {
     Days(i64),
     Seasons(i64),
@@ -1170,7 +1300,7 @@ pub enum ReturnFromElsewhereFlavor {
         /// Number of days or seasons the player was Elsewhere, if present. Not all elsewhere
         /// returns say the amount of time the player was Elsewhere.
         time_elsewhere: Option<TimeElsewhere>,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1185,17 +1315,26 @@ pub struct TeamRunsLost {
 
 impl Display for TeamRunsLost {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} of the {}'s {} are lost!", self.runs_lost, self.team_name, if self.runs_lost < 0. {
-            "Unruns"
-        } else {
-            "Runs"
-        })
+        write!(
+            f,
+            "{} of the {}'s {} are lost!",
+            self.runs_lost,
+            self.team_name,
+            if self.runs_lost < 0. {
+                "Unruns"
+            } else {
+                "Runs"
+            }
+        )
     }
 }
 
 // TODO: Make this into a static vec with max size 2 (third-party crate)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
-#[serde(into = "SerdeRunLossesFromSalmon", try_from = "SerdeRunLossesFromSalmon")]
+#[serde(
+    into = "SerdeRunLossesFromSalmon",
+    try_from = "SerdeRunLossesFromSalmon"
+)]
 pub enum RunLossesFromSalmon {
     None,
     OneTeam(TeamRunsLost),
@@ -1210,10 +1349,15 @@ impl TryFrom<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
 
     fn try_from(value: SerdeRunLossesFromSalmon) -> Result<Self, Self::Error> {
         Ok(match value.0.len() {
-            0 => { Self::None }
-            1 => { Self::OneTeam(value.0.into_iter().next().unwrap()) }
-            2 => { Self::BothTeams(value.0.into_iter().collect_tuple().unwrap()) }
-            n => { return Err(format!("RunLossesFromSalmon must have 0, 1, or 2 elements but got {} elements", n)); }
+            0 => Self::None,
+            1 => Self::OneTeam(value.0.into_iter().next().unwrap()),
+            2 => Self::BothTeams(value.0.into_iter().collect_tuple().unwrap()),
+            n => {
+                return Err(format!(
+                    "RunLossesFromSalmon must have 0, 1, or 2 elements but got {} elements",
+                    n
+                ));
+            }
         })
     }
 }
@@ -1221,20 +1365,25 @@ impl TryFrom<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
 impl Into<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
     fn into(self) -> SerdeRunLossesFromSalmon {
         match self {
-            RunLossesFromSalmon::None => { SerdeRunLossesFromSalmon(vec![]) }
-            RunLossesFromSalmon::OneTeam(one) => { SerdeRunLossesFromSalmon(vec![one]) }
-            RunLossesFromSalmon::BothTeams((a, b)) => { SerdeRunLossesFromSalmon(vec![a, b]) }
+            RunLossesFromSalmon::None => SerdeRunLossesFromSalmon(vec![]),
+            RunLossesFromSalmon::OneTeam(one) => SerdeRunLossesFromSalmon(vec![one]),
+            RunLossesFromSalmon::BothTeams((a, b)) => SerdeRunLossesFromSalmon(vec![a, b]),
         }
     }
 }
 
-
 impl Display for RunLossesFromSalmon {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RunLossesFromSalmon::None => { write!(f, "No Runs are lost.") }
-            RunLossesFromSalmon::OneTeam(runs) => { write!(f, "{runs}") }
-            RunLossesFromSalmon::BothTeams((a, b)) => { write!(f, "{a}\n{b}") }
+            RunLossesFromSalmon::None => {
+                write!(f, "No Runs are lost.")
+            }
+            RunLossesFromSalmon::OneTeam(runs) => {
+                write!(f, "{runs}")
+            }
+            RunLossesFromSalmon::BothTeams((a, b)) => {
+                write!(f, "{a}\n{b}")
+            }
         }
     }
 }
@@ -1263,8 +1412,8 @@ impl DebtType {
     pub fn mod_id(&self) -> &'static str {
         // I think it's just a coincidence that neither of these mods' ids match their display names
         match self {
-            DebtType::Unstable => { "MARKED" }
-            DebtType::Observed => { "COFFEE_PERIL" }
+            DebtType::Unstable => "MARKED",
+            DebtType::Observed => "COFFEE_PERIL",
         }
     }
 }
@@ -1365,8 +1514,12 @@ pub enum EchoChamberModAdded {
 impl Display for EchoChamberModAdded {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EchoChamberModAdded::Repeating => { write!(f, "Repeating") }
-            EchoChamberModAdded::Reverberating => { write!(f, "Reverberating") }
+            EchoChamberModAdded::Repeating => {
+                write!(f, "Repeating")
+            }
+            EchoChamberModAdded::Reverberating => {
+                write!(f, "Reverberating")
+            }
         }
     }
 }
@@ -1501,7 +1654,7 @@ pub struct ItemLost {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq,Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemRepaired {
     /// Uuid of item that was repaired
     pub item_id: Uuid,
@@ -1716,10 +1869,18 @@ pub enum HitType {
 impl Display for HitType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HitType::Single => { write!(f, "Single") }
-            HitType::Double(_) => { write!(f, "Double") }
-            HitType::Triple(_) => { write!(f, "Triple") }
-            HitType::Quadruple => { write!(f, "Quadruple") }
+            HitType::Single => {
+                write!(f, "Single")
+            }
+            HitType::Double(_) => {
+                write!(f, "Double")
+            }
+            HitType::Triple(_) => {
+                write!(f, "Triple")
+            }
+            HitType::Quadruple => {
+                write!(f, "Quadruple")
+            }
         }
     }
 }
@@ -1736,11 +1897,21 @@ pub enum Base {
 impl Display for Base {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Base::First => { write!(f, "first") }
-            Base::Second => { write!(f, "second") }
-            Base::Third => { write!(f, "third") }
-            Base::Fourth => { write!(f, "fourth") }
-            Base::Fifth => { write!(f, "fifth") }
+            Base::First => {
+                write!(f, "first")
+            }
+            Base::Second => {
+                write!(f, "second")
+            }
+            Base::Third => {
+                write!(f, "third")
+            }
+            Base::Fourth => {
+                write!(f, "fourth")
+            }
+            Base::Fifth => {
+                write!(f, "fifth")
+            }
         }
     }
 }
@@ -1758,11 +1929,21 @@ pub enum HomeRunType {
 impl Display for HomeRunType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HomeRunType::Solo => { write!(f, "solo home run") }
-            HomeRunType::TwoRun => { write!(f, "2-run home run") }
-            HomeRunType::ThreeRun => { write!(f, "3-run home run") }
-            HomeRunType::FourRun => { write!(f, "4-run home run") }
-            HomeRunType::GrandSlam => { write!(f, "grand slam") }
+            HomeRunType::Solo => {
+                write!(f, "solo home run")
+            }
+            HomeRunType::TwoRun => {
+                write!(f, "2-run home run")
+            }
+            HomeRunType::ThreeRun => {
+                write!(f, "3-run home run")
+            }
+            HomeRunType::FourRun => {
+                write!(f, "4-run home run")
+            }
+            HomeRunType::GrandSlam => {
+                write!(f, "grand slam")
+            }
         }
     }
 }
@@ -1776,8 +1957,12 @@ pub enum StrikeoutType {
 impl Display for StrikeoutType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StrikeoutType::Looking => { write!(f, "looking") }
-            StrikeoutType::Swinging => { write!(f, "swinging") }
+            StrikeoutType::Looking => {
+                write!(f, "looking")
+            }
+            StrikeoutType::Swinging => {
+                write!(f, "swinging")
+            }
         }
     }
 }
@@ -1872,7 +2057,17 @@ pub struct NamedPlayerBoostSubEvent {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    AsRefStr,
+    WithStructure,
+    EnumDisplay,
+)]
 pub enum TeamNicknameOrPlayerName {
     TeamNickname(String),
     PlayerName(String),
@@ -1884,7 +2079,18 @@ pub struct MaintenanceMode {
     pub team_id: Uuid,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    AsRefStr,
+    WithStructure,
+    EnumDisplay,
+)]
 pub enum PostseasonBirthBoostEventOrder {
     // TODO Do all 3 of these actually appear in real data?
     AfterHatch,
@@ -1929,7 +2135,6 @@ pub struct ModRemoval {
     /// If this mod change caused a dependent mod to be removed, this is the information about that
     /// mod removal.
     pub dependent_mod_removal: Option<ModsFromAnotherModRemoved>,
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1967,7 +2172,9 @@ pub struct Hype {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
+)]
 pub enum HomeRunHypeSource {
     HomeRun,
     Buckets,
@@ -1998,8 +2205,12 @@ pub enum NumbersGo {
 impl Display for NumbersGo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NumbersGo::Up => { write!(f, "up") }
-            NumbersGo::Down => { write!(f, "down") }
+            NumbersGo::Up => {
+                write!(f, "up")
+            }
+            NumbersGo::Down => {
+                write!(f, "down")
+            }
         }
     }
 }
@@ -2019,8 +2230,8 @@ pub struct Ambush {
 
     /// Name of ambushed player
     pub player_name: String,
-    
-    /// If this player was formerly on a team (which can only happen if their whole team was 
+
+    /// If this player was formerly on a team (which can only happen if their whole team was
     /// Incinerated), this is the info about that team and the removed-from-team event. Otherwise
     /// null.
     pub former_team: Option<KnownPlayerRemovedFromTeam>,
@@ -2052,12 +2263,12 @@ pub enum RoamFromLocation {
         previous_team_nickname: String,
 
         /// Parties as a result of the Good Riddance mod
-        good_riddance_parties: Vec<GoodRiddanceParty>
+        good_riddance_parties: Vec<GoodRiddanceParty>,
     },
     HallOfFlame {
         /// Metadata for the player-left-hall-of-flame sub-event
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
@@ -2069,7 +2280,7 @@ pub enum GameStartAnnouncement {
 
         /// Home team name
         home: String,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
@@ -2087,14 +2298,30 @@ pub enum LedgerLineV1 {
 impl Display for LedgerLineV1 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LedgerLineV1::NegativePolarity => { write!(f, "Negative Polarity (x-1)") }
-            LedgerLineV1::Underachiever => { write!(f, "Underachiever (x-1)") }
-            LedgerLineV1::Underhanded => { write!(f, "Underhanded (x-1)") }
-            LedgerLineV1::Subtractor => { write!(f, "Subtractor (x-1)") }
-            LedgerLineV1::Tired(name) => { write!(f, "{name} is Tired. (0.5 Unruns)") }
-            LedgerLineV1::Wired(name) => { write!(f, "{name} is Wired! (0.5 Runs)") }
-            LedgerLineV1::AcidicPitch => { write!(f, "Acidic Pitch (0.1 Unruns)") }
-            LedgerLineV1::Magnified => { write!(f, "Batter Magnified 2x (x2)") }
+            LedgerLineV1::NegativePolarity => {
+                write!(f, "Negative Polarity (x-1)")
+            }
+            LedgerLineV1::Underachiever => {
+                write!(f, "Underachiever (x-1)")
+            }
+            LedgerLineV1::Underhanded => {
+                write!(f, "Underhanded (x-1)")
+            }
+            LedgerLineV1::Subtractor => {
+                write!(f, "Subtractor (x-1)")
+            }
+            LedgerLineV1::Tired(name) => {
+                write!(f, "{name} is Tired. (0.5 Unruns)")
+            }
+            LedgerLineV1::Wired(name) => {
+                write!(f, "{name} is Wired! (0.5 Runs)")
+            }
+            LedgerLineV1::AcidicPitch => {
+                write!(f, "Acidic Pitch (0.1 Unruns)")
+            }
+            LedgerLineV1::Magnified => {
+                write!(f, "Batter Magnified 2x (x2)")
+            }
         }
     }
 }
@@ -2125,14 +2352,14 @@ pub enum LedgerRunModifier {
 impl LedgerRunModifier {
     pub fn modify(&self, in_value: f64) -> f64 {
         match self {
-            LedgerRunModifier::Magnified { .. } => { in_value * 2.0 }
-            LedgerRunModifier::Underhanded => { in_value * -1.0 }
-            LedgerRunModifier::SunPoint1 { value } => { in_value + value }
-            LedgerRunModifier::Subtractor => { in_value * -1.0 }
-            LedgerRunModifier::AcidicPitch => { in_value - 0.1 }
-            LedgerRunModifier::Wired { .. } => { in_value + 0.5 }
-            LedgerRunModifier::Tired { .. } => { in_value - 0.5 }
-            LedgerRunModifier::NegativePolarity => { in_value * -1.0 }
+            LedgerRunModifier::Magnified { .. } => in_value * 2.0,
+            LedgerRunModifier::Underhanded => in_value * -1.0,
+            LedgerRunModifier::SunPoint1 { value } => in_value + value,
+            LedgerRunModifier::Subtractor => in_value * -1.0,
+            LedgerRunModifier::AcidicPitch => in_value - 0.1,
+            LedgerRunModifier::Wired { .. } => in_value + 0.5,
+            LedgerRunModifier::Tired { .. } => in_value - 0.5,
+            LedgerRunModifier::NegativePolarity => in_value * -1.0,
         }
     }
 
@@ -2140,43 +2367,88 @@ impl LedgerRunModifier {
     /// any other modifications)
     pub fn is_pure_negating(&self) -> bool {
         match self {
-            LedgerRunModifier::Magnified { .. } => { false }
-            LedgerRunModifier::Underhanded => { true }
-            LedgerRunModifier::SunPoint1 { .. } => { false }
-            LedgerRunModifier::Subtractor => { true }
-            LedgerRunModifier::AcidicPitch => { false }
-            LedgerRunModifier::Wired { .. } => { false }
-            LedgerRunModifier::Tired { .. } => { false }
-            LedgerRunModifier::NegativePolarity => { true }
+            LedgerRunModifier::Magnified { .. } => false,
+            LedgerRunModifier::Underhanded => true,
+            LedgerRunModifier::SunPoint1 { .. } => false,
+            LedgerRunModifier::Subtractor => true,
+            LedgerRunModifier::AcidicPitch => false,
+            LedgerRunModifier::Wired { .. } => false,
+            LedgerRunModifier::Tired { .. } => false,
+            LedgerRunModifier::NegativePolarity => true,
         }
     }
 
-    pub fn modify_and_write(&self, run_value_before: f64, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+    pub fn modify_and_write(
+        &self,
+        run_value_before: f64,
+        mut w: &mut impl Write,
+    ) -> Result<f64, std::fmt::Error> {
         let run_value_after = self.modify(run_value_before);
         match self {
             LedgerRunModifier::Magnified { position } => {
-                write!(w, "\t{} Magnified 2x: {} * 2 = {}", position.title(), RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\t{} Magnified 2x: {} * 2 = {}",
+                    position.title(),
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::Underhanded => {
-                write!(w, "\tUnderhanded: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\tUnderhanded: {} * -1 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::SunPoint1 { value } => {
-                write!(w, "\tSun .1: {} + {value} = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\tSun .1: {} + {value} = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::Subtractor => {
-                write!(w, "\tSubtractor: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\tSubtractor: {} * -1 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::AcidicPitch => {
-                write!(w, "\tAcidic Pitch: {} + -0.1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\tAcidic Pitch: {} + -0.1 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::Wired { player_name } => {
-                write!(w, "\t{player_name} is Wired!: {} + 0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\t{player_name} is Wired!: {} + 0.5 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::Tired { player_name } => {
-                write!(w, "\t{player_name} is Tired.: {} + -0.5 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\t{player_name} is Tired.: {} + -0.5 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
             LedgerRunModifier::NegativePolarity => {
-                write!(w, "\tNegative Polarity: {} * -1 = {}", RunDisplay(run_value_before), RunDisplay(run_value_after))?;
+                write!(
+                    w,
+                    "\tNegative Polarity: {} * -1 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
             }
         }
 
@@ -2194,13 +2466,31 @@ impl LedgerRun {
         Self { modifiers }
     }
 
-    pub fn compute_and_write(&self, ledger_label: &str, w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+    pub fn compute_and_write(
+        &self,
+        ledger_label: &str,
+        w: &mut impl Write,
+    ) -> Result<f64, std::fmt::Error> {
         self.compute_and_write_with_value(1.0, ledger_label, w)
     }
 
-    pub fn compute_and_write_with_value(&self, mut run_value: f64, ledger_label: &str, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+    pub fn compute_and_write_with_value(
+        &self,
+        mut run_value: f64,
+        ledger_label: &str,
+        mut w: &mut impl Write,
+    ) -> Result<f64, std::fmt::Error> {
         // The !self.modifiers.is_empty() part seems to be a bug in Blaseball
-        write!(w, "{ledger_label}: {} Run{}", RunDisplay(run_value), if run_value == 1.0 || !self.modifiers.is_empty() { "" } else { "s" } )?;
+        write!(
+            w,
+            "{ledger_label}: {} Run{}",
+            RunDisplay(run_value),
+            if run_value == 1.0 || !self.modifiers.is_empty() {
+                ""
+            } else {
+                "s"
+            }
+        )?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
@@ -2212,12 +2502,16 @@ impl LedgerRun {
 
     // TODO dedup logic with compute_and_write
     pub fn value(&self, run_value: f64) -> f64 {
-        self.modifiers.iter()
+        self.modifiers
+            .iter()
             .fold(run_value, |value, modifier| modifier.modify(value))
     }
 }
 
-fn compute_and_write_sum_sun(num_runs: i64, mut w: &mut impl Write) -> Result<f64, std::fmt::Error> {
+fn compute_and_write_sum_sun(
+    num_runs: i64,
+    mut w: &mut impl Write,
+) -> Result<f64, std::fmt::Error> {
     write!(w, "Sum Sun: {}", WholeRuns(num_runs))?;
     Ok(num_runs as f64)
 }
@@ -2232,7 +2526,7 @@ pub trait LedgerV2: WithStructure {
     // Returns the number of Run lines in the ledger
     fn len(&self) -> usize;
 
-    fn run_values(&self) -> impl Iterator<Item=f64>;
+    fn run_values(&self) -> impl Iterator<Item = f64>;
 
     fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result;
 }
@@ -2266,11 +2560,16 @@ struct MaximumSunRunValuesIterator<T: Iterator<Item = f64>> {
 
 impl<ChildT: Iterator<Item = f64>> MaximumSunRunValuesIterator<ChildT> {
     pub fn new(is_maximum_sun: bool, child: ChildT) -> Self {
-        Self { is_maximum_sun, child, accumulated_value: 0.0, accumulated_value_has_been_emitted: false }
+        Self {
+            is_maximum_sun,
+            child,
+            accumulated_value: 0.0,
+            accumulated_value_has_been_emitted: false,
+        }
     }
 }
 
-impl<ChildT: Iterator<Item=f64>> Iterator for MaximumSunRunValuesIterator<ChildT> {
+impl<ChildT: Iterator<Item = f64>> Iterator for MaximumSunRunValuesIterator<ChildT> {
     type Item = f64;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -2287,10 +2586,10 @@ impl<ChildT: Iterator<Item=f64>> Iterator for MaximumSunRunValuesIterator<ChildT
 }
 
 trait FedIteratorExtensions {
-    fn with_maximum_sun(self, is_maximum_sun: bool) -> impl Iterator<Item=f64>;
+    fn with_maximum_sun(self, is_maximum_sun: bool) -> impl Iterator<Item = f64>;
 }
 
-impl<ChildT: Iterator<Item=f64>> FedIteratorExtensions for ChildT {
+impl<ChildT: Iterator<Item = f64>> FedIteratorExtensions for ChildT {
     fn with_maximum_sun(self, is_maximum_sun: bool) -> MaximumSunRunValuesIterator<ChildT> {
         MaximumSunRunValuesIterator::new(is_maximum_sun, self)
     }
@@ -2303,13 +2602,14 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
     }
 
     fn len(&self) -> usize {
-        self.runs.len() +
-            if self.sum_sun.is_some() { 1 } else { 0 } +
-            if self.maximum_sun { 1 } else { 0 }
+        self.runs.len()
+            + if self.sum_sun.is_some() { 1 } else { 0 }
+            + if self.maximum_sun { 1 } else { 0 }
     }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
-        self.runs.iter()
+    fn run_values(&self) -> impl Iterator<Item = f64> {
+        self.runs
+            .iter()
             // SimpleLedger runs are always worth 1.0 before modifiers
             .map(|run| run.value(1.0))
             .chain(self.sum_sun.map(|sum_sun_runs| sum_sun_runs as f64))
@@ -2355,45 +2655,46 @@ impl LedgerV2 for HomeRunLedger {
 
     fn len(&self) -> usize {
         let mut len = self.home_run.len();
-        if let Some(bucket) = &self.big_bucket { len += bucket.len() }
-        if let Some(oop) = &self.alley_oop { len += oop.len() }
-        if self.sum_sun.is_some() { len += 1 }
-        if self.equal_sun.is_some() { len += 1 }
+        if let Some(bucket) = &self.big_bucket {
+            len += bucket.len()
+        }
+        if let Some(oop) = &self.alley_oop {
+            len += oop.len()
+        }
+        if self.sum_sun.is_some() {
+            len += 1
+        }
+        if self.equal_sun.is_some() {
+            len += 1
+        }
         len
     }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         // The Either crate very conveniently does the work to consolidate 2 iterators of
         // different concrete types but with the same Item type into a single Iterator type
-        self.home_run.run_values()
-            .chain(
-                if let Some(oop) = &self.big_bucket {
-                    Either::Left(oop.run_values())
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
-            .chain(
-                if let Some(oop) = &self.alley_oop {
-                    Either::Left(oop.run_values())
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
-            .chain(
-                if let Some(sum_sun_runs) = self.sum_sun {
-                    Either::Left(iter::once(sum_sun_runs as f64))
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
-            .chain(
-                if let Some(equal_sun_runs) = self.equal_sun {
-                    Either::Left(iter::once(equal_sun_runs))
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
+        self.home_run
+            .run_values()
+            .chain(if let Some(oop) = &self.big_bucket {
+                Either::Left(oop.run_values())
+            } else {
+                Either::Right(iter::empty())
+            })
+            .chain(if let Some(oop) = &self.alley_oop {
+                Either::Left(oop.run_values())
+            } else {
+                Either::Right(iter::empty())
+            })
+            .chain(if let Some(sum_sun_runs) = self.sum_sun {
+                Either::Left(iter::once(sum_sun_runs as f64))
+            } else {
+                Either::Right(iter::empty())
+            })
+            .chain(if let Some(equal_sun_runs) = self.equal_sun {
+                Either::Left(iter::once(equal_sun_runs))
+            } else {
+                Either::Right(iter::empty())
+            })
     }
 
     fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result {
@@ -2437,9 +2738,11 @@ impl LedgerV2 for ModerationLedger {
         todo!()
     }
 
-    fn len(&self) -> usize { 1 }
+    fn len(&self) -> usize {
+        1
+    }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         iter::once(self.num_runs)
     }
 
@@ -2448,7 +2751,9 @@ impl LedgerV2 for ModerationLedger {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
+)]
 #[repr(u8)]
 pub enum TripleThreats {
     One = 1,
@@ -2474,10 +2779,9 @@ impl TripleThreatLedger {
     }
 
     pub fn value(&self) -> f64 {
-        self.modifiers.iter().fold(
-            self.base_value(),
-            |value, modifier| modifier.modify(value),
-        )
+        self.modifiers
+            .iter()
+            .fold(self.base_value(), |value, modifier| modifier.modify(value))
     }
 }
 
@@ -2486,9 +2790,11 @@ impl LedgerV2 for TripleThreatLedger {
         todo!()
     }
 
-    fn len(&self) -> usize { 1 }
+    fn len(&self) -> usize {
+        1
+    }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         iter::once(self.value())
     }
 
@@ -2498,7 +2804,11 @@ impl LedgerV2 for TripleThreatLedger {
         let mut value = self.base_value();
         // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
         // was surprised too.
-        write!(w, "Triple Threat: {}", Runs(value).singular_if(!self.modifiers.is_empty()))?;
+        write!(
+            w,
+            "Triple Threat: {}",
+            Runs(value).singular_if(!self.modifiers.is_empty())
+        )?;
 
         for modifier in &self.modifiers {
             write!(w, "\n")?;
@@ -2523,9 +2833,11 @@ impl LedgerV2 for HeatMagnetLedger {
         todo!()
     }
 
-    fn len(&self) -> usize { 1 }
+    fn len(&self) -> usize {
+        1
+    }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         iter::once(5.0)
     }
 
@@ -2546,7 +2858,10 @@ pub struct OverflowLedger {
 
 impl OverflowLedger {
     pub fn new(num_runs: i64, modifiers: Vec<LedgerRunModifier>) -> Self {
-        Self { num_runs, modifiers }
+        Self {
+            num_runs,
+            modifiers,
+        }
     }
 }
 
@@ -2555,18 +2870,23 @@ impl LedgerV2 for OverflowLedger {
         todo!()
     }
 
-    fn len(&self) -> usize { 1 }
+    fn len(&self) -> usize {
+        1
+    }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         iter::once(self.num_runs as f64)
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         // Like with triple threat, this only gets pluralized if there are no modifiers.
-        write!(w, "Overflow: {}",
-               Runs(self.num_runs as f64)
+        write!(
+            w,
+            "Overflow: {}",
+            Runs(self.num_runs as f64)
                 .unruns_always_plural()
-                .singular_if(!self.modifiers.is_empty()))?;
+                .singular_if(!self.modifiers.is_empty())
+        )?;
 
         let mut run_value = self.num_runs as f64;
         for modifier in &self.modifiers {
@@ -2592,37 +2912,37 @@ impl LedgerV2 for StolenBaseLedger {
 
     fn len(&self) -> usize {
         let mut len = 0;
-        if self.steal_home.is_some() { len += 1 }
-        if self.blaserunning.is_some() { len += 1 }
-        if self.sum_sun.is_some() { len += 1 }
+        if self.steal_home.is_some() {
+            len += 1
+        }
+        if self.blaserunning.is_some() {
+            len += 1
+        }
+        if self.sum_sun.is_some() {
+            len += 1
+        }
         len
     }
 
-    fn run_values(&self) -> impl Iterator<Item=f64> {
+    fn run_values(&self) -> impl Iterator<Item = f64> {
         // I wrote this stuff with the chain when steal_home and blaserunning
         // were different types. It can probably be simpler.
         iter::empty()
-            .chain(
-                if let Some(sh) = &self.steal_home {
-                    Either::Left(iter::once(sh.value(1.0)))
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
-            .chain(
-                if let Some(br) = &self.blaserunning {
-                    Either::Left(iter::once(br.value(0.2)))
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
-            .chain(
-                if let Some(sum_sun_runs) = self.sum_sun {
-                    Either::Left(iter::once(sum_sun_runs as f64))
-                } else {
-                    Either::Right(iter::empty())
-                }
-            )
+            .chain(if let Some(sh) = &self.steal_home {
+                Either::Left(iter::once(sh.value(1.0)))
+            } else {
+                Either::Right(iter::empty())
+            })
+            .chain(if let Some(br) = &self.blaserunning {
+                Either::Left(iter::once(br.value(0.2)))
+            } else {
+                Either::Right(iter::empty())
+            })
+            .chain(if let Some(sum_sun_runs) = self.sum_sun {
+                Either::Left(iter::once(sum_sun_runs as f64))
+            } else {
+                Either::Right(iter::empty())
+            })
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
@@ -2632,7 +2952,7 @@ impl LedgerV2 for StolenBaseLedger {
             delimiter.print(w)?;
             sh.compute_and_write("Steal Home", w)?;
         }
-        
+
         if let Some(br) = &self.blaserunning {
             delimiter.print(w)?;
             br.compute_and_write_with_value(0.2, "Blaserunning", w)?;
@@ -2648,7 +2968,10 @@ impl LedgerV2 for StolenBaseLedger {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
-pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStructure {
+pub enum Ledger<LedgerRunT>
+where
+    LedgerRunT: LedgerV2 + with_structure::WithStructure,
+{
     None,
     // TODO: If possible, have the V1 parser convert to V2 and always store V2
     V1 {
@@ -2661,13 +2984,14 @@ pub enum Ledger<LedgerRunT> where LedgerRunT: LedgerV2 + with_structure::WithStr
 impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
     pub fn to_string(&self, season: i64, day: i64) -> String {
         let mut s = String::new();
-        self.write(season, day, &mut s).expect("write() should not fail on a string formatter");
+        self.write(season, day, &mut s)
+            .expect("write() should not fail on a string formatter");
         s
     }
-    
+
     pub fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result {
         match self {
-            Ledger::None => {},
+            Ledger::None => {}
             Ledger::V1 { base_runs, lines } => {
                 let (abs_runs, run_type) = if *base_runs < 0. {
                     (-base_runs, "Unrun")
@@ -2736,7 +3060,9 @@ pub struct PressureBuilt {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
 pub enum RenovationBuiltEffect {
     None,
     ModAdded {
@@ -2759,7 +3085,7 @@ pub enum RenovationBuiltEffect {
 
         /// Metadata for the LightSwitchFlipped sub-event
         sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -2775,7 +3101,18 @@ pub struct ModRemovedFromRatification {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, IntoPrimitive, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    IntoPrimitive,
+    JsonSchema,
+    AsRefStr,
+    WithStructure,
+    EnumDisplay,
+)]
 #[repr(i64)]
 pub enum BracketType {
     Overbracket = 0,
@@ -2864,18 +3201,17 @@ pub struct PlayerTogethernessModChange {
 pub struct PlayerMultiTogethernessModChange {
     /// List of players with this mod and their ids
     pub players: Vec<PlayerNameId>,
-    
+
     /// List of players who are named but whose ids are not in playerTags
-    /// 
-    /// These are existing players on the team who already had the togetherness 
-    /// mod. In the event description, these players are named after the first 
+    ///
+    /// These are existing players on the team who already had the togetherness
+    /// mod. In the event description, these players are named after the first
     /// player in `players` and before all the rest.
     pub extra_player_names: Vec<String>,
 
     /// Metadata for the associated mod being added/removed
     pub sub_event: SubEvent,
 }
-
 
 /// Sometimes player togetherness "blips" (gets removed and then re-added) when a player is moved
 /// around a team, because it's technically them being removed and then re-added to the team. This
@@ -2894,7 +3230,9 @@ pub struct PlayerTogethernessModBlip {
     pub addition: Option<PlayerTogethernessModChange>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
 pub enum RunStolenThroughTunnelsDetails {
     /// Neither scoring event was available, so no details are known
     NeitherKnown,
@@ -2959,34 +3297,69 @@ pub enum RunStolenThroughTunnelsDetails {
         /// it. If you can see the pattern please let me know.
         // TODO Try to deduce this from data
         victim_event_first: bool,
-    }
+    },
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, StrumDisplay, WithStructure)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    AsRefStr,
+    StrumDisplay,
+    WithStructure,
+)]
 pub enum RiffElement {
-    #[strum(to_string = "bow")] Bow,
-    #[strum(to_string = "bah")] Bah,
-    #[strum(to_string = "wah")] Wah,
-    #[strum(to_string = "ah")] Ah,
-    #[strum(to_string = "doo")] Doo,
-    #[strum(to_string = "la")] La,
-    #[strum(to_string = "ooo")] Ooo,
-    #[strum(to_string = "bee")] Bee,
-    #[strum(to_string = "ski")] Ski,
-    #[strum(to_string = "ooie")] Ooie,
-    #[strum(to_string = "dah")] Dah,
-    #[strum(to_string = "da")] Da,
-    #[strum(to_string = "louie")] Louie,
-    #[strum(to_string = "shoo")] Shoo,
-    #[strum(to_string = "boh")] Boh,
-    #[strum(to_string = "dee")] Dee,
-    #[strum(to_string = "sha")] Sha,
-    #[strum(to_string = "doh")] Doh,
-    #[strum(to_string = "bop")] Bop,
-    #[strum(to_string = "boo")] Boo,
-    #[strum(to_string = "do")] Do,
-    #[strum(to_string = "bip")] Bip,
-    #[strum(to_string = "ska")] Ska,
+    #[strum(to_string = "bow")]
+    Bow,
+    #[strum(to_string = "bah")]
+    Bah,
+    #[strum(to_string = "wah")]
+    Wah,
+    #[strum(to_string = "ah")]
+    Ah,
+    #[strum(to_string = "doo")]
+    Doo,
+    #[strum(to_string = "la")]
+    La,
+    #[strum(to_string = "ooo")]
+    Ooo,
+    #[strum(to_string = "bee")]
+    Bee,
+    #[strum(to_string = "ski")]
+    Ski,
+    #[strum(to_string = "ooie")]
+    Ooie,
+    #[strum(to_string = "dah")]
+    Dah,
+    #[strum(to_string = "da")]
+    Da,
+    #[strum(to_string = "louie")]
+    Louie,
+    #[strum(to_string = "shoo")]
+    Shoo,
+    #[strum(to_string = "boh")]
+    Boh,
+    #[strum(to_string = "dee")]
+    Dee,
+    #[strum(to_string = "sha")]
+    Sha,
+    #[strum(to_string = "doh")]
+    Doh,
+    #[strum(to_string = "bop")]
+    Bop,
+    #[strum(to_string = "boo")]
+    Boo,
+    #[strum(to_string = "do")]
+    Do,
+    #[strum(to_string = "bip")]
+    Bip,
+    #[strum(to_string = "ska")]
+    Ska,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -3039,10 +3412,18 @@ pub enum TraderTraitor {
 impl Display for TraderTraitor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TraderTraitor::Trader(_) => { write!(f, "Trader ") }
-            TraderTraitor::Traitor(_) => { write!(f, "Traitor ") }
-            TraderTraitor::Unknown(_) => { write!(f, " ") }
-            TraderTraitor::Neither(_) => { write!(f, "") }
+            TraderTraitor::Trader(_) => {
+                write!(f, "Trader ")
+            }
+            TraderTraitor::Traitor(_) => {
+                write!(f, "Traitor ")
+            }
+            TraderTraitor::Unknown(_) => {
+                write!(f, " ")
+            }
+            TraderTraitor::Neither(_) => {
+                write!(f, "")
+            }
         }
     }
 }
@@ -3050,10 +3431,10 @@ impl Display for TraderTraitor {
 impl TraderTraitor {
     pub fn is_trade_for_nothing(&self) -> bool {
         match self {
-            TraderTraitor::Trader(_) => { false }
-            TraderTraitor::Traitor(_) => { false }
-            TraderTraitor::Unknown(_) => { false }
-            TraderTraitor::Neither(_) => { true }
+            TraderTraitor::Trader(_) => false,
+            TraderTraitor::Traitor(_) => false,
+            TraderTraitor::Unknown(_) => false,
+            TraderTraitor::Neither(_) => true,
         }
     }
 }
@@ -3119,7 +3500,7 @@ pub enum PlayerMovedFrom {
 
         /// Metadata associated with the player gaining the Returned mod
         gained_returned_sub_event: SubEvent,
-    }
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -3140,11 +3521,11 @@ pub struct PlayerAddedToTeam {
     /// by their lack of this event
     pub player_visited_vault: Option<SubEvent>,
 
-    /// If the player is On an Odyssey, this is the boost resulting from them 
+    /// If the player is On an Odyssey, this is the boost resulting from them
     /// joining a new team
     pub odyssey_boost: Option<PlayerBoostSubEvent>,
 
-    /// If the player received a shadow boost, this contains the information 
+    /// If the player received a shadow boost, this contains the information
     /// about that boost plus an index.
     ///
     /// The index tells you the order in which the subsequent events were
@@ -3189,7 +3570,9 @@ pub struct PlayersAddedToTeam {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -3557,7 +3940,7 @@ pub enum FedEventData {
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
 
-        /// Items that were damaged, if any. Like home runs there isn't enough information to 
+        /// Items that were damaged, if any. Like home runs there isn't enough information to
         /// properly attribute the damage to pitchers, batters, fielders, and runners.
         damaged_items: Vec<(String, ItemDamaged)>,
     },
@@ -4477,7 +4860,7 @@ pub enum FedEventData {
 
         /// Starting in s20, there's an additional child event for the weather proc. This is the
         /// information in that event, if applicable.
-        weather_event: Option<SubEvent>
+        weather_event: Option<SubEvent>,
     },
 
     /// Reverb bestows the Reverberating mod
@@ -5236,7 +5619,6 @@ pub enum FedEventData {
 
         /// TODO Document
         effect: RenovationBuiltEffect,
-
     },
 
     /// The peanut mister activates and cures a player's peanut allergy
@@ -5979,7 +6361,6 @@ pub enum FedEventData {
         // /// Meta about the batter's item breaking, if it broke, otherwise null.
         // TODO is this needed?
         // batter_item_damage: Option<ItemDamaged>,
-
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::Walk>>,
     },
@@ -6006,7 +6387,6 @@ pub enum FedEventData {
         batter_name: String,
 
         // Item damages would go here but I haven't encountered one yet so I haven't put it in
-
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::CharmedMindTrickWalk>>,
     },
@@ -6158,8 +6538,8 @@ pub enum FedEventData {
         player_id: Uuid,
     },
 
-    /// The community chest announcement that appears during the game. Because community chests can 
-    /// open when some teams aren't playing a game, and the players must still receive their items, 
+    /// The community chest announcement that appears during the game. Because community chests can
+    /// open when some teams aren't playing a game, and the players must still receive their items,
     /// the events for receiving an item are separate from the event that appears in game.
     ///
     /// This event has very minimal data. If you want to process community chests you probably want
@@ -6336,7 +6716,7 @@ pub enum FedEventData {
     /// Team received a Gift. This event is currently minimally parsed, with metadata simply
     /// included as-is. If you have a use-case where thoroughly parsing this event type would be
     /// useful please let us know in the SIBR discord.
-    // TODO: Now that I decided to open the "combining events" can of worms, should this be 
+    // TODO: Now that I decided to open the "combining events" can of worms, should this be
     //   combined with TeamReceivedGifts?
     #[serde(rename_all = "camelCase")]
     GiftReceived {
@@ -6353,7 +6733,7 @@ pub enum FedEventData {
         metadata: EventMetadata,
 
         // TODO Figure out what should happen here
-        successors: Vec<EventuallyEvent>
+        successors: Vec<EventuallyEvent>,
     },
 
     /// Replica player faded to dust at the end of the season
@@ -6564,10 +6944,10 @@ pub enum FedEventData {
         /// Nickname of the team who had their run stolen
         victim_team_nickname: String,
 
-        /// More details about the stolen run, if they exist. These details exist for almost every 
-        /// event of this type, but presumably due to a bug there were two occasions where a 
-        /// RunStolenThroughTunnels event did not have any children (event ids 
-        /// dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and 4338a482-f7eb-448c-9827-e9220f2e86a4), and 
+        /// More details about the stolen run, if they exist. These details exist for almost every
+        /// event of this type, but presumably due to a bug there were two occasions where a
+        /// RunStolenThroughTunnels event did not have any children (event ids
+        /// dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and 4338a482-f7eb-448c-9827-e9220f2e86a4), and
         /// those children are where this info can be found. Also, for event
         /// ddf2df8a-946d-4785-bb75-84233d01e927, only the victim team's details were found. The
         /// last combination (thief only) is included for completeness.
@@ -6648,17 +7028,17 @@ pub enum FedEventData {
         ///
         /// The thief's team is always the home team, though.
         victim_team_id: Uuid,
-        
+
         /// Uuid of the item that was stolen
         item_id: Uuid,
-        
+
         /// Name of the item that was stolen
         item_name: String,
-        
+
         /// List of mods that this item grants. Each element is the internal id of a mod.
         item_mods: Vec<String>,
 
-        /// The increase/decrease that all the thief's items caused to their star rating before 
+        /// The increase/decrease that all the thief's items caused to their star rating before
         /// gaining this item
         thief_item_rating_before: f64,
 
@@ -6668,7 +7048,7 @@ pub enum FedEventData {
         /// The thief's star rating. TODO: Is this with or without items?
         thief_rating: f64,
 
-        /// The increase/decrease that all the victim's items caused to their star rating before 
+        /// The increase/decrease that all the victim's items caused to their star rating before
         /// gaining this item
         ///
         /// For reasons currently unknown to me, some items (like the Smokey Plant-Based Sunglasses
@@ -6935,7 +7315,7 @@ pub enum FedEventData {
     RoamFailed {
         /// Name of the player who tried and failed to Roam
         player_name: String,
-        
+
         /// Uuid of the player who tried and failed to Roam
         player_id: Uuid,
     },
@@ -7227,7 +7607,18 @@ pub enum FedEventData {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize, JsonSchema, WithStructure, IntoPrimitive, TryFromPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Copy,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    WithStructure,
+    IntoPrimitive,
+    TryFromPrimitive,
+)]
 #[repr(i64)]
 pub enum SimPhase {
     GodsDay = 0,
@@ -7301,189 +7692,189 @@ pub struct FedEvent {
 impl FedEventData {
     pub fn game(&self) -> Option<&GameEvent> {
         match self {
-            FedEventData::BeingSpeech { .. } => { None }
-            FedEventData::GameStart { game, .. } => { Some(game) }
-            FedEventData::PlayBall { game, .. } => { Some(game) }
-            FedEventData::HalfInningStart { game, .. } => { Some(game) }
-            FedEventData::BatterUp { game, .. } => { Some(game) }
-            FedEventData::SuperyummyGameStart { game, .. } => { Some(game) }
-            FedEventData::EchoedSuperyummyGameStart { game, .. } => { Some(game) }
-            FedEventData::Ball { game, .. } => { Some(game) }
-            FedEventData::FoulBall { game, .. } => { Some(game) }
-            FedEventData::StrikeSwinging { game, .. } => { Some(game) }
-            FedEventData::StrikeLooking { game, .. } => { Some(game) }
-            FedEventData::StrikeFlinching { game, .. } => { Some(game) }
-            FedEventData::Flyout { game, .. } => { Some(game) }
-            FedEventData::GroundOut { game, .. } => { Some(game) }
-            FedEventData::FieldersChoice { game, .. } => { Some(game) }
-            FedEventData::DoublePlay { game, .. } => { Some(game) }
-            FedEventData::Hit { game, .. } => { Some(game) }
-            FedEventData::HomeRun { game, .. } => { Some(game) }
-            FedEventData::StolenBase { game, .. } => { Some(game) }
-            FedEventData::CaughtStealing { game, .. } => { Some(game) }
-            FedEventData::StrikeoutSwinging { game, .. } => { Some(game) }
-            FedEventData::StrikeoutLooking { game, .. } => { Some(game) }
-            FedEventData::Walk { game, .. } => { Some(game) }
-            FedEventData::InningEnd { game, .. } => { Some(game) }
-            FedEventData::CharmStrikeout { game, .. } => { Some(game) }
-            FedEventData::StrikeZapped { game, .. } => { Some(game) }
-            FedEventData::PeanutFlavorText { game, .. } => { Some(game) }
-            FedEventData::GameEnd { game, .. } => { Some(game) }
-            FedEventData::MildPitch { game, .. } => { Some(game) }
-            FedEventData::MildPitchWalk { game, .. } => { Some(game) }
-            FedEventData::CoffeeBean { game, .. } => { Some(game) }
-            FedEventData::BecameMagmatic { game, .. } => { Some(game) }
-            FedEventData::Blooddrain { game, .. } => { Some(game) }
-            FedEventData::SpecialBlooddrain { game, .. } => { Some(game) }
-            FedEventData::PlayerModExpires { .. } => { None }
-            FedEventData::TeamModExpires { .. } => { None }
-            FedEventData::BirdsCircle { game, .. } => { Some(game) }
-            FedEventData::AmbushedByCrows { game, .. } => { Some(game) }
-            FedEventData::Sun2SetWin { .. } => { None }
-            FedEventData::BlackHoleSwallowedWin { .. } => { None }
-            FedEventData::Sun2 { game, .. } => { Some(game) }
-            FedEventData::BlackHole { game, .. } => { Some(game) }
-            FedEventData::TeamDidShame { .. } => { None }
-            FedEventData::TeamWasShamed { .. } => { None }
-            FedEventData::CharmWalk { game, .. } => { Some(game) }
-            FedEventData::GainFreeRefill { game, .. } => { Some(game) }
-            FedEventData::AllergicReaction { game, .. } => { Some(game) }
-            FedEventData::SuperallergicReaction { game, .. } => { Some(game) }
-            FedEventData::PerkUp { game, .. } => { Some(game) }
-            FedEventData::Feedback { game, .. } => { Some(game) }
-            FedEventData::BestowReverberating { game, .. } => { Some(game) }
-            FedEventData::Reverb { game, .. } => { Some(game) }
-            FedEventData::TarotReading { .. } => { None }
-            FedEventData::TarotReadingAddedOrRemovedMod { .. } => { None }
-            FedEventData::TeamEnteredPartyTime { .. } => { None }
-            FedEventData::BecomeTripleThreat { game, .. } => { Some(game) }
-            FedEventData::UnderOver { game, .. } => { Some(game) }
-            FedEventData::OverUnder { game, .. } => { Some(game) }
-            FedEventData::TasteTheInfinite { game, .. } => { Some(game) }
-            FedEventData::BatterSkipped { game, .. } => { Some(game) }
-            FedEventData::FeedbackBlocked { game, .. } => { Some(game) }
-            FedEventData::FlagPlanted { .. } => { None }
-            FedEventData::EmergencyAlert { .. } => { None }
-            FedEventData::TeamJoinedILB { .. } => { None }
-            FedEventData::FloodingSwept { game, .. } => { Some(game) }
-            FedEventData::ReturnFromElsewhere { game, .. } => { Some(game) }
-            FedEventData::Incineration { game, .. } => { Some(game) }
-            FedEventData::PitcherChange { game, .. } => { Some(game) }
-            FedEventData::Party { game, .. } => { Some(game) }
-            FedEventData::PlayerHatched { .. } => { None }
-            FedEventData::PostseasonBirth { .. } => { None }
-            FedEventData::FinalStandings { .. } => { None }
-            FedEventData::TeamLeftPartyTimeForPostseason { .. } => { None }
-            FedEventData::EarnedPostseasonSlot { .. } => { None }
-            FedEventData::PostseasonAdvance { .. } => { None }
-            FedEventData::PostseasonEliminated { .. } => { None }
-            FedEventData::PlayerBoosted { .. } => { None }
-            FedEventData::TeamWonInternetSeries { .. } => { None }
-            FedEventData::BottomDwellers { .. } => { None }
-            FedEventData::WillReceived { .. } => { None }
-            FedEventData::BlessingWon { .. } => { None }
-            FedEventData::DecreePassed { .. } => { None }
-            FedEventData::PlayerJoinedILB { .. } => { None }
-            FedEventData::PlayerPermittedToStay { .. } => { None }
-            FedEventData::FireproofIncineration { game, .. } => { Some(game) }
-            FedEventData::LineupSorted { .. } => { None }
-            FedEventData::Undersea { game, .. } => { Some(game) }
-            FedEventData::RenovationBuilt { .. } => { None }
-            FedEventData::PeanutMister { game, .. } => { Some(game) }
-            FedEventData::PlayerNamedMvp { .. } => { None }
-            FedEventData::BirdsUnshell { game, .. } => { Some(game) }
-            FedEventData::ReplaceReturnedPlayerFromShadows { .. } => { None }
-            FedEventData::PlayerCalledBackToHall { .. } => { None }
-            FedEventData::TeamUsedFreeWill { .. } => { None }
-            FedEventData::TeamUsedFreeGift { .. } => { None }
-            FedEventData::PlayerLostMod { .. } => { None }
-            FedEventData::InvestigationMessage { .. } => { None }
-            FedEventData::HighPressure { game, .. } => { Some(game) }
-            FedEventData::PlayerPulledThroughRift { .. } => { None }
-            FedEventData::PlayerLocalized { .. } => { None }
-            FedEventData::Echo { game, .. } => { Some(game) }
-            FedEventData::SolarPanelsAwait { game, .. } => { Some(game) }
-            FedEventData::EventHorizonAwaits { game, .. } => { Some(game) }
-            FedEventData::EchoIntoStatic { game, .. } => { Some(game) }
-            FedEventData::Psychoacoustics { game, .. } => { Some(game) }
-            FedEventData::EchoReceiver { game, .. } => { Some(game) }
-            FedEventData::ConsumerAttack { game, .. } => { Some(game) }
-            FedEventData::TeamGainedFreeWill { .. } => { None }
-            FedEventData::Tidings { .. } => { None }
-            FedEventData::HomebodyGameStart { game, .. } => { Some(game) }
-            FedEventData::SalmonSwim { game, .. } => { Some(game) }
-            FedEventData::HitByPitch { game, .. } => { Some(game) }
-            FedEventData::SolarPanelsActivate { game, .. } => { Some(game) }
-            FedEventData::RunsOverflowing { game, .. } => { Some(game) }
-            FedEventData::EnterCrimeScene { game, .. } => { Some(game) }
-            FedEventData::ReturnFromInvestigation { .. } => { None }
-            FedEventData::InvestigationConcluded { .. } => { None }
-            FedEventData::GrindRail { game, .. } => { Some(game) }
-            FedEventData::EnterSecretBase { game, .. } => { Some(game) }
-            FedEventData::ExitSecretBase { game, .. } => { Some(game) }
-            FedEventData::EchoChamber { game, .. } => { Some(game) }
-            FedEventData::Roam { .. } => { None }
-            FedEventData::SuperRoam { .. } => { None }
-            FedEventData::GlitterCrate { game, .. } => { Some(game) }
-            FedEventData::ModsFromAnotherModRemoved { .. } => { None }
-            FedEventData::ConsumerExpelled { game, .. } => { Some(game) }
-            FedEventData::ConsumerDefended { game, .. } => { Some(game) }
-            FedEventData::ConsumerCountered { game, .. } => { Some(game) }
-            FedEventData::MindTrickWalk { game, .. } => { Some(game) }
-            FedEventData::CharmedMindTrickWalk { game, .. } => { Some(game) }
-            FedEventData::MindTrickStrikeout { game, .. } => { Some(game) }
-            FedEventData::BlooddrainBlocked { game, .. } => { Some(game) }
-            FedEventData::TarotReadingAddedOrRemovedItem { .. } => { None }
-            FedEventData::CommunityChestOpens { .. } => { None }
-            FedEventData::PlayerDropsItem { .. } => { None }
-            FedEventData::CommunityChestGameMessage { game, .. } => { Some(game) }
-            FedEventData::TeamSubseasonalModsChange { game, .. } => { Some(game) }
-            FedEventData::PlayerSubseasonalModsChange { game, .. } => { Some(game) }
-            FedEventData::Fax { game, .. } => { Some(game) }
-            FedEventData::Redacted { .. } => { None }
-            FedEventData::Smithy { game, .. } => { Some(game) }
-            FedEventData::HolidayInning { game, .. } => { Some(game) }
-            FedEventData::HomeFieldAdvantage { game, .. } => { Some(game) }
-            FedEventData::PrizeMatch { game, .. } => { Some(game) }
-            FedEventData::WonPrizeMatch { .. } => { None }
-            FedEventData::TeamReceivedGifts { .. } => { None }
-            FedEventData::GiftReceived { .. } => { None }
-            FedEventData::ReplicaFadedToDust { .. } => { None }
-            FedEventData::ABloodType { game, .. } => { Some(game) }
-            FedEventData::PolarityShift { game, .. } => { Some(game) }
-            FedEventData::DonatedShameApplied { game, .. } => { Some(game) }
-            FedEventData::GameOver { game, .. } => { Some(game) }
-            FedEventData::BalloonsCollectedFromWin { game, .. } => { Some(game) }
-            FedEventData::Moderation { game, .. } => { Some(game) }
-            FedEventData::PlacedFifthBase { game, .. } => { Some(game) }
-            FedEventData::EventHorizonActivates { game, .. } => { Some(game) }
-            FedEventData::RenovationRatified { .. } => { None }
-            FedEventData::RunStolenThroughTunnels { game, .. } => { Some(game) }
-            FedEventData::CaughtStealingItemWithTunnels { game, .. } => { Some(game) }
-            FedEventData::StoleItemWithTunnels { game, .. } => { Some(game) }
-            FedEventData::NothingInterestingInTunnels { game, .. } => { Some(game) }
-            FedEventData::SunSunRecharged { .. } => { None }
-            FedEventData::Sun30Smiles { game, .. } => { Some(game) }
-            FedEventData::Voicemail { game, .. } => { Some(game) }
-            FedEventData::BadGatewayBroken { .. } => { None }
-            FedEventData::TumbleweedSounds { .. } => { None }
-            FedEventData::IntentionalWalk { game, .. } => { Some(game) }
-            FedEventData::NothingToTrade { game, .. } => { Some(game) }
-            FedEventData::Trade { game, .. } => { Some(game) }
-            FedEventData::NothingToOffer { game, .. } => { Some(game) }
-            FedEventData::RoamFailed { .. } => { None }
-            FedEventData::ThievesGuildStolePlayer { game, .. } => { Some(game) }
-            FedEventData::ThievesGuildStoleItem { game, .. } => { Some(game) }
-            FedEventData::RiffOpened { game, .. } => { Some(game) }
-            FedEventData::BandBeginsToPlay { game, .. } => { Some(game) }
-            FedEventData::BasesReloaded { game, .. } => { Some(game) }
-            FedEventData::NightShift { game, .. } => { Some(game) }
-            FedEventData::TeamFormed { .. } => { None }
-            FedEventData::WeatherReport { game, .. } => { Some(game) }
-            FedEventData::TeamTunnelHeistBegins { game, .. } => { Some(game) }
-            FedEventData::TeamTunnelHeistContinues { game, .. } => { Some(game) }
-            FedEventData::TeamTunnelHeistConcludes { game, .. } => { Some(game) }
-            FedEventData::PitcherCyclesOut { game, .. } => { Some(game) }
+            FedEventData::BeingSpeech { .. } => None,
+            FedEventData::GameStart { game, .. } => Some(game),
+            FedEventData::PlayBall { game, .. } => Some(game),
+            FedEventData::HalfInningStart { game, .. } => Some(game),
+            FedEventData::BatterUp { game, .. } => Some(game),
+            FedEventData::SuperyummyGameStart { game, .. } => Some(game),
+            FedEventData::EchoedSuperyummyGameStart { game, .. } => Some(game),
+            FedEventData::Ball { game, .. } => Some(game),
+            FedEventData::FoulBall { game, .. } => Some(game),
+            FedEventData::StrikeSwinging { game, .. } => Some(game),
+            FedEventData::StrikeLooking { game, .. } => Some(game),
+            FedEventData::StrikeFlinching { game, .. } => Some(game),
+            FedEventData::Flyout { game, .. } => Some(game),
+            FedEventData::GroundOut { game, .. } => Some(game),
+            FedEventData::FieldersChoice { game, .. } => Some(game),
+            FedEventData::DoublePlay { game, .. } => Some(game),
+            FedEventData::Hit { game, .. } => Some(game),
+            FedEventData::HomeRun { game, .. } => Some(game),
+            FedEventData::StolenBase { game, .. } => Some(game),
+            FedEventData::CaughtStealing { game, .. } => Some(game),
+            FedEventData::StrikeoutSwinging { game, .. } => Some(game),
+            FedEventData::StrikeoutLooking { game, .. } => Some(game),
+            FedEventData::Walk { game, .. } => Some(game),
+            FedEventData::InningEnd { game, .. } => Some(game),
+            FedEventData::CharmStrikeout { game, .. } => Some(game),
+            FedEventData::StrikeZapped { game, .. } => Some(game),
+            FedEventData::PeanutFlavorText { game, .. } => Some(game),
+            FedEventData::GameEnd { game, .. } => Some(game),
+            FedEventData::MildPitch { game, .. } => Some(game),
+            FedEventData::MildPitchWalk { game, .. } => Some(game),
+            FedEventData::CoffeeBean { game, .. } => Some(game),
+            FedEventData::BecameMagmatic { game, .. } => Some(game),
+            FedEventData::Blooddrain { game, .. } => Some(game),
+            FedEventData::SpecialBlooddrain { game, .. } => Some(game),
+            FedEventData::PlayerModExpires { .. } => None,
+            FedEventData::TeamModExpires { .. } => None,
+            FedEventData::BirdsCircle { game, .. } => Some(game),
+            FedEventData::AmbushedByCrows { game, .. } => Some(game),
+            FedEventData::Sun2SetWin { .. } => None,
+            FedEventData::BlackHoleSwallowedWin { .. } => None,
+            FedEventData::Sun2 { game, .. } => Some(game),
+            FedEventData::BlackHole { game, .. } => Some(game),
+            FedEventData::TeamDidShame { .. } => None,
+            FedEventData::TeamWasShamed { .. } => None,
+            FedEventData::CharmWalk { game, .. } => Some(game),
+            FedEventData::GainFreeRefill { game, .. } => Some(game),
+            FedEventData::AllergicReaction { game, .. } => Some(game),
+            FedEventData::SuperallergicReaction { game, .. } => Some(game),
+            FedEventData::PerkUp { game, .. } => Some(game),
+            FedEventData::Feedback { game, .. } => Some(game),
+            FedEventData::BestowReverberating { game, .. } => Some(game),
+            FedEventData::Reverb { game, .. } => Some(game),
+            FedEventData::TarotReading { .. } => None,
+            FedEventData::TarotReadingAddedOrRemovedMod { .. } => None,
+            FedEventData::TeamEnteredPartyTime { .. } => None,
+            FedEventData::BecomeTripleThreat { game, .. } => Some(game),
+            FedEventData::UnderOver { game, .. } => Some(game),
+            FedEventData::OverUnder { game, .. } => Some(game),
+            FedEventData::TasteTheInfinite { game, .. } => Some(game),
+            FedEventData::BatterSkipped { game, .. } => Some(game),
+            FedEventData::FeedbackBlocked { game, .. } => Some(game),
+            FedEventData::FlagPlanted { .. } => None,
+            FedEventData::EmergencyAlert { .. } => None,
+            FedEventData::TeamJoinedILB { .. } => None,
+            FedEventData::FloodingSwept { game, .. } => Some(game),
+            FedEventData::ReturnFromElsewhere { game, .. } => Some(game),
+            FedEventData::Incineration { game, .. } => Some(game),
+            FedEventData::PitcherChange { game, .. } => Some(game),
+            FedEventData::Party { game, .. } => Some(game),
+            FedEventData::PlayerHatched { .. } => None,
+            FedEventData::PostseasonBirth { .. } => None,
+            FedEventData::FinalStandings { .. } => None,
+            FedEventData::TeamLeftPartyTimeForPostseason { .. } => None,
+            FedEventData::EarnedPostseasonSlot { .. } => None,
+            FedEventData::PostseasonAdvance { .. } => None,
+            FedEventData::PostseasonEliminated { .. } => None,
+            FedEventData::PlayerBoosted { .. } => None,
+            FedEventData::TeamWonInternetSeries { .. } => None,
+            FedEventData::BottomDwellers { .. } => None,
+            FedEventData::WillReceived { .. } => None,
+            FedEventData::BlessingWon { .. } => None,
+            FedEventData::DecreePassed { .. } => None,
+            FedEventData::PlayerJoinedILB { .. } => None,
+            FedEventData::PlayerPermittedToStay { .. } => None,
+            FedEventData::FireproofIncineration { game, .. } => Some(game),
+            FedEventData::LineupSorted { .. } => None,
+            FedEventData::Undersea { game, .. } => Some(game),
+            FedEventData::RenovationBuilt { .. } => None,
+            FedEventData::PeanutMister { game, .. } => Some(game),
+            FedEventData::PlayerNamedMvp { .. } => None,
+            FedEventData::BirdsUnshell { game, .. } => Some(game),
+            FedEventData::ReplaceReturnedPlayerFromShadows { .. } => None,
+            FedEventData::PlayerCalledBackToHall { .. } => None,
+            FedEventData::TeamUsedFreeWill { .. } => None,
+            FedEventData::TeamUsedFreeGift { .. } => None,
+            FedEventData::PlayerLostMod { .. } => None,
+            FedEventData::InvestigationMessage { .. } => None,
+            FedEventData::HighPressure { game, .. } => Some(game),
+            FedEventData::PlayerPulledThroughRift { .. } => None,
+            FedEventData::PlayerLocalized { .. } => None,
+            FedEventData::Echo { game, .. } => Some(game),
+            FedEventData::SolarPanelsAwait { game, .. } => Some(game),
+            FedEventData::EventHorizonAwaits { game, .. } => Some(game),
+            FedEventData::EchoIntoStatic { game, .. } => Some(game),
+            FedEventData::Psychoacoustics { game, .. } => Some(game),
+            FedEventData::EchoReceiver { game, .. } => Some(game),
+            FedEventData::ConsumerAttack { game, .. } => Some(game),
+            FedEventData::TeamGainedFreeWill { .. } => None,
+            FedEventData::Tidings { .. } => None,
+            FedEventData::HomebodyGameStart { game, .. } => Some(game),
+            FedEventData::SalmonSwim { game, .. } => Some(game),
+            FedEventData::HitByPitch { game, .. } => Some(game),
+            FedEventData::SolarPanelsActivate { game, .. } => Some(game),
+            FedEventData::RunsOverflowing { game, .. } => Some(game),
+            FedEventData::EnterCrimeScene { game, .. } => Some(game),
+            FedEventData::ReturnFromInvestigation { .. } => None,
+            FedEventData::InvestigationConcluded { .. } => None,
+            FedEventData::GrindRail { game, .. } => Some(game),
+            FedEventData::EnterSecretBase { game, .. } => Some(game),
+            FedEventData::ExitSecretBase { game, .. } => Some(game),
+            FedEventData::EchoChamber { game, .. } => Some(game),
+            FedEventData::Roam { .. } => None,
+            FedEventData::SuperRoam { .. } => None,
+            FedEventData::GlitterCrate { game, .. } => Some(game),
+            FedEventData::ModsFromAnotherModRemoved { .. } => None,
+            FedEventData::ConsumerExpelled { game, .. } => Some(game),
+            FedEventData::ConsumerDefended { game, .. } => Some(game),
+            FedEventData::ConsumerCountered { game, .. } => Some(game),
+            FedEventData::MindTrickWalk { game, .. } => Some(game),
+            FedEventData::CharmedMindTrickWalk { game, .. } => Some(game),
+            FedEventData::MindTrickStrikeout { game, .. } => Some(game),
+            FedEventData::BlooddrainBlocked { game, .. } => Some(game),
+            FedEventData::TarotReadingAddedOrRemovedItem { .. } => None,
+            FedEventData::CommunityChestOpens { .. } => None,
+            FedEventData::PlayerDropsItem { .. } => None,
+            FedEventData::CommunityChestGameMessage { game, .. } => Some(game),
+            FedEventData::TeamSubseasonalModsChange { game, .. } => Some(game),
+            FedEventData::PlayerSubseasonalModsChange { game, .. } => Some(game),
+            FedEventData::Fax { game, .. } => Some(game),
+            FedEventData::Redacted { .. } => None,
+            FedEventData::Smithy { game, .. } => Some(game),
+            FedEventData::HolidayInning { game, .. } => Some(game),
+            FedEventData::HomeFieldAdvantage { game, .. } => Some(game),
+            FedEventData::PrizeMatch { game, .. } => Some(game),
+            FedEventData::WonPrizeMatch { .. } => None,
+            FedEventData::TeamReceivedGifts { .. } => None,
+            FedEventData::GiftReceived { .. } => None,
+            FedEventData::ReplicaFadedToDust { .. } => None,
+            FedEventData::ABloodType { game, .. } => Some(game),
+            FedEventData::PolarityShift { game, .. } => Some(game),
+            FedEventData::DonatedShameApplied { game, .. } => Some(game),
+            FedEventData::GameOver { game, .. } => Some(game),
+            FedEventData::BalloonsCollectedFromWin { game, .. } => Some(game),
+            FedEventData::Moderation { game, .. } => Some(game),
+            FedEventData::PlacedFifthBase { game, .. } => Some(game),
+            FedEventData::EventHorizonActivates { game, .. } => Some(game),
+            FedEventData::RenovationRatified { .. } => None,
+            FedEventData::RunStolenThroughTunnels { game, .. } => Some(game),
+            FedEventData::CaughtStealingItemWithTunnels { game, .. } => Some(game),
+            FedEventData::StoleItemWithTunnels { game, .. } => Some(game),
+            FedEventData::NothingInterestingInTunnels { game, .. } => Some(game),
+            FedEventData::SunSunRecharged { .. } => None,
+            FedEventData::Sun30Smiles { game, .. } => Some(game),
+            FedEventData::Voicemail { game, .. } => Some(game),
+            FedEventData::BadGatewayBroken { .. } => None,
+            FedEventData::TumbleweedSounds { .. } => None,
+            FedEventData::IntentionalWalk { game, .. } => Some(game),
+            FedEventData::NothingToTrade { game, .. } => Some(game),
+            FedEventData::Trade { game, .. } => Some(game),
+            FedEventData::NothingToOffer { game, .. } => Some(game),
+            FedEventData::RoamFailed { .. } => None,
+            FedEventData::ThievesGuildStolePlayer { game, .. } => Some(game),
+            FedEventData::ThievesGuildStoleItem { game, .. } => Some(game),
+            FedEventData::RiffOpened { game, .. } => Some(game),
+            FedEventData::BandBeginsToPlay { game, .. } => Some(game),
+            FedEventData::BasesReloaded { game, .. } => Some(game),
+            FedEventData::NightShift { game, .. } => Some(game),
+            FedEventData::TeamFormed { .. } => None,
+            FedEventData::WeatherReport { game, .. } => Some(game),
+            FedEventData::TeamTunnelHeistBegins { game, .. } => Some(game),
+            FedEventData::TeamTunnelHeistContinues { game, .. } => Some(game),
+            FedEventData::TeamTunnelHeistConcludes { game, .. } => Some(game),
+            FedEventData::PitcherCyclesOut { game, .. } => Some(game),
         }
     }
 }

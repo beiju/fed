@@ -54,7 +54,10 @@ impl Runs {
     }
 
     pub fn singular_if(self, always_singular: bool) -> RunsWithSingularOverride {
-        RunsWithSingularOverride { nested: self, always_singular }
+        RunsWithSingularOverride {
+            nested: self,
+            always_singular,
+        }
     }
 
     pub fn singular(&self) -> RunsSingular {
@@ -73,7 +76,6 @@ impl Display for RunsSingular {
     }
 }
 
-
 pub struct RunsWithUnrunsAlwaysPlural(pub f64);
 
 impl Display for RunsWithUnrunsAlwaysPlural {
@@ -89,7 +91,10 @@ impl Display for RunsWithUnrunsAlwaysPlural {
 }
 
 impl RunsWithUnrunsAlwaysPlural {
-    pub fn singular_if(self, always_singular: bool) -> RunsWithUnrunsAlwaysPluralAndSingularOverride {
+    pub fn singular_if(
+        self,
+        always_singular: bool,
+    ) -> RunsWithUnrunsAlwaysPluralAndSingularOverride {
         RunsWithUnrunsAlwaysPluralAndSingularOverride {
             nested: self,
             always_singular,

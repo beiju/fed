@@ -1,17 +1,17 @@
 use ::proc_macro::TokenStream;
-use ::proc_macro2::{TokenStream as TokenStream2};
-use syn::{parse_macro_input, DeriveInput, Data, DataStruct, Field};
+use ::proc_macro2::TokenStream as TokenStream2;
+use ::syn::{Result, *};
+use darling::FromField;
 use quote::quote;
-use ::syn::{*, Result};
 use syn::spanned::Spanned;
-use darling::{FromField};
+use syn::{Data, DataStruct, DeriveInput, Field, parse_macro_input};
 
 #[proc_macro_derive(WithStructure, attributes(with_structure))]
 pub fn with_structure_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as _);
     TokenStream::from(match impl_with_structure(ast) {
-        | Ok(it) => it,
-        | Err(err) => err.to_compile_error(),
+        Ok(it) => it,
+        Err(err) => err.to_compile_error(),
     })
 }
 
@@ -36,7 +36,9 @@ struct WithStructureOpts {
 
 fn definition_field_from_item_field(field: &Field) -> Option<TokenStream2> {
     let opts = WithStructureOpts::from_field(field).unwrap();
-    if opts.ignore.is_present() { return None }
+    if opts.ignore.is_present() {
+        return None;
+    }
 
     let ident_opt = &field.ident;
     let ty = &field.ty;
@@ -47,16 +49,25 @@ fn definition_field_from_item_field(field: &Field) -> Option<TokenStream2> {
     })
 }
 
-fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, generics: Generics, s: DataStruct) -> Result<TokenStream2> {
+fn impl_with_structure_for_struct(
+    item_vis: Visibility,
+    name: Ident,
+    generics: Generics,
+    s: DataStruct,
+) -> Result<TokenStream2> {
     let structure_name = Ident::new(&format!("{}Structure", name), name.span());
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let definition_fields: Vec<_> = s.fields.iter()
+    let definition_fields: Vec<_> = s
+        .fields
+        .iter()
         .flat_map(definition_field_from_item_field)
         .collect();
 
-    let init_fields: Vec<_> = s.fields.iter()
+    let init_fields: Vec<_> = s
+        .fields
+        .iter()
         .map(|field| {
             let ident = &field.ident;
             quote! { #ident: self.#ident.structure() }
@@ -83,37 +94,48 @@ fn impl_with_structure_for_struct(item_vis: Visibility, name: Ident, generics: G
     })
 }
 
-fn impl_with_structure_for_enum(item_vis: Visibility, name: Ident, generics: Generics, e: DataEnum) -> Result<TokenStream2> {
+fn impl_with_structure_for_enum(
+    item_vis: Visibility,
+    name: Ident,
+    generics: Generics,
+    e: DataEnum,
+) -> Result<TokenStream2> {
     let structure_name = Ident::new(&format!("{}Structure", name), name.span());
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let structure_variants: Vec<_> = e.variants.iter()
+    let structure_variants: Vec<_> = e
+        .variants
+        .iter()
         .map(|variant: &Variant| {
             let variant_ident = &variant.ident;
             match &variant.fields {
                 Fields::Named(fields) => {
-                    let structure_fields: Vec<_> = fields.named.iter()
+                    let structure_fields: Vec<_> = fields
+                        .named
+                        .iter()
                         .flat_map(definition_field_from_item_field)
                         .collect();
 
-                    quote!{
+                    quote! {
                         #variant_ident {
                             #(#structure_fields),*
                         }
                     }
                 }
                 Fields::Unnamed(fields) => {
-                    let structure_fields: Vec<_> = fields.unnamed.iter()
+                    let structure_fields: Vec<_> = fields
+                        .unnamed
+                        .iter()
                         .map(definition_field_from_item_field)
                         .collect();
 
-                    quote!{
+                    quote! {
                         #variant_ident(#(#structure_fields),*)
                     }
                 }
                 Fields::Unit => {
-                    quote!{
+                    quote! {
                         #variant_ident
                     }
                 }

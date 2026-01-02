@@ -1,34 +1,57 @@
-pub mod error;
 pub mod builder;
+pub mod error;
 pub mod event_builder_new;
+mod parse_wrapper;
 mod parsers;
 pub mod stream;
-mod parse_wrapper;
 
-use std::collections::HashMap;
 use crate::PeekableWithLogging;
-use std::sync::{Arc, Mutex};
 use itertools::{Either, Itertools};
 use nom::combinator::opt;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 // the second one is a macro
-use uuid::{Uuid, uuid};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
+use uuid::{Uuid, uuid};
 
-use crate::parse::error::FeedParseError;
-use crate::parse::parsers::*;
-use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::fed_event::*;
 use crate::format_utils::Possessive;
+use crate::parse::error::FeedParseError;
+use crate::parse::parse_wrapper::EventParseWrapper;
+use crate::parse::parsers::*;
 
 // pub use stream::expansion_era_events;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
 const KNOWN_TEAM_NICKNAMES: [&'static str; 27] = [
-    "Fridays", "Moist Talkers", "Lovers", "Jazz Hands", "Sunbeams", "Tigers", "Wild Wings",
-    "Flowers", "Millennials", "Millenials", "Pies", "Garages", "Dale", "Lift", "Firefighters",
-    "Steaks", "Magic", "Breath Mints", "Spies", "Shoe Thieves", "Tacos", "Georgias", "Worms",
-    "Crabs", "Mechanics", "Legends", "Rising Stars",
+    "Fridays",
+    "Moist Talkers",
+    "Lovers",
+    "Jazz Hands",
+    "Sunbeams",
+    "Tigers",
+    "Wild Wings",
+    "Flowers",
+    "Millennials",
+    "Millenials",
+    "Pies",
+    "Garages",
+    "Dale",
+    "Lift",
+    "Firefighters",
+    "Steaks",
+    "Magic",
+    "Breath Mints",
+    "Spies",
+    "Shoe Thieves",
+    "Tacos",
+    "Georgias",
+    "Worms",
+    "Crabs",
+    "Mechanics",
+    "Legends",
+    "Rising Stars",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -127,21 +150,25 @@ trait EventIterator {
     fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
     fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent>;
-    fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
-    fn next_expect_type_any(&mut self, types: &[EventType], after_type: EventType) -> Result<EventuallyEvent, FeedParseError>;
+    fn next_expect_type(
+        &mut self,
+        ty: EventType,
+        after_type: EventType,
+    ) -> Result<EventuallyEvent, FeedParseError>;
+    fn next_expect_type_any(
+        &mut self,
+        types: &[EventType],
+        after_type: EventType,
+    ) -> Result<EventuallyEvent, FeedParseError>;
 }
 
-impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
+impl<T: Iterator<Item = EventuallyEvent>> EventIterator for PeekableWithLogging<T> {
     fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent> {
         let Some(event) = self.peek() else {
             return None;
         };
 
-        if cond(event) {
-            self.next()
-        } else {
-            None
-        }
+        if cond(event) { self.next() } else { None }
     }
 
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent> {
@@ -152,11 +179,19 @@ impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T>
         self.next_if(|event| types.contains(&event.r#type))
     }
 
-    fn next_expect_type(&mut self, ty: EventType, after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
+    fn next_expect_type(
+        &mut self,
+        ty: EventType,
+        after_type: EventType,
+    ) -> Result<EventuallyEvent, FeedParseError> {
         self.next_expect_type_any(&[ty], after_type)
     }
 
-    fn next_expect_type_any(&mut self, types: &[EventType], after_type: EventType) -> Result<EventuallyEvent, FeedParseError> {
+    fn next_expect_type_any(
+        &mut self,
+        types: &[EventType],
+        after_type: EventType,
+    ) -> Result<EventuallyEvent, FeedParseError> {
         let Some(event) = self.peek() else {
             Err(FeedParseError::MissingFollowingEvent {
                 expected_types: Vec::from(types),
@@ -165,7 +200,9 @@ impl<T: Iterator<Item=EventuallyEvent>> EventIterator for PeekableWithLogging<T>
         };
 
         if types.contains(&event.r#type) {
-            Ok(self.next().expect("This call is always after a successful peek()"))
+            Ok(self
+                .next()
+                .expect("This call is always after a successful peek()"))
         } else {
             Err(FeedParseError::UnexpectedFollowingEvent {
                 expected_types: Vec::from(types),
@@ -180,58 +217,50 @@ impl ModsFromAnotherModRemovedWithName {
     pub fn from_event(event: &mut EventParseWrapper) -> Result<Self, FeedParseError> {
         let (name, mod_name) = event.next_parse(parse_mods_from_other_mod_removed)?;
 
-        let mods_removed = event.get_metadata("removes")?
+        let mods_removed = event
+            .get_metadata("removes")?
             .as_array()
-            .ok_or_else(|| {
-                FeedParseError::MetadataTypeError {
-                    event_type: event.event_type,
-                    field: "removes".to_string(),
-                    ty: "array",
-                }
+            .ok_or_else(|| FeedParseError::MetadataTypeError {
+                event_type: event.event_type,
+                field: "removes".to_string(),
+                ty: "array",
             })?
             .iter()
             .enumerate()
             .map(|(i, removes)| {
-                let obj = removes.as_object()
-                    .ok_or_else(|| {
-                        FeedParseError::MetadataTypeError {
-                            event_type: event.event_type,
-                            field: format!("removes[{i}]"),
-                            ty: "object",
-                        }
+                let obj = removes
+                    .as_object()
+                    .ok_or_else(|| FeedParseError::MetadataTypeError {
+                        event_type: event.event_type,
+                        field: format!("removes[{i}]"),
+                        ty: "object",
                     })?;
 
-                let mod_id = obj.get("mod")
-                    .ok_or_else(|| {
-                        FeedParseError::MissingMetadata {
-                            event_type: event.event_type,
-                            field: format!("removes[{i}].mod"),
-                        }
+                let mod_id = obj
+                    .get("mod")
+                    .ok_or_else(|| FeedParseError::MissingMetadata {
+                        event_type: event.event_type,
+                        field: format!("removes[{i}].mod"),
                     })?
                     .as_str()
-                    .ok_or_else(|| {
-                        FeedParseError::MetadataTypeError {
-                            event_type: event.event_type,
-                            field: format!("removes[{i}].mod"),
-                            ty: "str",
-                        }
+                    .ok_or_else(|| FeedParseError::MetadataTypeError {
+                        event_type: event.event_type,
+                        field: format!("removes[{i}].mod"),
+                        ty: "str",
                     })?
                     .to_string();
 
-                let mod_duration = obj.get("type")
-                    .ok_or_else(|| {
-                        FeedParseError::MissingMetadata {
-                            event_type: event.event_type,
-                            field: format!("removes[{i}].type"),
-                        }
+                let mod_duration = obj
+                    .get("type")
+                    .ok_or_else(|| FeedParseError::MissingMetadata {
+                        event_type: event.event_type,
+                        field: format!("removes[{i}].type"),
                     })?
                     .as_i64()
-                    .ok_or_else(|| {
-                        FeedParseError::MetadataTypeError {
-                            event_type: event.event_type,
-                            field: format!("removes[{i}].type"),
-                            ty: "i64",
-                        }
+                    .ok_or_else(|| FeedParseError::MetadataTypeError {
+                        event_type: event.event_type,
+                        field: format!("removes[{i}].type"),
+                        ty: "i64",
                     })?
                     .try_into()
                     .map_err(|err: <i64 as TryInto<ModDuration>>::Error| {
@@ -242,14 +271,17 @@ impl ModsFromAnotherModRemovedWithName {
                         }
                     })?;
 
-                ParseOk(ModDesc { mod_id, mod_duration })
+                ParseOk(ModDesc {
+                    mod_id,
+                    mod_duration,
+                })
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
             name: match name {
-                ParsedName::Player(n) => { TeamNicknameOrPlayerName::PlayerName(n.to_string()) }
-                ParsedName::Team(n) => { TeamNicknameOrPlayerName::TeamNickname(n.to_string()) }
+                ParsedName::Player(n) => TeamNicknameOrPlayerName::PlayerName(n.to_string()),
+                ParsedName::Team(n) => TeamNicknameOrPlayerName::TeamNickname(n.to_string()),
             },
             mods_removed,
             source_mod_name: mod_name.to_string(),
@@ -260,10 +292,17 @@ impl ModsFromAnotherModRemovedWithName {
     pub fn format_description(&self) -> String {
         match &self.name {
             TeamNicknameOrPlayerName::TeamNickname(team_nickname) => {
-                format!("The {team_nickname}' mods caused by {} were removed.", self.source_mod_name)
+                format!(
+                    "The {team_nickname}' mods caused by {} were removed.",
+                    self.source_mod_name
+                )
             }
             TeamNicknameOrPlayerName::PlayerName(player_name) => {
-                format!("{} mods caused by {} were removed.", Possessive(player_name), self.source_mod_name)
+                format!(
+                    "{} mods caused by {} were removed.",
+                    Possessive(player_name),
+                    self.source_mod_name
+                )
             }
         }
     }
@@ -280,17 +319,24 @@ impl ModsFromAnotherModRemoved {
     }
 
     pub fn format_description_player(&self, player_name: &str) -> String {
-        format!("{} mods caused by {} were removed.", Possessive(player_name), self.source_mod_name)
+        format!(
+            "{} mods caused by {} were removed.",
+            Possessive(player_name),
+            self.source_mod_name
+        )
     }
 
     pub fn format_description_team(&self, team_nickname: &str) -> String {
-        format!("The {} mods caused by {} were removed.", Possessive(team_nickname), self.source_mod_name)
+        format!(
+            "The {} mods caused by {} were removed.",
+            Possessive(team_nickname),
+            self.source_mod_name
+        )
     }
 }
 
-
 pub fn parse_next_event(
-    event_iter: &mut PeekableWithLogging<impl Iterator<Item=EventuallyEvent>>,
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
     state: &InterEventState,
 ) -> Result<Option<FedEvent>, FeedParseError> {
     let Some(event) = event_iter.next() else {
@@ -302,18 +348,22 @@ pub fn parse_next_event(
     let _id_string = event.id.to_string();
 
     // This can happen on the majority of events, so I handle it outside
-    let unscatter = event.next_child_if_mod_effect(EventType::RemovedMod, "SCATTERED")?.map(|mut child| {
-        let player_name = child.next_parse(parse_terminated(" was Unscattered."))?;
-        ParseOk(ModChangeSubEventWithNamedPlayer {
-            sub_event: child.as_sub_event(),
-            team_id: child.next_team_id()?,
-            player_id: child.next_player_id()?,
-            player_name: player_name.to_string(),
+    let unscatter = event
+        .next_child_if_mod_effect(EventType::RemovedMod, "SCATTERED")?
+        .map(|mut child| {
+            let player_name = child.next_parse(parse_terminated(" was Unscattered."))?;
+            ParseOk(ModChangeSubEventWithNamedPlayer {
+                sub_event: child.as_sub_event(),
+                team_id: child.next_team_id()?,
+                player_id: child.next_player_id()?,
+                player_name: player_name.to_string(),
+            })
         })
-    }).transpose()?;
+        .transpose()?;
 
     // Ditto
-    let attractor_secret_base = event.next_parse_opt(parse_terminated(" enters the Secret Base...\n"))
+    let attractor_secret_base = event
+        .next_parse_opt(parse_terminated(" enters the Secret Base...\n"))
         .map(|name| {
             ParseOk(PlayerNameId {
                 player_id: event.next_player_id()?,
@@ -323,12 +373,10 @@ pub fn parse_next_event(
         .transpose()?;
 
     let data = match event.event_type {
-        EventType::Undefined => {
-            FedEventData::Redacted {
-                description: event.description().to_string(),
-                scales: event.metadata_i64("scales")?,
-            }
-        }
+        EventType::Undefined => FedEventData::Redacted {
+            description: event.description().to_string(),
+            scales: event.metadata_i64("scales")?,
+        },
         EventType::GameStart => {
             let team_names = event.next_parse(parse_game_start)?;
             if let Some((away, home)) = team_names {
@@ -346,7 +394,7 @@ pub fn parse_next_event(
                     Some((away, home)) => GameStartAnnouncement::TeamNames {
                         away: away.to_string(),
                         home: home.to_string(),
-                    }
+                    },
                 },
             }
         }
@@ -361,7 +409,8 @@ pub fn parse_next_event(
             // Starting in s16, subseasonal mods (mods that apply only during Earl/Mid/Lateseason)
             // sometimes announce when they start or end in the first HalfInning of the game. This
             // smells like a bug to me.
-            let (team_subseasonal_mod_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
+            let (team_subseasonal_mod_changes, is_terminal) =
+                event.parse_team_subseasonal_mod_changes(state)?;
             assert!(!is_terminal);
 
             let (top_of_inning, inning, team_name) = event.next_parse(parse_half_inning)?;
@@ -391,7 +440,14 @@ pub fn parse_next_event(
             let parsed = event.next_parse(parse_stolen_base)?;
 
             match parsed {
-                ParsedStolenBase::Normal { runner_name, base_stolen, is_successful, blaserunning, free_refiller, hype_stadium_name } => {
+                ParsedStolenBase::Normal {
+                    runner_name,
+                    base_stolen,
+                    is_successful,
+                    blaserunning,
+                    free_refiller,
+                    hype_stadium_name,
+                } => {
                     // TODO Right now each of these is in one branch and both should be in both
                     let runner_item_damage = event.parse_item_damage(runner_name)?;
                     let fielder_item_damage = event.parse_item_damage_and_name(true)?;
@@ -399,13 +455,20 @@ pub fn parse_next_event(
                     if is_successful {
                         let runner_id = event.next_player_id()?;
 
-                        let took_the_fifth_base = event.next_parse_opt(parse_player_took_the_fifth_base(runner_name)).is_some();
+                        let took_the_fifth_base = event
+                            .next_parse_opt(parse_player_took_the_fifth_base(runner_name))
+                            .is_some();
                         let took_the_fifth_base = if took_the_fifth_base {
-                            let mut remove_mod_from_stadium_event = event.next_child(EventType::RemovedMod)?;
-                            let stadium_name = remove_mod_from_stadium_event.next_parse(parse_player_took_the_fifth_base_from_stadium(runner_name))?;
+                            let mut remove_mod_from_stadium_event =
+                                event.next_child(EventType::RemovedMod)?;
+                            let stadium_name = remove_mod_from_stadium_event.next_parse(
+                                parse_player_took_the_fifth_base_from_stadium(runner_name),
+                            )?;
 
-                            let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
-                            let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
+                            let mut item_dropped_event =
+                                event.next_child_opt(EventType::PlayerLostItem)?;
+                            let mut item_gained_event =
+                                event.next_child(EventType::PlayerGainedItem)?;
 
                             let dropped_item = item_dropped_event
                                 // TODO If this `false` is still hardcoded when this is all done, find
@@ -413,13 +476,15 @@ pub fn parse_next_event(
                                 .map(|e| e.as_item_dropped(false))
                                 .transpose()?;
 
-
                             Some(TookTheFifthBase {
                                 stadium_name: stadium_name.to_string(),
                                 team_id: item_gained_event.next_team_id()?,
-                                remove_mod_from_stadium_sub_event: remove_mod_from_stadium_event.as_sub_event(),
-                                player_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
-                                player_item_rating_after: item_gained_event.metadata_f64("playerItemRatingAfter")?,
+                                remove_mod_from_stadium_sub_event: remove_mod_from_stadium_event
+                                    .as_sub_event(),
+                                player_item_rating_before: item_gained_event
+                                    .metadata_f64("playerItemRatingBefore")?,
+                                player_item_rating_after: item_gained_event
+                                    .metadata_f64("playerItemRatingAfter")?,
                                 player_rating: item_gained_event.metadata_f64("playerRating")?,
                                 player_gained_item_sub_event: item_gained_event.as_sub_event(),
                                 dropped_item,
@@ -428,7 +493,9 @@ pub fn parse_next_event(
                             None
                         };
 
-                        let hype = hype_stadium_name.map(|n| event.parse_hype_from_stadium(n.to_string())).transpose()?;
+                        let hype = hype_stadium_name
+                            .map(|n| event.parse_hype_from_stadium(n.to_string()))
+                            .transpose()?;
 
                         let free_refill = free_refiller
                             .map(|refiller_name| {
@@ -443,13 +510,17 @@ pub fn parse_next_event(
                             .transpose()?;
 
                         let score_summary = event.parse_score_summary()?;
-                        let balloons = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
+                        let balloons =
+                            event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
-                        let hotel_motel_party = event.next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
-                            .map(|birds| ParseOk(HotelMotelParty {
-                                birds: birds.map(str::to_string),
-                                boost: event.next_boost_child_with_team()?,
-                            }))
+                        let hotel_motel_party = event
+                            .next_parse_opt(parse_hotel_motel_party_with_name(runner_name))
+                            .map(|birds| {
+                                ParseOk(HotelMotelParty {
+                                    birds: birds.map(str::to_string),
+                                    boost: event.next_boost_child_with_team()?,
+                                })
+                            })
                             .transpose()?;
 
                         FedEventData::StolenBase {
@@ -479,7 +550,8 @@ pub fn parse_next_event(
                 }
                 ParsedStolenBase::Fifth { runner_name } => {
                     let mut player_lost_item_event = event.next_child(EventType::PlayerLostItem)?;
-                    let stadium_name = player_lost_item_event.next_parse(parse_placed_fifth_base_in_stadium(runner_name))?;
+                    let stadium_name = player_lost_item_event
+                        .next_parse(parse_placed_fifth_base_in_stadium(runner_name))?;
                     let mut stadium_gained_mod_event = event.next_child(EventType::AddedMod)?;
                     FedEventData::PlacedFifthBase {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -487,8 +559,10 @@ pub fn parse_next_event(
                         player_name: runner_name.to_string(),
                         player_team_id: player_lost_item_event.next_team_id()?,
                         stadium_name: stadium_name.to_string(),
-                        player_item_rating_before: player_lost_item_event.metadata_f64("playerItemRatingBefore")?,
-                        player_item_rating_after: player_lost_item_event.metadata_f64("playerItemRatingAfter")?,
+                        player_item_rating_before: player_lost_item_event
+                            .metadata_f64("playerItemRatingBefore")?,
+                        player_item_rating_after: player_lost_item_event
+                            .metadata_f64("playerItemRatingAfter")?,
                         player_rating: player_lost_item_event.metadata_f64("playerRating")?,
                         player_lost_item_event: player_lost_item_event.as_sub_event(),
                         stadium_gained_mod_event: stadium_gained_mod_event.as_sub_event(),
@@ -526,7 +600,7 @@ pub fn parse_next_event(
 
                     let scores = event.parse_scores(" scores!", false)?;
                     let (batter_item_damage, pitcher_item_damage) = match broken_item {
-                        None => { (None, None) }
+                        None => (None, None),
                         Some((ActivePositionType::Lineup, _item_name, item_name_damage)) => {
                             (Some(event.next_item_damage(item_name_damage)?), None)
                         }
@@ -584,7 +658,8 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedWalk::IntentionalWalk((pitcher_name, batter_name)) => {
-                    let sensed_foul_play_event = event.next_child_opt(EventType::InvestigationMessage)?;
+                    let sensed_foul_play_event =
+                        event.next_child_opt(EventType::InvestigationMessage)?;
                     FedEventData::IntentionalWalk {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -592,7 +667,9 @@ pub fn parse_next_event(
                         batter_id: event.next_player_id()?,
                         pitcher_name: pitcher_name.to_string(),
                         pitcher_id: event.next_player_id()?,
-                        sensed_foul_play_sub_event: sensed_foul_play_event.as_ref().map(EventParseWrapper::as_sub_event),
+                        sensed_foul_play_sub_event: sensed_foul_play_event
+                            .as_ref()
+                            .map(EventParseWrapper::as_sub_event),
                     }
                 }
             }
@@ -624,7 +701,8 @@ pub fn parse_next_event(
                     let free_refill = event.parse_free_refill()?;
                     let parasite = event.parse_parasite()?;
                     let score_summary = event.parse_score_summary()?;
-                    let balloons = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
+                    let balloons =
+                        event.parse_balloons_from_score_summary(score_summary.as_ref())?;
                     FedEventData::StrikeoutLooking {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -638,7 +716,11 @@ pub fn parse_next_event(
                         balloons,
                     }
                 }
-                ParsedStrikeout::Charm { charmer_name, charmed_name, num_swings } => {
+                ParsedStrikeout::Charm {
+                    charmer_name,
+                    charmed_name,
+                    num_swings,
+                } => {
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let charmer_id = event.next_player_id()?;
                     let charmer_id_2 = event.next_player_id()?;
@@ -654,15 +736,16 @@ pub fn parse_next_event(
                         num_swings,
                     }
                 }
-                ParsedStrikeout::MindTrick { pitcher_name, batter_name } => {
-                    FedEventData::MindTrickStrikeout {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        pitch,
-                        batter_id: event.next_player_id()?,
-                        batter_name: batter_name.to_string(),
-                        pitcher_name: pitcher_name.to_string(),
-                    }
-                }
+                ParsedStrikeout::MindTrick {
+                    pitcher_name,
+                    batter_name,
+                } => FedEventData::MindTrickStrikeout {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    pitch,
+                    batter_id: event.next_player_id()?,
+                    batter_name: batter_name.to_string(),
+                    pitcher_name: pitcher_name.to_string(),
+                },
             }
         }
         EventType::FlyOut => {
@@ -679,7 +762,8 @@ pub fn parse_next_event(
             let parasite = event.parse_parasite()?;
             //  Needs to be after cooled_off, but I have no idea about the other sub-events
             scores.score_summary = event.parse_score_summary()?;
-            scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
+            scores.balloons =
+                event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
             FedEventData::Flyout {
                 game: event.game(unscatter, attractor_secret_base)?,
                 pitch,
@@ -700,16 +784,25 @@ pub fn parse_next_event(
             let pitch = event.parse_pitch()?;
             let pitcher_item_damage_from_pitch = event.parse_item_damage_and_name(false)?;
             match event.next_parse(parse_ground_out)? {
-                ParsedGroundOut::Simple { batter_name, fielder_name } => {
+                ParsedGroundOut::Simple {
+                    batter_name,
+                    fielder_name,
+                } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage_from_out = event.parse_item_damage(fielder_name)?;
                     let pitcher_item_damage_from_out = event.parse_item_damage_and_name(true)?;
-                    let (scoring_players, attractions) = event.parse_scoring_players(" advances on the sacrifice.", false)?;
+                    let (scoring_players, attractions) =
+                        event.parse_scoring_players(" advances on the sacrifice.", false)?;
                     let batter_item_damage = event.parse_item_damage(batter_name)?;
                     let fielder_item_damage_from_advance = event.parse_item_damage(fielder_name)?;
-                    let pitcher_item_damage_from_advance = event.parse_item_damage_and_name(true)?;
+                    let pitcher_item_damage_from_advance =
+                        event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let scores = event.parse_scores_with_scoring_players(scoring_players, attractions, false)?;
+                    let scores = event.parse_scores_with_scoring_players(
+                        scoring_players,
+                        attractions,
+                        false,
+                    )?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
                     FedEventData::GroundOut {
@@ -730,16 +823,25 @@ pub fn parse_next_event(
                         flood_balloon_popped,
                     }
                 }
-                ParsedGroundOut::FieldersChoice { runner_out_name, base } => {
+                ParsedGroundOut::FieldersChoice {
+                    runner_out_name,
+                    base,
+                } => {
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
-                    let (scoring_players, attractions) = event.parse_scoring_players(" scores!", true)?;
+                    let (scoring_players, attractions) =
+                        event.parse_scoring_players(" scores!", true)?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
-                    let mut scores = event.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, true)?;
+                    let mut scores = event.parse_scores_with_scoring_players_without_summary(
+                        scoring_players,
+                        attractions,
+                        true,
+                    )?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     scores.score_summary = event.parse_score_summary()?;
-                    scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
+                    scores.balloons =
+                        event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
                     FedEventData::FieldersChoice {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -759,7 +861,8 @@ pub fn parse_next_event(
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
                     scores.score_summary = event.parse_score_summary()?;
-                    scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
+                    scores.balloons =
+                        event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
                     FedEventData::DoublePlay {
                         game: event.game(unscatter, attractor_secret_base)?,
                         pitch,
@@ -801,12 +904,14 @@ pub fn parse_next_event(
 
             // Parsed specially because AFAIK this is the only place an attraction happens and you
             // don't already know the player name
-            let attraction = event.next_parse(parse_attract_player)?
+            let attraction = event
+                .next_parse(parse_attract_player)?
                 .map(|(team_nickname, player_name)| {
                     assert!(is_known_team_nickname(team_nickname));
 
                     let mut child = event.next_child(EventType::PlayerAddedToTeam)?;
-                    let boost = event.next_child_opt(EventType::PlayerStatIncrease)?
+                    let boost = event
+                        .next_child_opt(EventType::PlayerStatIncrease)?
                         .map(|child| {
                             ParseOk(PlayerBoostSubEvent {
                                 rating_before: child.metadata_f64("before")?,
@@ -855,18 +960,28 @@ pub fn parse_next_event(
             let spicy_status = event.parse_spicy_status(batter_name)?;
 
             let hype = if let Some(h) = home_run_hype {
-                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::HomeRun))
+                Some(HomeRunHype::from_hype_and_source(
+                    h,
+                    HomeRunHypeSource::HomeRun,
+                ))
             } else if let Some(h) = big_bucket_hype {
-                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Buckets))
+                Some(HomeRunHype::from_hype_and_source(
+                    h,
+                    HomeRunHypeSource::Buckets,
+                ))
             } else if let Some(h) = alley_oop_hype {
-                Some(HomeRunHype::from_hype_and_source(h, HomeRunHypeSource::Hoops))
+                Some(HomeRunHype::from_hype_and_source(
+                    h,
+                    HomeRunHypeSource::Hoops,
+                ))
             } else {
                 None
             };
 
             // I have no idea where this needs to go in relation to the other sub-events
             let score_summary = event.parse_score_summary()?;
-            let balloons_inflated = event.parse_balloons_from_score_summary(score_summary.as_ref())?;
+            let balloons_inflated =
+                event.parse_balloons_from_score_summary(score_summary.as_ref())?;
 
             FedEventData::HomeRun {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -889,23 +1004,27 @@ pub fn parse_next_event(
                 score_summary,
                 balloons_inflated,
                 balloons_popped: balloons_popped.map(|(stadium_name, birds_scared_away)| {
-                    BalloonsPopped { stadium_name: stadium_name.to_string(), birds_scared_away }
+                    BalloonsPopped {
+                        stadium_name: stadium_name.to_string(),
+                        birds_scared_away,
+                    }
                 }),
             }
         }
         EventType::Hit => {
             let pitch = event.parse_pitch()?;
-            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke) = event.next_parse(parse_hit)?;
+            let (batter_name, hit_type, batter_item_broke, pitcher_item_broke) =
+                event.next_parse(parse_hit)?;
             // resim research says pitcher goes first
             let pitcher_item_damage = pitcher_item_broke
                 .map(|(_item_name, item_name_plural, player_name)| {
-                    event.next_item_damage(item_name_plural).map(|d| (player_name.to_string(), d))
+                    event
+                        .next_item_damage(item_name_plural)
+                        .map(|d| (player_name.to_string(), d))
                 })
                 .transpose()?;
             let batter_item_damage = batter_item_broke
-                .map(|(_item_name, item_name_plural)| {
-                    event.next_item_damage(item_name_plural)
-                })
+                .map(|(_item_name, item_name_plural)| event.next_item_damage(item_name_plural))
                 .transpose()?;
 
             let batter_id = event.next_player_id()?;
@@ -919,14 +1038,14 @@ pub fn parse_next_event(
             };
 
             let hit_type = match hit_type {
-                ParsedHitType::Single => { HitType::Single }
+                ParsedHitType::Single => HitType::Single,
                 ParsedHitType::Double => {
                     HitType::Double(event.parse_charge_blood(batter_name, "aa")?)
                 }
                 ParsedHitType::Triple => {
                     HitType::Triple(event.parse_charge_blood(batter_name, "aaa")?)
                 }
-                ParsedHitType::Quadruple => { HitType::Quadruple }
+                ParsedHitType::Quadruple => HitType::Quadruple,
             };
 
             let mut scores = event.parse_scores_without_summary(" scores!", false)?;
@@ -951,7 +1070,8 @@ pub fn parse_next_event(
 
             // Ditto for balloons
             assert!(scores.balloons.is_none());
-            scores.balloons = event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
+            scores.balloons =
+                event.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
 
             FedEventData::Hit {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -970,9 +1090,11 @@ pub fn parse_next_event(
             }
         }
         EventType::GameEnd => {
-            let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) = event.next_parse(parse_game_end)?;
+            let ((winning_team_name, winning_team_score), (losing_team_name, losing_team_score)) =
+                event.next_parse(parse_game_end)?;
 
-            let temp_stolen_player_returned = event.next_child_opt(EventType::PlayerMoved)?
+            let temp_stolen_player_returned = event
+                .next_child_opt(EventType::PlayerMoved)?
                 .as_mut()
                 .map(EventParseWrapper::parse_player_moved_teams)
                 .transpose()?;
@@ -1000,36 +1122,58 @@ pub fn parse_next_event(
                 batter_name: batter_name.to_string(),
                 team_nickname: team_name.to_string(),
                 wielding_item: wielding_item.map(|s| s.to_string()),
-                inhabiting: inhabited.map(|inhabited| {
-                    // Haunting doesn't have a sub-event if the player who Haunted already has the
-                    // Inhabiting mod
-                    let child = event.next_child_if_mod_effect(EventType::AddedMod, "INHABITING")?;
+                inhabiting: inhabited
+                    .map(|inhabited| {
+                        // Haunting doesn't have a sub-event if the player who Haunted already has the
+                        // Inhabiting mod
+                        let child =
+                            event.next_child_if_mod_effect(EventType::AddedMod, "INHABITING")?;
 
-                    // These live on the parent
-                    let inhabiting_player_id = event.next_player_id()?;
-                    let inhabited_player_id = event.next_player_id()?;
+                        // These live on the parent
+                        let inhabiting_player_id = event.next_player_id()?;
+                        let inhabited_player_id = event.next_player_id()?;
 
-                    ParseOk(Inhabiting {
-                        sub_event: child.as_ref().map(|c| c.as_sub_event()),
-                        inhabited_player_name: inhabited.to_string(),
-                        inhabiting_player_id,
-                        inhabited_player_id,
-                        inhabiting_player_team_id: child.and_then(|mut c| c.next_team_id_opt()),
+                        ParseOk(Inhabiting {
+                            sub_event: child.as_ref().map(|c| c.as_sub_event()),
+                            inhabited_player_name: inhabited.to_string(),
+                            inhabiting_player_id,
+                            inhabited_player_id,
+                            inhabiting_player_team_id: child.and_then(|mut c| c.next_team_id_opt()),
+                        })
                     })
-                }).transpose()?,
+                    .transpose()?,
                 is_repeating,
                 is_skipping,
             }
         }
         EventType::Strike => {
             let pitch = event.parse_pitch()?;
-            let (strike_type, balls, strikes) = event.next_parse(parse_strike(pitch.double_strike.is_some()))?;
+            let (strike_type, balls, strikes) =
+                event.next_parse(parse_strike(pitch.double_strike.is_some()))?;
             let pitcher_item_damage = event.parse_item_damage_and_name(true)?;
             let game = event.game(unscatter, attractor_secret_base)?;
             match strike_type {
-                StrikeType::Swinging => FedEventData::StrikeSwinging { game, pitch, balls, strikes, pitcher_item_damage },
-                StrikeType::Looking => FedEventData::StrikeLooking { game, pitch, balls, strikes, pitcher_item_damage },
-                StrikeType::Flinching => FedEventData::StrikeFlinching { game, pitch, balls, strikes, pitcher_item_damage },
+                StrikeType::Swinging => FedEventData::StrikeSwinging {
+                    game,
+                    pitch,
+                    balls,
+                    strikes,
+                    pitcher_item_damage,
+                },
+                StrikeType::Looking => FedEventData::StrikeLooking {
+                    game,
+                    pitch,
+                    balls,
+                    strikes,
+                    pitcher_item_damage,
+                },
+                StrikeType::Flinching => FedEventData::StrikeFlinching {
+                    game,
+                    pitch,
+                    balls,
+                    strikes,
+                    pitcher_item_damage,
+                },
             }
         }
         EventType::Ball => {
@@ -1066,7 +1210,8 @@ pub fn parse_next_event(
             }
         }
         EventType::RunsOverflowing => {
-            let (team_nickname, num_runs, unruns, gained) = event.next_parse(parse_runs_overflowing)?;
+            let (team_nickname, num_runs, unruns, gained) =
+                event.next_parse(parse_runs_overflowing)?;
             assert!(is_known_team_nickname(team_nickname));
 
             let score_summary = event.parse_score_summary()?;
@@ -1116,7 +1261,7 @@ pub fn parse_next_event(
                 game: event.game(unscatter, attractor_secret_base)?,
                 batter_name: player_name.to_string(),
                 reason: match reason {
-                    ParsedBatterSkippedReason::Shelled => { BatterSkippedReason::Shelled }
+                    ParsedBatterSkippedReason::Shelled => BatterSkippedReason::Shelled,
                     ParsedBatterSkippedReason::Elsewhere => {
                         BatterSkippedReason::Elsewhere(event.next_player_id()?)
                     }
@@ -1143,7 +1288,9 @@ pub fn parse_next_event(
                 game: event.game(unscatter, attractor_secret_base)?,
             }
         }
-        EventType::WeatherChange => { todo!() }
+        EventType::WeatherChange => {
+            todo!()
+        }
         EventType::MildPitch => {
             let (pitcher_name, pitch_type) = event.next_parse(parse_mild_pitch)?;
             let pitcher_id = event.next_player_id()?;
@@ -1187,13 +1334,11 @@ pub fn parse_next_event(
                 lost_triple_threat: zip_mod_change_events(&mut event, lost_triple_threat_names)?,
             }
         }
-        EventType::BigDeal => {
-            FedEventData::BeingSpeech {
-                being: Being::try_from(event.metadata_i64("being")? as i64)
-                    .map_err(|e| FeedParseError::UnknownBeing(e.number))?,
-                message: event.consume_description().to_string(),
-            }
-        }
+        EventType::BigDeal => FedEventData::BeingSpeech {
+            being: Being::try_from(event.metadata_i64("being")? as i64)
+                .map_err(|e| FeedParseError::UnknownBeing(e.number))?,
+            message: event.consume_description().to_string(),
+        },
         EventType::BlackHole => {
             let (scoring_team, victim_team) = event.next_parse(parse_black_hole)?;
             assert!(is_known_team_nickname(scoring_team));
@@ -1201,7 +1346,8 @@ pub fn parse_next_event(
 
             let win_event = event.parse_win_event()?;
 
-            let carcinization = event.next_parse_opt(parse_carcinization)
+            let carcinization = event
+                .next_parse_opt(parse_carcinization)
                 .map(|(team_name, player_name, success)| {
                     assert!(is_known_team_name(team_name));
                     if success {
@@ -1214,9 +1360,13 @@ pub fn parse_next_event(
                                     player_name: player_name.to_string(),
                                     location: child.metadata_enum("location")?,
                                     previous_team_id: child.metadata_uuid("sendTeamId")?,
-                                    previous_team_nickname: child.metadata_str("sendTeamName")?.to_string(),
+                                    previous_team_nickname: child
+                                        .metadata_str("sendTeamName")?
+                                        .to_string(),
                                     new_team_id: child.metadata_uuid("receiveTeamId")?,
-                                    new_team_nickname: child.metadata_str("receiveTeamName")?.to_string(),
+                                    new_team_nickname: child
+                                        .metadata_str("receiveTeamName")?
+                                        .to_string(),
                                     sub_event: child.as_sub_event(),
                                 },
                                 mod_added_sub_event: mod_add_child.as_sub_event(),
@@ -1226,18 +1376,21 @@ pub fn parse_next_event(
                     } else {
                         let mut child = event.next_child(EventType::PlayerMoveFailedForce)?;
                         ParseOk(Carcinization {
-                            player_moved: PlayerMaybeCarcinized::FailedByForce(PlayerGrippedByForce {
-                                player_id: child.next_player_id()?,
-                                player_name: player_name.to_string(),
-                                sub_event: child.as_sub_event(),
-                            }),
+                            player_moved: PlayerMaybeCarcinized::FailedByForce(
+                                PlayerGrippedByForce {
+                                    player_id: child.next_player_id()?,
+                                    player_name: player_name.to_string(),
+                                    sub_event: child.as_sub_event(),
+                                },
+                            ),
                             new_team_name: team_name.to_string(),
                         })
                     }
                 })
                 .transpose()?;
 
-            let compressed_by_gamma = event.next_parse_opt(parse_compressed_by_gamma)
+            let compressed_by_gamma = event
+                .next_parse_opt(parse_compressed_by_gamma)
                 .map(|player_name| {
                     let mut child = event.next_child(EventType::PlayerStatDecrease)?;
                     Ok::<_, FeedParseError>(PlayerStatChange {
@@ -1289,7 +1442,9 @@ pub fn parse_next_event(
             }
         }
         EventType::BirdsCircle => {
-            event.next_parse_tag("The Birds circle ... but they don't find what they're looking for.")?;
+            event.next_parse_tag(
+                "The Birds circle ... but they don't find what they're looking for.",
+            )?;
             FedEventData::BirdsCircle {
                 game: event.game(unscatter, attractor_secret_base)?,
             }
@@ -1299,7 +1454,13 @@ pub fn parse_next_event(
             let (pitcher, batter_id) = if let Some(name) = pitcher_name {
                 let pitcher_id = event.next_player_id()?;
                 let batter_id = event.next_player_id()?;
-                (Some(PitcherNameId { pitcher_id, pitcher_name: name.to_string() }), batter_id)
+                (
+                    Some(PitcherNameId {
+                        pitcher_id,
+                        pitcher_name: name.to_string(),
+                    }),
+                    batter_id,
+                )
             } else {
                 (None, event.next_player_id()?)
             };
@@ -1333,7 +1494,8 @@ pub fn parse_next_event(
         EventType::BecomeTripleThreat => {
             let names = event.next_parse(parse_become_triple_threat)?;
 
-            let pitchers = names.into_iter()
+            let pitchers = names
+                .into_iter()
                 .map(|pitcher_name| {
                     let mut sub_event = event.next_child(EventType::AddedMod)?;
                     ParseOk(ModChangeSubEventWithNamedPlayer {
@@ -1351,7 +1513,8 @@ pub fn parse_next_event(
             }
         }
         EventType::GainFreeRefill => {
-            let (player_name, roast, ingredient1, ingredient2) = event.next_parse(parse_gain_free_refill)?;
+            let (player_name, roast, ingredient1, ingredient2) =
+                event.next_parse(parse_gain_free_refill)?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
             let player_id = event.next_player_id()?;
             // The player ID should match in the sub event
@@ -1368,8 +1531,13 @@ pub fn parse_next_event(
             }
         }
         EventType::CoffeeBean => {
-            let (player_name, roast, notes, wired, gained_mod) = event.next_parse(parse_coffee_bean)?;
-            let mut sub_event = event.next_child_any(&[EventType::AddedMod, EventType::ModChange, EventType::RemovedMod])?;
+            let (player_name, roast, notes, wired, gained_mod) =
+                event.next_parse(parse_coffee_bean)?;
+            let mut sub_event = event.next_child_any(&[
+                EventType::AddedMod,
+                EventType::ModChange,
+                EventType::RemovedMod,
+            ])?;
             let player_id = event.next_player_id()?;
             let prev_mod = if sub_event.event_type == EventType::ModChange {
                 let mod_str = sub_event.metadata_str("to")?;
@@ -1390,17 +1558,24 @@ pub fn parse_next_event(
                 player_name: player_name.to_string(),
                 roast: roast.to_string(),
                 notes: notes.to_string(),
-                which_mod: if wired { CoffeeBeanMod::Wired } else { CoffeeBeanMod::Tired },
+                which_mod: if wired {
+                    CoffeeBeanMod::Wired
+                } else {
+                    CoffeeBeanMod::Tired
+                },
                 gained_mod,
                 sub_event: sub_event.as_sub_event(),
                 team_id: sub_event.next_team_id_opt(),
-                previous: prev_mod.map(|s| s.try_into()
-                    .map_err(|_| FeedParseError::UnexpectedMetadataValue {
-                        event_type: sub_event.event_type,
-                        field: "from",
-                        value: s.to_string(),
+                previous: prev_mod
+                    .map(|s| {
+                        s.try_into()
+                            .map_err(|_| FeedParseError::UnexpectedMetadataValue {
+                                event_type: sub_event.event_type,
+                                field: "from",
+                                value: s.to_string(),
+                            })
                     })
-                ).transpose()?,
+                    .transpose()?,
             }
         }
         EventType::FeedbackBlocked => {
@@ -1422,39 +1597,42 @@ pub fn parse_next_event(
             }
         }
         EventType::FeedbackSwap => {
-            let (player1_name, player2_name, lcd_soundsystem, position) = event.next_parse(parse_feedback)?;
+            let (player1_name, player2_name, lcd_soundsystem, position) =
+                event.next_parse(parse_feedback)?;
 
             let lcd_soundsystem = lcd_soundsystem
                 .map(|team_nickname| {
                     assert!(is_known_team_nickname(team_nickname));
-                    ParseOk((
-                        event.next_boost_child()?,
-                        event.next_boost_child()?,
-                    ))
+                    ParseOk((event.next_boost_child()?, event.next_boost_child()?))
                 })
                 .transpose()?;
 
-            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+            let weather_event = event
+                .next_child_opt(EventType::WeatherEvent)?
                 .map(|child| child.as_sub_event());
 
             let sub_event = event.next_child(EventType::PlayerTraded)?;
 
             macro_rules! get_player_data {
-                ($event:ident, $prefix:literal, $expected_name:ident) => {
-                    {
-                        let team_nickname = sub_event.metadata_str(concat!($prefix, "TeamName"))?.to_string();
-                        assert!(is_known_team_nickname(&team_nickname));
-                        let player_name = sub_event.metadata_str(concat!($prefix, "PlayerName"))?.to_string();
-                        assert_eq!(player_name, $expected_name);
-                        FeedbackPlayerData {
-                            team_id: sub_event.metadata_uuid(concat!($prefix, "TeamId"))?,
-                            team_nickname,
-                            player_id: sub_event.metadata_uuid(concat!($prefix, "PlayerId"))?,
-                            player_name,
-                            location: sub_event.metadata_i64(concat!($prefix, "Location"))?.try_into()?,
-                        }
+                ($event:ident, $prefix:literal, $expected_name:ident) => {{
+                    let team_nickname = sub_event
+                        .metadata_str(concat!($prefix, "TeamName"))?
+                        .to_string();
+                    assert!(is_known_team_nickname(&team_nickname));
+                    let player_name = sub_event
+                        .metadata_str(concat!($prefix, "PlayerName"))?
+                        .to_string();
+                    assert_eq!(player_name, $expected_name);
+                    FeedbackPlayerData {
+                        team_id: sub_event.metadata_uuid(concat!($prefix, "TeamId"))?,
+                        team_nickname,
+                        player_id: sub_event.metadata_uuid(concat!($prefix, "PlayerId"))?,
+                        player_name,
+                        location: sub_event
+                            .metadata_i64(concat!($prefix, "Location"))?
+                            .try_into()?,
                     }
-                };
+                }};
             }
 
             FedEventData::Feedback {
@@ -1488,7 +1666,8 @@ pub fn parse_next_event(
             let player_name = event.next_parse(parse_allergic_reaction)?;
             let player_id = event.next_player_id()?;
 
-            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+            let weather_event = event
+                .next_child_opt(EventType::WeatherEvent)?
                 .map(|child| child.as_sub_event());
 
             let mut sub_event = event.next_child(EventType::PlayerStatDecrease)?;
@@ -1518,13 +1697,16 @@ pub fn parse_next_event(
             }
         }
         EventType::ReverbRosterShuffle => {
-            let (team_nickname, reverb_type, gravity_player_names) = event.next_parse(parse_roster_shuffle(event.season))?;
+            let (team_nickname, reverb_type, gravity_player_names) =
+                event.next_parse(parse_roster_shuffle(event.season))?;
 
             // Not sure where this falls relative to gravity
-            let weather_event = event.next_child_opt(EventType::WeatherEvent)?
+            let weather_event = event
+                .next_child_opt(EventType::WeatherEvent)?
                 .map(|child| child.as_sub_event());
 
-            let gravity_players = gravity_player_names.into_iter()
+            let gravity_players = gravity_player_names
+                .into_iter()
                 .map(|player_name| {
                     ParseOk(PlayerNameId {
                         player_id: event.next_player_id()?,
@@ -1597,7 +1779,8 @@ pub fn parse_next_event(
                     FedEventData::Reverb {
                         game: event.game(unscatter, attractor_secret_base)?,
                         // TODO Turn this Expect into a Result
-                        team_id: team_id.expect("There must be at least one child to set the team id"),
+                        team_id: team_id
+                            .expect("There must be at least one child to set the team id"),
                         team_nickname: team_nickname.to_string(),
                         reverb_type: ReverbType::SeveralPlayers(reverbs),
                         gravity_players,
@@ -1612,8 +1795,10 @@ pub fn parse_next_event(
             let sipped_id = event.next_player_id()?;
 
             // This is for you, Chorby Soul III
-            let mut sipped_event = event.next_child_any(&[EventType::PlayerStatDecrease, EventType::PlayerStatIncrease])?;
-            let maintenance_mode = event.next_child_opt(EventType::AddedMod)?
+            let mut sipped_event = event
+                .next_child_any(&[EventType::PlayerStatDecrease, EventType::PlayerStatIncrease])?;
+            let maintenance_mode = event
+                .next_child_opt(EventType::AddedMod)?
                 .map(|mut mm_event| {
                     // Make sure this is a maintenance mode event by verifying the description
                     mm_event.next_parse_tag("Impairment Detected. Entering Maintenance Mode.")?;
@@ -1650,7 +1835,8 @@ pub fn parse_next_event(
             }
         }
         EventType::BlooddrainSiphon => {
-            let (sipper_name, sipped_name, sipped_category, action) = event.next_parse(parse_blooddrain_siphon)?;
+            let (sipper_name, sipped_name, sipped_category, action) =
+                event.next_parse(parse_blooddrain_siphon)?;
 
             match action {
                 None => {
@@ -1684,7 +1870,8 @@ pub fn parse_next_event(
                     }
                 }
                 Some(action) => {
-                    let mut stat_decrease_event = event.next_child(EventType::PlayerStatDecrease)?;
+                    let mut stat_decrease_event =
+                        event.next_child(EventType::PlayerStatDecrease)?;
                     // These are in the opposite order for normal vs special blooddrains! fun!
                     let sipper_id = event.next_player_id()?;
                     let sipped_id = event.next_player_id()?;
@@ -1699,23 +1886,28 @@ pub fn parse_next_event(
                         sipped_name: sipped_name.to_string(),
                         sipped_category,
                         action: match action {
-                            ParsedBlooddrainAction::AddBall => { BlooddrainAction::AddBall }
-                            ParsedBlooddrainAction::RemoveBall => { BlooddrainAction::RemoveBall }
-                            ParsedBlooddrainAction::AddStrike(name) => { BlooddrainAction::AddStrike(name.map(|s| s.to_string())) }
-                            ParsedBlooddrainAction::RemoveStrike => { BlooddrainAction::RemoveStrike }
-                            ParsedBlooddrainAction::AddOut => { BlooddrainAction::AddOut }
-                            ParsedBlooddrainAction::RemoveOut => { BlooddrainAction::RemoveOut }
+                            ParsedBlooddrainAction::AddBall => BlooddrainAction::AddBall,
+                            ParsedBlooddrainAction::RemoveBall => BlooddrainAction::RemoveBall,
+                            ParsedBlooddrainAction::AddStrike(name) => {
+                                BlooddrainAction::AddStrike(name.map(|s| s.to_string()))
+                            }
+                            ParsedBlooddrainAction::RemoveStrike => BlooddrainAction::RemoveStrike,
+                            ParsedBlooddrainAction::AddOut => BlooddrainAction::AddOut,
+                            ParsedBlooddrainAction::RemoveOut => BlooddrainAction::RemoveOut,
                         },
                         sipped_event: stat_decrease_event.as_sub_event(),
                         rating_before: stat_decrease_event.metadata_f64("before")?,
                         rating_after: stat_decrease_event.metadata_f64("after")?,
-                        maintenance_mode: maintenance_mode_event.as_ref().map(EventParseWrapper::as_sub_event),
+                        maintenance_mode: maintenance_mode_event
+                            .as_ref()
+                            .map(EventParseWrapper::as_sub_event),
                     }
                 }
             }
         }
         EventType::BlooddrainBlocked => {
-            let (is_siphon, sipper_name, sippee_name) = event.next_parse(parse_blooddrain_blocked)?;
+            let (is_siphon, sipper_name, sippee_name) =
+                event.next_parse(parse_blooddrain_blocked)?;
 
             FedEventData::BlooddrainBlocked {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1727,11 +1919,13 @@ pub fn parse_next_event(
             }
         }
         EventType::Incineration => {
-            let (victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed) = event.next_parse(parse_incineration)?;
+            let (victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed) =
+                event.next_parse(parse_incineration)?;
 
             // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
             // Incineration sub-event instead of adding a new event type.
-            let mut incin_child = event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
+            let mut incin_child =
+                event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
             let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
             let mut pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
             let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
@@ -1760,7 +1954,8 @@ pub fn parse_next_event(
                 })
                 .transpose()?;
 
-            let heat_magnet = event.parse_score_summary()?
+            let heat_magnet = event
+                .parse_score_summary()?
                 .map(|score| ParseOk((score, event.parse_balloons(5)?)))
                 .transpose()?;
             assert_eq!(heat_magnet.is_some(), heat_magnet_parsed.is_some());
@@ -1789,11 +1984,13 @@ pub fn parse_next_event(
             }
         }
         EventType::IncinerationBlocked => {
-            let (is_unstable, player_name, blocked_reason) = event.next_parse(parse_incineration_blocked)?;
+            let (is_unstable, player_name, blocked_reason) =
+                event.next_parse(parse_incineration_blocked)?;
             match blocked_reason {
                 IncinerationBlockedReason::Magmatic => {
                     // If you were already magmatic, you don't get a sub-event about it
-                    let mod_add_event = event.next_child_opt(EventType::AddedMod)?
+                    let mod_add_event = event
+                        .next_child_opt(EventType::AddedMod)?
                         .map(|mut child| {
                             ParseOk(ModChangeSubEvent {
                                 team_id: child.next_team_id()?,
@@ -1809,18 +2006,17 @@ pub fn parse_next_event(
                         magmatic_mod_added: mod_add_event,
                     }
                 }
-                IncinerationBlockedReason::Fireproof => {
-                    FedEventData::FireproofIncineration {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        player_id: event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        is_unstable,
-                    }
-                }
+                IncinerationBlockedReason::Fireproof => FedEventData::FireproofIncineration {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    player_id: event.next_player_id()?,
+                    player_name: player_name.to_string(),
+                    is_unstable,
+                },
             }
         }
         EventType::FlagPlanted => {
-            let (team_nickname, park_name, prefab_name, is_first) = event.next_parse(parse_flag_planted)?;
+            let (team_nickname, park_name, prefab_name, is_first) =
+                event.next_parse(parse_flag_planted)?;
 
             FedEventData::FlagPlanted {
                 team_id: event.next_team_id()?,
@@ -1835,14 +2031,13 @@ pub fn parse_next_event(
         EventType::RenovationBuilt => {
             // Funnily enough, fraudulent renos' make-good events have string values for the
             // metadata instead of ints.
-            let is_fraudulent_reno_fix = event.metadata()
+            let is_fraudulent_reno_fix = event
+                .metadata()
                 .as_object()
                 .and_then(|obj| obj.get("votes"))
-                .ok_or_else(|| {
-                    FeedParseError::MissingMetadata {
-                        event_type: event.event_type,
-                        field: "votes".to_string(),
-                    }
+                .ok_or_else(|| FeedParseError::MissingMetadata {
+                    event_type: event.event_type,
+                    field: "votes".to_string(),
                 })?
                 .is_string();
 
@@ -1852,8 +2047,11 @@ pub fn parse_next_event(
                     mod_id: mod_add_child.metadata_str("mod")?.to_string(),
                     sub_event: mod_add_child.as_sub_event(),
                 }
-            } else if let Some(mut switch_flipped_child) = event.next_child_opt(EventType::LightSwitchFlipped)? {
-                let (stadium_name, is_on) = switch_flipped_child.next_parse(parse_light_switch_flipped)?;
+            } else if let Some(mut switch_flipped_child) =
+                event.next_child_opt(EventType::LightSwitchFlipped)?
+            {
+                let (stadium_name, is_on) =
+                    switch_flipped_child.next_parse(parse_light_switch_flipped)?;
                 RenovationBuiltEffect::LightSwitchFlipped {
                     stadium_name: stadium_name.to_string(),
                     is_on,
@@ -1878,7 +2076,9 @@ pub fn parse_next_event(
                 effect,
             }
         }
-        EventType::LightSwitchFlipped => { todo!() }
+        EventType::LightSwitchFlipped => {
+            todo!()
+        }
         EventType::DecreePassed => {
             let decree_title = event.next_parse(parse_decree_passed)?;
 
@@ -1891,13 +2091,11 @@ pub fn parse_next_event(
             let blessing_or_gift = event.next_parse(parse_blessing_or_gift)?;
 
             match blessing_or_gift {
-                ParsedBlessingOrGift::Blessing(blessing_title) => {
-                    FedEventData::BlessingWon {
-                        team_tags: event.team_tags()?.into(),
-                        blessing_title: blessing_title.into(),
-                        metadata: event.full_metadata().clone(),
-                    }
-                }
+                ParsedBlessingOrGift::Blessing(blessing_title) => FedEventData::BlessingWon {
+                    team_tags: event.team_tags()?.into(),
+                    blessing_title: blessing_title.into(),
+                    metadata: event.full_metadata().clone(),
+                },
                 ParsedBlessingOrGift::Gift(title_and_recipient) => {
                     // TODO Clean this up once I understand it more
                     // See this discord conversation for me going a little insane about these events: https://discord.com/channels/738107179294523402/1047288668953530389/1272058222806831186
@@ -1915,9 +2113,12 @@ pub fn parse_next_event(
                                 // So sometimes there are 2 events after this event and both start out redacted,
                                 // and apparently we've only ever unredacted one of them (which is AddedMod).
                                 // This assert is meant to catch the other one.
-                                (next1.r#type == EventType::Undefined && next2.r#type == EventType::Undefined) ||
-                                (next1.r#type == EventType::AddedMod && next2.r#type == EventType::Undefined) ||
-                                (next1.r#type == EventType::Undefined && next2.r#type == EventType::AddedMod)
+                                (next1.r#type == EventType::Undefined
+                                    && next2.r#type == EventType::Undefined)
+                                    || (next1.r#type == EventType::AddedMod
+                                        && next2.r#type == EventType::Undefined)
+                                    || (next1.r#type == EventType::Undefined
+                                        && next2.r#type == EventType::AddedMod)
                             );
                             vec![next1, next2]
                         }
@@ -1943,9 +2144,11 @@ pub fn parse_next_event(
             }
         }
         EventType::FloodingSwept => {
-            let (parsed_effects, flood_pumps, flood_balloon, anti_flood_pumps) = event.next_parse(parse_flooding_swept)?;
+            let (parsed_effects, flood_pumps, flood_balloon, anti_flood_pumps) =
+                event.next_parse(parse_flooding_swept)?;
 
-            let effects = parsed_effects.into_iter()
+            let effects = parsed_effects
+                .into_iter()
                 .map(|effect| {
                     ParseOk(match effect {
                         ParsedFloodingEffect::Elsewhere((player_name, undertaker_name)) => {
@@ -2011,13 +2214,15 @@ pub fn parse_next_event(
         }
         EventType::SalmonSwim => {
             let (inning_num, parsed_runs_lost) = event.next_parse(parse_salmon)?;
-            let item_restored = event.next_parse_opt(parse_item_restored)
+            let item_restored = event
+                .next_parse_opt(parse_item_restored)
                 .map(|(player_name, _item_name, _restored)| {
                     event.next_item_repaired(player_name.to_string())
                 })
                 .transpose()?;
 
-            let player_expelled = event.next_parse_opt(parse_caught_in_the_bind)
+            let player_expelled = event
+                .next_parse_opt(parse_caught_in_the_bind)
                 .map(|(caught_player_name, undertaker_name)| {
                     let mut sub_event = event.next_child(EventType::AddedMod)?;
                     // Order is important
@@ -2037,55 +2242,61 @@ pub fn parse_next_event(
                 game: event.game(unscatter, attractor_secret_base)?,
                 inning_num,
                 run_losses: match parsed_runs_lost {
-                    ParsedSalmonRunsLost::None => { RunLossesFromSalmon::None }
+                    ParsedSalmonRunsLost::None => RunLossesFromSalmon::None,
                     ParsedSalmonRunsLost::OneTeam(ParsedTeamRunsLost { runs, name }) => {
-                        RunLossesFromSalmon::OneTeam(TeamRunsLost { runs_lost: runs, team_name: name.to_string() })
+                        RunLossesFromSalmon::OneTeam(TeamRunsLost {
+                            runs_lost: runs,
+                            team_name: name.to_string(),
+                        })
                     }
-                    ParsedSalmonRunsLost::BothTeams((a, b)) => {
-                        RunLossesFromSalmon::BothTeams((
-                            TeamRunsLost { runs_lost: a.runs, team_name: a.name.to_string() },
-                            TeamRunsLost { runs_lost: b.runs, team_name: b.name.to_string() },
-                        ))
-                    }
+                    ParsedSalmonRunsLost::BothTeams((a, b)) => RunLossesFromSalmon::BothTeams((
+                        TeamRunsLost {
+                            runs_lost: a.runs,
+                            team_name: a.name.to_string(),
+                        },
+                        TeamRunsLost {
+                            runs_lost: b.runs,
+                            team_name: b.name.to_string(),
+                        },
+                    )),
                 },
                 item_repaired: item_restored,
                 player_expelled,
             }
         }
-        EventType::PolarityShift => {
-            match event.next_parse(parse_polarity)? {
-                ParsedPolarity::NumbersGo(numbers_go) => {
-                    let weather_change_event = event.next_child(EventType::WeatherChange)?;
-                    FedEventData::PolarityShift {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        numbers_go,
-                        sub_event: weather_change_event.as_sub_event(),
-                    }
-                }
-                ParsedPolarity::BandBeginsToPlay => {
-                    let weather_change_event = event.next_child(EventType::WeatherChange)?;
-                    let numbers_went = match weather_change_event.metadata_enum("before")? {
-                        Weather::PolarityPlus => NumbersGo::Up,
-                        Weather::PolarityMinus => NumbersGo::Down,
-                        other => {
-                            return Err(FeedParseError::UnexpectedPolarityWeather {
-                                weather: other,
-                                event_type: event.event_type,
-                            })
-                        }
-                    };
-                    FedEventData::BandBeginsToPlay {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        numbers_went,
-                        sub_event: weather_change_event.as_sub_event(),
-                    }
+        EventType::PolarityShift => match event.next_parse(parse_polarity)? {
+            ParsedPolarity::NumbersGo(numbers_go) => {
+                let weather_change_event = event.next_child(EventType::WeatherChange)?;
+                FedEventData::PolarityShift {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    numbers_go,
+                    sub_event: weather_change_event.as_sub_event(),
                 }
             }
-        }
+            ParsedPolarity::BandBeginsToPlay => {
+                let weather_change_event = event.next_child(EventType::WeatherChange)?;
+                let numbers_went = match weather_change_event.metadata_enum("before")? {
+                    Weather::PolarityPlus => NumbersGo::Up,
+                    Weather::PolarityMinus => NumbersGo::Down,
+                    other => {
+                        return Err(FeedParseError::UnexpectedPolarityWeather {
+                            weather: other,
+                            event_type: event.event_type,
+                        });
+                    }
+                };
+                FedEventData::BandBeginsToPlay {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    numbers_went,
+                    sub_event: weather_change_event.as_sub_event(),
+                }
+            }
+        },
         EventType::EnterSecretBase => {
             let player_name = event.next_parse(parse_terminated(" enters the Secret Base..."))?;
 
-            let deep_darkness = event.next_child_opt(EventType::InvestigationMessage)?
+            let deep_darkness = event
+                .next_child_opt(EventType::InvestigationMessage)?
                 .map(|child_event| child_event.as_sub_event());
 
             FedEventData::EnterSecretBase {
@@ -2111,21 +2322,29 @@ pub fn parse_next_event(
                     let (team_id, effect) = if let Some((_, item_name_plural)) = item_breaks {
                         let item_damaged = event.next_item_damage(item_name_plural)?;
 
-                        (item_damaged.team_id, ConsumerAttackEffect::DefendedWithItem(item_damaged))
+                        (
+                            item_damaged.team_id,
+                            ConsumerAttackEffect::DefendedWithItem(item_damaged),
+                        )
                     } else {
                         // I'm hoping that detectives only sense something fishy if the attack hit
                         // TODO: If this is true, move the something fishy inside the effect
                         let mut chomp_child = event.next_child(EventType::PlayerStatDecrease)?;
                         let team_id = chomp_child.next_team_id()?;
-                        (team_id, ConsumerAttackEffect::Chomp {
-                            rating_before: chomp_child.metadata_f64("before")?,
-                            rating_after: chomp_child.metadata_f64("after")?,
-                            sub_event: chomp_child.as_sub_event(),
-                        })
+                        (
+                            team_id,
+                            ConsumerAttackEffect::Chomp {
+                                rating_before: chomp_child.metadata_f64("before")?,
+                                rating_after: chomp_child.metadata_f64("after")?,
+                                sub_event: chomp_child.as_sub_event(),
+                            },
+                        )
                     };
-                    let sensed_something_fishy = event.next_child_if(EventType::InvestigationMessage, |_| true)?
+                    let sensed_something_fishy = event
+                        .next_child_if(EventType::InvestigationMessage, |_| true)?
                         .map(|mut fishy_event| {
-                            let detective_name = fishy_event.next_parse(parse_terminated(" sensed something fishy."))?;
+                            let detective_name = fishy_event
+                                .next_parse(parse_terminated(" sensed something fishy."))?;
                             ParseOk(DetectiveActivity {
                                 detective_id: fishy_event.next_player_id()?,
                                 detective_name: detective_name.to_string(),
@@ -2133,7 +2352,6 @@ pub fn parse_next_event(
                             })
                         })
                         .transpose()?;
-
 
                     FedEventData::ConsumerAttack {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -2145,12 +2363,10 @@ pub fn parse_next_event(
                         scattered,
                     }
                 }
-                ParsedConsumerAttack::ConsumerExpelled => {
-                    FedEventData::ConsumerExpelled {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        player_id: event.next_player_id()?,
-                    }
-                }
+                ParsedConsumerAttack::ConsumerExpelled => FedEventData::ConsumerExpelled {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    player_id: event.next_player_id()?,
+                },
                 ParsedConsumerAttack::ConsumerDefended((player_name, exclamation, verb)) => {
                     let defender_id = event.next_player_id()?;
                     let targeted_player_id = event.next_player_id()?;
@@ -2168,7 +2384,8 @@ pub fn parse_next_event(
                     let targeted_player_id = event.next_player_id()?;
                     // next_item_damage pops the event itself, so we can't pop it here. We can
                     // peek it though
-                    let (player_name, _item_name) = event.peek_child()?
+                    let (player_name, _item_name) = event
+                        .peek_child()?
                         .ok_or_else(|| FeedParseError::NotEnoughChildren {
                             event_type: event.event_type,
                             expected_at_least: 1,
@@ -2222,16 +2439,19 @@ pub fn parse_next_event(
                     ParsedGrindRailSuccess::TaggedOut(trick) => {
                         GrindRailSuccess::TaggedOut(trick_from_parsed(trick))
                     }
-                    ParsedGrindRailSuccess::Bailed => {
-                        GrindRailSuccess::Bailed
-                    }
+                    ParsedGrindRailSuccess::Bailed => GrindRailSuccess::Bailed,
                 },
             }
         }
         EventType::TunnelsUsed => {
             match event.next_parse(parse_tunnels)? {
-                ParsedTunnels::Player { player_name, tunnels_effect } => match tunnels_effect {
-                    ParsedPlayerTunnels::StoleRun { victim_team_nickname } => {
+                ParsedTunnels::Player {
+                    player_name,
+                    tunnels_effect,
+                } => match tunnels_effect {
+                    ParsedPlayerTunnels::StoleRun {
+                        victim_team_nickname,
+                    } => {
                         assert!(is_known_team_nickname(victim_team_nickname));
 
                         let free_refill = event.parse_free_refill()?;
@@ -2240,44 +2460,62 @@ pub fn parse_next_event(
                         // On exactly two occasions (dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
                         // 4338a482-f7eb-448c-9827-e9220f2e86a4) a RunStolenThroughTunnels was emitted
                         // without any children. I have no idea why that happened.
-                        let details = event.next_child_opt(EventType::RunsScored)?
+                        let details = event
+                            .next_child_opt(EventType::RunsScored)?
                             .map(|mut runs_scored_a| {
                                 // Exactly one time, ddf2df8a-946d-4785-bb75-84233d01e927, there was
                                 // only one scored event. It was the one for the victim team.
-                                if let Some(mut runs_scored_b) = event.next_child_opt(EventType::RunsScored)? {
-                                    let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                if let Some(mut runs_scored_b) =
+                                    event.next_child_opt(EventType::RunsScored)?
+                                {
+                                    let team_nickname_a =
+                                        runs_scored_a.next_parse(parse_team_scored)?;
                                     assert!(is_known_team_nickname(team_nickname_a));
-                                    let team_nickname_b = runs_scored_b.next_parse(parse_team_scored)?;
+                                    let team_nickname_b =
+                                        runs_scored_b.next_parse(parse_team_scored)?;
                                     assert!(is_known_team_nickname(team_nickname_b));
 
-                                    let (mut run_gained_event, mut run_lost_event, thieving_team_nickname, victim_event_first) =
-                                        if team_nickname_a == victim_team_nickname {
-                                            (runs_scored_b, runs_scored_a, team_nickname_b, true)
-                                        } else {
-                                            (runs_scored_a, runs_scored_b, team_nickname_a, false)
-                                        };
+                                    let (
+                                        mut run_gained_event,
+                                        mut run_lost_event,
+                                        thieving_team_nickname,
+                                        victim_event_first,
+                                    ) = if team_nickname_a == victim_team_nickname {
+                                        (runs_scored_b, runs_scored_a, team_nickname_b, true)
+                                    } else {
+                                        (runs_scored_a, runs_scored_b, team_nickname_a, false)
+                                    };
                                     ParseOk(RunStolenThroughTunnelsDetails::BothKnown {
                                         victim_team_id: run_lost_event.next_team_id()?,
                                         thieving_team_nickname: thieving_team_nickname.to_string(),
                                         thieving_team_id: run_gained_event.next_team_id()?,
-                                        away_emoji: run_gained_event.metadata_str("awayEmoji")?.to_string(),
+                                        away_emoji: run_gained_event
+                                            .metadata_str("awayEmoji")?
+                                            .to_string(),
                                         away_score: run_gained_event.metadata_f64("awayScore")?,
-                                        home_emoji: run_gained_event.metadata_str("homeEmoji")?.to_string(),
+                                        home_emoji: run_gained_event
+                                            .metadata_str("homeEmoji")?
+                                            .to_string(),
                                         home_score: run_gained_event.metadata_f64("homeScore")?,
                                         run_gained_sub_event: run_gained_event.as_sub_event(),
                                         run_lost_sub_event: run_lost_event.as_sub_event(),
                                         victim_event_first,
                                     })
                                 } else {
-                                    let team_nickname_a = runs_scored_a.next_parse(parse_team_scored)?;
+                                    let team_nickname_a =
+                                        runs_scored_a.next_parse(parse_team_scored)?;
                                     assert!(is_known_team_nickname(team_nickname_a));
 
                                     if team_nickname_a == victim_team_nickname {
                                         ParseOk(RunStolenThroughTunnelsDetails::VictimKnown {
                                             victim_team_id: runs_scored_a.next_team_id()?,
-                                            away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                            away_emoji: runs_scored_a
+                                                .metadata_str("awayEmoji")?
+                                                .to_string(),
                                             away_score: runs_scored_a.metadata_f64("awayScore")?,
-                                            home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                            home_emoji: runs_scored_a
+                                                .metadata_str("homeEmoji")?
+                                                .to_string(),
                                             home_score: runs_scored_a.metadata_f64("homeScore")?,
                                             run_lost_sub_event: runs_scored_a.as_sub_event(),
                                         })
@@ -2286,9 +2524,13 @@ pub fn parse_next_event(
                                         ParseOk(RunStolenThroughTunnelsDetails::ThiefKnown {
                                             thieving_team_nickname: team_nickname_a.to_string(),
                                             thieving_team_id: runs_scored_a.next_team_id()?,
-                                            away_emoji: runs_scored_a.metadata_str("awayEmoji")?.to_string(),
+                                            away_emoji: runs_scored_a
+                                                .metadata_str("awayEmoji")?
+                                                .to_string(),
                                             away_score: runs_scored_a.metadata_f64("awayScore")?,
-                                            home_emoji: runs_scored_a.metadata_str("homeEmoji")?.to_string(),
+                                            home_emoji: runs_scored_a
+                                                .metadata_str("homeEmoji")?
+                                                .to_string(),
                                             home_score: runs_scored_a.metadata_f64("homeScore")?,
                                             run_gained_sub_event: runs_scored_a.as_sub_event(),
                                         })
@@ -2309,8 +2551,12 @@ pub fn parse_next_event(
                             free_refill,
                         }
                     }
-                    ParsedPlayerTunnels::CaughtStealingItem { victim_name, item_name } => {
-                        let mut caught_stealing_item_event = event.next_child(EventType::FailedTunnelsSteal)?;
+                    ParsedPlayerTunnels::CaughtStealingItem {
+                        victim_name,
+                        item_name,
+                    } => {
+                        let mut caught_stealing_item_event =
+                            event.next_child(EventType::FailedTunnelsSteal)?;
                         let mut fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
 
                         let thief_id = caught_stealing_item_event.next_player_id()?;
@@ -2322,16 +2568,24 @@ pub fn parse_next_event(
                             victim_id,
                             victim_name: victim_name.to_string(),
                             item_name: item_name.to_string(),
-                            caught_stealing_item_sub_event: caught_stealing_item_event.as_sub_event(),
-                            fled_elsewhere_sub_event: fled_elsewhere_event.map(|e| e.as_sub_event()),
+                            caught_stealing_item_sub_event: caught_stealing_item_event
+                                .as_sub_event(),
+                            fled_elsewhere_sub_event: fled_elsewhere_event
+                                .map(|e| e.as_sub_event()),
                             flipped_negative: None, // TODO
                         }
                     }
-                    ParsedPlayerTunnels::StoleItem { victim_name, item_name } => {
-                        let mut stole_item_event = event.next_child(EventType::StoleItemFromTunnels)?;
+                    ParsedPlayerTunnels::StoleItem {
+                        victim_name,
+                        item_name,
+                    } => {
+                        let mut stole_item_event =
+                            event.next_child(EventType::StoleItemFromTunnels)?;
                         let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
-                        let mut item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
-                        let mut item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
+                        let mut item_dropped_event =
+                            event.next_child_opt(EventType::PlayerLostItem)?;
+                        let mut item_gained_event =
+                            event.next_child(EventType::PlayerGainedItem)?;
 
                         let thief_id = stole_item_event.next_player_id()?;
                         let victim_id = stole_item_event.next_player_id()?;
@@ -2352,13 +2606,20 @@ pub fn parse_next_event(
                             victim_team_id,
                             item_id: item_lost_event.metadata_uuid("itemId")?,
                             item_name: item_name.to_string(),
-                            item_mods: item_lost_event.metadata_str_vec("mods")?
-                                .into_iter().map(str::to_string).collect(),
-                            thief_item_rating_before: item_gained_event.metadata_f64("playerItemRatingBefore")?,
-                            thief_item_rating_after: item_gained_event.metadata_f64_opt("playerItemRatingAfter")?,
+                            item_mods: item_lost_event
+                                .metadata_str_vec("mods")?
+                                .into_iter()
+                                .map(str::to_string)
+                                .collect(),
+                            thief_item_rating_before: item_gained_event
+                                .metadata_f64("playerItemRatingBefore")?,
+                            thief_item_rating_after: item_gained_event
+                                .metadata_f64_opt("playerItemRatingAfter")?,
                             thief_rating: item_gained_event.metadata_f64("playerRating")?,
-                            victim_item_rating_before: item_lost_event.metadata_f64_opt("playerItemRatingBefore")?,
-                            victim_item_rating_after: item_lost_event.metadata_f64("playerItemRatingAfter")?,
+                            victim_item_rating_before: item_lost_event
+                                .metadata_f64_opt("playerItemRatingBefore")?,
+                            victim_item_rating_after: item_lost_event
+                                .metadata_f64("playerItemRatingAfter")?,
                             victim_rating: item_lost_event.metadata_f64("playerRating")?,
                             stole_item_sub_event: stole_item_event.as_sub_event(),
                             item_lost_sub_event: item_lost_event.as_sub_event(),
@@ -2367,7 +2628,8 @@ pub fn parse_next_event(
                         }
                     }
                     ParsedPlayerTunnels::NothingInteresting => {
-                        let mut nothing_interesting_event = event.next_child(EventType::FoundNothingInterestingInTunnels)?;
+                        let mut nothing_interesting_event =
+                            event.next_child(EventType::FoundNothingInterestingInTunnels)?;
 
                         FedEventData::NothingInterestingInTunnels {
                             game: event.game(unscatter, attractor_secret_base)?,
@@ -2376,16 +2638,35 @@ pub fn parse_next_event(
                             sub_event: nothing_interesting_event.as_sub_event(),
                         }
                     }
-                }
+                },
                 ParsedTunnels::Team(tunnels_effect) => match tunnels_effect {
                     ParsedTeamTunnels::HeistBegins { team_nickname } => {
                         assert!(is_known_team_nickname(team_nickname));
-                        let mut outcome_sub_event = event.next_child_any(&[EventType::FailedTunnelsSteal, EventType::StoleItemFromTunnels])?;
-                        let (successful, target_player_name) = if outcome_sub_event.event_type == EventType::FailedTunnelsSteal {
-                            (false, outcome_sub_event.next_parse(parse_failed_team_tunnels_steal_outcome(team_nickname))?)
+                        let mut outcome_sub_event = event.next_child_any(&[
+                            EventType::FailedTunnelsSteal,
+                            EventType::StoleItemFromTunnels,
+                        ])?;
+                        let (successful, target_player_name) = if outcome_sub_event.event_type
+                            == EventType::FailedTunnelsSteal
+                        {
+                            (
+                                false,
+                                outcome_sub_event.next_parse(
+                                    parse_failed_team_tunnels_steal_outcome(team_nickname),
+                                )?,
+                            )
                         } else {
-                            assert_eq!(outcome_sub_event.event_type, EventType::StoleItemFromTunnels, "Call to event.next_child_any must return an event with one of the types it was passed.");
-                            (true, outcome_sub_event.next_parse(parse_successful_team_tunnels_steal_outcome(team_nickname))?)
+                            assert_eq!(
+                                outcome_sub_event.event_type,
+                                EventType::StoleItemFromTunnels,
+                                "Call to event.next_child_any must return an event with one of the types it was passed."
+                            );
+                            (
+                                true,
+                                outcome_sub_event.next_parse(
+                                    parse_successful_team_tunnels_steal_outcome(team_nickname),
+                                )?,
+                            )
                         };
                         let target_team_id = outcome_sub_event.next_team_id()?;
                         let thieving_team_id = outcome_sub_event.next_team_id()?;
@@ -2400,7 +2681,6 @@ pub fn parse_next_event(
                             target_player_name: target_player_name.to_string(),
                             sub_event: outcome_sub_event.as_sub_event(),
                         }
-
                     }
                     ParsedTeamTunnels::HeistContinues { player_name } => {
                         FedEventData::TeamTunnelHeistContinues {
@@ -2414,7 +2694,7 @@ pub fn parse_next_event(
                             target_player_name: player_name.to_string(),
                         }
                     }
-                }
+                },
             }
         }
         EventType::PeanutMister => {
@@ -2437,12 +2717,10 @@ pub fn parse_next_event(
                 superallergy,
             }
         }
-        EventType::PeanutFlavorText => {
-            FedEventData::PeanutFlavorText {
-                game: event.game(unscatter, attractor_secret_base)?,
-                message: event.description().into(),
-            }
-        }
+        EventType::PeanutFlavorText => FedEventData::PeanutFlavorText {
+            game: event.game(unscatter, attractor_secret_base)?,
+            message: event.description().into(),
+        },
         EventType::TasteTheInfinite => {
             let (sheller_name, shellee_name) = event.next_parse(parse_taste_the_infinite)?;
             let sheller_id = event.next_player_id()?;
@@ -2468,7 +2746,6 @@ pub fn parse_next_event(
                 num_unruns,
                 away_team_nickname: team_nickname.to_string(),
             }
-
         }
         EventType::EventHorizonAwaits => {
             let _ = event.next_parse_tag("The Event Horizon awaits.")?;
@@ -2492,32 +2769,40 @@ pub fn parse_next_event(
                 team_nickname: team_nickname.to_string(),
             }
         }
-        EventType::TarotReading => {
-            FedEventData::TarotReading {
-                description: event.description().into(),
-                metadata: event.metadata().clone(),
-                player_tags: event.player_tags()?.into(),
-                team_tags: event.team_tags()?.into(),
-            }
-        }
-        EventType::EmergencyAlert => {
-            FedEventData::EmergencyAlert {
-                message: event.description().into(),
-                team_tags: event.team_tags()?.into(),
-            }
-        }
+        EventType::TarotReading => FedEventData::TarotReading {
+            description: event.description().into(),
+            metadata: event.metadata().clone(),
+            player_tags: event.player_tags()?.into(),
+            team_tags: event.team_tags()?.into(),
+        },
+        EventType::EmergencyAlert => FedEventData::EmergencyAlert {
+            message: event.description().into(),
+            team_tags: event.team_tags()?.into(),
+        },
         EventType::ReturnFromElsewhere => {
-            let returns = event.next_parse(parse_returns_from_elsewhere)?.into_iter()
+            let returns = event
+                .next_parse(parse_returns_from_elsewhere)?
+                .into_iter()
                 .map(|ret| {
                     let (player_name, flavor) = match ret {
-                        ParsedReturnFromElsewhere::Normal((player_name, time_elsewhere, is_peanut)) => {
+                        ParsedReturnFromElsewhere::Normal((
+                            player_name,
+                            time_elsewhere,
+                            is_peanut,
+                        )) => {
                             let scattered = event.parse_scattered()?;
 
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
-                            let recongealed_differently = event.next_child_any_opt(&[EventType::PlayerStatIncrease, EventType::PlayerStatDecrease])?
+                            let recongealed_differently = event
+                                .next_child_any_opt(&[
+                                    EventType::PlayerStatIncrease,
+                                    EventType::PlayerStatDecrease,
+                                ])?
                                 .map(|mut child| {
-                                    let player_name = child.next_parse(parse_terminated(" re-congealed differently."))?;
+                                    let player_name = child.next_parse(parse_terminated(
+                                        " re-congealed differently.",
+                                    ))?;
                                     Ok::<_, FeedParseError>(PlayerStatChange {
                                         team_id: child.next_team_id()?,
                                         player_id: child.next_player_id()?,
@@ -2529,24 +2814,32 @@ pub fn parse_next_event(
                                 })
                                 .transpose()?;
 
-                            (player_name, ReturnFromElsewhereFlavor::Full {
-                                team_id: return_sub_event.next_team_id()?,
-                                player_id: return_sub_event.next_player_id()?,
-                                is_peanut,
-                                sub_event: return_sub_event.as_sub_event(),
-                                time_elsewhere,
-                                scattered,
-                                recongealed_differently,
-                            })
-                        }
-                        ParsedReturnFromElsewhere::Short((player_name, is_peanut)) => {
-                            if let Some(mut return_sub_event) = event.next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")? {
-                                (player_name, ReturnFromElsewhereFlavor::Short {
+                            (
+                                player_name,
+                                ReturnFromElsewhereFlavor::Full {
                                     team_id: return_sub_event.next_team_id()?,
                                     player_id: return_sub_event.next_player_id()?,
-                                    sub_event: return_sub_event.as_sub_event(),
                                     is_peanut,
-                                })
+                                    sub_event: return_sub_event.as_sub_event(),
+                                    time_elsewhere,
+                                    scattered,
+                                    recongealed_differently,
+                                },
+                            )
+                        }
+                        ParsedReturnFromElsewhere::Short((player_name, is_peanut)) => {
+                            if let Some(mut return_sub_event) = event
+                                .next_child_if_mod_effect(EventType::RemovedMod, "ELSEWHERE")?
+                            {
+                                (
+                                    player_name,
+                                    ReturnFromElsewhereFlavor::Short {
+                                        team_id: return_sub_event.next_team_id()?,
+                                        player_id: return_sub_event.next_player_id()?,
+                                        sub_event: return_sub_event.as_sub_event(),
+                                        is_peanut,
+                                    },
+                                )
                             } else {
                                 (player_name, ReturnFromElsewhereFlavor::False { is_peanut })
                             }
@@ -2556,30 +2849,40 @@ pub fn parse_next_event(
 
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
-                            (sought_name, ReturnFromElsewhereFlavor::PulledBack {
-                                team_id: return_sub_event.next_team_id()?,
-                                sought_player_id: return_sub_event.next_player_id()?,
-                                seeker_player_id: event.next_player_id()?,
-                                seeker_player_name: seeker_name.to_string(),
-                                scattered,
-                                sub_event: return_sub_event.as_sub_event(),
-                                time_elsewhere: None,
-                            })
+                            (
+                                sought_name,
+                                ReturnFromElsewhereFlavor::PulledBack {
+                                    team_id: return_sub_event.next_team_id()?,
+                                    sought_player_id: return_sub_event.next_player_id()?,
+                                    seeker_player_id: event.next_player_id()?,
+                                    seeker_player_name: seeker_name.to_string(),
+                                    scattered,
+                                    sub_event: return_sub_event.as_sub_event(),
+                                    time_elsewhere: None,
+                                },
+                            )
                         }
-                        ParsedReturnFromElsewhere::NormalSeeker((seeker_name, sought_name, time_elsewhere)) => {
+                        ParsedReturnFromElsewhere::NormalSeeker((
+                            seeker_name,
+                            sought_name,
+                            time_elsewhere,
+                        )) => {
                             let scattered = event.parse_scattered()?;
 
                             let mut return_sub_event = event.next_child(EventType::RemovedMod)?;
 
-                            (sought_name, ReturnFromElsewhereFlavor::PulledBack {
-                                team_id: return_sub_event.next_team_id()?,
-                                sought_player_id: return_sub_event.next_player_id()?,
-                                seeker_player_id: event.next_player_id()?,
-                                scattered,
-                                sub_event: return_sub_event.as_sub_event(),
-                                time_elsewhere: Some(time_elsewhere),
-                                seeker_player_name: seeker_name.to_string(),
-                            })
+                            (
+                                sought_name,
+                                ReturnFromElsewhereFlavor::PulledBack {
+                                    team_id: return_sub_event.next_team_id()?,
+                                    sought_player_id: return_sub_event.next_player_id()?,
+                                    seeker_player_id: event.next_player_id()?,
+                                    scattered,
+                                    sub_event: return_sub_event.as_sub_event(),
+                                    time_elsewhere: Some(time_elsewhere),
+                                    seeker_player_name: seeker_name.to_string(),
+                                },
+                            )
                         }
                     };
 
@@ -2590,7 +2893,10 @@ pub fn parse_next_event(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            assert!(!returns.is_empty(), "Parser should never return an empty list of returns");
+            assert!(
+                !returns.is_empty(),
+                "Parser should never return an empty list of returns"
+            );
 
             FedEventData::ReturnFromElsewhere {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -2647,9 +2953,13 @@ pub fn parse_next_event(
         EventType::Homebody => {
             let players = event.next_parse(parse_homebody)?;
 
-            let homebodies = players.into_iter()
+            let homebodies = players
+                .into_iter()
                 .map(|(player_name, is_overperforming)| {
-                    let mut mod_add_event = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::ChangedModFromOtherMod])?;
+                    let mut mod_add_event = event.next_child_any(&[
+                        EventType::AddedModFromOtherMod,
+                        EventType::ChangedModFromOtherMod,
+                    ])?;
                     ParseOk(TogglePerforming {
                         player_id: mod_add_event.next_player_id()?,
                         team_id: mod_add_event.next_team_id()?,
@@ -2669,7 +2979,10 @@ pub fn parse_next_event(
         EventType::Superyummy => {
             let (player_name, peanuts_present) = event.next_parse(parse_superyummy)?;
 
-            let expected_types = [EventType::AddedModFromOtherMod, EventType::ChangedModFromOtherMod];
+            let expected_types = [
+                EventType::AddedModFromOtherMod,
+                EventType::ChangedModFromOtherMod,
+            ];
             if let Some(mut mod_add_event) = event.next_child_if_any(&expected_types, |child| {
                 expected_types.iter().any(|t| t == &child.event_type)
             })? {
@@ -2696,10 +3009,14 @@ pub fn parse_next_event(
         EventType::Perk => {
             let player_names = event.next_parse(parse_perk_up)?;
 
-            let players = player_names.into_iter()
+            let players = player_names
+                .into_iter()
                 .map(|player_name| {
                     let mut mod_add_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                    assert_eq!(format!("{player_name} Perks up."), mod_add_event.description());
+                    assert_eq!(
+                        format!("{player_name} Perks up."),
+                        mod_add_event.description()
+                    );
                     ParseOk(ModChangeSubEventWithNamedPlayer {
                         player_name: player_name.to_string(),
                         sub_event: mod_add_event.as_sub_event(),
@@ -2714,13 +3031,21 @@ pub fn parse_next_event(
                 players,
             }
         }
-        EventType::Earlbird => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Earlbirds, event.game(unscatter, attractor_secret_base)?)?
+        EventType::Earlbird => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::Earlbirds,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::LateToTheParty => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::LateToTheParty,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::EarlyToTheParty => {
+            todo!()
         }
-        EventType::LateToTheParty => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::LateToTheParty, event.game(unscatter, attractor_secret_base)?)?
-        }
-        EventType::EarlyToTheParty => { todo!() }
         EventType::ShameDonor => {
             let (team_nickname, unruns) = event.next_parse(parse_donated_shame)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -2759,20 +3084,19 @@ pub fn parse_next_event(
                             team_nickname: team_nickname.to_string(),
                         }
                     }
-                    ParsedAddedMod::MVP(player_name) => {
-                        FedEventData::PlayerNamedMvp {
-                            team_id: event.next_team_id()?,
-                            player_id: event.next_player_id()?,
-                            player_name: player_name.to_string(),
-                            level: 1,
-                        }
-                    }
+                    ParsedAddedMod::MVP(player_name) => FedEventData::PlayerNamedMvp {
+                        team_id: event.next_team_id()?,
+                        player_id: event.next_player_id()?,
+                        player_name: player_name.to_string(),
+                        level: 1,
+                    },
                 }
             }
         }
         EventType::RemovedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
-                let pending_sub_removal = event_iter.next_expect_type(EventType::RemovedModsFromAnotherMod, EventType::RemovedMod)
+                let pending_sub_removal = event_iter
+                    .next_expect_type(EventType::RemovedModsFromAnotherMod, EventType::RemovedMod)
                     .ok()
                     .map(|event| {
                         let mut event = EventParseWrapper::new(&event)?;
@@ -2824,18 +3148,23 @@ pub fn parse_next_event(
             }
         }
         EventType::ModExpires => {
-            let mods: Vec<_> = event.metadata_str_vec("mods")?
-                .into_iter().map(String::from).collect();
+            let mods: Vec<_> = event
+                .metadata_str_vec("mods")?
+                .into_iter()
+                .map(String::from)
+                .collect();
             if let Some(player_id) = event.next_player_id_opt() {
                 let (player_name, mod_duration) = event.next_parse(parse_player_mod_expires)?;
                 FedEventData::PlayerModExpires {
                     team_id: event.next_team_id()?,
                     player_id,
                     player_name: player_name.to_string(),
-                    mods: mods.into_iter()
+                    mods: mods
+                        .into_iter()
                         .map(|mod_id| ModRemoval {
                             mod_id: mod_id.clone(),
-                            dependent_mod_removal: state.extract_dependent_mod(&(player_id, mod_id)),
+                            dependent_mod_removal: state
+                                .extract_dependent_mod(&(player_id, mod_id)),
                         })
                         .collect(),
                     mod_duration,
@@ -2847,7 +3176,8 @@ pub fn parse_next_event(
                 FedEventData::TeamModExpires {
                     team_id,
                     team_nickname: team_nickname.to_string(),
-                    mods: mods.into_iter()
+                    mods: mods
+                        .into_iter()
                         .map(|mod_id| ModRemoval {
                             mod_id: mod_id.clone(),
                             dependent_mod_removal: state.extract_dependent_mod(&(team_id, mod_id)),
@@ -2868,7 +3198,11 @@ pub fn parse_next_event(
                         location: event.metadata_enum("location")?,
                     }
                 }
-                ParsedPlayerAddedToTeam::Localized { player_name, team_nickname, .. } => {
+                ParsedPlayerAddedToTeam::Localized {
+                    player_name,
+                    team_nickname,
+                    ..
+                } => {
                     // TODO Check location from parsing against location from metadata
                     FedEventData::PlayerLocalized {
                         team_id: event.next_team_id()?,
@@ -2880,7 +3214,9 @@ pub fn parse_next_event(
                 }
             }
         }
-        EventType::PlayerReplacedByNecromancy => { todo!() }
+        EventType::PlayerReplacedByNecromancy => {
+            todo!()
+        }
         EventType::PlayerReplacesReturned => {
             let team_nickname = event.next_parse(parse_player_replaces_returned)?;
 
@@ -2902,21 +3238,26 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(team_nickname));
 
             let player_id = event.next_player_id()?;
-            let mod_event = event_iter.extract_next_match(|e| {
-                e.r#type == EventType::AddedMod && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
-            })
+            let mod_event = event_iter
+                .extract_next_match(|e| {
+                    e.r#type == EventType::AddedMod
+                        && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+                })
                 .ok_or_else(|| FeedParseError::MissingFollowingEvent {
                     expected_types: vec![EventType::AddedMod],
                     after_type: EventType::PlayerRemovedFromTeam,
                 })?;
             let mod_event = EventParseWrapper::new(&mod_event)?;
 
-            let weaker_apart_event = event_iter.extract_next_match(|e| {
-                e.r#type == EventType::RemovedModFromOtherMod && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
-            })
+            let weaker_apart_event = event_iter
+                .extract_next_match(|e| {
+                    e.r#type == EventType::RemovedModFromOtherMod
+                        && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+                })
                 .map(|weaker_apart_event| {
                     let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
-                    let names = weaker_apart_event.next_parse(parse_yolk_message(player_name, "weaker apart"))?;
+                    let names = weaker_apart_event
+                        .next_parse(parse_yolk_message(player_name, "weaker apart"))?;
                     ParseOk(PlayerTogethernessModChange {
                         other_player_names: names.into_iter().map(str::to_string).collect(),
                         sub_event: weaker_apart_event.as_sub_event(),
@@ -2933,8 +3274,12 @@ pub fn parse_next_event(
                 weaker_apart_event,
             }
         }
-        EventType::PlayerTraded => { todo!() }
-        EventType::PlayerSwap => { todo!() }
+        EventType::PlayerTraded => {
+            todo!()
+        }
+        EventType::PlayerSwap => {
+            todo!()
+        }
         EventType::PlayerMoved => {
             match event.next_parse(parse_player_moved)? {
                 ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
@@ -2952,7 +3297,10 @@ pub fn parse_next_event(
                 ParsedPlayerMoved::Roamin(player_name) => {
                     let mut good_riddance_parties = Vec::new();
 
-                    while let Some(party) = event_iter.next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved).ok() {
+                    while let Some(party) = event_iter
+                        .next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved)
+                        .ok()
+                    {
                         let mut party = EventParseWrapper::new(&party)?;
                         let (player_name, attracted_birds) = party.next_parse(parse_party)?;
                         assert!(attracted_birds.is_none());
@@ -2982,10 +3330,11 @@ pub fn parse_next_event(
                     // If the player Roamed to the shadows, there will be a top-level boost event
                     // (erroneously) emitted _after_ this one (and not as a child, which is what
                     // you would expect). We yoink that and include it as part of this event.
-                    let shadow_boost = event_iter.next_if_type(EventType::PlayerStatIncrease)
+                    let shadow_boost = event_iter
+                        .next_if_type(EventType::PlayerStatIncrease)
                         .map(|event| {
                             let mut event = EventParseWrapper::new(&event)?;
-                            
+
                             ParseOk(PlayerBoostSubEvent {
                                 rating_before: event.metadata_f64("before")?,
                                 rating_after: event.metadata_f64("after")?,
@@ -3007,32 +3356,36 @@ pub fn parse_next_event(
                 }
             }
         }
-        EventType::PlayerBornFromIncineration => { todo!() }
-        EventType::PlayerStatIncrease => {
-            match event.next_parse(parse_player_stat_increase)? {
-                ParsedPlayerStatIncrease::PlayerBoosted(player_name) => {
-                    FedEventData::PlayerBoosted {
-                        team_id: event.next_team_id()?,
-                        player_id: event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                        rating_before: event.metadata_f64("before")?,
-                        rating_after: event.metadata_f64("after")?,
-                    }
-                }
-                ParsedPlayerStatIncrease::BottomDwellers(team_nickname) => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    FedEventData::BottomDwellers {
-                        team_id: event.next_team_id()?,
-                        team_nickname: team_nickname.to_string(),
-                        rating_before: event.metadata_f64("before")?,
-                        rating_after: event.metadata_f64("after")?,
-                    }
+        EventType::PlayerBornFromIncineration => {
+            todo!()
+        }
+        EventType::PlayerStatIncrease => match event.next_parse(parse_player_stat_increase)? {
+            ParsedPlayerStatIncrease::PlayerBoosted(player_name) => FedEventData::PlayerBoosted {
+                team_id: event.next_team_id()?,
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+                rating_before: event.metadata_f64("before")?,
+                rating_after: event.metadata_f64("after")?,
+            },
+            ParsedPlayerStatIncrease::BottomDwellers(team_nickname) => {
+                assert!(is_known_team_nickname(team_nickname));
+                FedEventData::BottomDwellers {
+                    team_id: event.next_team_id()?,
+                    team_nickname: team_nickname.to_string(),
+                    rating_before: event.metadata_f64("before")?,
+                    rating_after: event.metadata_f64("after")?,
                 }
             }
+        },
+        EventType::PlayerStatDecrease => {
+            todo!()
         }
-        EventType::PlayerStatDecrease => { todo!() }
-        EventType::PlayerStatReroll => { todo!() }
-        EventType::PlayerStatDecreaseFromSuperallergic => { todo!() }
+        EventType::PlayerStatReroll => {
+            todo!()
+        }
+        EventType::PlayerStatDecreaseFromSuperallergic => {
+            todo!()
+        }
         EventType::PlayerMoveFailedForce => {
             // The only top-level instances of this event is Parker trying to Roam
             event.next_parse_tag("Roam failed.\nParker MacMillan was gripped by Force.")?;
@@ -3041,7 +3394,6 @@ pub fn parse_next_event(
                 player_name: "Parker MacMillan".to_string(),
                 player_id: event.next_player_id()?,
             }
-
         }
         EventType::EnterHallOfFlame => {
             // In Beta, this event type is only top-level for return-to-hall events. That was no
@@ -3057,7 +3409,8 @@ pub fn parse_next_event(
         }
         EventType::ExitHallOfFlame => {
             // So far the only instance of this at the top level is Roamers roaming out of the Hall
-            let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
+            let add_to_team_event = event_iter
+                .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
             let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
             FedEventData::Roam {
@@ -3077,7 +3430,8 @@ pub fn parse_next_event(
                 make_item_tarot_event(&mut event, true)?
             } else {
                 let mut pending_prize_matches = state.pending_prize_matches.lock().unwrap();
-                let potential_prize_matches: Vec<_> = pending_prize_matches.iter()
+                let potential_prize_matches: Vec<_> = pending_prize_matches
+                    .iter()
                     .filter(|&pm| {
                         let Some(team_ids) = event.team_tags().ok() else {
                             return false;
@@ -3085,8 +3439,9 @@ pub fn parse_next_event(
                         let Ok(&team_id) = team_ids.into_iter().exactly_one() else {
                             return false;
                         };
-                        pm.season == event.season && pm.day == event.day &&
-                            (pm.home_team_id == team_id || pm.away_team_id == team_id)
+                        pm.season == event.season
+                            && pm.day == event.day
+                            && (pm.home_team_id == team_id || pm.away_team_id == team_id)
                     })
                     .collect();
                 match event.next_parse(parse_player_gained_item(&potential_prize_matches))? {
@@ -3094,9 +3449,15 @@ pub fn parse_next_event(
                         FedEventData::CommunityChestOpens {
                             item_id: event.metadata_uuid("itemId")?,
                             item_name: event.metadata_str("itemName")?.to_string(),
-                            item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                            player_item_rating_before: event.metadata_f64_opt("playerItemRatingBefore")?,
-                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
+                            item_mods: event
+                                .metadata_str_vec("mods")?
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect(),
+                            player_item_rating_before: event
+                                .metadata_f64_opt("playerItemRatingBefore")?,
+                            player_item_rating_after: event
+                                .metadata_f64_opt("playerItemRatingAfter")?,
                             player_rating: event.metadata_f64("playerRating")?,
                             team_id: event.next_team_id()?,
                             player_name: player_name.to_string(),
@@ -3106,14 +3467,22 @@ pub fn parse_next_event(
                     ParsedPlayerGainedItem::WonPrizeMatchExplicit(team_nickname) => {
                         assert!(is_known_team_nickname(team_nickname));
                         FedEventData::WonPrizeMatch {
-                            team_nickname_or_player_name: TeamNicknameOrPlayerName::TeamNickname(team_nickname.to_string()),
+                            team_nickname_or_player_name: TeamNicknameOrPlayerName::TeamNickname(
+                                team_nickname.to_string(),
+                            ),
                             team_id: event.next_team_id()?,
                             player_id: event.next_player_id()?,
                             item_id: event.metadata_uuid("itemId")?,
                             item_name: event.metadata_str("itemName")?.to_string(),
-                            item_mods: event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
-                            player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
-                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
+                            item_mods: event
+                                .metadata_str_vec("mods")?
+                                .into_iter()
+                                .map(|s| s.to_string())
+                                .collect(),
+                            player_item_rating_before: event
+                                .metadata_f64("playerItemRatingBefore")?,
+                            player_item_rating_after: event
+                                .metadata_f64_opt("playerItemRatingAfter")?,
                             player_rating: event.metadata_f64("playerRating")?,
                         }
                     }
@@ -3126,14 +3495,22 @@ pub fn parse_next_event(
                             .0;
                         pending_prize_matches.swap_remove(remove_index);
                         FedEventData::WonPrizeMatch {
-                            team_nickname_or_player_name: TeamNicknameOrPlayerName::PlayerName(player_name.to_string()),
+                            team_nickname_or_player_name: TeamNicknameOrPlayerName::PlayerName(
+                                player_name.to_string(),
+                            ),
                             team_id: event.next_team_id()?,
                             player_id: event.next_player_id()?,
                             item_id: event.metadata_uuid("itemId")?,
                             item_name: event.metadata_str("itemName")?.to_string(),
-                            item_mods: event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
-                            player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
-                            player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
+                            item_mods: event
+                                .metadata_str_vec("mods")?
+                                .into_iter()
+                                .map(|s| s.to_string())
+                                .collect(),
+                            player_item_rating_before: event
+                                .metadata_f64("playerItemRatingBefore")?,
+                            player_item_rating_after: event
+                                .metadata_f64_opt("playerItemRatingAfter")?,
                             player_rating: event.metadata_f64("playerRating")?,
                         }
                     }
@@ -3150,7 +3527,11 @@ pub fn parse_next_event(
                 FedEventData::PlayerDropsItem {
                     item_id: event.metadata_uuid("itemId")?,
                     item_name: event.metadata_str("itemName")?.to_string(),
-                    item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+                    item_mods: event
+                        .metadata_str_vec("mods")?
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                     player_item_rating_before: event.metadata_f64_opt("playerItemRatingBefore")?,
                     player_item_rating_after: event.metadata_f64_opt("playerItemRatingAfter")?,
                     player_rating: event.metadata_f64("playerRating")?,
@@ -3160,9 +3541,15 @@ pub fn parse_next_event(
                 }
             }
         }
-        EventType::ReverbFullShuffle => { todo!() }
-        EventType::ReverbLineupShuffle => { todo!() }
-        EventType::ReverbRotationShuffle => { todo!() }
+        EventType::ReverbFullShuffle => {
+            todo!()
+        }
+        EventType::ReverbLineupShuffle => {
+            todo!()
+        }
+        EventType::ReverbRotationShuffle => {
+            todo!()
+        }
         EventType::PlayerHatched => {
             // Apparently this event type is only top-level during postseason births. I think.
 
@@ -3170,46 +3557,84 @@ pub fn parse_next_event(
             let player_name = event.next_parse(parse_player_hatched)?;
             let mut prev_type = EventType::PlayerHatched;
 
-            let boost_event = event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+            let boost_event = event_iter
+                .next_expect_type(EventType::PlayerStatIncrease, prev_type)
+                .ok()
                 .map(|e| (e, PostseasonBirthBoostEventOrder::AfterHatch));
-            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
+            if let Some((e, _)) = &boost_event {
+                prev_type = e.r#type;
+            }
             // let mut boost_event = boost_event.as_ref().map(EventParseWrapper::new).transpose()?;
 
             // This is *almost* always there, but the lovers in the s19 postseason were missing this
             // event
-            let earned_birth_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, prev_type).ok();
-            if let Some(e) = &earned_birth_event { prev_type = e.r#type; }
-            let mut earned_birth_event = earned_birth_event.as_ref().map(EventParseWrapper::new).transpose()?;
+            let earned_birth_event = event_iter
+                .next_expect_type(EventType::PlayerAddedToTeam, prev_type)
+                .ok();
+            if let Some(e) = &earned_birth_event {
+                prev_type = e.r#type;
+            }
+            let mut earned_birth_event = earned_birth_event
+                .as_ref()
+                .map(EventParseWrapper::new)
+                .transpose()?;
             if earned_birth_event.is_none() {
                 // Audit that this only happens the one time I expect it
                 assert_eq!(event.id, uuid!("8b074caf-a71c-42e4-9c4a-1904c24b814a"));
             }
 
-            let boost_event = if let Some(e) = boost_event { Some(e) } else {
-                event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+            let boost_event = if let Some(e) = boost_event {
+                Some(e)
+            } else {
+                event_iter
+                    .next_expect_type(EventType::PlayerStatIncrease, prev_type)
+                    .ok()
                     .map(|e| (e, PostseasonBirthBoostEventOrder::AfterBirth))
             };
-            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
+            if let Some((e, _)) = &boost_event {
+                prev_type = e.r#type;
+            }
 
-            let left_party_event = event_iter.next_expect_type(EventType::RemovedMod, prev_type).ok();
-            if let Some(e) = &left_party_event { prev_type = e.r#type; }
-            let mut left_party_event = left_party_event.as_ref().map(EventParseWrapper::new).transpose()?;
+            let left_party_event = event_iter
+                .next_expect_type(EventType::RemovedMod, prev_type)
+                .ok();
+            if let Some(e) = &left_party_event {
+                prev_type = e.r#type;
+            }
+            let mut left_party_event = left_party_event
+                .as_ref()
+                .map(EventParseWrapper::new)
+                .transpose()?;
 
-            let earned_spot_event = event_iter.next_expect_type(EventType::EarnedPostseasonSlot, prev_type)?;
+            let earned_spot_event =
+                event_iter.next_expect_type(EventType::EarnedPostseasonSlot, prev_type)?;
             prev_type = earned_spot_event.r#type;
             let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
-            let (team_nickname, displayed_season_number) = earned_spot_event.next_parse(parse_earned_postseason_slot)?;
+            let (team_nickname, displayed_season_number) =
+                earned_spot_event.next_parse(parse_earned_postseason_slot)?;
             assert!(is_known_team_nickname(team_nickname));
             assert_eq!(displayed_season_number, event.season + 1);
 
-            let boost_event = if let Some(e) = boost_event { Some(e) } else {
-                event_iter.next_expect_type(EventType::PlayerStatIncrease, prev_type).ok()
+            let boost_event = if let Some(e) = boost_event {
+                Some(e)
+            } else {
+                event_iter
+                    .next_expect_type(EventType::PlayerStatIncrease, prev_type)
+                    .ok()
                     .map(|e| (e, PostseasonBirthBoostEventOrder::AfterEarnedSlot))
             };
-            if let Some((e, _)) = &boost_event { prev_type = e.r#type; }
-            let mut boost_event = boost_event.as_ref().map(|(e, o)| EventParseWrapper::new(e).map(|w| (w, *o))).transpose()?;
+            if let Some((e, _)) = &boost_event {
+                prev_type = e.r#type;
+            }
+            let mut boost_event = boost_event
+                .as_ref()
+                .map(|(e, o)| EventParseWrapper::new(e).map(|w| (w, *o)))
+                .transpose()?;
 
-            let shadow_boost = boost_event.as_ref().map(|(w, o)| EventParseWrapper::as_known_player_boost(w).map(|e| (e, *o))).transpose()?;
+            let shadow_boost = boost_event
+                .as_ref()
+                .map(|(w, o)| EventParseWrapper::as_known_player_boost(w).map(|e| (e, *o)))
+                .transpose()?;
             let data = FedEventData::EarnedPostseasonSlot {
                 team_id: earned_spot_event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
@@ -3217,14 +3642,19 @@ pub fn parse_next_event(
                 postseason_birth_id: event.next_player_id()?,
                 // The only time this event was missing was after shadows were unified, so location
                 // will necessarily be Bench.
-                postseason_birth_location: earned_birth_event.as_ref()
+                postseason_birth_location: earned_birth_event
+                    .as_ref()
                     .map(|e| e.metadata_enum("location"))
                     .transpose()?
                     .unwrap_or(ShadowPositionType::Bench),
                 hatch_event_metadata: event.as_sub_event(),
-                postseason_birth_event_metadata: earned_birth_event.as_ref().map(EventParseWrapper::as_sub_event),
+                postseason_birth_event_metadata: earned_birth_event
+                    .as_ref()
+                    .map(EventParseWrapper::as_sub_event),
                 shadow_boost,
-                left_party_event_metadata: left_party_event.as_ref().map(EventParseWrapper::as_sub_event),
+                left_party_event_metadata: left_party_event
+                    .as_ref()
+                    .map(EventParseWrapper::as_sub_event),
             };
 
             // Shortcutting the return because the returned FedEvent should be based on the `earned_spot_event`
@@ -3260,13 +3690,19 @@ pub fn parse_next_event(
             // Get the events that precede the PlayersAddedToTeam and collect them for later use
             let mut preceding_events = Vec::new();
             let mut current_player: Option<PrecedingEvents> = None;
-            while event_iter.peek().map_or(false, |e| e.r#type != EventType::PlayersAddedToTeam) {
-                let event = event_iter.next_expect_type_any(&[
-                    EventType::PlayerEnteredVault,
-                    EventType::PlayerRemovedFromTeam,
-                    EventType::ExitHallOfFlame,
-                    EventType::AddedMod,
-                ], EventType::TeamFormed)?;
+            while event_iter
+                .peek()
+                .map_or(false, |e| e.r#type != EventType::PlayersAddedToTeam)
+            {
+                let event = event_iter.next_expect_type_any(
+                    &[
+                        EventType::PlayerEnteredVault,
+                        EventType::PlayerRemovedFromTeam,
+                        EventType::ExitHallOfFlame,
+                        EventType::AddedMod,
+                    ],
+                    EventType::TeamFormed,
+                )?;
 
                 let mut event_wrapper = EventParseWrapper::new(&event)?;
                 let event_type = event_wrapper.event_type;
@@ -3274,7 +3710,8 @@ pub fn parse_next_event(
 
                 let player = current_player.get_or_insert_with(|| PrecedingEvents::new(player_id));
                 if player.player_id != player_id {
-                    preceding_events.push(std::mem::replace(player, PrecedingEvents::new(player_id)));
+                    preceding_events
+                        .push(std::mem::replace(player, PrecedingEvents::new(player_id)));
                 }
 
                 match event_type {
@@ -3282,7 +3719,9 @@ pub fn parse_next_event(
                     EventType::PlayerRemovedFromTeam => player.removed_from_team = Some(event),
                     EventType::ExitHallOfFlame => player.exit_hall = Some(event),
                     EventType::AddedMod => player.added_returned_mod = Some(event),
-                    _ => panic!("next_expect_type_any returned an event of a type we didn't ask for"),
+                    _ => {
+                        panic!("next_expect_type_any returned an event of a type we didn't ask for")
+                    }
                 }
             }
 
@@ -3296,10 +3735,14 @@ pub fn parse_next_event(
             let mut team_nickname = None;
 
             let mut get_position_players = |position_type: PositionType| {
-                let players_added_event = event_iter.next_expect_type(EventType::PlayersAddedToTeam, EventType::TeamFormed)?;
+                let players_added_event = event_iter
+                    .next_expect_type(EventType::PlayersAddedToTeam, EventType::TeamFormed)?;
                 let players_added_event = EventParseWrapper::new(&players_added_event)?;
                 // TODO Instead of asserting, be robust to reordering
-                assert_eq!(players_added_event.metadata_enum::<PositionType>("location")?, position_type);
+                assert_eq!(
+                    players_added_event.metadata_enum::<PositionType>("location")?,
+                    position_type
+                );
 
                 if team_nickname.is_none() {
                     team_nickname = Some(players_added_event.metadata_str("teamName")?.to_string());
@@ -3410,15 +3853,17 @@ pub fn parse_next_event(
                     })
                     .collect::<Result<_, _>>()?;
 
-                let stronger_together = event_iter.next_if_type(EventType::AddedModFromOtherMod)
+                let stronger_together = event_iter
+                    .next_if_type(EventType::AddedModFromOtherMod)
                     .map(|togetherness_event| {
                         let mut togetherness_event = EventParseWrapper::new(&togetherness_event)?;
-                        let mut names = togetherness_event.next_parse(parse_togetherness_mod)?
+                        let mut names = togetherness_event
+                            .next_parse(parse_togetherness_mod)?
                             .split(", ")
                             .collect_vec();
                         if let Some(last) = names.last_mut() {
                             // Strip an "and"
-                            * last = &last[4..];
+                            *last = &last[4..];
                         }
 
                         // So the way `names` works is weird. It lists the first player who gained
@@ -3432,12 +3877,14 @@ pub fn parse_next_event(
                         // Rotate names so all the extra players are at the front
                         names[0..num_extra_players + 1].rotate_left(1);
 
-                        let extra_player_names = names.iter()
+                        let extra_player_names = names
+                            .iter()
                             .take(num_extra_players)
                             .map(|name| name.to_string())
                             .collect();
 
-                        let players = names.iter()
+                        let players = names
+                            .iter()
                             .skip(num_extra_players)
                             .zip(player_tags)
                             .map(|(player_name, &player_id)| {
@@ -3455,59 +3902,90 @@ pub fn parse_next_event(
                         })
                     })
                     .transpose()?;
-                
-                fn find_player_added_to_team<'p>(players: &'p mut [PlayerAddedToTeam], sub_event: &mut EventParseWrapper, preceding_event_type: EventType) -> Result<&'p mut PlayerAddedToTeam, FeedParseError> {
+
+                fn find_player_added_to_team<'p>(
+                    players: &'p mut [PlayerAddedToTeam],
+                    sub_event: &mut EventParseWrapper,
+                    preceding_event_type: EventType,
+                ) -> Result<&'p mut PlayerAddedToTeam, FeedParseError> {
                     let player_id = sub_event.next_player_id()?;
-                    players.iter_mut()
+                    players
+                        .iter_mut()
                         .find(|p| p.player_id == player_id)
-                        .ok_or_else(|| {
-                            FeedParseError::TagNotFoundInPrecedingEvent {
-                                preceding_event_type,
-                                following_event_type: sub_event.event_type,
-                                tag_type: "player",
-                                tag_value: player_id,
-                            }
+                        .ok_or_else(|| FeedParseError::TagNotFoundInPrecedingEvent {
+                            preceding_event_type,
+                            following_event_type: sub_event.event_type,
+                            tag_type: "player",
+                            tag_value: player_id,
                         })
                 }
 
                 let mut order = 0;
                 while let Some(subsequent_event) = event_iter.next_if_type_any(&[
-                    EventType::PlayerStatIncrease, // Shadow boost
-                    EventType::RemovedMod, // Replica dusts off
+                    EventType::PlayerStatIncrease,     // Shadow boost
+                    EventType::RemovedMod,             // Replica dusts off
                     EventType::RemovedModFromOtherMod, // Togetherness mod removed
                 ]) {
                     match subsequent_event.r#type {
-                        EventType::PlayerStatIncrease => { // Shadow boost
-                            let mut player_shadow_boost = EventParseWrapper::new(&subsequent_event)?;
-                            let player = find_player_added_to_team(&mut players, &mut player_shadow_boost, event.event_type)?;
+                        EventType::PlayerStatIncrease => {
+                            // Shadow boost
+                            let mut player_shadow_boost =
+                                EventParseWrapper::new(&subsequent_event)?;
+                            let player = find_player_added_to_team(
+                                &mut players,
+                                &mut player_shadow_boost,
+                                event.event_type,
+                            )?;
                             let shadow_boost = PlayerBoostSubEvent {
                                 rating_before: player_shadow_boost.metadata_f64("before")?,
                                 rating_after: player_shadow_boost.metadata_f64("after")?,
                                 sub_event: player_shadow_boost.as_sub_event(),
                             };
                             player.shadow_boost = Some((shadow_boost, order));
-                        },
-                        EventType::RemovedMod => { // Replica dusts off
+                        }
+                        EventType::RemovedMod => {
+                            // Replica dusts off
                             let mut player_dusts_off = EventParseWrapper::new(&subsequent_event)?;
-                            let player = find_player_added_to_team(&mut players, &mut player_dusts_off, event.event_type)?;
-                            player.replica_dusted_off = Some((player_dusts_off.as_sub_event(), order));
-                        },
-                        EventType::RemovedModFromOtherMod => { // Togetherness mod removed
+                            let player = find_player_added_to_team(
+                                &mut players,
+                                &mut player_dusts_off,
+                                event.event_type,
+                            )?;
+                            player.replica_dusted_off =
+                                Some((player_dusts_off.as_sub_event(), order));
+                        }
+                        EventType::RemovedModFromOtherMod => {
+                            // Togetherness mod removed
                             let mut yolked_removed = EventParseWrapper::new(&subsequent_event)?;
-                            let player = find_player_added_to_team(&mut players, &mut yolked_removed, event.event_type)?;
+                            let player = find_player_added_to_team(
+                                &mut players,
+                                &mut yolked_removed,
+                                event.event_type,
+                            )?;
                             player.yolked_removed = Some((yolked_removed.as_sub_event(), order));
-                        },
+                        }
                         unexpected_event_type => {
-                            panic!("{:?} handler asked for subsequent event of type {unexpected_event_type:?}, then failed to handle it. This is a programming error!", event.event_type);
+                            panic!(
+                                "{:?} handler asked for subsequent event of type \
+                                {unexpected_event_type:?}, then failed to handle it. This is a \
+                                programming error!",
+                                event.event_type
+                            );
                         }
                     }
                     order += 1;
                 }
-                
+
                 let mut order = 0;
-                while let Some(player_shadow_boost) = event_iter.next_if_type(EventType::PlayerStatIncrease) {
+                while let Some(player_shadow_boost) =
+                    event_iter.next_if_type(EventType::PlayerStatIncrease)
+                {
                     let mut player_shadow_boost = EventParseWrapper::new(&player_shadow_boost)?;
-                    let player = find_player_added_to_team(&mut players, &mut player_shadow_boost, event.event_type)?;
+                    let player = find_player_added_to_team(
+                        &mut players,
+                        &mut player_shadow_boost,
+                        event.event_type,
+                    )?;
                     let shadow_boost = PlayerBoostSubEvent {
                         rating_before: player_shadow_boost.metadata_f64("before")?,
                         rating_after: player_shadow_boost.metadata_f64("after")?,
@@ -3546,7 +4024,9 @@ pub fn parse_next_event(
                 shadows_players,
             }
         }
-        EventType::PlayerEvolves => { todo!() }
+        EventType::PlayerEvolves => {
+            todo!()
+        }
         EventType::TeamDivisionMove => {
             // For now this only has the breach events, it will need to be updated for s24
             let (team_nickname, division_name) = event.next_parse(parse_team_division_move)?;
@@ -3563,24 +4043,21 @@ pub fn parse_next_event(
                 division_name: division_name.to_string(),
             }
         }
-        EventType::PlayerDivisionMove => {
-            match event.next_parse(parse_player_division_move)? {
-                ParsedPlayerDivisionMove::JoinedIlb(player_name) => {
-                    FedEventData::PlayerJoinedILB {
-                        player_id: event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                    }
-                }
-                ParsedPlayerDivisionMove::PulledThroughRift(player_name) => {
-                    FedEventData::PlayerPulledThroughRift {
-                        player_id: event.next_player_id()?,
-                        player_name: player_name.to_string(),
-                    }
+        EventType::PlayerDivisionMove => match event.next_parse(parse_player_division_move)? {
+            ParsedPlayerDivisionMove::JoinedIlb(player_name) => FedEventData::PlayerJoinedILB {
+                player_id: event.next_player_id()?,
+                player_name: player_name.to_string(),
+            },
+            ParsedPlayerDivisionMove::PulledThroughRift(player_name) => {
+                FedEventData::PlayerPulledThroughRift {
+                    player_id: event.next_player_id()?,
+                    player_name: player_name.to_string(),
                 }
             }
-        }
+        },
         EventType::TeamWonInternetSeries => {
-            let (team_nickname, bracket_type) = event.next_parse(parse_team_won_internet_series(event.season + 1))?;
+            let (team_nickname, bracket_type) =
+                event.next_parse(parse_team_won_internet_series(event.season + 1))?;
             assert!(is_known_team_nickname(team_nickname));
 
             FedEventData::TeamWonInternetSeries {
@@ -3600,7 +4077,10 @@ pub fn parse_next_event(
             //     team_nickname: team_nickname.to_string(),
             // }
 
-            todo!("I think this should be turned into a \"this event must come after a PlayerHatched event\" error")
+            todo!(
+                "I think this should be turned into a \"this event must come after a PlayerHatched \
+                event\" error"
+            )
         }
         EventType::FinalStandings => {
             let (team_nickname, place, division_name) = event.next_parse(parse_final_standings)?;
@@ -3626,10 +4106,18 @@ pub fn parse_next_event(
                 level,
             }
         }
-        EventType::PlayerAlternated => { todo!() }
-        EventType::AddedModFromOtherMod => { todo!() }
-        EventType::ChangedModFromOtherMod => { todo!() }
-        EventType::NecromancyOrPlunderNarration => { todo!() }
+        EventType::PlayerAlternated => {
+            todo!()
+        }
+        EventType::AddedModFromOtherMod => {
+            todo!()
+        }
+        EventType::ChangedModFromOtherMod => {
+            todo!()
+        }
+        EventType::NecromancyOrPlunderNarration => {
+            todo!()
+        }
         EventType::PlayerPermittedToStay => {
             let player_name = event.next_parse(parse_terminated(" has been permitted to stay."))?;
 
@@ -3638,9 +4126,15 @@ pub fn parse_next_event(
                 player_name: player_name.to_string(),
             }
         }
-        EventType::DecreeNarration => { todo!() }
-        EventType::WillResults => { todo!() }
-        EventType::TeamStatAdjustment => { todo!() }
+        EventType::DecreeNarration => {
+            todo!()
+        }
+        EventType::WillResults => {
+            todo!()
+        }
+        EventType::TeamStatAdjustment => {
+            todo!()
+        }
         EventType::TeamWasShamed => {
             // TODO combine with the event for the shaming run?
             let (shaming_team, shamed_team) = event.next_parse(parse_team_was_shamed)?;
@@ -3673,13 +4167,15 @@ pub fn parse_next_event(
             // This could be written better with the new interface but I'm just doing a
             // straightforward transformation for now. It was hard enough to write once.
             let (echoer_name, echoee_name) = event.next_parse(parse_echo)?;
-            let first_remove_mods_event = event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
+            let first_remove_mods_event =
+                event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
             let first_add_mods_event = event.next_child(EventType::AddedModsFromAnotherMod)?;
             let main_echo_event = (first_remove_mods_event, first_add_mods_event);
 
             let mut sub_echo_events = Vec::new();
             loop {
-                let remove_mods_event = event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
+                let remove_mods_event =
+                    event.next_child_opt(EventType::RemovedModsFromAnotherMod)?;
                 let add_mods_event = event.next_child_opt(EventType::AddedModsFromAnotherMod)?;
 
                 if let Some(add_mods_event) = add_mods_event {
@@ -3690,7 +4186,8 @@ pub fn parse_next_event(
             }
 
             let parse_str = format!("'s Echoed an Echo from {echoer_name}!");
-            let sub_echos = sub_echo_events.into_iter()
+            let sub_echos = sub_echo_events
+                .into_iter()
                 .map(|(removed, mut added)| {
                     let echoer_name = added.next_parse(parse_terminated(&parse_str))?;
                     make_echo(echoer_name, (removed, added))
@@ -3711,19 +4208,21 @@ pub fn parse_next_event(
             let echoer_mod_change = event.next_child(EventType::ModChange)?;
             let echoee_mod_change = event.next_child(EventType::ModChange)?;
 
-
-            let make_echo_into_static = |name: &str, removed_event: EventParseWrapper, mod_change_event: EventParseWrapper| {
-                let nickname = removed_event.metadata_str("teamName")?;
-                assert!(is_known_team_nickname(nickname));
-                ParseOk(EchoIntoStatic {
-                    team_id: removed_event.metadata_uuid("teamId")?,
-                    team_nickname: nickname.to_string(),
-                    player_id: removed_event.metadata_uuid("playerId")?,
-                    player_name: name.to_string(),
-                    removed_from_team_sub_event: removed_event.as_sub_event(),
-                    mod_changed_sub_event: mod_change_event.as_sub_event(),
-                })
-            };
+            let make_echo_into_static =
+                |name: &str,
+                 removed_event: EventParseWrapper,
+                 mod_change_event: EventParseWrapper| {
+                    let nickname = removed_event.metadata_str("teamName")?;
+                    assert!(is_known_team_nickname(nickname));
+                    ParseOk(EchoIntoStatic {
+                        team_id: removed_event.metadata_uuid("teamId")?,
+                        team_nickname: nickname.to_string(),
+                        player_id: removed_event.metadata_uuid("playerId")?,
+                        player_name: name.to_string(),
+                        removed_from_team_sub_event: removed_event.as_sub_event(),
+                        mod_changed_sub_event: mod_change_event.as_sub_event(),
+                    })
+                };
 
             FedEventData::EchoIntoStatic {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -3731,10 +4230,13 @@ pub fn parse_next_event(
                 echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
             }
         }
-        EventType::AddedModsFromAnotherMod => { todo!() }
+        EventType::AddedModsFromAnotherMod => {
+            todo!()
+        }
         EventType::RemovedModsFromAnotherMod => {
             // What the hell did I just write
-            let player_or_team_id = Ok(event.next_player_id_opt()).transpose()
+            let player_or_team_id = Ok(event.next_player_id_opt())
+                .transpose()
                 .unwrap_or_else(|| event.next_team_id())?;
             let source_name = event.metadata_str("source")?;
             let event = ModsFromAnotherModRemoved::from_event(&mut event)?;
@@ -3757,14 +4259,16 @@ pub fn parse_next_event(
         }
         EventType::Psychoacoustics => {
             // Same probably-bug as on HalfInning events
-            let (team_subseasonal_mod_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
+            let (team_subseasonal_mod_changes, is_terminal) =
+                event.parse_team_subseasonal_mod_changes(state)?;
             assert!(!is_terminal);
 
             // For some reason the description on the main event is empty and the description is
             // only on the child event
             let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
             // They changed the format slightly in the middle of s16
-            let (stadium_name, mod_name, team_nickname) = child.next_parse(parse_psychoacoustics((event.season, event.day) < (15, 33)))?;
+            let (stadium_name, mod_name, team_nickname) =
+                child.next_parse(parse_psychoacoustics((event.season, event.day) < (15, 33)))?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::Psychoacoustics {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -3790,21 +4294,18 @@ pub fn parse_next_event(
                 sub_event: child.as_sub_event(),
             }
         }
-        EventType::InvestigationMessage => {
-            FedEventData::InvestigationMessage {
-                player_id: event.next_player_id()?,
-                message: event.description().into(),
-            }
-        }
-        EventType::Tidings => {
-            FedEventData::Tidings {
-                message: event.description().into(),
-                metadata: event.full_metadata().clone(),
-                player_tags: event.player_tags()?.into(),
-            }
-        }
+        EventType::InvestigationMessage => FedEventData::InvestigationMessage {
+            player_id: event.next_player_id()?,
+            message: event.description().into(),
+        },
+        EventType::Tidings => FedEventData::Tidings {
+            message: event.description().into(),
+            metadata: event.full_metadata().clone(),
+            player_tags: event.player_tags()?.into(),
+        },
         EventType::GlitterCrateDrop => {
-            let (player_name, _gained_item_name, lost_item_name) = event.next_parse(parse_glitter)?;
+            let (player_name, _gained_item_name, lost_item_name) =
+                event.next_parse(parse_glitter)?;
 
             // Drop event is first in the data
             let dropped_item = lost_item_name
@@ -3818,7 +4319,11 @@ pub fn parse_next_event(
             let gained_item = ItemGained {
                 item_id: gain_event.metadata_uuid("itemId")?,
                 item_name: gain_event.metadata_str("itemName")?.to_string(),
-                item_mods: gain_event.metadata_str_vec("mods")?.into_iter().map(|s| s.to_string()).collect(),
+                item_mods: gain_event
+                    .metadata_str_vec("mods")?
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 player_item_rating_before: gain_event.metadata_f64("playerItemRatingBefore")?,
                 player_item_rating_after: gain_event.metadata_f64_opt("playerItemRatingAfter")?,
                 player_rating: gain_event.metadata_f64("playerRating")?,
@@ -3834,11 +4339,18 @@ pub fn parse_next_event(
                 gained_item,
             }
         }
-        EventType::Middling => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Middling, event.game(unscatter, attractor_secret_base)?)?
+        EventType::Middling => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::Middling,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::PlayerAttributeIncrease => {
+            todo!()
         }
-        EventType::PlayerAttributeIncrease => { todo!() }
-        EventType::PlayerAttributeDecrease => { todo!() }
+        EventType::PlayerAttributeDecrease => {
+            todo!()
+        }
         EventType::EnterCrimeScene => {
             let (_player_name, stadium_nickname) = event.next_parse(parse_enter_crime_scene)?;
 
@@ -3853,7 +4365,9 @@ pub fn parse_next_event(
                 previous_team_name: crime_scene_event.metadata_str("sendTeamName")?.to_string(),
                 previous_location: crime_scene_event.metadata_enum("location")?,
                 new_team_id: crime_scene_event.metadata_uuid("receiveTeamId")?,
-                new_team_name: crime_scene_event.metadata_str("receiveTeamName")?.to_string(),
+                new_team_name: crime_scene_event
+                    .metadata_str("receiveTeamName")?
+                    .to_string(),
                 stadium_name: stadium_nickname.to_string(),
                 rating_before: shadows_event.metadata_f64("before")?,
                 rating_after: shadows_event.metadata_f64("after")?,
@@ -3861,19 +4375,36 @@ pub fn parse_next_event(
                 enter_shadows_sub_event: shadows_event.as_sub_event(),
             }
         }
-        EventType::Ambitious => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Ambitious, event.game(unscatter, attractor_secret_base)?)?
+        EventType::Ambitious => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::Ambitious,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::Unambitious => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::Unambitious,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::Coasting => parse_subseasonal_mod_change_event(
+            state,
+            event,
+            SubseasonalMod::Coasting,
+            event.game(unscatter, attractor_secret_base)?,
+        )?,
+        EventType::ItemBreaks => {
+            todo!()
         }
-        EventType::Unambitious => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Unambitious, event.game(unscatter, attractor_secret_base)?)?
+        EventType::ItemDamaged => {
+            todo!()
         }
-        EventType::Coasting => {
-            parse_subseasonal_mod_change_event(state, event, SubseasonalMod::Coasting, event.game(unscatter, attractor_secret_base)?)?
+        EventType::BrokenItemRepaired => {
+            todo!()
         }
-        EventType::ItemBreaks => { todo!() }
-        EventType::ItemDamaged => { todo!() }
-        EventType::BrokenItemRepaired => { todo!() }
-        EventType::DamagedItemRepaired => { todo!() }
+        EventType::DamagedItemRepaired => {
+            todo!()
+        }
         EventType::CommunityChestOpens => {
             let [first, second] = event.next_parse(parse_community_chest_ingame)?;
 
@@ -3887,17 +4418,22 @@ pub fn parse_next_event(
                 second_player_dropped_item: second.2.map(str::to_string),
             }
         }
-        EventType::NoFreeItemSlot => { todo!() }
+        EventType::NoFreeItemSlot => {
+            todo!()
+        }
         EventType::FaxMachine => {
-            let (_exiting_pitcher_name, _entering_pitcher_name) = event.next_parse(parse_fax_machine)?;
+            let (_exiting_pitcher_name, _entering_pitcher_name) =
+                event.next_parse(parse_fax_machine)?;
             let move_child = event.next_child(EventType::PlayerSwap)?;
             let boost_child = event.next_child(EventType::PlayerStatIncrease)?;
 
             let exiting_pitcher_name = move_child.metadata_str("aPlayerName")?;
-            let yolked_blip = event.next_child_if_mod_effect(EventType::RemovedModFromOtherMod, "YOLKED")?
+            let yolked_blip = event
+                .next_child_if_mod_effect(EventType::RemovedModFromOtherMod, "YOLKED")?
                 .map(|mut unyolk_event| {
                     // This may need to be expanded to handle entering pitchers too
-                    let unyolk_names = unyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "weaker apart"))?;
+                    let unyolk_names = unyolk_event
+                        .next_parse(parse_yolk_message(exiting_pitcher_name, "weaker apart"))?;
                     let unyolk_change = PlayerTogethernessModChange {
                         other_player_names: unyolk_names.into_iter().map(String::from).collect(),
                         sub_event: unyolk_event.as_sub_event(),
@@ -3906,11 +4442,18 @@ pub fn parse_next_event(
                     // Not sure how but you can have an unyolk without a reyolk, even though I think
                     // shadowed players count for YOLKED? Maybe it just clears yolked statuses that
                     // should have been cleared already but weren't because of a bug. idk
-                    let reyolk_change = event.next_child_opt(EventType::AddedModFromOtherMod)?
+                    let reyolk_change = event
+                        .next_child_opt(EventType::AddedModFromOtherMod)?
                         .map(|mut reyolk_event| {
-                            let reyolk_names = reyolk_event.next_parse(parse_yolk_message(exiting_pitcher_name, "stronger together"))?;
+                            let reyolk_names = reyolk_event.next_parse(parse_yolk_message(
+                                exiting_pitcher_name,
+                                "stronger together",
+                            ))?;
                             ParseOk(PlayerTogethernessModChange {
-                                other_player_names: reyolk_names.into_iter().map(String::from).collect(),
+                                other_player_names: reyolk_names
+                                    .into_iter()
+                                    .map(String::from)
+                                    .collect(),
                                 sub_event: reyolk_event.as_sub_event(),
                             })
                         })
@@ -3968,9 +4511,10 @@ pub fn parse_next_event(
             // use the serde parsing that already exists. I just need to make serde deserialize to
             // the right variant
             let mut metadata = event.metadata().clone();
-            metadata.as_object_mut()
+            metadata
+                .as_object_mut()
                 .ok_or_else(|| FeedParseError::MetadataWasNotAnObject {
-                    event_type: EventType::TeamReceivedGifts
+                    event_type: EventType::TeamReceivedGifts,
                 })?
                 .insert("type".to_string(), "TeamReceivedGifts".into());
 
@@ -3985,7 +4529,9 @@ pub fn parse_next_event(
                 repair,
             }
         }
-        EventType::PlayerEnteredVault => { todo!() }
+        EventType::PlayerEnteredVault => {
+            todo!()
+        }
         EventType::ABloodType => {
             // Only the shoe thieves ever had this, and Psychoacoustics is incompatible with it.
             // Still, I'm going to parse it
@@ -4002,10 +4548,15 @@ pub fn parse_next_event(
                 sub_event: mod_add_event.as_sub_event(),
             }
         }
-        EventType::PlayerSoulIncrease => { todo!() }
-        EventType::Announcement => { todo!() }
+        EventType::PlayerSoulIncrease => {
+            todo!()
+        }
+        EventType::Announcement => {
+            todo!()
+        }
         EventType::Ratification => {
-            let renovation_name = event.next_parse(parse_terminated(" was Ratified into Non-Physical Law."))?;
+            let renovation_name =
+                event.next_parse(parse_terminated(" was Ratified into Non-Physical Law."))?;
             let mod_id = event.metadata_str("mod")?;
 
             let mut mod_removals = Vec::new();
@@ -4013,14 +4564,21 @@ pub fn parse_next_event(
             // Gather all the (detached) RemovedMod events caused by this ratification
             loop {
                 // Stop if we run out of events
-                let Some(next_event) = event_iter.peek() else { break };
+                let Some(next_event) = event_iter.peek() else {
+                    break;
+                };
                 // Stop if we hit an event that isn't a RemovedMod event
-                if next_event.r#type != EventType::RemovedMod { break }
+                if next_event.r#type != EventType::RemovedMod {
+                    break;
+                }
                 // Stop if we hit a RemovedMod event that removes a different mod
-                if EventParseWrapper::new(next_event)?.metadata_str("mod")? != mod_id { break }
+                if EventParseWrapper::new(next_event)?.metadata_str("mod")? != mod_id {
+                    break;
+                }
 
                 // By this point we're pretty sure this event is connected with this ratification
-                let mod_removed_event = event_iter.next()
+                let mod_removed_event = event_iter
+                    .next()
                     .expect("This code is only hit after we successfully peek the iterator");
                 let mut mod_removed_event = EventParseWrapper::new(&mod_removed_event)?;
 
@@ -4038,12 +4596,12 @@ pub fn parse_next_event(
                 mod_removals,
             }
         }
-        EventType::BadGatewayBroken => {
-            FedEventData::BadGatewayBroken {
-                team_id: event.next_team_id()?,
-            }
+        EventType::BadGatewayBroken => FedEventData::BadGatewayBroken {
+            team_id: event.next_team_id()?,
+        },
+        EventType::HypeBuilds => {
+            todo!()
         }
-        EventType::HypeBuilds => { todo!() }
         EventType::Moderation => {
             let team_nickname = event.next_parse(parse_moderation)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -4062,8 +4620,12 @@ pub fn parse_next_event(
                 score_summary,
             }
         }
-        EventType::RunsScored => { todo!() }
-        EventType::LeagueModificationAdded => { todo!() }
+        EventType::RunsScored => {
+            todo!()
+        }
+        EventType::LeagueModificationAdded => {
+            todo!()
+        }
         EventType::BalloonsInflatedFromWin => {
             let before_s20d81 = (event.season, event.day) < (19, 80);
             let stadium_name = event.next_parse(parse_balloon_inflated_from_win(before_s20d81))?;
@@ -4074,8 +4636,12 @@ pub fn parse_next_event(
                 earned_win: event.parse_earned_win_opt()?,
             }
         }
-        EventType::WinCollectedRegular => { todo!() }
-        EventType::WinCollectedPostseason => { todo!() }
+        EventType::WinCollectedRegular => {
+            todo!()
+        }
+        EventType::WinCollectedPostseason => {
+            todo!()
+        }
         EventType::GameOver => {
             let _ = event.next_parse_tag("Game Over.")?;
 
@@ -4101,13 +4667,24 @@ pub fn parse_next_event(
                 pressure_after: event.metadata_f64("current")?,
             }
         }
-        EventType::FoundNothingInterestingInTunnels => { todo!() }
-        EventType::FailedTunnelsSteal => { todo!() }
-        EventType::StoleItemFromTunnels => { todo!() }
-        EventType::WeatherEvent => { todo!() }
-        EventType::ElementAddedToItem => { todo!() }
+        EventType::FoundNothingInterestingInTunnels => {
+            todo!()
+        }
+        EventType::FailedTunnelsSteal => {
+            todo!()
+        }
+        EventType::StoleItemFromTunnels => {
+            todo!()
+        }
+        EventType::WeatherEvent => {
+            todo!()
+        }
+        EventType::ElementAddedToItem => {
+            todo!()
+        }
         EventType::Sun30Smiles => {
-            let (away_team_nickname, home_team_nickname, balloons) = event.next_parse(parse_sun30(false))?;
+            let (away_team_nickname, home_team_nickname, balloons) =
+                event.next_parse(parse_sun30(false))?;
             assert!(is_known_team_nickname(away_team_nickname));
             assert!(is_known_team_nickname(home_team_nickname));
 
@@ -4116,7 +4693,10 @@ pub fn parse_next_event(
 
             fn event_has_team_id(desired_id: Uuid) -> impl Fn(EventParseWrapper) -> bool {
                 move |mut child: EventParseWrapper| {
-                    child.next_team_id().map(|team_id| team_id == desired_id).unwrap_or(false)
+                    child
+                        .next_team_id()
+                        .map(|team_id| team_id == desired_id)
+                        .unwrap_or(false)
                 }
             }
 
@@ -4124,18 +4704,32 @@ pub fn parse_next_event(
             // Then I ran into event d7f39a58-f148-4506-a59f-7e14c3680d55, where the beams and spies
             // were playing but the spies (away team) didn't have a Win event. Time will tell if the
             // same thing can happen to the home team.
-            let home_win_event = event.next_child_if(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason },
-                                                     event_has_team_id(game.home_team))?;
-            let away_win_event = event.next_child_if(if event.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason },
-                                                     event_has_team_id(game.away_team))?;
+            let home_win_event = event.next_child_if(
+                if event.day < 99 {
+                    EventType::WinCollectedRegular
+                } else {
+                    EventType::WinCollectedPostseason
+                },
+                event_has_team_id(game.home_team),
+            )?;
+            let away_win_event = event.next_child_if(
+                if event.day < 99 {
+                    EventType::WinCollectedRegular
+                } else {
+                    EventType::WinCollectedPostseason
+                },
+                event_has_team_id(game.away_team),
+            )?;
 
             // This may not be always true, but until I have proof it isn't I'm going to assert it is
-            let away_win_event = away_win_event
-                .expect("If this expect ever panics I want to know about it");
+            let away_win_event =
+                away_win_event.expect("If this expect ever panics I want to know about it");
 
             // TODO this is slightly redundant after doing the work necessary to support optional
             //   Win sub-events
-            fn parse_win(mut win_event: EventParseWrapper) -> Result<ShortEarnedWin, FeedParseError> {
+            fn parse_win(
+                mut win_event: EventParseWrapper,
+            ) -> Result<ShortEarnedWin, FeedParseError> {
                 let team_nickname = win_event.next_parse(parse_sun_30_win)?;
                 assert!(is_known_team_nickname(team_nickname));
                 Ok(ShortEarnedWin {
@@ -4146,8 +4740,8 @@ pub fn parse_next_event(
             }
 
             let home = match home_win_event {
-                Some(e) => { Either::Left(parse_win(e)?) }
-                None => { Either::Right(home_team_nickname.to_string()) }
+                Some(e) => Either::Left(parse_win(e)?),
+                None => Either::Right(home_team_nickname.to_string()),
             };
 
             FedEventData::Sun30Smiles {
@@ -4158,7 +4752,8 @@ pub fn parse_next_event(
             }
         }
         EventType::Voicemail => {
-            let (replaced_player_name, replacement_player_name) = event.next_parse(parse_voicemail)?;
+            let (replaced_player_name, replacement_player_name) =
+                event.next_parse(parse_voicemail)?;
             let replaced_player_id = event.next_player_id()?;
             let replacement_player_id = event.next_player_id()?;
 
@@ -4183,13 +4778,16 @@ pub fn parse_next_event(
         }
         EventType::ThievesGuildStoleItem => {
             let thieving_team_stadium_name = event.next_parse(parse_thieves_guild_convened)?;
-            let (item_name, victim_team_nickname, victim_player_name, beneficiary_player_name) = event.next_parse(parse_thieves_guild_stole_item)?;
+            let (item_name, victim_team_nickname, victim_player_name, beneficiary_player_name) =
+                event.next_parse(parse_thieves_guild_stole_item)?;
             assert!(is_known_team_nickname(victim_team_nickname));
 
             let mut item_lost_child = event.next_child(EventType::PlayerLostItem)?;
             // Cheating a little here by parsing only the beginning of a sub-event
-            let thieving_team_nickname = item_lost_child.next_parse(parse_terminated("Thieves' Guild stole"))?;
-            let mut item_dropped_for_other_item_child = event.next_child_opt(EventType::PlayerLostItem)?;
+            let thieving_team_nickname =
+                item_lost_child.next_parse(parse_terminated("Thieves' Guild stole"))?;
+            let mut item_dropped_for_other_item_child =
+                event.next_child_opt(EventType::PlayerLostItem)?;
             let mut item_gained_child = event.next_child(EventType::PlayerGainedItem)?;
 
             let dropped_item = item_dropped_for_other_item_child
@@ -4197,12 +4795,18 @@ pub fn parse_next_event(
                     ParseOk(ItemDroppedForNewItem {
                         item_id: drop_event.metadata_uuid("itemId")?,
                         item_name: drop_event.metadata_str("itemName")?.to_string(),
-                        item_mods: drop_event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                        player_item_rating_before: drop_event.metadata_f64_opt("playerItemRatingBefore")?,
-                        player_item_rating_after: drop_event.metadata_f64("playerItemRatingAfter")?,
+                        item_mods: drop_event
+                            .metadata_str_vec("mods")?
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect(),
+                        player_item_rating_before: drop_event
+                            .metadata_f64_opt("playerItemRatingBefore")?,
+                        player_item_rating_after: drop_event
+                            .metadata_f64("playerItemRatingAfter")?,
                         item_was_broken: false, // TODO
                         sub_event: drop_event.as_sub_event(),
-                    })     
+                    })
                 })
                 .transpose()?;
 
@@ -4214,9 +4818,15 @@ pub fn parse_next_event(
                 beneficiary_gained_item: ItemGained {
                     item_id: item_gained_child.metadata_uuid("itemId")?,
                     item_name: item_name.to_string(),
-                    item_mods: item_gained_child.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                    player_item_rating_before: item_gained_child.metadata_f64("playerItemRatingBefore")?,
-                    player_item_rating_after: item_gained_child.metadata_f64_opt("playerItemRatingAfter")?,
+                    item_mods: item_gained_child
+                        .metadata_str_vec("mods")?
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    player_item_rating_before: item_gained_child
+                        .metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: item_gained_child
+                        .metadata_f64_opt("playerItemRatingAfter")?,
                     player_rating: item_gained_child.metadata_f64("playerRating")?,
                     team_id: item_gained_child.next_team_id()?,
                     player_id: item_gained_child.next_player_id()?,
@@ -4228,9 +4838,15 @@ pub fn parse_next_event(
                 victim_player_id: item_lost_child.next_player_id()?,
                 victim_player_name: victim_player_name.to_string(),
                 victim_lost_item: ItemLost {
-                    item_mods: item_lost_child.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
-                    player_item_rating_before: item_lost_child.metadata_f64("playerItemRatingBefore")?,
-                    player_item_rating_after: item_lost_child.metadata_f64("playerItemRatingAfter")?,
+                    item_mods: item_lost_child
+                        .metadata_str_vec("mods")?
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
+                    player_item_rating_before: item_lost_child
+                        .metadata_f64("playerItemRatingBefore")?,
+                    player_item_rating_after: item_lost_child
+                        .metadata_f64("playerItemRatingAfter")?,
                     player_rating: item_lost_child.metadata_f64("playerRating")?,
                     sub_event: item_lost_child.as_sub_event(),
                 },
@@ -4238,7 +4854,8 @@ pub fn parse_next_event(
         }
         EventType::ThievesGuildStolePlayer => {
             let thieving_team_stadium_name = event.next_parse(parse_thieves_guild_convened)?;
-            let (victim_team_nickname, stolen_player_name) = event.next_parse(parse_thieves_guild_stole_player)?;
+            let (victim_team_nickname, stolen_player_name) =
+                event.next_parse(parse_thieves_guild_stole_player)?;
             assert!(is_known_team_nickname(victim_team_nickname));
 
             let moved_teams_child = event.next_child(EventType::PlayerMoved)?;
@@ -4247,7 +4864,9 @@ pub fn parse_next_event(
             FedEventData::ThievesGuildStolePlayer {
                 game: event.game(unscatter, attractor_secret_base)?,
                 thieving_team_id: moved_teams_child.metadata_uuid("receiveTeamId")?,
-                thieving_team_nickname: moved_teams_child.metadata_str("receiveTeamName")?.to_string(),
+                thieving_team_nickname: moved_teams_child
+                    .metadata_str("receiveTeamName")?
+                    .to_string(),
                 thieving_team_stadium_name: thieving_team_stadium_name.to_string(),
                 victim_team_id: moved_teams_child.metadata_uuid("sendTeamId")?,
                 victim_team_nickname: victim_team_nickname.to_string(),
@@ -4257,11 +4876,9 @@ pub fn parse_next_event(
                 player_shadows_boost,
             }
         }
-        EventType::TumbleweedSounds => {
-            FedEventData::TumbleweedSounds {
-                team_id: event.next_team_id()?,
-            }
-        }
+        EventType::TumbleweedSounds => FedEventData::TumbleweedSounds {
+            team_id: event.next_team_id()?,
+        },
         EventType::Trade => {
             match event.next_parse(parse_trade)? {
                 ParsedTrade::NothingCaughtTheirEye { trader_name } => {
@@ -4277,7 +4894,13 @@ pub fn parse_next_event(
                         sub_event: child_event.as_sub_event(),
                     }
                 }
-                ParsedTrade::Traded { trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name } => {
+                ParsedTrade::Traded {
+                    trader_traitor,
+                    trader_name,
+                    donated_item_name,
+                    victim_name,
+                    taken_item_name,
+                } => {
                     let is_trade_for_nothing = trader_traitor == ParsedTraderTraitor::Neither;
                     let (game, mut trader_event, mut victim_event) = if is_trade_for_nothing {
                         let victim_event = event.next_child(EventType::PlayerLostItem)?;
@@ -4302,15 +4925,29 @@ pub fn parse_next_event(
                         ParseOk(TradeForSomething {
                             donated_item_name: donated_item_name.to_string(),
                             donated_item_id: trader_event.metadata_uuid("itemTradedId")?,
-                            trader_mods_lost: trader_event.metadata_str_vec("modsLost")?.into_iter().map(str::to_string).collect(),
-                            victim_mods_gained: victim_event.metadata_str_vec("modsGained")?.into_iter().map(str::to_string).collect(),
+                            trader_mods_lost: trader_event
+                                .metadata_str_vec("modsLost")?
+                                .into_iter()
+                                .map(str::to_string)
+                                .collect(),
+                            victim_mods_gained: victim_event
+                                .metadata_str_vec("modsGained")?
+                                .into_iter()
+                                .map(str::to_string)
+                                .collect(),
                         })
                     };
 
                     let trader_traitor = match trader_traitor {
-                        ParsedTraderTraitor::Trader => TraderTraitor::Trader(build_trade_for_something()?),
-                        ParsedTraderTraitor::Traitor => TraderTraitor::Traitor(build_trade_for_something()?),
-                        ParsedTraderTraitor::Unknown => TraderTraitor::Unknown(build_trade_for_something()?),
+                        ParsedTraderTraitor::Trader => {
+                            TraderTraitor::Trader(build_trade_for_something()?)
+                        }
+                        ParsedTraderTraitor::Traitor => {
+                            TraderTraitor::Traitor(build_trade_for_something()?)
+                        }
+                        ParsedTraderTraitor::Unknown => {
+                            TraderTraitor::Unknown(build_trade_for_something()?)
+                        }
                         ParsedTraderTraitor::Neither => TraderTraitor::Neither(TradeForNothing {
                             victim_team_id: victim_event.next_team_id()?,
                             trader_team_id: trader_event.next_team_id()?,
@@ -4321,24 +4958,51 @@ pub fn parse_next_event(
                         game,
                         trader_traitor,
                         taken_item_name: taken_item_name.to_string(),
-                        taken_item_id: victim_event.metadata_uuid(if is_trade_for_nothing { "itemId" } else { "itemTradedId" })?,
-                        victim_mods_lost: victim_event.metadata_str_vec(if is_trade_for_nothing { "mods" } else { "modsLost" })?.into_iter().map(str::to_string).collect(),
-                        trader_mods_gained: trader_event.metadata_str_vec(if is_trade_for_nothing { "mods" } else { "modsGained" })?.into_iter().map(str::to_string).collect(),
+                        taken_item_id: victim_event.metadata_uuid(if is_trade_for_nothing {
+                            "itemId"
+                        } else {
+                            "itemTradedId"
+                        })?,
+                        victim_mods_lost: victim_event
+                            .metadata_str_vec(if is_trade_for_nothing {
+                                "mods"
+                            } else {
+                                "modsLost"
+                            })?
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect(),
+                        trader_mods_gained: trader_event
+                            .metadata_str_vec(if is_trade_for_nothing {
+                                "mods"
+                            } else {
+                                "modsGained"
+                            })?
+                            .into_iter()
+                            .map(str::to_string)
+                            .collect(),
                         trader_name: trader_name.to_string(),
                         trader_id: trader_event.next_player_id()?,
-                        trader_item_rating_before: trader_event.metadata_f64_opt("playerItemRatingBefore")?,
-                        trader_item_rating_after: trader_event.metadata_f64_opt("playerItemRatingAfter")?,
+                        trader_item_rating_before: trader_event
+                            .metadata_f64_opt("playerItemRatingBefore")?,
+                        trader_item_rating_after: trader_event
+                            .metadata_f64_opt("playerItemRatingAfter")?,
                         trader_rating: trader_event.metadata_f64("playerRating")?,
                         trader_item_change_sub_event: trader_event.as_sub_event(),
                         victim_name: victim_name.to_string(),
                         victim_id: victim_event.next_player_id()?,
-                        victim_item_rating_before: victim_event.metadata_f64_opt("playerItemRatingBefore")?,
-                        victim_item_rating_after: victim_event.metadata_f64_opt("playerItemRatingAfter")?,
+                        victim_item_rating_before: victim_event
+                            .metadata_f64_opt("playerItemRatingBefore")?,
+                        victim_item_rating_after: victim_event
+                            .metadata_f64_opt("playerItemRatingAfter")?,
                         victim_rating: victim_event.metadata_f64("playerRating")?,
                         victim_item_change_sub_event: victim_event.as_sub_event(),
                     }
                 }
-                ParsedTrade::NothingToOffer { trader_name, victim_name } => {
+                ParsedTrade::NothingToOffer {
+                    trader_name,
+                    victim_name,
+                } => {
                     let mut child_event = event.next_child(EventType::TradeFailed)?;
                     let trader_id = child_event.next_player_id()?;
                     let victim_id = child_event.next_player_id()?;
@@ -4354,10 +5018,15 @@ pub fn parse_next_event(
                 }
             }
         }
-        EventType::TradeFailed => { todo!() }
-        EventType::ItemTraded => { todo!() }
+        EventType::TradeFailed => {
+            todo!()
+        }
+        EventType::ItemTraded => {
+            todo!()
+        }
         EventType::PitcherCyclesOut => {
-            let (team_nickname, outgoing_pitcher_name, incoming_pitcher_name) = event.next_parse(parse_pitcher_cycles_out)?;
+            let (team_nickname, outgoing_pitcher_name, incoming_pitcher_name) =
+                event.next_parse(parse_pitcher_cycles_out)?;
 
             FedEventData::PitcherCyclesOut {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -4375,10 +5044,13 @@ pub fn parse_next_event(
                 player_id: event.next_player_id()?,
             }
         }
-        EventType::BeingSpeechInTidings => { todo!() }
+        EventType::BeingSpeechInTidings => {
+            todo!()
+        }
         EventType::WeatherReport => {
             let weather_change_event = event.next_child(EventType::WeatherChange)?;
-            let (season_num, season_tagline_all_caps) = event.next_parse(parse_weather_report(weather_change_event.description()))?;
+            let (season_num, season_tagline_all_caps) =
+                event.next_parse(parse_weather_report(weather_change_event.description()))?;
 
             FedEventData::WeatherReport {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -4390,7 +5062,9 @@ pub fn parse_next_event(
                 sub_event: weather_change_event.as_sub_event(),
             }
         }
-        EventType::PlayersAddedToTeam => { todo!() }
+        EventType::PlayersAddedToTeam => {
+            todo!()
+        }
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened)?;
 
@@ -4419,8 +5093,12 @@ pub fn parse_next_event(
                 player_unshadowed_sub_event: player_unshadowed_child,
             }
         }
-        EventType::StormWarning => { todo!() }
-        EventType::Snowflakes => { todo!() }
+        EventType::StormWarning => {
+            todo!()
+        }
+        EventType::Snowflakes => {
+            todo!()
+        }
         EventType::Sun2SetWin => {
             let team_name = event.next_parse(parse_sun2_set_win)?;
             assert!(is_known_team_nickname(team_name));
@@ -4437,9 +5115,12 @@ pub fn parse_next_event(
                 team_nickname: team_name.to_string(),
             }
         }
-        EventType::RemovedModFromOtherMod => { todo!() }
+        EventType::RemovedModFromOtherMod => {
+            todo!()
+        }
         EventType::PostseasonAdvance => {
-            let (team_nickname, round_num, season_num) = event.next_parse(parse_postseason_advance)?;
+            let (team_nickname, round_num, season_num) =
+                event.next_parse(parse_postseason_advance)?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::PostseasonAdvance {
                 team_id: event.next_team_id()?,
@@ -4448,11 +5129,16 @@ pub fn parse_next_event(
                 displayed_season: season_num,
             }
         }
-        EventType::GainBloodType => { todo!() }
+        EventType::GainBloodType => {
+            todo!()
+        }
         EventType::HighPressure => {
             let (team_nickname, is_on) = event.next_parse(parse_high_pressure)?;
             assert!(is_known_team_nickname(team_nickname));
-            let mut sub_event = event.next_child_any(&[EventType::AddedModFromOtherMod, EventType::RemovedModFromOtherMod])?;
+            let mut sub_event = event.next_child_any(&[
+                EventType::AddedModFromOtherMod,
+                EventType::RemovedModFromOtherMod,
+            ])?;
             FedEventData::HighPressure {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_id: sub_event.next_team_id()?,
@@ -4470,15 +5156,24 @@ pub fn parse_next_event(
                 team_nickname: "Lovers".to_string(),
             }
         }
-        EventType::NutButton => { todo!() }
+        EventType::NutButton => {
+            todo!()
+        }
         EventType::PostseasonEliminated => {
-            let (team_nickname, season_num, overbracket) = event.next_parse(parse_postseason_eliminated)?;
+            let (team_nickname, season_num, overbracket) =
+                event.next_parse(parse_postseason_eliminated)?;
             assert!(is_known_team_nickname(team_nickname));
             FedEventData::PostseasonEliminated {
                 team_id: event.next_team_id()?,
                 team_nickname: team_nickname.to_string(),
                 displayed_season: season_num,
-                bracket: overbracket.map(|o| if o { BracketType::Overbracket } else { BracketType::Underbracket }),
+                bracket: overbracket.map(|o| {
+                    if o {
+                        BracketType::Overbracket
+                    } else {
+                        BracketType::Underbracket
+                    }
+                }),
             }
         }
     };
@@ -4486,18 +5181,22 @@ pub fn parse_next_event(
     Ok(Some(event.to_fed(data)?))
 }
 
-fn parse_subseasonal_mod_change_event(state: &InterEventState, mut event: EventParseWrapper, which_mod: SubseasonalMod, game: GameEvent) -> Result<FedEventData, FeedParseError> {
+fn parse_subseasonal_mod_change_event(
+    state: &InterEventState,
+    mut event: EventParseWrapper,
+    which_mod: SubseasonalMod,
+    game: GameEvent,
+) -> Result<FedEventData, FeedParseError> {
     let (team_changes, is_terminal) = event.parse_team_subseasonal_mod_changes(state)?;
 
     Ok(if is_terminal {
         FedEventData::TeamSubseasonalModsChange {
             game,
-            change: team_changes
-                .into_iter()
-                .exactly_one()
-                .map_err(|err| FeedParseError::UnexpectedCompoundEvent {
+            change: team_changes.into_iter().exactly_one().map_err(|err| {
+                FeedParseError::UnexpectedCompoundEvent {
                     event_type: event.event_type,
-                })?
+                }
+            })?,
         }
     } else {
         let player_change = event.parse_player_subseasonal_mod_change(state, which_mod)?;
@@ -4510,7 +5209,11 @@ fn parse_subseasonal_mod_change_event(state: &InterEventState, mut event: EventP
     })
 }
 
-fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool, mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>) -> Result<FedEventData, FeedParseError> {
+fn make_mod_tarot_event(
+    event: &mut EventParseWrapper,
+    mod_removed: bool,
+    mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>,
+) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedMod {
         team_id: event.next_team_id()?,
         player_id: event.next_player_id_opt(),
@@ -4522,12 +5225,19 @@ fn make_mod_tarot_event(event: &mut EventParseWrapper, mod_removed: bool, mods_r
     })
 }
 
-fn make_item_tarot_event(event: &mut EventParseWrapper, item_gained: bool) -> Result<FedEventData, FeedParseError> {
+fn make_item_tarot_event(
+    event: &mut EventParseWrapper,
+    item_gained: bool,
+) -> Result<FedEventData, FeedParseError> {
     Ok(FedEventData::TarotReadingAddedOrRemovedItem {
         description: event.description().into(),
         item_id: event.metadata_uuid("itemId")?,
         item_name: event.metadata_str("itemName")?.to_string(),
-        item_mods: event.metadata_str_vec("mods")?.iter().map(|s| s.to_string()).collect(),
+        item_mods: event
+            .metadata_str_vec("mods")?
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
         player_item_rating_before: event.metadata_f64("playerItemRatingBefore")?,
         player_item_rating_after: event.metadata_f64("playerItemRatingAfter")?,
         player_rating: event.metadata_f64("playerRating")?,
@@ -4537,7 +5247,10 @@ fn make_item_tarot_event(event: &mut EventParseWrapper, item_gained: bool) -> Re
     })
 }
 
-fn make_echo(echoer_name: &str, events: (Option<EventParseWrapper>, EventParseWrapper)) -> Result<Echo, FeedParseError> {
+fn make_echo(
+    echoer_name: &str,
+    events: (Option<EventParseWrapper>, EventParseWrapper),
+) -> Result<Echo, FeedParseError> {
     let (removed, mut added) = events;
     // I could verify that the IDs all match, but the round-trip test should verify that
     Ok(Echo {
@@ -4577,7 +5290,9 @@ impl TryFrom<RawModDesc> for ModDesc {
 //     }
 // }
 
-fn get_mods_removed(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
+fn get_mods_removed(
+    event: EventParseWrapper,
+) -> Result<MultipleModsAddedOrRemoved, FeedParseError> {
     #[derive(Deserialize)]
     struct EchoMetadata {
         removes: Vec<RawModDesc>,
@@ -4585,25 +5300,24 @@ fn get_mods_removed(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemov
 
     let _metadata = format!("metadata: {}", event.metadata());
 
-    let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
-        .map_err(|e| {
-            let _err_str = format!("err: {}", e);
-            FeedParseError::MissingMetadata {
-                event_type: event.event_type,
-                field: "removes".to_string(),
-            }
-        })?;
+    let des: EchoMetadata = serde_json::from_value(event.metadata().clone()).map_err(|e| {
+        let _err_str = format!("err: {}", e);
+        FeedParseError::MissingMetadata {
+            event_type: event.event_type,
+            field: "removes".to_string(),
+        }
+    })?;
 
     Ok(MultipleModsAddedOrRemoved {
-        mods: des.removes.into_iter()
+        mods: des
+            .removes
+            .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_, _>>()
-            .map_err(|e| {
-                FeedParseError::MetadataIntToEnumError {
-                    event_type: event.event_type,
-                    field: "removes".to_string(),
-                    err: format!("{e}"),
-                }
+            .map_err(|e| FeedParseError::MetadataIntToEnumError {
+                event_type: event.event_type,
+                field: "removes".to_string(),
+                err: format!("{e}"),
             })?,
         sub_event: event.as_sub_event(),
     })
@@ -4615,31 +5329,34 @@ fn get_mods_added(event: EventParseWrapper) -> Result<MultipleModsAddedOrRemoved
         adds: Vec<RawModDesc>,
     }
 
-    let des: EchoMetadata = serde_json::from_value(event.metadata().clone())
-        .map_err(|_| {
-            FeedParseError::MissingMetadata {
-                event_type: event.event_type,
-                field: "adds".to_string(),
-            }
-        })?;
+    let des: EchoMetadata = serde_json::from_value(event.metadata().clone()).map_err(|_| {
+        FeedParseError::MissingMetadata {
+            event_type: event.event_type,
+            field: "adds".to_string(),
+        }
+    })?;
 
     Ok(MultipleModsAddedOrRemoved {
-        mods: des.adds.into_iter()
+        mods: des
+            .adds
+            .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_, _>>()
-            .map_err(|e| {
-                FeedParseError::MetadataIntToEnumError {
-                    event_type: event.event_type,
-                    field: "adds".to_string(),
-                    err: format!("{e}"),
-                }
+            .map_err(|e| FeedParseError::MetadataIntToEnumError {
+                event_type: event.event_type,
+                field: "adds".to_string(),
+                err: format!("{e}"),
             })?,
         sub_event: event.as_sub_event(),
     })
 }
 
-fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
-    names.into_iter()
+fn zip_mod_change_events(
+    event: &mut EventParseWrapper,
+    names: Vec<&str>,
+) -> Result<Vec<ModChangeSubEventWithNamedPlayer>, FeedParseError> {
+    names
+        .into_iter()
         .map(|name| {
             let mut sub_event = event.next_child(EventType::RemovedMod)?;
             Ok(ModChangeSubEventWithNamedPlayer {
@@ -4710,13 +5427,35 @@ fn zip_mod_change_events(event: &mut EventParseWrapper, names: Vec<&str>) -> Res
 // }
 
 fn is_known_team_name(name: &str) -> bool {
-    vec!["Hawai'i Fridays", "Canada Moist Talkers", "San Francisco Lovers", "Seattle Garages",
-         "Breckenridge Jazz Hands", "Hellmouth Sunbeams", "Hades Tigers", "Mexico City Wild Wings",
-         "Boston Flowers", "New York Millennials", "Philly Pies", "Miami Dale", "Tokyo Lift",
-         "Chicago Firefighters", "Dallas Steaks", "Yellowstone Magic", "Kansas City Breath Mints",
-         "Houston Spies", "Charleston Shoe Thieves", "LA Unlimited Tacos", "Atlantis Georgias",
-         "Ohio Worms", "Baltimore Crabs", "Core Mechanics", "Vault Legends", "Rising Stars",
-    ].contains(&name)
+    vec![
+        "Hawai'i Fridays",
+        "Canada Moist Talkers",
+        "San Francisco Lovers",
+        "Seattle Garages",
+        "Breckenridge Jazz Hands",
+        "Hellmouth Sunbeams",
+        "Hades Tigers",
+        "Mexico City Wild Wings",
+        "Boston Flowers",
+        "New York Millennials",
+        "Philly Pies",
+        "Miami Dale",
+        "Tokyo Lift",
+        "Chicago Firefighters",
+        "Dallas Steaks",
+        "Yellowstone Magic",
+        "Kansas City Breath Mints",
+        "Houston Spies",
+        "Charleston Shoe Thieves",
+        "LA Unlimited Tacos",
+        "Atlantis Georgias",
+        "Ohio Worms",
+        "Baltimore Crabs",
+        "Core Mechanics",
+        "Vault Legends",
+        "Rising Stars",
+    ]
+    .contains(&name)
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
@@ -4724,9 +5463,17 @@ fn is_known_team_nickname(name: &str) -> bool {
 }
 
 fn sort_children(event: &mut EventuallyEvent) {
-    if event.metadata.children.iter().all(|child| child.metadata.sub_play.is_some()) {
-        event.metadata.children.sort_by_key(|e| e.metadata.sub_play
-            .expect("Shouldn't get here if sub_play is None"));
+    if event
+        .metadata
+        .children
+        .iter()
+        .all(|child| child.metadata.sub_play.is_some())
+    {
+        event.metadata.children.sort_by_key(|e| {
+            e.metadata
+                .sub_play
+                .expect("Shouldn't get here if sub_play is None")
+        });
     }
     for child in event.metadata.children.as_mut_slice() {
         sort_children(child);

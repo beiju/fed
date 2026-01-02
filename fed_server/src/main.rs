@@ -2,15 +2,15 @@
 #[macro_use]
 extern crate rocket;
 
-use std::collections::hash_map::Entry;
+use fed::FedEvent;
+use rocket::State;
+use rocket::http::uri::Origin;
+use rocket::serde::Serialize;
+use rocket::serde::json::Json;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::convert::Infallible;
 use std::ops::FromResidual;
-use rocket::http::uri::Origin;
-use rocket::serde::json::Json;
-use rocket::serde::Serialize;
-use rocket::State;
-use fed::FedEvent;
 
 const EVENTUALLY_ENDPOINT: &str = "https://api.sibr.dev/eventually/v2/events";
 
@@ -57,7 +57,6 @@ impl FromResidual<Result<Infallible, fed::FeedParseError>> for ApiResult<'_> {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 pub struct InvalidParameter<'a> {
     name: &'a str,
@@ -69,33 +68,32 @@ pub struct InvalidParameter<'a> {
 pub enum ApiUseError<'a> {
     InvalidParameters {
         parameters: Vec<InvalidParameter<'a>>,
-    }
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "error", rename_all = "snake_case")]
 pub enum ApiServerError {
-    HttpFailed {
-        message: String,
-    },
+    HttpFailed { message: String },
 
-    JsonParseFailed {
-        message: String,
-    },
+    JsonParseFailed { message: String },
 
-    FeedParseFailed {
-        message: String,
-    },
+    FeedParseFailed { message: String },
 }
 
-fn validate_parameter<'a>(entry: Entry<&'a str, &'a str>, expected: &'a str) -> Option<InvalidParameter<'a>> {
+fn validate_parameter<'a>(
+    entry: Entry<&'a str, &'a str>,
+    expected: &'a str,
+) -> Option<InvalidParameter<'a>> {
     let name = *entry.key();
     let value = entry.or_insert(expected);
     if value != &expected {
         Some(InvalidParameter {
             name,
-            reason: format!("Fed requires {name}={expected}, but received {name}={value}. \
-                              Either pass {name}={expected} or remove the {name} attribute."),
+            reason: format!(
+                "Fed requires {name}={expected}, but received {name}={value}. \
+                Either pass {name}={expected} or remove the {name} attribute."
+            ),
         })
     } else {
         None
@@ -114,15 +112,17 @@ async fn get_events<'a>(uri: &'a Origin<'_>, client: &State<reqwest::Client>) ->
         validate_parameter(params.entry("expand_children"), "true"),
         validate_parameter(params.entry("expand_siblings"), "true"),
         validate_parameter(params.entry("metadata.parent"), "notexists"),
-    ].into_iter().flatten().collect();
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
 
     if !errs.is_empty() {
-        Err(ApiUseError::InvalidParameters {
-            parameters: errs
-        })?;
+        Err(ApiUseError::InvalidParameters { parameters: errs })?;
     }
 
-    let eventually_response = client.get(EVENTUALLY_ENDPOINT)
+    let eventually_response = client
+        .get(EVENTUALLY_ENDPOINT)
         .query(&params)
         .send()
         .await?

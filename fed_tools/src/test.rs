@@ -1,19 +1,19 @@
 #![feature(let_chains)]
 
+use anyhow::{Context, anyhow};
+use clap::Parser;
+use eventually_api::EventuallyEvent;
+use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
+use itertools::Itertools;
+use json_structural_diff::JsonDiff;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, prelude::*};
 use std::sync::{Arc, Mutex, TryLockError};
-use json_structural_diff::JsonDiff;
-use anyhow::{anyhow, Context};
-use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
 use with_structure::WithStructure;
-use clap::Parser;
-use itertools::Itertools;
-use eventually_api::EventuallyEvent;
 
-use fed::{FedEvent, InterEventStateSync, parse_next_event, FedEventData};
 use fed::MakePeekableWithLogging;
+use fed::{FedEvent, FedEventData, InterEventStateSync, parse_next_event};
 
 const SEASONS: [(&'static str, i64, i64); 11] = [
     // sim, season number, number of events in that season
@@ -74,64 +74,74 @@ fn main() -> anyhow::Result<()> {
     let capture_err = err.clone();
     let capture_progress = progress.clone();
     let threads = SEASONS.map(move |(sim, season, count)| {
-            let capture_err = capture_err.clone();
-            let capture_progress = capture_progress.clone();
-            let capture_args = args.clone();
-            std::thread::spawn(move || {
-                let result = run_test_on_season(
-                    sim,
-                    season,
-                    count,
-                    &capture_progress,
-                    || {
-                        // This is called a lot so we don't want to wait on a lock if we don't have
-                        // to. And if the option is Some, every thread that acquires it from now on
-                        // will exit soon, so we'll never be starved for long. (If the option is
-                        // None it's fine if we're starved because we'll be returning false either
-                        // way.)
-                        let lock = capture_err.try_lock();
-                        match lock {
-                            Ok(e) => e.is_some(),
-                            Err(TryLockError::WouldBlock) => false,
-                            Err(other) => {
-                                panic!("Lock error: {other}");
-                            }
+        let capture_err = capture_err.clone();
+        let capture_progress = capture_progress.clone();
+        let capture_args = args.clone();
+        std::thread::spawn(move || {
+            let result = run_test_on_season(
+                sim,
+                season,
+                count,
+                &capture_progress,
+                || {
+                    // This is called a lot so we don't want to wait on a lock if we don't have
+                    // to. And if the option is Some, every thread that acquires it from now on
+                    // will exit soon, so we'll never be starved for long. (If the option is
+                    // None it's fine if we're starved because we'll be returning false either
+                    // way.)
+                    let lock = capture_err.try_lock();
+                    match lock {
+                        Ok(e) => e.is_some(),
+                        Err(TryLockError::WouldBlock) => false,
+                        Err(other) => {
+                            panic!("Lock error: {other}");
                         }
-                    },
-                    capture_args,
-                );
-                if let Err(e) = result {
-                    let mut err_lock = capture_err.lock().unwrap();
-                    *err_lock = Some(e);
-                }
-            })
-        });
+                    }
+                },
+                capture_args,
+            );
+            if let Err(e) = result {
+                let mut err_lock = capture_err.lock().unwrap();
+                *err_lock = Some(e);
+            }
+        })
+    });
 
     for thread in threads {
-        thread.join()
-            .expect("Worker thread panicked");
+        thread.join().expect("Worker thread panicked");
     }
 
     let mut err_lock = err.lock().unwrap();
-    match err_lock.take() { Some(e) => {
-        Err(e)
-    } _ => {
-        println!("Done");
-        Ok(())
-    }}
+    match err_lock.take() {
+        Some(e) => Err(e),
+        _ => {
+            println!("Done");
+            Ok(())
+        }
+    }
 }
 
-fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress: &MultiProgress, stop_signal: impl Fn() -> bool, args: Args) -> anyhow::Result<()> {
+fn run_test_on_season(
+    sim: &str,
+    season: i64,
+    total_events: i64,
+    multi_progress: &MultiProgress,
+    stop_signal: impl Fn() -> bool,
+    args: Args,
+) -> anyhow::Result<()> {
     // If these files don't exist, download feed_dump.ndjson from
     // https://faculty.sibr.dev/~allie/feed_dump.ndjson.zstd
     // and run `filter_feed` to make feed_dump.filtered.ndjson
-    let file = File::open(format!("feed_dump_filtered/sim-{sim}-season-{season}.ndjson"))?;
+    let file = File::open(format!(
+        "feed_dump_filtered/sim-{sim}-season-{season}.ndjson"
+    ))?;
     // let reader = BufReader::new(GzDecoder::new(file));
     let reader = BufReader::new(file);
 
     let state = InterEventStateSync::new();
 
-    let mut event_iter = reader.lines()
+    let mut event_iter = reader
+        .lines()
         .map(|json_str| {
             let str = json_str.context("Failed to read line from ndjson file")?;
             if str.contains("\"_eventually_ingest_source\":\"blaseball.com_library\"") {
@@ -155,14 +165,25 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
     let mut with_structures = HashSet::<<FedEvent as WithStructure>::Structure>::new();
 
     let progress = indicatif::ProgressBar::new(total_events as u64);
-    progress.set_style(ProgressStyle::with_template("{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}")?);
+    progress.set_style(ProgressStyle::with_template(
+        "{msg:7} {wide_bar} {human_pos}/{human_len} {elapsed} eta {eta}",
+    )?);
     progress.set_draw_target(ProgressDrawTarget::stdout_with_hz(2 /* hz */));
     let progress = multi_progress.add(progress);
     let mut displayed_day_season = None;
     let mut local_progress_inc: u64 = 0;
-    while let Some(parsed_event) = parse_next_event(&mut event_iter, state.inner())
-        .with_context(|| format!("Parsing events: \n{}", event_iter.log().iter()
-            .map(|event| format!("  - {}: {}", event.id, event.description)).format("\n")))? {
+    while let Some(parsed_event) =
+        parse_next_event(&mut event_iter, state.inner()).with_context(|| {
+            format!(
+                "Parsing events: \n{}",
+                event_iter
+                    .log()
+                    .iter()
+                    .map(|event| format!("  - {}: {}", event.id, event.description))
+                    .format("\n")
+            )
+        })?
+    {
         check_parse(&parsed_event, event_iter.log())?;
         local_progress_inc += event_iter.log().len() as u64;
         if local_progress_inc > 100 {
@@ -171,7 +192,11 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
         }
         // This makes a huge difference in run speed
         if displayed_day_season != Some((parsed_event.season + 1, parsed_event.day + 1)) {
-            progress.set_message(format!("s{}d{}", parsed_event.season + 1, parsed_event.day + 1));
+            progress.set_message(format!(
+                "s{}d{}",
+                parsed_event.season + 1,
+                parsed_event.day + 1
+            ));
             displayed_day_season = Some((parsed_event.season + 1, parsed_event.day + 1));
         }
         event_iter.take_log();
@@ -181,15 +206,25 @@ fn run_test_on_season(sim: &str, season: i64, total_events: i64, multi_progress:
         }
 
         // Some temp logging
-        if let FedEventData::StrikeoutSwinging { score_summary, ..} = &parsed_event.data {
+        if let FedEventData::StrikeoutSwinging { score_summary, .. } = &parsed_event.data {
             // TODO Let chain
             if let Some(score_summary) = score_summary {
                 // TODO Let chain
                 if let fed::Ledger::V2(ledger) = &score_summary.ledger {
                     // TODO Let chain
-                    if ledger.modifiers.iter().any(|r#mod| r#mod.is_pure_negating()) &&
-                        ledger.modifiers.iter().any(|r#mod| !r#mod.is_pure_negating()) {
-                        progress.println(format!("\"{}\" is a triple threat with complex modifiers", parsed_event.id));
+                    if ledger
+                        .modifiers
+                        .iter()
+                        .any(|r#mod| r#mod.is_pure_negating())
+                        && ledger
+                            .modifiers
+                            .iter()
+                            .any(|r#mod| !r#mod.is_pure_negating())
+                    {
+                        progress.println(format!(
+                            "\"{}\" is a triple threat with complex modifiers",
+                            parsed_event.id
+                        ));
                     }
                 }
             }

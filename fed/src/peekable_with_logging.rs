@@ -1,6 +1,6 @@
+use itertools::Itertools;
 use std::collections::VecDeque;
 use std::mem;
-use itertools::Itertools;
 
 pub struct PeekableWithLogging<IterT: Iterator> {
     iter: IterT,
@@ -8,7 +8,10 @@ pub struct PeekableWithLogging<IterT: Iterator> {
     log: Vec<IterT::Item>,
 }
 
-impl<IterT: Iterator> PeekableWithLogging<IterT> where IterT::Item: Clone {
+impl<IterT: Iterator> PeekableWithLogging<IterT>
+where
+    IterT::Item: Clone,
+{
     pub fn new(iter: IterT) -> Self {
         Self {
             iter,
@@ -18,11 +21,10 @@ impl<IterT: Iterator> PeekableWithLogging<IterT> where IterT::Item: Clone {
     }
 
     fn raw_next(&mut self) -> Option<IterT::Item> {
-        match self.peeked.pop_front() { Some(item) => {
-            Some(item)
-        } _ => {
-            self.iter.next()
-        }}
+        match self.peeked.pop_front() {
+            Some(item) => Some(item),
+            _ => self.iter.next(),
+        }
     }
 
     fn yield_item(&mut self, item: Option<IterT::Item>) -> Option<IterT::Item> {
@@ -61,18 +63,21 @@ impl<IterT: Iterator> PeekableWithLogging<IterT> where IterT::Item: Clone {
     // return it right away (this has the effect of changing the order elements are returned).
     // Elements for which pred returns false are retained and will still be yielded in future calls
     // to next() or extract_next_match()
-    pub fn extract_next_match(&mut self, mut pred: impl FnMut(&IterT::Item) -> bool) -> Option<IterT::Item> {
+    pub fn extract_next_match(
+        &mut self,
+        mut pred: impl FnMut(&IterT::Item) -> bool,
+    ) -> Option<IterT::Item> {
         // First, try everything that's currently peeked
         if let Some((index, _)) = self.peeked.iter().find_position(|e| pred(e)) {
             // This should always be Some, but no point unwrapping it and re-wrapping it
             let item = self.peeked.remove(index);
-            return self.yield_item(item)
+            return self.yield_item(item);
         }
 
         // Otherwise, scroll forward through the iterator
         while let Some(item) = self.iter.next() {
             if pred(&item) {
-                return self.yield_item(Some(item))
+                return self.yield_item(Some(item));
             }
             self.peeked.push_back(item)
         }
@@ -87,7 +92,11 @@ pub trait MakePeekableWithLogging {
     fn peekable_with_logging(self) -> PeekableWithLogging<Self::IterT>;
 }
 
-impl<T> MakePeekableWithLogging for T where T: Iterator, T::Item: Clone {
+impl<T> MakePeekableWithLogging for T
+where
+    T: Iterator,
+    T::Item: Clone,
+{
     type IterT = T;
 
     fn peekable_with_logging(self) -> PeekableWithLogging<Self::IterT> {

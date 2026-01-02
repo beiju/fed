@@ -6,7 +6,7 @@ use std::iter;
 
 use crate::format_utils::Possessive;
 use crate::parse::builder::{
-    possessive, EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate,
+    EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive,
 };
 use crate::parse::event_builder_new::EventBuilder;
 use crate::*;

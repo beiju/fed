@@ -1,6 +1,6 @@
+use eventually_api::{EventType, Weather};
 use thiserror::Error;
 use uuid::Uuid;
-use eventually_api::{EventType, Weather};
 
 #[derive(Error, Debug)]
 pub enum FeedParseError {
@@ -14,16 +14,10 @@ pub enum FeedParseError {
     },
 
     #[error("Description parse error for {event_type:?} event: {err}")]
-    DescriptionParseError {
-        event_type: EventType,
-        err: String,
-    },
+    DescriptionParseError { event_type: EventType, err: String },
 
     #[error("ScoreUpdate parse error for {event_type:?} event: {err}")]
-    ScoreUpdateParseError {
-        event_type: EventType,
-        err: String,
-    },
+    ScoreUpdateParseError { event_type: EventType, err: String },
 
     #[error("ScoreLedger parse error for {event_type:?} event: {err}\n\noriginal: {original}")]
     ScoreLedgerParseError {
@@ -72,7 +66,10 @@ pub enum FeedParseError {
         expected: usize,
     },
 
-    #[error("Unexpected event type {child_event_type:?} as {child_number}th child of {event_type:?} event")]
+    #[error(
+        "Unexpected event type {child_event_type:?} as {child_number}th child of {event_type:?} \
+        event"
+    )]
     UnexpectedChildType {
         event_type: EventType,
         child_event_type: EventType,
@@ -80,9 +77,7 @@ pub enum FeedParseError {
     },
 
     #[error("Expected metadata to be an object for {event_type:?} event")]
-    MetadataWasNotAnObject {
-        event_type: EventType,
-    },
+    MetadataWasNotAnObject { event_type: EventType },
 
     #[error("Expected metadata field \"{field}\" for {event_type:?} event")]
     MissingMetadata {
@@ -119,10 +114,7 @@ pub enum FeedParseError {
     },
 
     #[error("Unknown phase {phase} for {event_type:?} event")]
-    UnknownPhase {
-        phase: i64,
-        event_type: EventType
-    },
+    UnknownPhase { phase: i64, event_type: EventType },
 
     #[error("Unknown being id {0}")]
     UnknownBeing(i64),
@@ -136,20 +128,29 @@ pub enum FeedParseError {
         actual: i64,
     },
 
-    #[error("Expected one of {expected_types:?} event after {after_type:?} event but there were no more events")]
+    #[error(
+        "Expected one of {expected_types:?} event after {after_type:?} event but there were no \
+        more events"
+    )]
     MissingFollowingEvent {
         expected_types: Vec<EventType>,
         after_type: EventType,
     },
 
-    #[error("Expected one of {expected_types:?} event after {after_type:?} event but found {found_type:?}")]
+    #[error(
+        "Expected one of {expected_types:?} event after {after_type:?} event but found \
+        {found_type:?}"
+    )]
     UnexpectedFollowingEvent {
         expected_types: Vec<EventType>,
         found_type: EventType,
         after_type: EventType,
     },
 
-    #[error("Expected a {expected_type:?} event along with a {group_indicator_type:?} event but it wasn't found")]
+    #[error(
+        "Expected a {expected_type:?} event along with a {group_indicator_type:?} event but it \
+        wasn't found"
+    )]
     MissingEventInGroup {
         group_indicator_type: EventType,
         expected_type: EventType,
@@ -162,17 +163,21 @@ pub enum FeedParseError {
     },
 
     #[error("Found a compound {event_type:?} where a simple {event_type:?} was expected")]
-    UnexpectedCompoundEvent {
-        event_type: EventType,
-    },
+    UnexpectedCompoundEvent { event_type: EventType },
 
-    #[error("Expected a Polarity weather (PolarityPlus or PolarityMinus), but got {weather} in {event_type:?} event")]
+    #[error(
+        "Expected a Polarity weather (PolarityPlus or PolarityMinus), but got {weather} in \
+        {event_type:?} event"
+    )]
     UnexpectedPolarityWeather {
         weather: Weather,
         event_type: EventType,
     },
 
-    #[error("{following_event_type:?} following a {preceding_event_type:?} had {tag_type} tag {tag_value}, but that tag was not found on the {preceding_event_type:?}")]
+    #[error(
+        "{following_event_type:?} following a {preceding_event_type:?} had {tag_type} tag \
+        {tag_value}, but that tag was not found on the {preceding_event_type:?}"
+    )]
     TagNotFoundInPrecedingEvent {
         preceding_event_type: EventType,
         following_event_type: EventType,
@@ -180,4 +185,3 @@ pub enum FeedParseError {
         tag_value: Uuid,
     },
 }
-

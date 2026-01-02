@@ -1,7 +1,7 @@
-use std::marker::PhantomData;
 use crate::WithStructure;
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use std::marker::PhantomData;
+use uuid::Uuid;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct MonostateStructure;
@@ -16,12 +16,32 @@ macro_rules! trivial_with_structure {
     }
 }
 
-trivial_with_structure!((), bool, f64, f32, i64, i32, i16, i8, isize, u64, u32, u16, u8, usize, Uuid, String, DateTime<Utc>);
+trivial_with_structure!(
+    (),
+    bool,
+    f64,
+    f32,
+    i64,
+    i32,
+    i16,
+    i8,
+    isize,
+    u64,
+    u32,
+    u16,
+    u8,
+    usize,
+    Uuid,
+    String,
+    DateTime<Utc>
+);
 
 impl<T> WithStructure for Vec<T> {
     type Structure = MonostateStructure;
 
-    fn structure(&self) -> Self::Structure { MonostateStructure }
+    fn structure(&self) -> Self::Structure {
+        MonostateStructure
+    }
 }
 
 impl<T: WithStructure> WithStructure for Option<T> {
@@ -29,8 +49,8 @@ impl<T: WithStructure> WithStructure for Option<T> {
 
     fn structure(&self) -> Self::Structure {
         match self {
-            None => { None }
-            Some(inner) => { Some(inner.structure()) }
+            None => None,
+            Some(inner) => Some(inner.structure()),
         }
     }
 }
@@ -41,8 +61,8 @@ impl<L: WithStructure, R: WithStructure> WithStructure for either::Either<L, R> 
 
     fn structure(&self) -> Self::Structure {
         match self {
-            either::Either::Left(inner) => { either::Either::Left(inner.structure()) }
-            either::Either::Right(inner) => { either::Either::Right(inner.structure()) }
+            either::Either::Left(inner) => either::Either::Left(inner.structure()),
+            either::Either::Right(inner) => either::Either::Right(inner.structure()),
         }
     }
 }
@@ -50,7 +70,9 @@ impl<L: WithStructure, R: WithStructure> WithStructure for either::Either<L, R> 
 impl<T: WithStructure> WithStructure for PhantomData<T> {
     type Structure = MonostateStructure;
 
-    fn structure(&self) -> Self::Structure { MonostateStructure }
+    fn structure(&self) -> Self::Structure {
+        MonostateStructure
+    }
 }
 
 macro_rules! tuple_impls {
@@ -87,7 +109,9 @@ macro_rules! array_impls {
     ($n:literal) => {
         impl<T> WithStructure for [T; $n] {
             type Structure = MonostateStructure;
-            fn structure(&self) -> Self::Structure { MonostateStructure }
+            fn structure(&self) -> Self::Structure {
+                MonostateStructure
+            }
         }
     };
 }

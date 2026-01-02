@@ -1,7 +1,16 @@
 use std::fmt::Write;
 
 use crate::format_utils::Possessive;
-use crate::{Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType, DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired, KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId, PlayerSentElsewhere, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject};
+use crate::{
+    Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType,
+    DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
+    HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired,
+    KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent,
+    ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent,
+    PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId,
+    PlayerSentElsewhere, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus,
+    StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject,
+};
 use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
@@ -21,7 +30,16 @@ fn reverse_performing(input: &str) -> &'static str {
 }
 
 impl EventBuilder {
-    pub fn new(id: Uuid, created: DateTime<Utc>, sim: String, day: i64, season: i64, tournament: i64, phase: i64, nuts: i64) -> Self {
+    pub fn new(
+        id: Uuid,
+        created: DateTime<Utc>,
+        sim: String,
+        day: i64,
+        season: i64,
+        tournament: i64,
+        phase: i64,
+        nuts: i64,
+    ) -> Self {
         let mut builder = Self {
             event: EventuallyEvent {
                 id,
@@ -95,7 +113,10 @@ impl EventBuilder {
 
         if let Some(attractor) = game.attractor_secret_base {
             self.set_category(EventCategory::Special);
-            self.push_description(format!("{} enters the Secret Base...", attractor.player_name));
+            self.push_description(format!(
+                "{} enters the Secret Base...",
+                attractor.player_name
+            ));
             self.push_player_tag(attractor.player_id)
         }
 
@@ -103,41 +124,84 @@ impl EventBuilder {
         // end of the child list, but for now pretend it's at the beginning
         if let Some(trader_trade) = game.trader_trade {
             self.push_child(trader_trade.victim_lost_item_sub_event, |mut child_eb| {
-                child_eb.push_description(format!("{} traded away {} to {} for {}.", trader_trade.victim_name, trader_trade.stolen_item_name, trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing")));
+                child_eb.push_description(format!(
+                    "{} traded away {} to {} for {}.",
+                    trader_trade.victim_name,
+                    trader_trade.stolen_item_name,
+                    trader_trade.trader_name,
+                    trader_trade
+                        .exchanged_item_name
+                        .as_deref()
+                        .unwrap_or("nothing")
+                ));
                 child_eb.push_player_tag(trader_trade.victim_id);
                 child_eb.push_team_tag(trader_trade.victim_team_id);
                 child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
                 child_eb.push_metadata_str("itemName", &trader_trade.stolen_item_name);
                 child_eb.push_metadata_str_vec("mods", trader_trade.stolen_item_mods.clone());
-                child_eb.push_metadata_f64("playerItemRatingBefore", trader_trade.victim_item_rating_before);
-                child_eb.push_metadata_f64("playerItemRatingAfter", trader_trade.victim_item_rating_after);
+                child_eb.push_metadata_f64(
+                    "playerItemRatingBefore",
+                    trader_trade.victim_item_rating_before,
+                );
+                child_eb.push_metadata_f64(
+                    "playerItemRatingAfter",
+                    trader_trade.victim_item_rating_after,
+                );
                 child_eb.push_metadata_f64("playerRating", trader_trade.victim_rating);
                 child_eb.build(EventType::PlayerLostItem)
             });
 
             self.push_child(trader_trade.trader_gained_item_sub_event, |mut child_eb| {
-                child_eb.push_description(format!("{} traded their {} for {} {}.", trader_trade.trader_name, trader_trade.exchanged_item_name.as_deref().unwrap_or("nothing"), Possessive(&trader_trade.victim_name), trader_trade.stolen_item_name));
+                child_eb.push_description(format!(
+                    "{} traded their {} for {} {}.",
+                    trader_trade.trader_name,
+                    trader_trade
+                        .exchanged_item_name
+                        .as_deref()
+                        .unwrap_or("nothing"),
+                    Possessive(&trader_trade.victim_name),
+                    trader_trade.stolen_item_name
+                ));
                 child_eb.push_player_tag(trader_trade.trader_id);
                 child_eb.push_team_tag(trader_trade.trader_team_id);
                 child_eb.push_metadata_uuid("itemId", trader_trade.stolen_item_id);
                 child_eb.push_metadata_str("itemName", trader_trade.stolen_item_name);
                 child_eb.push_metadata_str_vec("mods", trader_trade.stolen_item_mods);
-                child_eb.push_metadata_f64("playerItemRatingBefore", trader_trade.trader_item_rating_before);
-                child_eb.push_metadata_f64("playerItemRatingAfter", trader_trade.trader_item_rating_after);
+                child_eb.push_metadata_f64(
+                    "playerItemRatingBefore",
+                    trader_trade.trader_item_rating_before,
+                );
+                child_eb.push_metadata_f64(
+                    "playerItemRatingAfter",
+                    trader_trade.trader_item_rating_after,
+                );
                 child_eb.push_metadata_f64("playerRating", trader_trade.trader_rating);
                 child_eb.build(EventType::PlayerGainedItem)
             });
         }
     }
 
-    pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F) where F: FnOnce(Self) -> EventuallyEvent {
-        let mut child_builder = Self::new(sub_event.id, sub_event.created, self.event.sim.clone(), self.event.day, self.event.season, self.event.tournament, self.event.phase, sub_event.nuts);
+    pub fn push_child<F>(&mut self, sub_event: SubEvent, build_func: F)
+    where
+        F: FnOnce(Self) -> EventuallyEvent,
+    {
+        let mut child_builder = Self::new(
+            sub_event.id,
+            sub_event.created,
+            self.event.sim.clone(),
+            self.event.day,
+            self.event.season,
+            self.event.tournament,
+            self.event.phase,
+            sub_event.nuts,
+        );
         // Childrens' categories are usually Changes
         child_builder.event.category = EventCategory::Changes;
         child_builder.event.metadata.parent = Some(self.event.id);
         child_builder.event.game_tags = self.event.game_tags.clone();
         child_builder.event.metadata.play = self.event.metadata.play;
-        child_builder.event.metadata.sub_play = Some(self.event.metadata.children.len() as i64 + self.phantom_children);
+        child_builder.event.metadata.sub_play =
+            Some(self.event.metadata.children.len() as i64 + self.phantom_children);
         self.event.metadata.children.push(build_func(child_builder))
     }
 
@@ -153,18 +217,21 @@ impl EventBuilder {
         if !self.event.description.is_empty() {
             self.event.description.push('\n');
         }
-        write!(self.event.description, "{desc}")
-            .expect("Write on &mut String can't fail");
+        write!(self.event.description, "{desc}").expect("Write on &mut String can't fail");
     }
 
     pub fn push_player_tag(&mut self, player_id: Uuid) {
-        self.event.player_tags.as_mut()
+        self.event
+            .player_tags
+            .as_mut()
             .expect("Builder should not be used for events with no player tags")
             .push(player_id)
     }
 
     pub fn push_team_tag(&mut self, team_id: Uuid) {
-        self.event.team_tags.as_mut()
+        self.event
+            .team_tags
+            .as_mut()
             .expect("Builder should not be used for events with no team tags")
             .push(team_id)
     }
@@ -174,7 +241,9 @@ impl EventBuilder {
     }
 
     fn metadata_mut(&mut self) -> &mut Map<String, Value> {
-        self.event.metadata.other
+        self.event
+            .metadata
+            .other
             .as_object_mut()
             .expect("Internal error: This metadata should always be an object")
     }
@@ -184,8 +253,7 @@ impl EventBuilder {
     }
 
     pub fn push_metadata_null(&mut self, key: impl Into<String>) {
-        self.metadata_mut()
-            .insert(key.into(), Value::Null);
+        self.metadata_mut().insert(key.into(), Value::Null);
     }
 
     pub fn push_metadata_str(&mut self, key: impl Into<String>, value: impl Into<String>) {
@@ -194,8 +262,7 @@ impl EventBuilder {
     }
 
     pub fn push_metadata_str_vec(&mut self, key: impl Into<String>, value: Vec<String>) {
-        self.metadata_mut()
-            .insert(key.into(), value.into());
+        self.metadata_mut().insert(key.into(), value.into());
     }
 
     pub fn push_metadata_json(&mut self, key: impl Into<String>, value: Value) {
@@ -203,8 +270,7 @@ impl EventBuilder {
     }
 
     pub fn push_metadata_json_vec(&mut self, key: impl Into<String>, value: Vec<Value>) {
-        self.metadata_mut()
-            .insert(key.into(), value.into());
+        self.metadata_mut().insert(key.into(), value.into());
     }
 
     pub fn push_metadata_uuid(&mut self, key: impl Into<String>, value: Uuid) {
@@ -212,22 +278,29 @@ impl EventBuilder {
             .insert(key.into(), Value::String(value.to_string()));
     }
 
-    pub fn push_metadata_uuid_vec<'a>(&mut self, key: impl Into<String>, value: impl IntoIterator<Item=&'a Uuid>) {
-        let value = Value::Array(value.into_iter().map(|id| {
-            let id_str = id.to_string();
-            Value::String(id_str)
-        }).collect());
+    pub fn push_metadata_uuid_vec<'a>(
+        &mut self,
+        key: impl Into<String>,
+        value: impl IntoIterator<Item = &'a Uuid>,
+    ) {
+        let value = Value::Array(
+            value
+                .into_iter()
+                .map(|id| {
+                    let id_str = id.to_string();
+                    Value::String(id_str)
+                })
+                .collect(),
+        );
         self.metadata_mut().insert(key.into(), value);
     }
 
     pub fn push_metadata_i64(&mut self, key: impl Into<String>, value: impl Into<i64>) {
-        self.metadata_mut()
-            .insert(key.into(), value.into().into());
+        self.metadata_mut().insert(key.into(), value.into().into());
     }
 
     pub fn push_metadata_f64_forced(&mut self, key: impl Into<String>, value: f64) {
-        self.metadata_mut()
-            .insert(key.into(), value.into());
+        self.metadata_mut().insert(key.into(), value.into());
     }
 
     pub fn push_metadata_f64(&mut self, key: impl Into<String>, value: f64) {
@@ -267,10 +340,22 @@ impl EventBuilder {
 
     pub fn push_gained_item(&mut self, player_name: &str, gained_item: ItemGained) {
         if let Some(lost_item) = gained_item.dropped_item {
-            let dropped_or_ditched = if lost_item.item_was_broken { "ditched" } else { "dropped" };
-            self.push_description(format!("{player_name} gained {} and {dropped_or_ditched} {}.",
-                                           gained_item.item_name, lost_item.item_name));
-            self.push_dropped_item(&player_name, gained_item.player_id, gained_item.team_id, gained_item.player_rating, lost_item);
+            let dropped_or_ditched = if lost_item.item_was_broken {
+                "ditched"
+            } else {
+                "dropped"
+            };
+            self.push_description(format!(
+                "{player_name} gained {} and {dropped_or_ditched} {}.",
+                gained_item.item_name, lost_item.item_name
+            ));
+            self.push_dropped_item(
+                &player_name,
+                gained_item.player_id,
+                gained_item.team_id,
+                gained_item.player_rating,
+                lost_item,
+            );
         } else {
             self.push_description(format!("{player_name} gained {}.", gained_item.item_name));
         }
@@ -283,14 +368,27 @@ impl EventBuilder {
             child.push_metadata_uuid("itemId", gained_item.item_id);
             child.push_metadata_str("itemName", gained_item.item_name);
             child.push_metadata_str_vec("mods", gained_item.item_mods);
-            child.push_metadata_f64_opt("playerItemRatingAfter", gained_item.player_item_rating_after);
-            child.push_metadata_f64("playerItemRatingBefore", gained_item.player_item_rating_before);
+            child.push_metadata_f64_opt(
+                "playerItemRatingAfter",
+                gained_item.player_item_rating_after,
+            );
+            child.push_metadata_f64(
+                "playerItemRatingBefore",
+                gained_item.player_item_rating_before,
+            );
             child.push_metadata_f64("playerRating", gained_item.player_rating);
             child.build(EventType::PlayerGainedItem)
         });
     }
 
-    pub fn push_dropped_item(&mut self, player_name: &str, player_id: Uuid, team_id: Uuid, player_rating: f64, dropped_item: ItemDroppedForNewItem) {
+    pub fn push_dropped_item(
+        &mut self,
+        player_name: &str,
+        player_id: Uuid,
+        team_id: Uuid,
+        player_rating: f64,
+        dropped_item: ItemDroppedForNewItem,
+    ) {
         self.push_child(dropped_item.sub_event, |mut child| {
             child.set_category(EventCategory::Changes);
             child.push_description(format!("{player_name} dropped {}.", dropped_item.item_name));
@@ -299,8 +397,14 @@ impl EventBuilder {
             child.push_metadata_uuid("itemId", dropped_item.item_id);
             child.push_metadata_str("itemName", dropped_item.item_name);
             child.push_metadata_str_vec("mods", dropped_item.item_mods);
-            child.push_metadata_f64("playerItemRatingAfter", dropped_item.player_item_rating_after);
-            child.push_metadata_f64_opt("playerItemRatingBefore", dropped_item.player_item_rating_before);
+            child.push_metadata_f64(
+                "playerItemRatingAfter",
+                dropped_item.player_item_rating_after,
+            );
+            child.push_metadata_f64_opt(
+                "playerItemRatingBefore",
+                dropped_item.player_item_rating_before,
+            );
             child.push_metadata_f64("playerRating", player_rating);
             child.build(EventType::PlayerLostItem)
         });
@@ -312,7 +416,10 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_named_item_damages<'a>(&mut self, item_damages: impl IntoIterator<Item=(&'a str, &'a ItemDamaged)>) {
+    pub fn push_named_item_damages<'a>(
+        &mut self,
+        item_damages: impl IntoIterator<Item = (&'a str, &'a ItemDamaged)>,
+    ) {
         for (player_name, dmg) in item_damages {
             self.push_item_damage(dmg, player_name);
         }
@@ -325,10 +432,16 @@ impl EventBuilder {
     }
 
     pub fn push_item_damage(&mut self, dmg: &ItemDamaged, player_name: &str) {
-        let description = format!("{}{} {dmg}",
-                                  // bug-for-bug compatibility :)
-                                  if (self.event.season, self.event.day) < (15, 3) { " " } else { "" },
-                                  Possessive(player_name));
+        let description = format!(
+            "{}{} {dmg}",
+            // bug-for-bug compatibility :)
+            if (self.event.season, self.event.day) < (15, 3) {
+                " "
+            } else {
+                ""
+            },
+            Possessive(player_name)
+        );
         self.push_description(&description);
         self.push_item_damage_with_description(dmg, &description)
     }
@@ -361,7 +474,9 @@ impl EventBuilder {
     }
 
     pub fn push_stopped_inhabiting(&mut self, stopped_inhabiting: Option<&StoppedInhabiting>) {
-        let Some(si) = stopped_inhabiting else { return; };
+        let Some(si) = stopped_inhabiting else {
+            return;
+        };
         self.push_child(si.sub_event, |mut child| {
             child.push_description(format!("{} stopped Inhabiting.", si.inhabiting_player_name));
             child.push_player_tag(si.inhabiting_player_id);
@@ -382,7 +497,9 @@ impl EventBuilder {
             self.push_child(fr.sub_event, |mut child| {
                 child.push_description(&common_description);
                 child.push_player_tag(fr.player_id);
-                if let Some(t) = fr.team_id { child.push_team_tag(t) };
+                if let Some(t) = fr.team_id {
+                    child.push_team_tag(t)
+                };
                 child.push_metadata_str("mod", "COFFEE_RALLY");
                 child.push_metadata_i64("type", ModDuration::Permanent as i64);
                 child.build(EventType::RemovedMod)
@@ -395,13 +512,23 @@ impl EventBuilder {
 
     pub fn push_balloons(&mut self, balloons: Option<&str>, runs_scored: i64) {
         if let Some(stadium_name) = balloons {
-            self.push_description(format!("{stadium_name} {} {runs_scored} Balloons!", self.inflated_or_inflates()));
+            self.push_description(format!(
+                "{stadium_name} {} {runs_scored} Balloons!",
+                self.inflated_or_inflates()
+            ));
         }
     }
 
     pub fn push_unknown_number_of_balloons(&mut self, balloons: Option<&Balloons>) {
-        if let Some(Balloons { stadium_name, num_balloons }) = balloons {
-            self.push_description(format!("{stadium_name} {} {num_balloons} Balloons!", self.inflated_or_inflates()));
+        if let Some(Balloons {
+            stadium_name,
+            num_balloons,
+        }) = balloons
+        {
+            self.push_description(format!(
+                "{stadium_name} {} {num_balloons} Balloons!",
+                self.inflated_or_inflates()
+            ));
         }
     }
 
@@ -411,13 +538,33 @@ impl EventBuilder {
         self.push_free_refills(free_refill.as_slice())
     }
 
-    pub fn push_scores_without_event<LedgerT: LedgerV2>(&mut self, scores: &Scores<LedgerT>, home_team_id: Uuid, score_label: &str, is_fc: bool, hype_before_score: bool) {
+    pub fn push_scores_without_event<LedgerT: LedgerV2>(
+        &mut self,
+        scores: &Scores<LedgerT>,
+        home_team_id: Uuid,
+        score_label: &str,
+        is_fc: bool,
+        hype_before_score: bool,
+    ) {
         // TODO get score_label from LedgerT
-        self.push_scorers(&scores.scores, home_team_id, score_label, is_fc, hype_before_score);
+        self.push_scorers(
+            &scores.scores,
+            home_team_id,
+            score_label,
+            is_fc,
+            hype_before_score,
+        );
         self.push_free_refills(&scores.free_refills);
     }
 
-    pub fn push_scores<T: LedgerV2>(&mut self, scores: &Scores<T>, home_team_id: Uuid, score_label: &str, is_fc: bool, hype_before_score: bool) {
+    pub fn push_scores<T: LedgerV2>(
+        &mut self,
+        scores: &Scores<T>,
+        home_team_id: Uuid,
+        score_label: &str,
+        is_fc: bool,
+        hype_before_score: bool,
+    ) {
         self.push_scores_without_event(scores, home_team_id, score_label, is_fc, hype_before_score);
         self.push_score_summary(scores);
     }
@@ -425,15 +572,27 @@ impl EventBuilder {
     // Also pushes balloons
     pub fn push_score_summary<T: LedgerV2>(&mut self, scores: &Scores<T>) {
         self.push_opt_direct_score_summary(scores.score_summary.as_ref());
-        self.push_balloons_from_score_summary(scores.score_summary.as_ref(), scores.balloons.as_deref());
+        self.push_balloons_from_score_summary(
+            scores.score_summary.as_ref(),
+            scores.balloons.as_deref(),
+        );
     }
 
-    pub fn push_balloons_from_score_summary<T: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<T>>, balloons: Option<&str>) {
-        let runs_scored = score_summary.as_ref().map_or(1, |s| s.runs_scored.round() as i64);
+    pub fn push_balloons_from_score_summary<T: LedgerV2>(
+        &mut self,
+        score_summary: Option<&ScoreSummary<T>>,
+        balloons: Option<&str>,
+    ) {
+        let runs_scored = score_summary
+            .as_ref()
+            .map_or(1, |s| s.runs_scored.round() as i64);
         self.push_balloons(balloons, runs_scored);
     }
 
-    pub fn push_opt_direct_score_summary<T: LedgerV2>(&mut self, score_summary: Option<&ScoreSummary<T>>) {
+    pub fn push_opt_direct_score_summary<T: LedgerV2>(
+        &mut self,
+        score_summary: Option<&ScoreSummary<T>>,
+    ) {
         if let Some(ss) = score_summary {
             self.push_direct_score_summary(ss)
         }
@@ -451,26 +610,40 @@ impl EventBuilder {
             child_eb.push_metadata_i64_or_f64("homeScore", score.home_score);
             child_eb.push_metadata_str("ledger", &score.ledger.to_string(season, day));
             // Apparently in season 22 they un-fixed the pluralization
-            child_eb.push_metadata_str("update", if score.runs_scored == 1.0 && season < 21 {
-                "1 Run scored!".to_string()
-            } else if score.runs_scored.signum() < 0.0 { // TODO is it signum or just <= ?
-                format!("{} Unruns scored!", -score.runs_scored)
-            } else {
-                format!("{} Runs scored!", score.runs_scored)
-            });
+            child_eb.push_metadata_str(
+                "update",
+                if score.runs_scored == 1.0 && season < 21 {
+                    "1 Run scored!".to_string()
+                } else if score.runs_scored.signum() < 0.0 {
+                    // TODO is it signum or just <= ?
+                    format!("{} Unruns scored!", -score.runs_scored)
+                } else {
+                    format!("{} Runs scored!", score.runs_scored)
+                },
+            );
             child_eb.build(EventType::RunsScored)
         });
     }
 
     pub fn inflated_or_inflates(&self) -> &'static str {
-        if (self.event.season, self.event.day) < (19, 80) { "inflated" } else { "inflates" }
+        if (self.event.season, self.event.day) < (19, 80) {
+            "inflated"
+        } else {
+            "inflates"
+        }
     }
 
     pub fn push_attraction(&mut self, attraction: &Attraction, player_name: &str, player_id: Uuid) {
         self.push_player_tag(player_id);
-        self.push_description(format!("The {} Attract {player_name}!", attraction.team_nickname));
+        self.push_description(format!(
+            "The {} Attract {player_name}!",
+            attraction.team_nickname
+        ));
         self.push_child(attraction.sub_event, |mut child| {
-            child.push_description(format!("The {} Attracted {player_name}!", attraction.team_nickname));
+            child.push_description(format!(
+                "The {} Attracted {player_name}!",
+                attraction.team_nickname
+            ));
             child.push_player_tag(player_id);
             child.push_team_tag(attraction.team_id);
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
@@ -490,7 +663,12 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_hotel_motel_party(&mut self, hotel_motel_party: &HotelMotelParty, player_name: &str, player_id: Uuid) {
+    pub fn push_hotel_motel_party(
+        &mut self,
+        hotel_motel_party: &HotelMotelParty,
+        player_name: &str,
+        player_id: Uuid,
+    ) {
         self.push_player_tag(player_id);
         let description = format!("{player_name} is Partying!");
         self.push_description(&description);
@@ -505,11 +683,19 @@ impl EventBuilder {
     }
 
     pub fn push_attraction_with_player(&mut self, attraction: Option<AttractionWithPlayer>) {
-        let Some(at) = attraction else { return; };
+        let Some(at) = attraction else {
+            return;
+        };
         self.push_player_tag(at.player_id);
-        self.push_description(format!("The {} Attract {}!", at.team_nickname, at.player_name));
+        self.push_description(format!(
+            "The {} Attract {}!",
+            at.team_nickname, at.player_name
+        ));
         self.push_child(at.sub_event, |mut child| {
-            child.push_description(format!("The {} Attracted {}!", at.team_nickname, at.player_name));
+            child.push_description(format!(
+                "The {} Attracted {}!",
+                at.team_nickname, at.player_name
+            ));
             child.push_player_tag(at.player_id);
             child.push_team_tag(at.team_id);
             child.push_metadata_i64("location", 2); // Shadows, I don't have an enum for that yet
@@ -521,7 +707,14 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_scorers(&mut self, scorers: &[ScoringPlayer], home_team_id: Uuid, score_label: &str, is_fc: bool, hype_before_score: bool) {
+    pub fn push_scorers(
+        &mut self,
+        scorers: &[ScoringPlayer],
+        home_team_id: Uuid,
+        score_label: &str,
+        is_fc: bool,
+        hype_before_score: bool,
+    ) {
         // Base scores
         for scorer in scorers {
             self.push_player_tag(scorer.player_id);
@@ -588,7 +781,11 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_cooled_off(&mut self, cooled_off: Option<ModChangeSubEventWithPlayer>, player_name: &str) {
+    pub fn push_cooled_off(
+        &mut self,
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
+        player_name: &str,
+    ) {
         if let Some(co) = cooled_off {
             let description = format!("{player_name} cooled off.");
             self.push_description(&description);
@@ -605,7 +802,12 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_batter_debt(&mut self, batter_debt: Option<BatterDebt>, batter_name: &str, fielder_name: &str) {
+    pub fn push_batter_debt(
+        &mut self,
+        batter_debt: Option<BatterDebt>,
+        batter_name: &str,
+        fielder_name: &str,
+    ) {
         if let Some(bd) = batter_debt {
             self.push_description(format!("{batter_name} hit a ball at {fielder_name}..."));
             let common_description = match bd.debt_type {
@@ -641,7 +843,13 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_charge_blood(&mut self, power_charge: Option<ModChangeSubEvent>, batter_name: &str, batter_id: Uuid, a: &str) {
+    pub fn push_charge_blood(
+        &mut self,
+        power_charge: Option<ModChangeSubEvent>,
+        batter_name: &str,
+        batter_id: Uuid,
+        a: &str,
+    ) {
         if let Some(charge) = power_charge {
             let description = format!("{batter_name} Power Ch{a}rged!");
             self.push_description(&description);
@@ -665,24 +873,42 @@ impl EventBuilder {
 
     pub fn push_parasite(&mut self, parasite: Option<Parasite>) {
         if let Some(parasite) = parasite {
-            self.push_description(format!("{} parasitically drained some of {} {}.",
-                                           parasite.pitcher_name, Possessive(&parasite.batter_name), parasite.attribute_name));
-            self.push_description(format!("{} boosted their {}!",
-                                           parasite.pitcher_name, parasite.attribute_name));
+            self.push_description(format!(
+                "{} parasitically drained some of {} {}.",
+                parasite.pitcher_name,
+                Possessive(&parasite.batter_name),
+                parasite.attribute_name
+            ));
+            self.push_description(format!(
+                "{} boosted their {}!",
+                parasite.pitcher_name, parasite.attribute_name
+            ));
             self.push_child(parasite.batter_sub_event, |mut child| {
-                child.push_description(format!("{} had blood drained by Parasite {}.",
-                                                parasite.batter_name, parasite.pitcher_name));
+                child.push_description(format!(
+                    "{} had blood drained by Parasite {}.",
+                    parasite.batter_name, parasite.pitcher_name
+                ));
                 child.push_player_tag(parasite.batter_id);
                 child.push_team_tag(parasite.batter_team_id);
-                child.build_player_attribute_changed(parasite.batter_rating_before, parasite.batter_rating_after, parasite.attribute_id)
+                child.build_player_attribute_changed(
+                    parasite.batter_rating_before,
+                    parasite.batter_rating_after,
+                    parasite.attribute_id,
+                )
             });
             self.push_maintenance_mode(parasite.maintenance_mode);
             self.push_child(parasite.pitcher_sub_event, |mut child| {
-                child.push_description(format!("Parasite {} drained blood from {}.",
-                                                parasite.pitcher_name, parasite.batter_name));
+                child.push_description(format!(
+                    "Parasite {} drained blood from {}.",
+                    parasite.pitcher_name, parasite.batter_name
+                ));
                 child.push_player_tag(parasite.pitcher_id);
                 child.push_team_tag(parasite.pitcher_team_id);
-                child.build_player_attribute_changed(parasite.pitcher_rating_before, parasite.pitcher_rating_after, parasite.attribute_id)
+                child.build_player_attribute_changed(
+                    parasite.pitcher_rating_before,
+                    parasite.pitcher_rating_after,
+                    parasite.attribute_id,
+                )
             });
         }
     }
@@ -695,7 +921,10 @@ impl EventBuilder {
 
     pub fn push_gravity(&mut self, gravity_players: Vec<PlayerNameId>) {
         for player in gravity_players {
-            self.push_description(format!("{}'s Gravity kept them in place!", player.player_name));
+            self.push_description(format!(
+                "{}'s Gravity kept them in place!",
+                player.player_name
+            ));
             self.push_player_tag(player.player_id);
         }
     }
@@ -733,7 +962,12 @@ impl EventBuilder {
         });
     }
 
-    pub fn push_sent_elsewhere(&mut self, sent_elsewhere: &PlayerSentElsewhere, outer_description: &str, inner_description: &str) {
+    pub fn push_sent_elsewhere(
+        &mut self,
+        sent_elsewhere: &PlayerSentElsewhere,
+        outer_description: &str,
+        inner_description: &str,
+    ) {
         self.push_description(outer_description);
         self.push_child(sent_elsewhere.sub_event, |mut child_self| {
             child_self.push_description(inner_description);
@@ -744,13 +978,27 @@ impl EventBuilder {
             child_self.build(EventType::AddedMod)
         });
 
-        self.push_flipped_negative_opt(sent_elsewhere.flipped_negative.as_ref(), &sent_elsewhere.player_name, sent_elsewhere.player_id, sent_elsewhere.team_id);
+        self.push_flipped_negative_opt(
+            sent_elsewhere.flipped_negative.as_ref(),
+            &sent_elsewhere.player_name,
+            sent_elsewhere.player_id,
+            sent_elsewhere.team_id,
+        );
     }
 
-    pub fn push_flipped_negative_opt(&mut self, flip_opt: Option<&FlipNegative>, elsewhere_player_name: &str, elsewhere_player_id: Uuid, elsewhere_team_id: Uuid) {
+    pub fn push_flipped_negative_opt(
+        &mut self,
+        flip_opt: Option<&FlipNegative>,
+        elsewhere_player_name: &str,
+        elsewhere_player_id: Uuid,
+        elsewhere_team_id: Uuid,
+    ) {
         if let Some(flip) = flip_opt {
             // First, undertaker also goes Elsewhere
-            let undertaker_description = format!("{} dove in after {}.", flip.undertaker_player_name, elsewhere_player_name);
+            let undertaker_description = format!(
+                "{} dove in after {}.",
+                flip.undertaker_player_name, elsewhere_player_name
+            );
             self.push_description(&undertaker_description);
             self.push_player_tag(flip.undertaker_player_id);
             self.push_child(flip.undertaker_elsewhere_sub_event, |mut child_self| {
@@ -766,7 +1014,10 @@ impl EventBuilder {
             self.push_description(format!("{} was flipped Negative!", elsewhere_player_name));
             self.push_player_tag(elsewhere_player_id);
             self.push_child(flip.flip_negative_sub_event, |mut child_self| {
-                child_self.push_description(format!("{} flipped {} Negative.", flip.undertaker_player_name, elsewhere_player_name));
+                child_self.push_description(format!(
+                    "{} flipped {} Negative.",
+                    flip.undertaker_player_name, elsewhere_player_name
+                ));
                 child_self.push_team_tag(elsewhere_team_id);
                 child_self.push_player_tag(elsewhere_player_id);
                 child_self.push_metadata_str("mod", "NEGATIVE");
@@ -774,40 +1025,39 @@ impl EventBuilder {
                 child_self.build(EventType::AddedMod)
             });
         }
-
     }
 
     pub fn push_earned_win(&mut self, win: EarnedWin) {
         let day = self.event.day;
         self.push_child(win.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Outcomes);
-            child_eb.push_description(format!("The {} collected a Win.", win.winning_team_nickname));
+            child_eb.push_description(format!(
+                "The {} collected a Win.",
+                win.winning_team_nickname
+            ));
             child_eb.push_team_tag(win.winning_team_id);
             // There were decrees that would have increased amount but they never won a vote
             child_eb.push_metadata_i64("amount", 1);
             child_eb.push_metadata_i64("before", win.wins_after - 1);
             child_eb.push_metadata_i64("after", win.wins_after);
             // This won't be hard-coded forever, but I won't change it until I need to
-            child_eb.push_metadata_str_vec("lines", if let Some(BracketType::Underbracket) = win.bracket_type {
-                // Postseason underbracket. You win by losing. God knows why it's negative.
-                vec![
-                    "Loss: -1".to_string(),
-                    "Sun(Sun): -1 ^ 2 = 1".to_string(),
-                ]
-            } else if let Some(BracketType::Overbracket) = win.bracket_type {
-                // Postseason underbracket. You win by winning.
-                vec![
-                    "Non-Loss: 1".to_string(),
-                    "Sun(Sun): 1 ^ 2 = 1".to_string(),
-                ]
-            } else {
-                // Regular season. You win by winning, and there's turntables.
-                vec![
-                    "Non-Loss: 1".to_string(),
-                    "Turntables: 1 * -1 = -1".to_string(),
-                    "Sun(Sun): -1 ^ 2 = 1".to_string(),
-                ]
-            });
+            child_eb.push_metadata_str_vec(
+                "lines",
+                if let Some(BracketType::Underbracket) = win.bracket_type {
+                    // Postseason underbracket. You win by losing. God knows why it's negative.
+                    vec!["Loss: -1".to_string(), "Sun(Sun): -1 ^ 2 = 1".to_string()]
+                } else if let Some(BracketType::Overbracket) = win.bracket_type {
+                    // Postseason underbracket. You win by winning.
+                    vec!["Non-Loss: 1".to_string(), "Sun(Sun): 1 ^ 2 = 1".to_string()]
+                } else {
+                    // Regular season. You win by winning, and there's turntables.
+                    vec![
+                        "Non-Loss: 1".to_string(),
+                        "Turntables: 1 * -1 = -1".to_string(),
+                        "Sun(Sun): -1 ^ 2 = 1".to_string(),
+                    ]
+                },
+            );
             child_eb.build(if day < 99 {
                 EventType::WinCollectedRegular
             } else {
@@ -822,29 +1072,58 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_team_subseasonal_mod_changes(&mut self, changes: impl IntoIterator<Item=SubseasonalModChange<TeamModChangeSubject>>, season: i64, day: i64) {
+    pub fn push_team_subseasonal_mod_changes(
+        &mut self,
+        changes: impl IntoIterator<Item = SubseasonalModChange<TeamModChangeSubject>>,
+        season: i64,
+        day: i64,
+    ) {
         for change in changes {
             self.push_team_subseasonal_mod_change(change, season, day);
         }
     }
 
-    pub fn push_team_subseasonal_mod_change(&mut self, change: SubseasonalModChange<TeamModChangeSubject>, season: i64, day: i64) {
+    pub fn push_team_subseasonal_mod_change(
+        &mut self,
+        change: SubseasonalModChange<TeamModChangeSubject>,
+        season: i64,
+        day: i64,
+    ) {
         if let Some(details) = change.details {
-            let display_team_nickname = change.subject.team_nickname.unwrap_or_else(|| "[object Object]".to_string());
+            let display_team_nickname = change
+                .subject
+                .team_nickname
+                .unwrap_or_else(|| "[object Object]".to_string());
             let description = if season < 15 {
                 if let Some(prefix) = change.source_mod.prefix() {
                     self.push_description(prefix);
                 }
                 if change.active {
-                    format!("The {} are {}!", display_team_nickname, change.source_mod.label_for_teams())
+                    format!(
+                        "The {} are {}!",
+                        display_team_nickname,
+                        change.source_mod.label_for_teams()
+                    )
                 } else {
-                    format!("{} wears off for the {}.", change.source_mod.label_for_teams(), display_team_nickname)
+                    format!(
+                        "{} wears off for the {}.",
+                        change.source_mod.label_for_teams(),
+                        display_team_nickname
+                    )
                 }
             } else {
                 if change.active {
-                    format!("The {} are {}.", display_team_nickname, change.source_mod.label_for_teams())
+                    format!(
+                        "The {} are {}.",
+                        display_team_nickname,
+                        change.source_mod.label_for_teams()
+                    )
                 } else {
-                    format!("{} are no longer {}.", display_team_nickname, change.source_mod.label_for_teams())
+                    format!(
+                        "{} are no longer {}.",
+                        display_team_nickname,
+                        change.source_mod.label_for_teams()
+                    )
                 }
             };
 
@@ -854,7 +1133,10 @@ impl EventBuilder {
                     child.push_description(&description);
                     child.push_team_tag(change.subject.team_id);
                     // On s19d72, EarlyToTheParty added the wrong Performing. This was fixed on day 73.
-                    let performing_mod_id = if change.source_mod == SubseasonalMod::EarlyToTheParty && season == 19 && day == 72 {
+                    let performing_mod_id = if change.source_mod == SubseasonalMod::EarlyToTheParty
+                        && season == 19
+                        && day == 72
+                    {
                         reverse_performing(change.source_mod.performing_mod_id())
                     } else {
                         change.source_mod.performing_mod_id()
@@ -872,11 +1154,16 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_player_subseasonal_mod_change(&mut self, change: SubseasonalModChange<PlayerModChangeSubject>) {
+    pub fn push_player_subseasonal_mod_change(
+        &mut self,
+        change: SubseasonalModChange<PlayerModChangeSubject>,
+    ) {
         fn get_description(source_mod: SubseasonalMod, active: bool, player_name: &str) -> String {
             match (active, source_mod) {
                 // Specific language for specific mods
-                (false, SubseasonalMod::Ambitious) => format!("{} loses their Ambition.", player_name),
+                (false, SubseasonalMod::Ambitious) => {
+                    format!("{} loses their Ambition.", player_name)
+                }
                 (false, SubseasonalMod::Coasting) => format!("{} stops Coasting.", player_name),
                 // General cases
                 (true, m) => format!("{} is {}.", player_name, m.label_for_players()),
@@ -885,7 +1172,11 @@ impl EventBuilder {
         }
 
         if let Some(details) = change.details {
-            let description = get_description(change.source_mod, change.active, &change.subject.player_name);
+            let description = get_description(
+                change.source_mod,
+                change.active,
+                &change.subject.player_name,
+            );
 
             self.push_description(&description);
             self.push_player_tag(change.subject.player_id);
@@ -905,7 +1196,11 @@ impl EventBuilder {
                 });
             }
         } else {
-            let description = get_description(change.source_mod, change.active, &change.subject.player_name);
+            let description = get_description(
+                change.source_mod,
+                change.active,
+                &change.subject.player_name,
+            );
 
             self.push_description(&description);
             self.push_player_tag(change.subject.player_id);
@@ -913,7 +1208,11 @@ impl EventBuilder {
     }
 
     pub fn push_scattered(&mut self, scattered: Option<Scattered>, player_id: Uuid, team_id: Uuid) {
-        if let Some(Scattered { scattered_name, sub_event }) = scattered {
+        if let Some(Scattered {
+            scattered_name,
+            sub_event,
+        }) = scattered
+        {
             self.push_child(sub_event, |mut child| {
                 child.push_description(format!("{scattered_name} was Scattered..."));
                 child.push_team_tag(team_id);
@@ -927,7 +1226,10 @@ impl EventBuilder {
 
     pub fn push_temp_stolen_player_returned(&mut self, ret: &PlayerMovedTeams) {
         self.push_child(ret.sub_event, |mut child_eb| {
-            child_eb.push_description(format!("{} is returned to the {}.", ret.player_name, ret.new_team_nickname));
+            child_eb.push_description(format!(
+                "{} is returned to the {}.",
+                ret.player_name, ret.new_team_nickname
+            ));
             child_eb.push_player_tag(ret.player_id);
             child_eb.push_team_tag(ret.previous_team_id);
             child_eb.push_team_tag(ret.new_team_id);
@@ -947,7 +1249,10 @@ impl EventBuilder {
 
     pub fn push_flood_balloon_popped(&mut self, pop: Option<BalloonsPopped>) {
         if let Some(pop) = pop {
-            self.push_description(format!("One of {} Flooding Balloons was struck and popped!", Possessive(&pop.stadium_name)));
+            self.push_description(format!(
+                "One of {} Flooding Balloons was struck and popped!",
+                Possessive(&pop.stadium_name)
+            ));
             self.push_description(format!("{} Birds were scared away!", pop.birds_scared_away));
         }
     }
@@ -961,8 +1266,14 @@ impl EventBuilder {
         self.push_metadata_uuid("itemId", item_repaired.item_id);
         self.push_metadata_str("itemName", item_repaired.item_name);
         self.push_metadata_str_vec("mods", item_repaired.item_mods);
-        self.push_metadata_f64_opt("playerItemRatingAfter", item_repaired.player_item_rating_after);
-        self.push_metadata_f64_opt("playerItemRatingBefore", item_repaired.player_item_rating_before);
+        self.push_metadata_f64_opt(
+            "playerItemRatingAfter",
+            item_repaired.player_item_rating_after,
+        );
+        self.push_metadata_f64_opt(
+            "playerItemRatingBefore",
+            item_repaired.player_item_rating_before,
+        );
         self.push_metadata_f64("playerRating", item_repaired.player_rating);
         // In season 17 days 7-10 inclusive, the Coasting event type was accidentally used instead
         // of BrokenItemRepaired
@@ -987,8 +1298,14 @@ impl EventBuilder {
         self.push_metadata_uuid("itemId", item_damaged.item_id);
         self.push_metadata_str("itemName", item_damaged.item_name);
         self.push_metadata_str_vec("mods", item_damaged.item_mods);
-        self.push_metadata_f64_opt("playerItemRatingAfter", item_damaged.player_item_rating_after);
-        self.push_metadata_f64_opt("playerItemRatingBefore", item_damaged.player_item_rating_before);
+        self.push_metadata_f64_opt(
+            "playerItemRatingAfter",
+            item_damaged.player_item_rating_after,
+        );
+        self.push_metadata_f64_opt(
+            "playerItemRatingBefore",
+            item_damaged.player_item_rating_before,
+        );
         self.push_metadata_f64("playerRating", item_damaged.player_rating);
         self.build(if item_damaged.health == 0 {
             EventType::ItemBreaks
@@ -997,7 +1314,12 @@ impl EventBuilder {
         })
     }
 
-    pub fn build_player_stat_changed(mut self, rating_before: f64, rating_after: f64, attribute_type: i64) -> EventuallyEvent {
+    pub fn build_player_stat_changed(
+        mut self,
+        rating_before: f64,
+        rating_after: f64,
+        attribute_type: i64,
+    ) -> EventuallyEvent {
         self.push_metadata_f64("before", rating_before);
         self.push_metadata_f64("after", rating_after);
         self.push_metadata_i64("type", attribute_type);
@@ -1009,7 +1331,12 @@ impl EventBuilder {
     }
 
     // TODO What the fheck is the difference from StatIncrease
-    pub fn build_player_attribute_changed(mut self, rating_before: f64, rating_after: f64, attribute_type: i64) -> EventuallyEvent {
+    pub fn build_player_attribute_changed(
+        mut self,
+        rating_before: f64,
+        rating_after: f64,
+        attribute_type: i64,
+    ) -> EventuallyEvent {
         self.push_metadata_f64("before", rating_before);
         self.push_metadata_f64("after", rating_after);
         self.push_metadata_i64("type", attribute_type);

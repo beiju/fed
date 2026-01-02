@@ -1,15 +1,14 @@
+use chrono::{DateTime, Utc};
+use derive_builder::Builder;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use schemars::{JsonSchema, Schema, SchemaGenerator};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
-use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
-use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use derive_builder::Builder;
-use schemars::{JsonSchema, Schema, SchemaGenerator};
 use with_structure::WithStructure;
-
 
 #[derive(Deserialize, Serialize)]
 pub struct EventuallyResponse(pub(crate) Vec<EventuallyEvent>);
@@ -30,14 +29,13 @@ impl IntoIterator for EventuallyResponse {
 }
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-    where
-        T: Default + Deserialize<'de>,
-        D: serde::Deserializer<'de>,
+where
+    T: Default + Deserialize<'de>,
+    D: serde::Deserializer<'de>,
 {
     let opt = Option::deserialize(deserializer)?;
     Ok(opt.unwrap_or_default())
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -95,7 +93,11 @@ pub enum EventCategory {
 
 impl EventCategory {
     pub fn special_if(cond: bool) -> Self {
-        if cond { EventCategory::Special } else { EventCategory::Game }
+        if cond {
+            EventCategory::Special
+        } else {
+            EventCategory::Game
+        }
     }
 }
 
@@ -109,15 +111,19 @@ pub struct EventuallyEvent {
     pub category: EventCategory,
     // Some event types have "metadata: null", this replaces that with a default EventMetadata
     #[serde(deserialize_with = "deserialize_null_default")]
-    #[builder(default)] pub metadata: EventMetadata,
+    #[builder(default)]
+    pub metadata: EventMetadata,
     pub blurb: String,
     pub description: String,
     // Idk what this even is
     pub election_option_id: Option<String>,
     // These three are null for redacted events
-    #[builder(default)] pub player_tags: Option<Vec<Uuid>>,
-    #[builder(default)] pub game_tags: Option<Vec<Uuid>>,
-    #[builder(default)] pub team_tags: Option<Vec<Uuid>>,
+    #[builder(default)]
+    pub player_tags: Option<Vec<Uuid>>,
+    #[builder(default)]
+    pub game_tags: Option<Vec<Uuid>>,
+    #[builder(default)]
+    pub team_tags: Option<Vec<Uuid>>,
     pub sim: String,
     pub day: i64,
     pub season: i64,
@@ -162,7 +168,18 @@ pub struct EventuallyEvent {
 //     }
 // }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, IntoPrimitive, TryFromPrimitive, WithStructure)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Serialize_repr,
+    Deserialize_repr,
+    JsonSchema,
+    IntoPrimitive,
+    TryFromPrimitive,
+    WithStructure,
+)]
 #[repr(i64)]
 pub enum Weather {
     Void = 0,

@@ -1,5 +1,5 @@
-use with_structure::{MonostateStructure, WithStructure};
 use schemars::JsonSchema;
+use with_structure::{MonostateStructure, WithStructure};
 
 pub trait RunSource {
     fn label() -> &'static str;
@@ -16,12 +16,14 @@ macro_rules! run_source {
         }
         impl WithStructure for $name {
             type Structure = MonostateStructure;
-            fn structure(&self) -> Self::Structure { MonostateStructure }
+            fn structure(&self) -> Self::Structure {
+                MonostateStructure
+            }
         }
     };
     ($name:ident) => {
         run_source!($name, stringify!($name));
-    }
+    };
 }
 
 run_source!(Flyout, "Sacrifice");

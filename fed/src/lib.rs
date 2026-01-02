@@ -1,13 +1,13 @@
 #![feature(adt_const_params)]
 
-mod parse;
 mod fed_event;
-mod peekable_with_logging;
 mod format_utils;
+mod parse;
+mod peekable_with_logging;
 
-pub use parse::stream::{EXPANSION_ERA_START, EXPANSION_ERA_END};
 pub use eventually_api::Weather;
 pub use fed_event::*;
-pub use parse::{parse_next_event, feed_event_from_json, InterEventStateSync};
 pub use parse::error::FeedParseError;
-pub use peekable_with_logging::{PeekableWithLogging, MakePeekableWithLogging};
+pub use parse::stream::{EXPANSION_ERA_END, EXPANSION_ERA_START};
+pub use parse::{InterEventStateSync, feed_event_from_json, parse_next_event};
+pub use peekable_with_logging::{MakePeekableWithLogging, PeekableWithLogging};
