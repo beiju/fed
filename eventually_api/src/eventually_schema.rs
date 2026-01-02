@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
@@ -6,9 +7,7 @@ use serde_repr::{Serialize_repr, Deserialize_repr};
 use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use derive_builder::Builder;
-use schemars::r#gen::SchemaGenerator;
-use schemars::JsonSchema;
-use schemars::schema::Schema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use with_structure::WithStructure;
 
 
@@ -445,7 +444,7 @@ pub enum EventType {
 }
 
 impl JsonSchema for EventuallyEvent {
-    fn schema_name() -> String {
+    fn schema_name() -> Cow<'static, str> {
         todo!()
     }
 

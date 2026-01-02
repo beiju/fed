@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use nom::{Finish, Parser};
 use nom::bytes::complete::tag;
 use nom::combinator::opt;
-use nom::error::convert_error;
+use nom_language::error::convert_error;
 use uuid::Uuid;
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use crate::fed_event::*;
@@ -81,7 +81,7 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn next_parse<F, Out>(&mut self, mut parser: F) -> Result<Out, FeedParseError>
-        where F: Parser<&'e str, Out, ParserError<'e>> {
+        where F: Parser<&'e str, Output = Out, Error = ParserError<'e>> {
         let (rest, result) = parser.parse(&self.description)
             .finish()
             .map_err(|e| {

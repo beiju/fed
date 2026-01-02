@@ -1,6 +1,6 @@
 use nom::{Finish, Parser};
 use nom::bytes::complete::tag;
-use nom::error::{convert_error, VerboseError};
+use nom_language::error::{convert_error, VerboseError};
 use eventually_api::EventType;
 use with_structure::WithStructure;
 use crate::{FeedParseError, HeatMagnetLedger, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2, ModerationLedger, OverflowLedger, RunSource, SimpleLedgerV2, StolenBaseLedger, TripleThreatLedger};
@@ -126,7 +126,7 @@ impl ParseableLedger for HomeRunLedger {
     }
 }
 
-fn parse_ledger<'a, O>(mut parser: impl Parser<&'a str, O, VerboseError<&'a str>>, ledger: &'a str) -> Result<(&'a str, O), FeedParseError> {
+fn parse_ledger<'a, O>(mut parser: impl Parser<&'a str, Output = O, Error = VerboseError<&'a str>>, ledger: &'a str) -> Result<(&'a str, O), FeedParseError> {
     parser.parse(ledger)
         .finish()
         .map_err(|e| {

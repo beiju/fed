@@ -10,9 +10,10 @@ use nom::multi::{many0, separated_list0, separated_list1};
 use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
+use nom::error::ParseError;
 use uuid::Uuid;
 
-pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
+pub(crate) type ParserError<'a> = nom_language::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
 pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<&str> {
@@ -49,8 +50,7 @@ pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<&str> {
     let (input, replacement_name_with_dot) = is_not("\n").parse(input)?;
     let replacement_name = replacement_name_with_dot.strip_suffix(".")
         .ok_or_else(|| {
-            // I can't figure out how to make an error myself so I'm just gonna unwrap a fail
-            fail::<_, (), _>(replacement_name_with_dot).unwrap_err()
+            todo!("Figure out how to make an error of the correct type")
         })?;
 
     Ok((input, replacement_name))
@@ -123,7 +123,7 @@ pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<&str> {
         let (input, _) = tag(".").parse(input)?;
         Ok((input, item_name))
     } else {
-        fail(input)
+        todo!("Figure out how to make an error of the correct type")
     }
 }
 
@@ -1435,7 +1435,7 @@ pub(crate) fn parse_incineration_normal(input: &str) -> ParserResult<(&str, &str
     let (input, (replacement_name, ambush)) = alt((
         parse_ambush.map(|(i, a, t)| (i, Some((a, t)))),
         parse_until_period_eof.map(|i| (i, None)),
-    ))(input)?;
+    )).parse(input)?;
 
     Ok((input, (victim_name, replacement_name, ambush, heat_magnet)))
 }
@@ -2449,17 +2449,16 @@ pub(crate) fn parse_won_prize_match_explicit(input: &str) -> ParserResult<&str> 
 
 pub(crate) fn parse_won_prize_match_implicit<'p, 'i>(pending_prize_matches: &'p [&'p PendingPrizeMatch]) -> impl Fn(&'i str) -> ParserResult<(&'i str, Uuid)> + 'p {
     move |input: &str| {
-        // When this "error message" is displayed, all I see is "attempt to subtract with overflow".
-        // Why the hell is that?
-        let mut parser = fail("There are no possible prize matches for this event");
-        for ppm in pending_prize_matches {
-            parser = parser.or(
-                parse_won_prize_match_implicit_with_prize(&ppm.prize_item_name)
-                    .map(|player_name| (player_name, ppm.game_id))
-                    .parse(input)
-            );
+        for pending_prize_match in pending_prize_matches {
+            if let Ok((input, player_name)) = parse_won_prize_match_implicit_with_prize(&pending_prize_match.prize_item_name).parse(input) {
+                return Ok((input, (player_name, pending_prize_match.game_id)))
+            }
         }
-        return parser;
+
+        Err(nom::Err::Error(ParserError::from_error_kind(
+            input,
+            nom::error::ErrorKind::Alt,
+        )))
     }
 }
 
@@ -2541,7 +2540,7 @@ pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<&str> {
 pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("Prize Match!\nThe Winner gets ").parse(input)?;
     let (input, item_name) = if input.contains('\n') {
-        fail(input)
+        todo!("Figure out how to fail with the correct type")
     } else {
         Ok(("", input))
     }?;

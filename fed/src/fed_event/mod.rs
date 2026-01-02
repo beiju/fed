@@ -1202,7 +1202,7 @@ pub enum RunLossesFromSalmon {
     BothTeams((TeamRunsLost, TeamRunsLost)),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 struct SerdeRunLossesFromSalmon(Vec<TeamRunsLost>);
 
 impl TryFrom<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
