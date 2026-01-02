@@ -1,5 +1,3 @@
-#![feature(adt_const_params)]
-
 mod fed_event;
 mod format_utils;
 mod parse;
