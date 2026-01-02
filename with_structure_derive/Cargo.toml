@@ -12,4 +12,4 @@ proc-macro = true
 syn = { version = "2.0.79", features = ["extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0.36"
-darling = "0.20.10"
+darling = "0.23.0"
