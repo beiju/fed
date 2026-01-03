@@ -4559,6 +4559,14 @@ pub fn parse_next_event(
         EventType::PlayerEnteredVault => {
             todo!()
         }
+        EventType::PlayerLeftVault => {
+            let player_name = event.next_parse(parse_player_left_vault)?;
+
+            FedEventData::PlayerLeftVault {
+                player_name: player_name.to_string(),
+                player_id: event.next_player_id()?,
+            }
+        }
         EventType::ABloodType => {
             // Only the shoe thieves ever had this, and Psychoacoustics is incompatible with it.
             // Still, I'm going to parse it

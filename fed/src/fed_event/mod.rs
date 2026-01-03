@@ -7788,6 +7788,18 @@ pub enum FedEventData {
         /// Players who were cut
         players: Vec<PlayerNameId>,
     },
+
+    /// Players left the Vault
+    ///
+    /// This happened at the conclusion of the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    PlayerLeftVault {
+        /// Name of the player who left the Vault
+        player_name: String,
+
+        /// Uuid of the player who left the Vault
+        player_id: Uuid,
+    },
 }
 
 #[derive(
@@ -8064,6 +8076,7 @@ impl FedEventData {
             FedEventData::Supernova { game, .. } => Some(game),
             FedEventData::GameCanceled { game, .. } => Some(game),
             FedEventData::PlayersCutFromTeam { .. } => None,
+            FedEventData::PlayerLeftVault { .. } => None,
         }
     }
 }

@@ -4747,6 +4747,13 @@ impl FedEvent {
 
                 eb.build(EventType::PlayersCutFromTeam)
             }
+            FedEventData::PlayerLeftVault { player_name, player_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("{player_name} left the Vault."));
+                eb.push_player_tag(player_id);
+
+                eb.build(EventType::PlayerLeftVault)
+            }
         };
 
         vec![item]

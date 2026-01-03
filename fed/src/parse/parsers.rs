@@ -4092,3 +4092,9 @@ pub(crate) fn parse_stables(input: &str) -> ParserResult<&str> {
 
     Ok((input, team_name))
 }
+
+pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<&str> {
+    let (input, player_name) = parse_terminated(" left the Vault.").parse(input)?;
+
+    Ok((input, player_name))
+}

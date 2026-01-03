@@ -422,6 +422,7 @@ pub enum EventType {
     TeamReceivedGifts = 194,
     Smithy = 195,
     PlayerEnteredVault = 196,
+    PlayerLeftVault = 197,
     ABloodType = 198,
     PlayerSoulIncrease = 199,
     Announcement = 201,
