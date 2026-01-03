@@ -7752,7 +7752,17 @@ pub enum FedEventData {
     Supernova {
         #[serde(flatten)]
         game: GameEvent,
-    }
+    },
+
+    /// Game was canceled
+    ///
+    /// This originally happened during the semicentennial but TODO is this also
+    /// the event type for games canceled during s24?
+    #[serde(rename_all = "camelCase")]
+    GameCanceled {
+        #[serde(flatten)]
+        game: GameEvent,
+    },
 }
 
 #[derive(
@@ -8027,6 +8037,7 @@ impl FedEventData {
             FedEventData::SunSunPressureBuilt { .. } => None,
             FedEventData::HorsePower { game, .. } => Some(game),
             FedEventData::Supernova { game, .. } => Some(game),
+            FedEventData::GameCanceled { game, .. } => Some(game),
         }
     }
 }

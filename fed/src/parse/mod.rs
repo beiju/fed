@@ -5099,6 +5099,11 @@ pub fn parse_next_event(
         EventType::PlayersAddedToTeam => {
             todo!()
         }
+        EventType::GameCanceled => {
+            FedEventData::GameCanceled {
+                game: event.game(unscatter, attractor_secret_base)?,
+            }
+        }
         EventType::Supernova => {
             FedEventData::Supernova {
                 game: event.game(unscatter, attractor_secret_base)?,

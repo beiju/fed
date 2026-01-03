@@ -4725,6 +4725,12 @@ impl FedEvent {
 
                 eb.build(EventType::Supernova)
             }
+            FedEventData::GameCanceled { game } => {
+                eb.set_game(game);
+                eb.push_description("GAME CANCELLED.");
+
+                eb.build(EventType::GameCanceled)
+            }
         };
 
         vec![item]
