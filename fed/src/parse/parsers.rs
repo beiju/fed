@@ -3820,65 +3820,71 @@ pub(crate) enum ParsedTrade<'a> {
     },
 }
 
-pub(crate) fn parse_trade(input: &str) -> ParserResult<ParsedTrade> {
-    alt((
-        parse_terminated(" sought out a trade, but nothing caught their eye.")
-            .map(|trader_name| ParsedTrade::NothingCaughtTheirEye { trader_name }),
-        parse_successful_trade.map(
-            |(trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)| {
-                ParsedTrade::Traded {
-                    trader_traitor,
+pub(crate) fn parse_trade(is_semicentennial: bool) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
+    move |input| {
+        alt((
+            parse_terminated(" sought out a trade, but nothing caught their eye.")
+                .map(|trader_name| ParsedTrade::NothingCaughtTheirEye { trader_name }),
+            parse_successful_trade(is_semicentennial).map(
+                |(trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)| {
+                    ParsedTrade::Traded {
+                        trader_traitor,
+                        trader_name,
+                        donated_item_name,
+                        victim_name,
+                        taken_item_name,
+                    }
+                },
+            ),
+            parse_trade_nothing_to_offer.map(|(trader_name, victim_name)| {
+                ParsedTrade::NothingToOffer {
                     trader_name,
-                    donated_item_name,
                     victim_name,
-                    taken_item_name,
                 }
-            },
-        ),
-        parse_trade_nothing_to_offer.map(|(trader_name, victim_name)| {
-            ParsedTrade::NothingToOffer {
-                trader_name,
-                victim_name,
-            }
-        }),
-    ))
-    .parse(input)
+            }),
+        ))
+            .parse(input)
+    }
 }
 
 pub(crate) fn parse_successful_trade(
-    input: &str,
-) -> ParserResult<(ParsedTraderTraitor, &str, &str, &str, &str)> {
-    // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
-    // must not be reordered.
-    let (input, trader_traitor) = alt((
-        tag("Trader ").map(|_| ParsedTraderTraitor::Trader),
-        tag("Traitor ").map(|_| ParsedTraderTraitor::Traitor),
-        tag(" ").map(|_| ParsedTraderTraitor::Unknown),
-        tag("").map(|_| ParsedTraderTraitor::Neither),
-    ))
-    .parse(input)?;
-    let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
-    // TODO Special-case "traded their nothing"?
-    let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
-    let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
-    let (input, taken_item_name) =
-        parse_terminated(if trader_traitor == ParsedTraderTraitor::Neither {
-            "!"
-        } else {
-            "."
-        })
-        .parse(input)?;
+    is_semicentennial: bool,
+) -> impl Fn(&str) -> ParserResult<(ParsedTraderTraitor, &str, &str, &str, &str)> {
+    move |input| {
+        // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
+        // must not be reordered.
+        let (input, trader_traitor) = alt((
+            tag("Trader ").map(|_| ParsedTraderTraitor::Trader),
+            tag("Traitor ").map(|_| ParsedTraderTraitor::Traitor),
+            tag(" ").map(|_| ParsedTraderTraitor::Unknown),
+            tag("").map(|_| ParsedTraderTraitor::Neither),
+        ))
+            .parse(input)?;
+        let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
+        // TODO Special-case "traded their nothing"?
+        let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
+        let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
+        let (input, taken_item_name) =
+            parse_terminated(match trader_traitor {
+                ParsedTraderTraitor::Trader => ".",
+                ParsedTraderTraitor::Traitor if is_semicentennial => "!",
+                ParsedTraderTraitor::Traitor => ".",
+                ParsedTraderTraitor::Unknown => ".",
+                ParsedTraderTraitor::Neither => "!",
+            })
+                .parse(input)?;
 
-    Ok((
-        input,
-        (
-            trader_traitor,
-            trader_name,
-            donated_item_name,
-            victim_name,
-            taken_item_name,
-        ),
-    ))
+        Ok((
+            input,
+            (
+                trader_traitor,
+                trader_name,
+                donated_item_name,
+                victim_name,
+                taken_item_name,
+            ),
+        ))
+    }
 }
 
 pub(crate) fn parse_trade_nothing_to_offer(input: &str) -> ParserResult<(&str, &str)> {
