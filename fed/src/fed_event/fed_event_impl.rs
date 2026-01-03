@@ -4619,30 +4619,32 @@ impl FedEvent {
                         child_eb.build(EventType::ModChange)
                     });
 
-                    eb.push_child(player_collected.stronger_together_sub_event, |mut togetherness_eb| {
-                        togetherness_eb.push_team_tag(thieving_team_id);
-                        for player_id in player_collected.stronger_together_player_ids {
-                            togetherness_eb.push_player_tag(player_id);
-                        }
+                    if let Some(stronger_together) = player_collected.stronger_together {
+                        eb.push_child(stronger_together.sub_event, |mut togetherness_eb| {
+                            togetherness_eb.push_team_tag(thieving_team_id);
+                            for player_id in stronger_together.player_ids {
+                                togetherness_eb.push_player_tag(player_id);
+                            }
 
-                        let description = player_collected.stronger_together_player_names.iter()
-                            .with_position()
-                            .flat_map(|(position, name)| {
-                                match position {
-                                    Position::First | Position::Only => ["", name.as_str()],
-                                    Position::Middle => [", ", name.as_str()],
-                                    Position::Last =>  [", and ", name.as_str()],
-                                }
-                            })
-                            .chain(iter::once(" are stronger together."))
-                            .join("");
+                            let description = stronger_together.player_names.iter()
+                                .with_position()
+                                .flat_map(|(position, name)| {
+                                    match position {
+                                        Position::First | Position::Only => ["", name.as_str()],
+                                        Position::Middle => [", ", name.as_str()],
+                                        Position::Last => [", and ", name.as_str()],
+                                    }
+                                })
+                                .chain(iter::once(" are stronger together."))
+                                .join("");
 
-                        togetherness_eb.push_description(description);
-                        togetherness_eb.push_metadata_str("mod", "YOLKED");
-                        togetherness_eb.push_metadata_str("source", "HARD_BOILED");
-                        togetherness_eb.push_metadata_i64("type", ModDuration::Permanent);
-                        togetherness_eb.build(EventType::AddedModFromOtherMod)
-                    });
+                            togetherness_eb.push_description(description);
+                            togetherness_eb.push_metadata_str("mod", "YOLKED");
+                            togetherness_eb.push_metadata_str("source", "HARD_BOILED");
+                            togetherness_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            togetherness_eb.build(EventType::AddedModFromOtherMod)
+                        });
+                    }
                 }
 
                 eb.build(EventType::TunnelsUsed)

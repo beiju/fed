@@ -2676,16 +2676,22 @@ pub fn parse_next_event(
                             let artificially_forged_event = event.next_child(EventType::ModChange)?;
                             // This is probably optional, but I'll wait until I run into an error to
                             // set it as such
-                            let mut stronger_together_event = event.next_child(EventType::AddedModFromOtherMod)?;
-                            let names = stronger_together_event.next_parse(parse_togetherness_mod)?;
+                            let stronger_together = event.next_child_opt(EventType::AddedModFromOtherMod)?
+                                .map(|mut stronger_together_event| {
+                                    let names = stronger_together_event.next_parse(parse_togetherness_mod)?;
+                                    ParseOk(UncorrelatedTogethernessChanges {
+                                        sub_event: stronger_together_event.as_sub_event(),
+                                        player_names: names.iter().map(|n| n.to_string()).collect(),
+                                        player_ids: stronger_together_event.player_tags()?.into(),
+                                    })
+                                })
+                                .transpose()?;
 
                             ParseOk(SuccessfulTunnelsTheft {
                                 target_team_nickname: player_collected_event.metadata_str("sendTeamName")?.to_string(),
                                 player_collected_sub_event: player_collected_event.as_sub_event(),
                                 artificially_forged_sub_event: artificially_forged_event.as_sub_event(),
-                                stronger_together_sub_event: stronger_together_event.as_sub_event(),
-                                stronger_together_player_names: names.iter().map(|n| n.to_string()).collect(),
-                                stronger_together_player_ids: stronger_together_event.player_tags()?.into(),
+                                stronger_together,
                             })
                         }).transpose()?;
 

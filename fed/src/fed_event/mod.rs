@@ -3571,6 +3571,24 @@ pub struct PlayersAddedToTeam {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct UncorrelatedTogethernessChanges {
+    /// Sub-event associated with Stronger Together changes
+    pub sub_event: SubEvent,
+
+    /// Names of players who were affected by Stronger Together changes
+    /// on this event.
+    ///
+    /// TODO Try to associate these with stronger_together_player_ids
+    pub player_names: Vec<String>,
+
+    /// Ids of players who were affected by Stronger Together changes
+    /// on this event.
+    ///
+    /// TODO Try to associate these with stronger_together_player_names
+    pub player_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct SuccessfulTunnelsTheft {
     /// The name of the team from which this player was stolen. This
     /// information is only available on successful steals.
@@ -3582,20 +3600,8 @@ pub struct SuccessfulTunnelsTheft {
     /// Sub-event associated with the stolen player gaining LEGENDARY
     pub artificially_forged_sub_event: SubEvent,
 
-    /// Sub-event associated with Stronger Together changes
-    pub stronger_together_sub_event: SubEvent,
-
-    /// Names of players who were affected by Stronger Together changes
-    /// on this event.
-    /// 
-    /// TODO Try to associate these with stronger_together_player_ids 
-    pub stronger_together_player_names: Vec<String>,
-
-    /// Ids of players who were affected by Stronger Together changes
-    /// on this event.
-    /// 
-    /// TODO Try to associate these with stronger_together_player_names
-    pub stronger_together_player_ids: Vec<Uuid>,
+    /// Information about any Stronger Together changes on this event
+    pub stronger_together: Option<UncorrelatedTogethernessChanges>,
 }
 
 #[derive(
