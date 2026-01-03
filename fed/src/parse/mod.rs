@@ -2668,18 +2668,36 @@ pub fn parse_next_event(
                                 )?,
                             )
                         };
-                        let target_team_id = outcome_sub_event.next_team_id()?;
                         let thieving_team_id = outcome_sub_event.next_team_id()?;
+                        let target_team_id = outcome_sub_event.next_team_id()?;
+
+                        let player_collected = successful.then(|| {
+                            let player_collected_event = event.next_child(EventType::PlayerMoved)?;
+                            let artificially_forged_event = event.next_child(EventType::ModChange)?;
+                            // This is probably optional, but I'll wait until I run into an error to
+                            // set it as such
+                            let mut stronger_together_event = event.next_child(EventType::AddedModFromOtherMod)?;
+                            let names = stronger_together_event.next_parse(parse_togetherness_mod)?;
+
+                            ParseOk(SuccessfulTunnelsTheft {
+                                target_team_nickname: player_collected_event.metadata_str("sendTeamName")?.to_string(),
+                                player_collected_sub_event: player_collected_event.as_sub_event(),
+                                artificially_forged_sub_event: artificially_forged_event.as_sub_event(),
+                                stronger_together_sub_event: stronger_together_event.as_sub_event(),
+                                stronger_together_player_names: names.iter().map(|n| n.to_string()).collect(),
+                                stronger_together_player_ids: stronger_together_event.player_tags()?.into(),
+                            })
+                        }).transpose()?;
 
                         FedEventData::TeamTunnelHeistBegins {
                             game: event.game(unscatter, attractor_secret_base)?,
-                            successful,
                             thieving_team_id,
                             thieving_team_nickname: team_nickname.to_string(),
                             target_team_id,
                             target_player_id: outcome_sub_event.next_player_id()?,
                             target_player_name: target_player_name.to_string(),
                             sub_event: outcome_sub_event.as_sub_event(),
+                            player_collected,
                         }
                     }
                     ParsedTeamTunnels::HeistContinues { player_name } => {
@@ -2688,9 +2706,16 @@ pub fn parse_next_event(
                             target_player_name: player_name.to_string(),
                         }
                     }
-                    ParsedTeamTunnels::HeistConcludes { player_name } => {
-                        FedEventData::TeamTunnelHeistConcludes {
+                    ParsedTeamTunnels::HeistFailed { player_name } => {
+                        FedEventData::TeamTunnelHeistFailed {
                             game: event.game(unscatter, attractor_secret_base)?,
+                            target_player_name: player_name.to_string(),
+                        }
+                    }
+                    ParsedTeamTunnels::HeistSucceeded { team_nickname, player_name } => {
+                        FedEventData::TeamTunnelHeistSucceeded {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            target_team_nickname: team_nickname.to_string(),
                             target_player_name: player_name.to_string(),
                         }
                     }
@@ -3858,13 +3883,7 @@ pub fn parse_next_event(
                     .map(|togetherness_event| {
                         let mut togetherness_event = EventParseWrapper::new(&togetherness_event)?;
                         let mut names = togetherness_event
-                            .next_parse(parse_togetherness_mod)?
-                            .split(", ")
-                            .collect_vec();
-                        if let Some(last) = names.last_mut() {
-                            // Strip an "and"
-                            *last = &last[4..];
-                        }
+                            .next_parse(parse_togetherness_mod)?;
 
                         // So the way `names` works is weird. It lists the first player who gained
                         // a togetherness mod, then all players who already had it, then the rest
@@ -4661,10 +4680,15 @@ pub fn parse_next_event(
             }
         }
         EventType::SunSunPressure => {
-            let _ = event.next_parse_tag("Sun(Sun) Recharged.")?;
-
-            FedEventData::SunSunRecharged {
-                pressure_after: event.metadata_f64("current")?,
+            match event.next_parse(parse_sun_sun_pressure)? {
+                ParsedSunSunPressure::Recharged => {
+                    FedEventData::SunSunRecharged {
+                        pressure_after: event.metadata_f64("current")?,
+                    }
+                }
+                ParsedSunSunPressure::PressureBuilt => {
+                    FedEventData::SunSunPressureBuilt {}
+                }
             }
         }
         EventType::FoundNothingInterestingInTunnels => {

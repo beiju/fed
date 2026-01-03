@@ -4560,27 +4560,84 @@ impl FedEvent {
 
                 eb.build(EventType::WeatherReport)
             },
-            FedEventData::TeamTunnelHeistBegins { game, successful, thieving_team_id, thieving_team_nickname, target_team_id, target_player_id, target_player_name, sub_event } => {
+            FedEventData::TeamTunnelHeistBegins { game, thieving_team_id, thieving_team_nickname, target_team_id, target_player_id, target_player_name, sub_event, player_collected } => {
                 eb.set_game(game);
                 eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
 
                 eb.push_child(sub_event, |mut child_eb| {
                     child_eb.set_category(EventCategory::Outcomes);
-                    if successful {
+                    if player_collected.is_some() {
                         child_eb.push_description(format!("The {thieving_team_nickname} collected {target_player_name} in a Heist!"));
                     } else {
                         child_eb.push_description(format!("The {thieving_team_nickname} attempted a Heist..."));
                         child_eb.push_description(format!("...but {target_player_name} evaded them!"));
                     }
                     child_eb.push_player_tag(target_player_id);
-                    child_eb.push_team_tag(target_team_id);
                     child_eb.push_team_tag(thieving_team_id);
-                    if successful {
+                    child_eb.push_team_tag(target_team_id);
+                    if player_collected.is_some() {
                         child_eb.build(EventType::StoleItemFromTunnels)
                     } else {
                         child_eb.build(EventType::FailedTunnelsSteal)
                     }
                 });
+
+                if let Some(player_collected) = player_collected {
+                    eb.push_child(player_collected.player_collected_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("The {thieving_team_nickname} collected {target_player_name}!"));
+                        child_eb.push_player_tag(target_player_id);
+                        child_eb.push_team_tag(target_team_id);
+                        child_eb.push_team_tag(thieving_team_id);
+
+                        child_eb.push_metadata_i64("location", PositionType::Rotation as i64);
+                        child_eb.push_metadata_uuid("playerId", target_player_id);
+                        child_eb.push_metadata_str("playerName", &target_player_name);
+                        child_eb.push_metadata_uuid("sendTeamId", target_team_id);
+                        child_eb.push_metadata_str("sendTeamName", player_collected.target_team_nickname);
+                        child_eb.push_metadata_i64("receiveLocation", PositionType::Rotation as i64);
+                        child_eb.push_metadata_uuid("receiveTeamId", thieving_team_id);
+                        child_eb.push_metadata_str("receiveTeamName", thieving_team_nickname);
+
+                        child_eb.build(EventType::PlayerMoved)
+                    });
+
+                    eb.push_child(player_collected.artificially_forged_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{target_player_name} was Artificially Forged!\n\nSun(Sun)'s Pressure built..."));
+                        child_eb.push_player_tag(target_player_id);
+                        child_eb.push_team_tag(thieving_team_id);
+
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child_eb.push_metadata_str("to", "LEGENDARY");
+                        child_eb.push_metadata_str("from", "EGO2");
+
+                        child_eb.build(EventType::ModChange)
+                    });
+
+                    eb.push_child(player_collected.stronger_together_sub_event, |mut togetherness_eb| {
+                        togetherness_eb.push_team_tag(thieving_team_id);
+                        for player_id in player_collected.stronger_together_player_ids {
+                            togetherness_eb.push_player_tag(player_id);
+                        }
+
+                        let description = player_collected.stronger_together_player_names.iter()
+                            .with_position()
+                            .flat_map(|(position, name)| {
+                                match position {
+                                    Position::First | Position::Only => ["", name.as_str()],
+                                    Position::Middle => [", ", name.as_str()],
+                                    Position::Last =>  [", and ", name.as_str()],
+                                }
+                            })
+                            .chain(iter::once(" are stronger together."))
+                            .join("");
+
+                        togetherness_eb.push_description(description);
+                        togetherness_eb.push_metadata_str("mod", "YOLKED");
+                        togetherness_eb.push_metadata_str("source", "HARD_BOILED");
+                        togetherness_eb.push_metadata_i64("type", ModDuration::Permanent);
+                        togetherness_eb.build(EventType::AddedModFromOtherMod)
+                    });
+                }
 
                 eb.build(EventType::TunnelsUsed)
             }
@@ -4590,16 +4647,35 @@ impl FedEvent {
                 eb.push_description(format!("...They approached {target_player_name}."));
                 eb.build(EventType::TunnelsUsed)
             }
-            FedEventData::TeamTunnelHeistConcludes { game, target_player_name } => {
+            FedEventData::TeamTunnelHeistFailed { game, target_player_name } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("But {target_player_name} evaded them!"));
+                eb.build(EventType::TunnelsUsed)
+            }
+            FedEventData::TeamTunnelHeistSucceeded { game, target_team_nickname, target_player_name } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("The {target_team_nickname} collected {target_player_name}!"));
+                eb.push_description(format!("{target_player_name} was Artificially Forged!"));
+                eb.push_description("");
+                eb.push_description("Sun(Sun)'s Pressure built...");
                 eb.build(EventType::TunnelsUsed)
             }
             FedEventData::PitcherCyclesOut { game, team_nickname, outgoing_pitcher_name, incoming_pitcher_name } => {
                 eb.set_game(game);
                 eb.push_description(format!("{team_nickname}' pitcher {outgoing_pitcher_name} Cycles out for {incoming_pitcher_name}!"));
                 eb.build(EventType::PitcherCyclesOut)
+            }
+            FedEventData::SunSunPressureBuilt {  } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("Sun(Sun)'s Pressure built...");
+
+                eb.push_metadata_f64("current", 84450.79999999968); // TDD
+                eb.push_metadata_i64("maximum", 99999);
+                eb.push_metadata_i64("recharge", 26244); // TDD
+
+                eb.build(EventType::SunSunPressure)
             }
         };
 

@@ -3529,7 +3529,8 @@ pub(crate) enum ParsedPlayerTunnels<'a> {
 pub(crate) enum ParsedTeamTunnels<'a> {
     HeistBegins { team_nickname: &'a str },
     HeistContinues { player_name: &'a str },
-    HeistConcludes { player_name: &'a str },
+    HeistFailed { player_name: &'a str },
+    HeistSucceeded { team_nickname: &'a str, player_name: &'a str },
 }
 
 pub(crate) fn parse_tunnels(input: &str) -> ParserResult<ParsedTunnels> {
@@ -3577,8 +3578,10 @@ pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<ParsedTeamTunnels>
             .map(|team_nickname| ParsedTeamTunnels::HeistBegins { team_nickname }),
         parse_team_tunnels_continues
             .map(|player_name| ParsedTeamTunnels::HeistContinues { player_name }),
-        parse_team_tunnels_concludes
-            .map(|player_name| ParsedTeamTunnels::HeistConcludes { player_name }),
+        parse_team_tunnels_failed
+            .map(|player_name| ParsedTeamTunnels::HeistFailed { player_name }),
+        parse_team_tunnels_succeeded
+            .map(|(team_nickname, player_name)| ParsedTeamTunnels::HeistSucceeded { team_nickname, player_name }),
     ))
     .parse(input)
 }
@@ -3597,11 +3600,20 @@ pub(crate) fn parse_team_tunnels_continues(input: &str) -> ParserResult<&str> {
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_team_tunnels_concludes(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_tunnels_failed(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("But ").parse(input)?;
     let (input, player_name) = parse_terminated(" evaded them!").parse(input)?;
 
     Ok((input, player_name))
+}
+
+pub(crate) fn parse_team_tunnels_succeeded(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" collected ").parse(input)?;
+    let (input, player_name) = parse_terminated("!\n").parse(input)?;
+    let (input, _) = tag(player_name).parse(input)?;
+    let (input, _) = tag(" was Artificially Forged!\n\nSun(Sun)'s Pressure built...").parse(input)?;
+    Ok((input, (team_nickname, player_name)))
 }
 
 pub(crate) fn parse_failed_team_tunnels_steal_outcome(
@@ -4002,8 +4014,19 @@ pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<&str> {
-    parse_terminated(" are stronger together.").parse(input)
+pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<Vec<&str>> {
+    let (input, names) = parse_terminated(" are stronger together.").parse(input)?;
+
+    let mut names: Vec<_> = names
+        .split(", ")
+        .collect();
+
+    if let Some(last) = names.last_mut() {
+        // Strip an "and"
+        *last = &last[4..];
+    }
+
+    Ok((input, names))
 }
 
 pub(crate) fn parse_weather_report(
@@ -4029,4 +4052,16 @@ pub(crate) fn parse_pitcher_cycles_out(input: &str) -> ParserResult<(&str, &str,
         input,
         (team_nickname, outgoing_pitcher_name, incoming_pitcher_name),
     ))
+}
+
+pub(crate) enum ParsedSunSunPressure {
+    Recharged,
+    PressureBuilt,
+}
+
+pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<ParsedSunSunPressure> {
+    alt((
+        tag("Sun(Sun) Recharged.").map(|_| ParsedSunSunPressure::Recharged),
+        tag("Sun(Sun)'s Pressure built...").map(|_| ParsedSunSunPressure::PressureBuilt),
+    )).parse(input)
 }

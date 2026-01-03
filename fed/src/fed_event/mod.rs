@@ -3570,6 +3570,34 @@ pub struct PlayersAddedToTeam {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct SuccessfulTunnelsTheft {
+    /// The name of the team from which this player was stolen. This
+    /// information is only available on successful steals.
+    pub target_team_nickname: String,
+
+    /// Sub-event associated with the stolen player joining the team
+    pub player_collected_sub_event: SubEvent,
+
+    /// Sub-event associated with the stolen player gaining LEGENDARY
+    pub artificially_forged_sub_event: SubEvent,
+
+    /// Sub-event associated with Stronger Together changes
+    pub stronger_together_sub_event: SubEvent,
+
+    /// Names of players who were affected by Stronger Together changes
+    /// on this event.
+    /// 
+    /// TODO Try to associate these with stronger_together_player_ids 
+    pub stronger_together_player_names: Vec<String>,
+
+    /// Ids of players who were affected by Stronger Together changes
+    /// on this event.
+    /// 
+    /// TODO Try to associate these with stronger_together_player_names
+    pub stronger_together_player_ids: Vec<Uuid>,
+}
+
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
@@ -7531,12 +7559,6 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Whether the heist will be successful
-        ///
-        /// At this point, the game log hasn't said that the heist succeeded,
-        /// but there's already a sub-event indicating the outcome. Spoilers!
-        successful: bool,
-
         /// Uuid of the team that did the heist
         thieving_team_id: Uuid,
 
@@ -7554,6 +7576,13 @@ pub enum FedEventData {
 
         /// Metadata for the heist sub-event
         sub_event: SubEvent,
+
+        /// Information about a successful tunnels theft, if this theft
+        /// will be successful. Otherwise null.
+        ///
+        /// Although the game log message associated with this event doesn't
+        /// say whether it will succeed, its child events do. Spoilers!
+        player_collected: Option<SuccessfulTunnelsTheft>,
     },
 
     /// A Team continued an attempt to steal a Player through the Tunnels
@@ -7573,18 +7602,38 @@ pub enum FedEventData {
         target_player_name: String,
     },
 
-    /// A Team concluded an attempt to steal a Player through the Tunnels
+    /// A Team failed an attempt to steal a Player through the Tunnels
     ///
     /// This is one of a trio of events: `TeamTunnelHeistBegins`,
-    /// `TeamTunnelHeistContinues`, and `TeamTunnelHeistConcludes`. While these
-    /// are part of the same logical event, they occur on different ticks so
-    /// they are not grouped.
+    /// `TeamTunnelHeistContinues`, and either `TeamTunnelHeistFailed` or
+    /// `TeamTunnelHeistSucceeded`. While these are part of the same logical
+    /// event, they occur on different ticks so they are not grouped.
     ///
     /// Only seen by the Vault Legends during the Semicentennial
     #[serde(rename_all = "camelCase")]
-    TeamTunnelHeistConcludes {
+    TeamTunnelHeistFailed {
         #[serde(flatten)]
         game: GameEvent,
+
+        /// Name of the intended target player
+        target_player_name: String,
+    },
+
+    /// A Team succeeded at an attempt to steal a Player through the Tunnels
+    ///
+    /// This is one of a trio of events: `TeamTunnelHeistBegins`,
+    /// `TeamTunnelHeistContinues`, and either `TeamTunnelHeistFailed` or
+    /// `TeamTunnelHeistSucceeded`. While these are part of the same logical
+    /// event, they occur on different ticks so they are not grouped.
+    ///
+    /// Only seen by the Vault Legends during the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    TeamTunnelHeistSucceeded {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the intended target player's team
+        target_team_nickname: String,
 
         /// Name of the intended target player
         target_player_name: String,
@@ -7605,6 +7654,12 @@ pub enum FedEventData {
         /// Name of the incoming pitcher
         incoming_pitcher_name: String,
     },
+
+    /// Sun(Sun)'s pressure built
+    ///
+    /// Happened during the Semicentennial. TODO: Exclusively?
+    #[serde(rename_all = "camelCase")]
+    SunSunPressureBuilt {},
 }
 
 #[derive(
@@ -7873,8 +7928,10 @@ impl FedEventData {
             FedEventData::WeatherReport { game, .. } => Some(game),
             FedEventData::TeamTunnelHeistBegins { game, .. } => Some(game),
             FedEventData::TeamTunnelHeistContinues { game, .. } => Some(game),
-            FedEventData::TeamTunnelHeistConcludes { game, .. } => Some(game),
+            FedEventData::TeamTunnelHeistFailed { game, .. } => Some(game),
+            FedEventData::TeamTunnelHeistSucceeded { game, .. } => Some(game),
             FedEventData::PitcherCyclesOut { game, .. } => Some(game),
+            FedEventData::SunSunPressureBuilt { .. } => None,
         }
     }
 }
