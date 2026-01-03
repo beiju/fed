@@ -2688,6 +2688,7 @@ pub fn parse_next_event(
                                 .transpose()?;
 
                             ParseOk(SuccessfulTunnelsTheft {
+                                location: player_collected_event.metadata_enum("location")?,
                                 target_team_nickname: player_collected_event.metadata_str("sendTeamName")?.to_string(),
                                 player_collected_sub_event: player_collected_event.as_sub_event(),
                                 replaced_mod_id: artificially_forged_event.metadata_str("from")?.to_string(),

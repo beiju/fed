@@ -4595,12 +4595,12 @@ impl FedEvent {
                         child_eb.push_team_tag(target_team_id);
                         child_eb.push_team_tag(thieving_team_id);
 
-                        child_eb.push_metadata_i64("location", PositionType::Rotation as i64);
+                        child_eb.push_metadata_i64("location", player_collected.location as i64);
                         child_eb.push_metadata_uuid("playerId", target_player_id);
                         child_eb.push_metadata_str("playerName", &target_player_name);
                         child_eb.push_metadata_uuid("sendTeamId", target_team_id);
                         child_eb.push_metadata_str("sendTeamName", player_collected.target_team_nickname);
-                        child_eb.push_metadata_i64("receiveLocation", PositionType::Rotation as i64);
+                        child_eb.push_metadata_i64("receiveLocation", player_collected.location as i64);
                         child_eb.push_metadata_uuid("receiveTeamId", thieving_team_id);
                         child_eb.push_metadata_str("receiveTeamName", thieving_team_nickname);
 

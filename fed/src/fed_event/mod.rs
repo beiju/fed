@@ -3590,6 +3590,12 @@ pub struct UncorrelatedTogethernessChanges {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct SuccessfulTunnelsTheft {
+    /// Position of the player who was stolen.
+    ///
+    /// This is their old position on the target team and their new position on
+    /// the thieving team.
+    pub location: ActivePositionType,
+
     /// The name of the team from which this player was stolen. This
     /// information is only available on successful steals.
     pub target_team_nickname: String,
