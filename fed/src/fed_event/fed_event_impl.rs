@@ -4614,7 +4614,7 @@ impl FedEvent {
 
                         child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
                         child_eb.push_metadata_str("to", "LEGENDARY");
-                        child_eb.push_metadata_str("from", "EGO2");
+                        child_eb.push_metadata_str("from", player_collected.replaced_mod_id);
 
                         child_eb.build(EventType::ModChange)
                     });

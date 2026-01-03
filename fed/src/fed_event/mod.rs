@@ -3597,6 +3597,10 @@ pub struct SuccessfulTunnelsTheft {
     /// Sub-event associated with the stolen player joining the team
     pub player_collected_sub_event: SubEvent,
 
+    /// Mod id of the mod that was replaced with LEGENDARY. This is always a
+    /// variant of ego. TODO confirm that last sentence
+    pub replaced_mod_id: String,
+
     /// Sub-event associated with the stolen player gaining LEGENDARY
     pub artificially_forged_sub_event: SubEvent,
 
