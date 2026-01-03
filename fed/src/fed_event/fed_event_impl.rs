@@ -4719,6 +4719,12 @@ impl FedEvent {
 
                 eb.build(EventType::HorsePower)
             }
+            FedEventData::Supernova { game } => {
+                eb.set_game(game);
+                eb.push_description("SUN(SUN) SUPERNOVA");
+
+                eb.build(EventType::Supernova)
+            }
         };
 
         vec![item]

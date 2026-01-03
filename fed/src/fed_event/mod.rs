@@ -7746,6 +7746,13 @@ pub enum FedEventData {
         /// Sub-event for the unruns scored as a result of these Stables
         unruns_sub_event: SubEvent,
     },
+
+    /// Sun(Sun) went supernova
+    #[serde(rename_all = "camelCase")]
+    Supernova {
+        #[serde(flatten)]
+        game: GameEvent,
+    }
 }
 
 #[derive(
@@ -8019,6 +8026,7 @@ impl FedEventData {
             FedEventData::PitcherCyclesOut { game, .. } => Some(game),
             FedEventData::SunSunPressureBuilt { .. } => None,
             FedEventData::HorsePower { game, .. } => Some(game),
+            FedEventData::Supernova { game, .. } => Some(game),
         }
     }
 }
