@@ -454,6 +454,7 @@ pub enum EventType {
     BeingSpeechInTidings = 241,
     WeatherReport = 243,
     PlayersAddedToTeam = 244,
+    PlayersCutFromTeam = 245,
     GameCanceled = 246,
     Supernova = 247,
     RiffOpened = 251,

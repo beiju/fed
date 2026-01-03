@@ -7763,6 +7763,21 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
     },
+
+    /// Players were cut from this team
+    ///
+    /// Only ever happened at the conclusion of the Semicentennial
+    #[serde(rename_all = "camelCase")]
+    PlayersCutFromTeam {
+        /// Name of the team from which the players were cut
+        team_nickname: String,
+
+        /// Uuid of the team from which the players were cut
+        team_id: Uuid,
+
+        /// Players who were cut
+        players: Vec<PlayerNameId>,
+    },
 }
 
 #[derive(
@@ -8038,6 +8053,7 @@ impl FedEventData {
             FedEventData::HorsePower { game, .. } => Some(game),
             FedEventData::Supernova { game, .. } => Some(game),
             FedEventData::GameCanceled { game, .. } => Some(game),
+            FedEventData::PlayersCutFromTeam { .. } => None,
         }
     }
 }

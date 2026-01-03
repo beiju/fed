@@ -4731,6 +4731,22 @@ impl FedEvent {
 
                 eb.build(EventType::GameCanceled)
             }
+            FedEventData::PlayersCutFromTeam { team_nickname, team_id, players } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("The {team_nickname} cut {} players from their Rotation.", players.len()));
+                eb.push_team_tag(team_id);
+                for player in &players {
+                    eb.push_player_tag(player.player_id);
+                }
+
+                eb.push_metadata_i64("location", PositionType::Rotation as i64);
+                eb.push_metadata_uuid("teamId", team_id);
+                eb.push_metadata_str("teamName", &team_nickname);
+                eb.push_metadata_str_vec("playerIds", players.iter().map(|p| p.player_id.to_string()).collect());
+                eb.push_metadata_str_vec("playerNames", players.into_iter().map(|p| p.player_name).collect());
+
+                eb.build(EventType::PlayersCutFromTeam)
+            }
         };
 
         vec![item]

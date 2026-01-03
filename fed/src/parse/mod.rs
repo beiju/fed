@@ -5099,6 +5099,20 @@ pub fn parse_next_event(
         EventType::PlayersAddedToTeam => {
             todo!()
         }
+        EventType::PlayersCutFromTeam => {
+            let team_id = event.next_team_id()?;
+            let team_nickname = event.metadata_str("teamName")?;
+
+            let players = event.player_tags()?.into_iter().zip_eq(event.metadata_str_vec("playerNames")?)
+                .map(|(player_id, player_name)| PlayerNameId { player_id: *player_id, player_name: player_name.to_string() })
+                .collect();
+
+            FedEventData::PlayersCutFromTeam {
+                team_nickname: team_nickname.to_string(),
+                team_id,
+                players,
+            }
+        }
         EventType::GameCanceled => {
             FedEventData::GameCanceled {
                 game: event.game(unscatter, attractor_secret_base)?,
