@@ -4073,3 +4073,22 @@ pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<ParsedSunSunPr
         tag("Sun(Sun)'s Pressure built...").map(|_| ParsedSunSunPressure::PressureBuilt),
     )).parse(input)
 }
+
+pub(crate) fn parse_stabled(input: &str) -> ParserResult<&str> {
+    parse_terminated(" was Stabled in The Vault.").parse(input)
+}
+
+pub(crate) fn parse_horse_power(input: &str) -> ParserResult<[&str; 2]> {
+    let (input, _) = tag("Horse Power Achieved.\nThe ").parse(input)?;
+    let (input, name_1) = parse_terminated(" and ").parse(input)?;
+    let (input, name_2) = parse_terminated(" were Stabled!").parse(input)?;
+
+    Ok((input, [name_1, name_2]))
+}
+
+pub(crate) fn parse_stables(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_name) = parse_terminated(" scored!").parse(input)?;
+
+    Ok((input, team_name))
+}

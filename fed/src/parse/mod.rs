@@ -2345,9 +2345,9 @@ pub fn parse_next_event(
                         .map(|mut fishy_event| {
                             let detective_name = fishy_event
                                 .next_parse(parse_terminated(" sensed something fishy."))?;
-                            ParseOk(DetectiveActivity {
-                                detective_id: fishy_event.next_player_id()?,
-                                detective_name: detective_name.to_string(),
+                            ParseOk(PlayerSubEvent {
+                                player_id: fishy_event.next_player_id()?,
+                                player_name: detective_name.to_string(),
                                 sub_event: fishy_event.as_sub_event(),
                             })
                         })
@@ -5125,6 +5125,50 @@ pub fn parse_next_event(
                 player_swap_sub_event: player_swap_child.as_sub_event(),
                 player_shadowed_sub_event: player_shadowed_child,
                 player_unshadowed_sub_event: player_unshadowed_child,
+            }
+        }
+        EventType::HorsePower => {
+            let [away_team_name, home_team_name] = event.next_parse(parse_horse_power)?
+                .map(|n| n.to_string());
+
+            fn make_sub_event(mut child: EventParseWrapper) -> Result<GenericPlayerModChange, FeedParseError> {
+                ParseOk(GenericPlayerModChange {
+                    team_id: child.next_team_id()?,
+                    player_id: child.next_player_id()?,
+                    player_name: child.next_parse(parse_stabled)?.to_string(),
+                    duration: child.metadata_enum("type")?,
+                    sub_event: child.as_sub_event(),
+                })
+            }
+
+            // Don't mark this closure as `move`. It will compile but be wrong at runtime.
+            let stabled_players = std::iter::from_fn(|| {
+                match event.next_child_opt(EventType::RemovedMod) {
+                    Ok(Some(child)) => {
+                        Some(make_sub_event(child))
+                    },
+                    Ok(None) => None,
+                    Err(e) => Some(Err(e)),
+                }
+            })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let mut unruns_event = event.next_child(EventType::RunsScored)?;
+            let scoring_team_name = unruns_event.next_parse(parse_stables)?;
+
+            FedEventData::HorsePower {
+                game: event.game(unscatter, attractor_secret_base)?,
+                away_team_emoji: unruns_event.metadata_str("awayEmoji")?.to_string(),
+                away_team_name,
+                away_team_score: unruns_event.metadata_f64("awayScore")?,
+                home_team_emoji: unruns_event.metadata_str("homeEmoji")?.to_string(),
+                home_team_name,
+                home_team_score: unruns_event.metadata_f64("homeScore")?,
+                stabled_players,
+                scoring_team_id: unruns_event.next_team_id()?,
+                scoring_team_name: scoring_team_name.to_string(),
+                unruns_scored: 25, // TODO
+                unruns_sub_event: unruns_event.as_sub_event(),
             }
         }
         EventType::StormWarning => {

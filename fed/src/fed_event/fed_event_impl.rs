@@ -2750,7 +2750,7 @@ impl FedEvent {
 
                 if let Some(fishy) = sensed_something_fishy {
                     eb.push_child(fishy.sub_event, |mut child| {
-                        child.push_description(format!("{} sensed something fishy.", fishy.detective_name));
+                        child.push_description(format!("{} sensed something fishy.", fishy.player_name));
                         child.build_detective_activity(fishy)
                     });
                 }
@@ -4684,6 +4684,40 @@ impl FedEvent {
                 eb.push_metadata_i64("recharge", 26244);
 
                 eb.build(EventType::SunSunPressure)
+            }
+            FedEventData::HorsePower { game, away_team_emoji, away_team_name, away_team_score, home_team_emoji, home_team_name, home_team_score, stabled_players, scoring_team_id, scoring_team_name, unruns_scored, unruns_sub_event } => {
+                eb.set_game(game);
+                eb.push_description("Horse Power Achieved.");
+                eb.push_description(format!("The {} and {} were Stabled!", away_team_name, home_team_name));
+
+                for stabled_player in stabled_players {
+                    eb.push_child(stabled_player.sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{} was Stabled in The Vault.", stabled_player.player_name));
+                        child_eb.push_team_tag(stabled_player.team_id);
+                        child_eb.push_player_tag(stabled_player.player_id);
+                        child_eb.push_metadata_str("mod", "MARKED");
+                        child_eb.push_metadata_i64("type", stabled_player.duration as i64);
+
+                        child_eb.build(EventType::RemovedMod)
+                    });
+                }
+
+                eb.push_child(unruns_sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Game);
+                    child_eb.push_description(format!("The {scoring_team_name} scored!"));
+                    child_eb.push_team_tag(scoring_team_id);
+
+                    child_eb.push_metadata_str("ledger", format!("Stables: {unruns_scored} Unruns"));
+                    child_eb.push_metadata_str("update", format!("{unruns_scored} Unruns scored!"));
+                    child_eb.push_metadata_str("awayEmoji", away_team_emoji);
+                    child_eb.push_metadata_i64_or_f64("awayScore", away_team_score);
+                    child_eb.push_metadata_str("homeEmoji", home_team_emoji);
+                    child_eb.push_metadata_i64_or_f64("homeScore", home_team_score);
+
+                    child_eb.build(EventType::RunsScored)
+                });
+
+                eb.build(EventType::HorsePower)
             }
         };
 

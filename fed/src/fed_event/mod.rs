@@ -1390,14 +1390,33 @@ impl Display for RunLossesFromSalmon {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
-pub struct DetectiveActivity {
-    /// Uuid of the detective
-    pub detective_id: Uuid,
+pub struct PlayerSubEvent {
+    /// Uuid of the player
+    pub player_id: Uuid,
 
-    /// Name of the detective
-    pub detective_name: String,
+    /// Name of the player
+    pub player_name: String,
 
-    /// Metadata for the sub-event associated with the detective activity
+    /// Metadata for the sub-event
+    pub sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct GenericPlayerModChange {
+    /// Uuid of the player's team
+    pub team_id: Uuid,
+
+    /// Uuid of the player
+    pub player_id: Uuid,
+
+    /// Name of the player
+    pub player_name: String,
+
+    /// Original duration of the mod that was removed
+    pub duration: ModDuration,
+
+    /// Metadata for the sub-event
     pub sub_event: SubEvent,
 }
 
@@ -5975,7 +5994,9 @@ pub enum FedEventData {
         effect: ConsumerAttackEffect,
 
         /// Detective activity, if any
-        sensed_something_fishy: Option<DetectiveActivity>,
+        ///
+        /// Player information in this is related to the detective
+        sensed_something_fishy: Option<PlayerSubEvent>,
 
         /// Whether the player who was attacked was Scattered
         scattered: bool,
@@ -7683,6 +7704,48 @@ pub enum FedEventData {
         /// The pressure after recharge
         pressure_after: f64,
     },
+
+    /// Horse Power activated and players were Stabled
+    #[serde(rename_all = "camelCase")]
+    HorsePower {
+        #[serde(flatten)]
+        game: GameEvent,
+        
+        /// Emoji of the away team during this event
+        away_team_emoji: String,
+        
+        /// Name of the away team during this event
+        away_team_name: String,
+
+        /// Away team's score (TODO before or after?) the event
+        away_team_score: f64,
+        
+        /// Emoji of the home team during this event
+        home_team_emoji: String,
+        
+        /// Name of the home team during this event
+        home_team_name: String,
+
+        /// Home team's score (TODO before or after?) the event
+        home_team_score: f64,
+
+        /// Players who were Stabled by the Horse Power
+        ///
+        /// This includes players from both teams
+        stabled_players: Vec<GenericPlayerModChange>,
+
+        /// Uuid of the team who scored the Unruns
+        scoring_team_id: Uuid,
+
+        /// Name of the team who scored the Unruns
+        scoring_team_name: String,
+
+        /// Number of unruns the scoring team scored
+        unruns_scored: i64,
+
+        /// Sub-event for the unruns scored as a result of these Stables
+        unruns_sub_event: SubEvent,
+    },
 }
 
 #[derive(
@@ -7955,6 +8018,7 @@ impl FedEventData {
             FedEventData::TeamTunnelHeistSucceeded { game, .. } => Some(game),
             FedEventData::PitcherCyclesOut { game, .. } => Some(game),
             FedEventData::SunSunPressureBuilt { .. } => None,
+            FedEventData::HorsePower { game, .. } => Some(game),
         }
     }
 }

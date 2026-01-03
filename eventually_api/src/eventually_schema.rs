@@ -456,6 +456,7 @@ pub enum EventType {
     PlayersAddedToTeam = 244,
     RiffOpened = 251,
     NightShift = 252,
+    HorsePower = 255,
     StormWarning = 263,
     Snowflakes = 264,
 }

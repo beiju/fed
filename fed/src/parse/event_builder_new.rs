@@ -3,7 +3,7 @@ use std::fmt::Write;
 use crate::format_utils::Possessive;
 use crate::{
     Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType,
-    DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
+    PlayerSubEvent, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
     HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired,
     KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent,
     ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent,
@@ -1356,9 +1356,9 @@ impl EventBuilder {
         self.build_player_stat_changed(boost.rating_before, boost.rating_after, 4)
     }
 
-    pub fn build_detective_activity(mut self, activity: DetectiveActivity) -> EventuallyEvent {
+    pub fn build_detective_activity(mut self, activity: PlayerSubEvent) -> EventuallyEvent {
         self.set_category(EventCategory::Special);
-        self.push_player_tag(activity.detective_id);
+        self.push_player_tag(activity.player_id);
         self.build(EventType::InvestigationMessage)
     }
 

@@ -5,7 +5,7 @@ mod peekable_with_logging;
 
 pub use eventually_api::Weather;
 pub use fed_event::{PlayerMovedFrom, PlayerAddedToTeam, PlayersAddedToTeam, TogglePerforming, FedEvent, Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType,
-                    DetectiveActivity, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
+                    PlayerSubEvent, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
                     HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired,
                     KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent,
                     ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent,
