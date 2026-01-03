@@ -4675,13 +4675,13 @@ impl FedEvent {
                 eb.push_description(format!("{team_nickname}' pitcher {outgoing_pitcher_name} Cycles out for {incoming_pitcher_name}!"));
                 eb.build(EventType::PitcherCyclesOut)
             }
-            FedEventData::SunSunPressureBuilt {  } => {
+            FedEventData::SunSunPressureBuilt { pressure_after } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description("Sun(Sun)'s Pressure built...");
 
-                eb.push_metadata_f64("current", 84450.79999999968); // TDD
+                eb.push_metadata_f64("current", pressure_after);
                 eb.push_metadata_i64("maximum", 99999);
-                eb.push_metadata_i64("recharge", 26244); // TDD
+                eb.push_metadata_i64("recharge", 26244);
 
                 eb.build(EventType::SunSunPressure)
             }

@@ -4694,7 +4694,9 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedSunSunPressure::PressureBuilt => {
-                    FedEventData::SunSunPressureBuilt {}
+                    FedEventData::SunSunPressureBuilt {
+                        pressure_after: event.metadata_f64("current")?,
+                    }
                 }
             }
         }

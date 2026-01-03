@@ -7668,8 +7668,15 @@ pub enum FedEventData {
     /// Sun(Sun)'s pressure built
     ///
     /// Happened during the Semicentennial. TODO: Exclusively?
+    ///
+    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the recharge value is
+    /// always 26244, so those values are not stored.
     #[serde(rename_all = "camelCase")]
-    SunSunPressureBuilt {},
+    SunSunPressureBuilt {
+        // TODO Verify that this is after
+        /// The pressure after recharge
+        pressure_after: f64,
+    },
 }
 
 #[derive(
