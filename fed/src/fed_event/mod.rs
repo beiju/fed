@@ -888,6 +888,13 @@ impl ActivePositionType {
         }
     }
 
+    pub fn location_caps(&self) -> &'static str {
+        match self {
+            ActivePositionType::Lineup => "Lineup",
+            ActivePositionType::Rotation => "Rotation",
+        }
+    }
+
     pub fn role(&self) -> &'static str {
         match self {
             ActivePositionType::Lineup => "batting",
@@ -7774,6 +7781,9 @@ pub enum FedEventData {
 
         /// Uuid of the team from which the players were cut
         team_id: Uuid,
+
+        /// Position from which these players were cut
+        location: PositionType,
 
         /// Players who were cut
         players: Vec<PlayerNameId>,

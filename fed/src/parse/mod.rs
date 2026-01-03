@@ -5110,6 +5110,7 @@ pub fn parse_next_event(
             FedEventData::PlayersCutFromTeam {
                 team_nickname: team_nickname.to_string(),
                 team_id,
+                location: event.metadata_enum("location")?,
                 players,
             }
         }
