@@ -1,3 +1,9 @@
+use crate::fed_event::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::HomeRunHypeSource;
+use crate::fed_event::HitType;
+use crate::fed_event::GameStartAnnouncement;
+use crate::fed_event::FedEventData;
+use crate::fed_event::PitcherNameId;
 use crate::{PlayerMovedFrom, PlayersAddedToTeam};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use itertools::{Either, Itertools, Position};
@@ -321,7 +327,7 @@ impl FedEvent {
                 eb.push_pitch(pitch);
 
                 // First, magmatic text...
-                if let Some(mod_change) = &magmatic {
+                if let Some(_) = &magmatic {
                     eb.push_description(format!("{batter_name} is Magmatic!"));
                 }
 
@@ -2062,7 +2068,7 @@ impl FedEvent {
                     party_eb.build(EventType::RemovedMod)
                 });
 
-                let order = shadow_boost.as_ref().map(|(boost, order)| *order);
+                let order = shadow_boost.as_ref().map(|(_, order)| *order);
                 let shadow_event = shadow_boost.map(|(boost, _)| {
                     let mut shadow_eb = eb.connected_event(boost.sub_event);
                     shadow_eb.set_category(EventCategory::Changes);
@@ -4182,7 +4188,8 @@ impl FedEvent {
 
                 eb.build(EventType::ThievesGuildStolePlayer)
             }
-            FedEventData::ThievesGuildStoleItem { game, thieving_team_nickname, thieving_team_stadium_name, beneficiary_player_name, beneficiary_gained_item, victim_team_id, victim_team_nickname, victim_player_id, victim_player_name, victim_lost_item } => {
+            // TODO Why is thieving_team_nickname unused?
+            FedEventData::ThievesGuildStoleItem { game, thieving_team_nickname: _, thieving_team_stadium_name, beneficiary_player_name, beneficiary_gained_item, victim_team_id, victim_team_nickname, victim_player_id, victim_player_name, victim_lost_item } => {
                 eb.set_game(game);
                 eb.push_player_tag(beneficiary_gained_item.player_id);
                 eb.push_player_tag(victim_player_id);

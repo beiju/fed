@@ -8,7 +8,7 @@ use eventually_api::Weather;
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_till, take_till1, take_until1};
 use nom::character::complete::{char, digit1};
-use nom::combinator::{eof, fail, map_res, opt, recognize, rest, verify};
+use nom::combinator::{eof, map_res, opt, recognize, rest, verify};
 use nom::error::ParseError;
 use nom::multi::{many0, separated_list0, separated_list1};
 use nom::number::complete::{double, float};
@@ -2121,42 +2121,6 @@ pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
     let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
 
     Ok((input, blessing_title))
-}
-
-pub(crate) enum LateToThePartyChange<'a> {
-    AddedToTeam(&'a str),
-    RemovedFromTeam(&'a str),
-    AddedToPlayer(&'a str),
-    RemovedFromPlayer(&'a str),
-}
-
-pub(crate) fn parse_one_late_to_the_party(input: &str) -> ParserResult<LateToThePartyChange> {
-    let (input, result) = alt((
-        // Pre-s15
-        preceded(
-            tag("Late to the Party!\nThe "),
-            parse_terminated(" are Late to the Party!"),
-        )
-        .map(|n| LateToThePartyChange::AddedToTeam(n)),
-        // Post-s15
-        preceded(tag("The "), parse_terminated(" are Late to the Party."))
-            .map(|n| LateToThePartyChange::AddedToTeam(n)),
-        preceded(
-            tag("Late to the Party!\nLate to the Party wears off for the "),
-            parse_terminated("."),
-        )
-        .map(|n| LateToThePartyChange::RemovedFromTeam(n)),
-        parse_terminated(" is Late to the Party.").map(|n| LateToThePartyChange::AddedToPlayer(n)),
-        parse_terminated(" is no longer Late to the Party.")
-            .map(|n| LateToThePartyChange::RemovedFromPlayer(n)),
-    ))
-    .parse(input)?;
-
-    Ok((input, result))
-}
-
-pub(crate) fn parse_late_to_the_party(input: &str) -> ParserResult<Vec<LateToThePartyChange>> {
-    separated_list1(tag("\n"), parse_one_late_to_the_party).parse(input)
 }
 
 pub(crate) fn parse_decree_passed(input: &str) -> ParserResult<&str> {
