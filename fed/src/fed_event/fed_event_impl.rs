@@ -387,11 +387,11 @@ impl FedEvent {
                     eb.push_description(format!("{} Birds were scared away!", pop.birds_scared_away));
                 }
 
-                eb.push_hotel_motel(&hotel_motel_parties);
-
                 eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
                 eb.push_free_refills(&free_refills);
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
+                // hotel motel is definitely after spicy
+                eb.push_hotel_motel(&hotel_motel_parties);
                 eb.push_attraction_with_player(attraction);
                 // TODO: Store the ledgers for big buckets and alley oops in their respective
                 //   Options and pass them in to push_opt_direct_score_summary with a new

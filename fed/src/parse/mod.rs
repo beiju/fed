@@ -949,8 +949,6 @@ pub fn parse_next_event(
             // (event "ac0d2a81-d453-47d1-99d6-b166bd912880)
             let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
 
-            let hotel_motel_parties = event.parse_hotel_motel_parties()?;
-
             // stopped_inhabiting definitely happens before free_refills
             // (event d4805130-be10-42ab-81b2-f8eefb14a4e4)
             let batter_id = event.next_player_id()?;
@@ -958,6 +956,10 @@ pub fn parse_next_event(
 
             let free_refills = event.parse_free_refills()?;
             let spicy_status = event.parse_spicy_status(batter_name)?;
+
+            // hotel_motel_parties definitely happens after spicy_status
+            // (event 1d0ac8c5-0ea3-48ce-b393-27287b0df121)
+            let hotel_motel_parties = event.parse_hotel_motel_parties()?;
 
             let hype = if let Some(h) = home_run_hype {
                 Some(HomeRunHype::from_hype_and_source(
