@@ -2401,6 +2401,7 @@ pub enum LedgerRunModifier {
         player_name: String,
     },
     NegativePolarity,
+    TeamMagnified,
 }
 
 impl LedgerRunModifier {
@@ -2414,6 +2415,7 @@ impl LedgerRunModifier {
             LedgerRunModifier::Wired { .. } => in_value + 0.5,
             LedgerRunModifier::Tired { .. } => in_value - 0.5,
             LedgerRunModifier::NegativePolarity => in_value * -1.0,
+            LedgerRunModifier::TeamMagnified => in_value * 2.0,
         }
     }
 
@@ -2429,6 +2431,7 @@ impl LedgerRunModifier {
             LedgerRunModifier::Wired { .. } => false,
             LedgerRunModifier::Tired { .. } => false,
             LedgerRunModifier::NegativePolarity => true,
+            LedgerRunModifier::TeamMagnified => true,
         }
     }
 
@@ -2500,6 +2503,14 @@ impl LedgerRunModifier {
                 write!(
                     w,
                     "\tNegative Polarity: {} * -1 = {}",
+                    RunDisplay(run_value_before),
+                    RunDisplay(run_value_after)
+                )?;
+            }
+            LedgerRunModifier::TeamMagnified => {
+                write!(
+                    w,
+                    "\tTeam Magnified 2x: {} * 2 = {}",
                     RunDisplay(run_value_before),
                     RunDisplay(run_value_after)
                 )?;

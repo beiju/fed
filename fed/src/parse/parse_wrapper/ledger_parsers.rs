@@ -60,6 +60,10 @@ fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), F
                 // TODO Verify run numbers are as expected
                 modifiers.push(LedgerRunModifier::NegativePolarity);
             }
+            Some(ParsedLedgerV2Modifier::TeamMagnified { .. }) => {
+                // TODO Verify run numbers are as expected
+                modifiers.push(LedgerRunModifier::TeamMagnified);
+            }
         }
     }
 }

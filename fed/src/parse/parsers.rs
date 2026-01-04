@@ -3212,6 +3212,10 @@ pub(crate) enum ParsedLedgerV2Modifier<'a> {
         runs_before: f64,
         runs_after: f64,
     },
+    TeamMagnified {
+        runs_before: f64,
+        runs_after: f64,
+    },
 }
 
 pub(crate) fn parse_score_ledger_v1(
@@ -3289,6 +3293,12 @@ pub(crate) fn parse_ledger_v2_modifier(
                     runs_after,
                 }
             }),
+            parse_ledger_team_magnified.map(|(runs_before, runs_after)| {
+                ParsedLedgerV2Modifier::TeamMagnified {
+                    runs_before,
+                    runs_after,
+                }
+            }),
             parse_ledger_negating("Underhanded").map(|(runs_before, runs_after)| {
                 ParsedLedgerV2Modifier::Underhanded {
                     runs_before,
@@ -3352,6 +3362,16 @@ pub(crate) fn parse_ledger_player_magnified(
     let (input, _) = tag(" * 2 = ").parse(input)?;
     let (input, runs_after) = double.parse(input)?;
     Ok((input, (position, runs_before, runs_after)))
+}
+
+pub(crate) fn parse_ledger_team_magnified(
+    input: &str,
+) -> ParserResult<(f64, f64)> {
+    let (input, _) = tag("\tTeam Magnified 2x: ").parse(input)?;
+    let (input, runs_before) = double.parse(input)?;
+    let (input, _) = tag(" * 2 = ").parse(input)?;
+    let (input, runs_after) = double.parse(input)?;
+    Ok((input, (runs_before, runs_after)))
 }
 
 // Covers any negating mod: underhanded, subtractor, etc
