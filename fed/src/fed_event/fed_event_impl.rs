@@ -1,4 +1,4 @@
-use crate::fed_event::{ActivePositionType, BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{ActivePositionType, BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
 use crate::fed_event::HomeRunHypeSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -917,32 +917,46 @@ impl FedEvent {
 
                 eb.build(EventType::Sun2)
             }
-            FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname, carcinization, compressed_by_gamma, win_event } => {
+            FedEventData::BlackHole { game, scoring_team_nickname, victim_team_nickname, carcinization, compressed_by_gamma, burp } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("The {scoring_team_nickname} collect 10!"));
 
-                // The presence of win_event is not causally connected to the burp message, but I'm
-                // using it as a signal for now. iirc this will have to be changed later
-                if let Some(win_event) = win_event {
-                    eb.push_description(format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
-                    eb.push_balloons(win_event.balloons.as_deref(), 10);
-                    eb.push_child(win_event.sub_event, |mut child_eb| {
-                        child_eb.set_category(EventCategory::Outcomes);
-                        child_eb.push_description(format!("The Black Hole burped a Win at the {victim_team_nickname}."));
-                        child_eb.push_team_tag(win_event.team_id);
-                        child_eb.push_metadata_i64("amount", 1);
-                        child_eb.push_metadata_i64("before", win_event.wins_after - 1);
-                        child_eb.push_metadata_i64("after", win_event.wins_after);
-                        // This won't be hard-coded forever, but I won't change it until I need to
-                        child_eb.push_metadata_str_vec("lines", vec![
-                            "Black Hole: -1".to_string(),
-                            "Sun(Sun): -1 ^ 2 = 1".to_string(),
-                        ]);
-                        child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
-                    });
-                } else {
-                    eb.push_description(format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));
+                match burp {
+                    BlackHoleBurp::None => {
+                        eb.push_description(format!("The Black Hole swallows the Runs and a {victim_team_nickname} Win."));
+                    },
+                    BlackHoleBurp::Win(win_event) => {
+                        eb.push_description(format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
+                        eb.push_balloons(win_event.balloons.as_deref(), 10);
+                        eb.push_child(win_event.sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Outcomes);
+                            child_eb.push_description(format!("The Black Hole burped a Win at the {victim_team_nickname}."));
+                            child_eb.push_team_tag(win_event.team_id);
+                            child_eb.push_metadata_i64("amount", 1);
+                            child_eb.push_metadata_i64("before", win_event.wins_after - 1);
+                            child_eb.push_metadata_i64("after", win_event.wins_after);
+                            child_eb.push_metadata_str_vec("lines", vec![
+                                "Black Hole: -1".to_string(),
+                                "Sun(Sun): -1 ^ 2 = 1".to_string(),
+                            ]);
+                            child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
+                        })
+                    },
+                    BlackHoleBurp::Unwin(win_event) => {
+                        eb.push_description(format!("The Black Hole swallowed the Runs and burped at the {victim_team_nickname}."));
+                        eb.push_balloons(win_event.balloons.as_deref(), 10);
+                        eb.push_child(win_event.sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Outcomes);
+                            child_eb.push_description(format!("The Black Hole burped an Unwin at the {victim_team_nickname}."));
+                            child_eb.push_team_tag(win_event.team_id);
+                            child_eb.push_metadata_i64("amount", -1);
+                            child_eb.push_metadata_i64("before", win_event.wins_after + 1);
+                            child_eb.push_metadata_i64("after", win_event.wins_after);
+                            child_eb.push_metadata_str_vec("lines", Vec::new());
+                            child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
+                        })
+                    },
                 }
 
                 if let Some(carc_full) = carcinization {

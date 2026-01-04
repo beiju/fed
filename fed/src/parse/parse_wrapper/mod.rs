@@ -1402,8 +1402,8 @@ impl<'e> EventParseWrapper<'e> {
         }
     }
 
-    pub fn parse_win_event(&mut self) -> Result<Option<WinSubEvent>, FeedParseError> {
-        let mut win_child = self.next_child_any_opt(&[
+    pub fn parse_win_event(&mut self) -> Result<Option<(WinSubEvent, i64)>, FeedParseError> {
+        let win_child = self.next_child_any_opt(&[
             EventType::WinCollectedRegular,
             EventType::WinCollectedPostseason,
         ])?;
@@ -1413,12 +1413,14 @@ impl<'e> EventParseWrapper<'e> {
             .map(|mut child| {
                 let before_s20d81 = (self.season, self.day) < (19, 80);
                 let balloons = self.next_parse_opt(parse_balloons(10, before_s20d81));
-                ParseOk(WinSubEvent {
+                let win = WinSubEvent {
                     team_id: child.next_team_id()?,
                     wins_after: child.metadata_i64("after")?,
                     sub_event: child.as_sub_event(),
                     balloons: balloons.map(str::to_string),
-                })
+                };
+                let amount = child.metadata_i64("amount")?;
+                ParseOk((win, amount))
             })
             .transpose()
     }

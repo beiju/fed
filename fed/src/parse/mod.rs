@@ -1344,7 +1344,14 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(scoring_team));
             assert!(is_known_team_nickname(victim_team));
 
-            let win_event = event.parse_win_event()?;
+            let burp = event.parse_win_event()?
+                .map_or(BlackHoleBurp::None, |(win_event, amount)| {
+                    if amount > 1 {
+                        BlackHoleBurp::Win(win_event)
+                    } else {
+                        BlackHoleBurp::Unwin(win_event)
+                    }
+                });
 
             let carcinization = event
                 .next_parse_opt(parse_carcinization)
@@ -1410,14 +1417,15 @@ pub fn parse_next_event(
                 victim_team_nickname: victim_team.to_string(),
                 carcinization,
                 compressed_by_gamma,
-                win_event,
+                burp,
             }
         }
         EventType::Sun2 => {
             let scoring_team = event.next_parse(parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
 
-            let win_event = event.parse_win_event()?;
+            let win_event = event.parse_win_event()?
+                .map(|(win, _)| win);
 
             let rays_player = event.next_parse_opt(parse_catches_rays);
             let caught_some_rays = if let Some(player_name) = rays_player {

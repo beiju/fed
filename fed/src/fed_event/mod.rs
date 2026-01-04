@@ -3684,6 +3684,20 @@ pub struct SuccessfulTunnelsTheft {
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
+pub enum BlackHoleBurp {
+    /// The Black Hole swallowed a win, and did not burp
+    None,
+
+    /// The Black Hole burped out a Win
+    Win(WinSubEvent),
+
+    /// The Black Hole burped out an Unwin
+    Unwin(WinSubEvent),
+}
+
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
 #[serde(tag = "type")]
 pub enum FedEventData {
     /// When a being (a god, Binky, or a similar entity) speaks
@@ -4783,9 +4797,11 @@ pub enum FedEventData {
         /// change. Otherwise null.
         compressed_by_gamma: Option<PlayerStatChange>,
 
-        /// Starting in s20, wins had a SubEvent associated with them. This is the metadata for that
-        /// sub
-        win_event: Option<WinSubEvent>,
+        /// In s20, the Black Hole started burping out Wins, which have a Win
+        /// sub-event associated with them. In season 24 it started burping out
+        /// Unwins, which have a slightly different Win sub-event. This is the
+        /// metadata for that sub-event.
+        burp: BlackHoleBurp,
     },
 
     /// Team shamed another team
