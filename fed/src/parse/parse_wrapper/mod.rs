@@ -76,8 +76,8 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn is_semicentennial(&self) -> bool {
-        self.season == 22 && self.day == 116
+    pub fn is_post_semicentennial(&self) -> bool {
+        self.season > 22 || (self.season == 22 && self.day == 116)
     }
 
     pub fn consume_description(&mut self) -> &'e str {

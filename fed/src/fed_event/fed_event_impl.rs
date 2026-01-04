@@ -4080,7 +4080,7 @@ impl FedEvent {
             FedEventData::Trade { game, trader_traitor, taken_item_name, taken_item_id, victim_mods_lost, trader_mods_gained, trader_name, trader_id, trader_item_rating_before, trader_item_rating_after, trader_rating, trader_item_change_sub_event, victim_name, victim_id, victim_item_rating_before, victim_item_rating_after, victim_rating, victim_item_change_sub_event } => {
                 eb.set_game(game);
 
-                let punct = if self.season == 22 && self.day == 116 {
+                let punct = if self.season > 22 || (self.season == 22 && self.day == 116) {
                     "!"
                 } else {
                     "."

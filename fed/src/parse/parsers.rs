@@ -3857,12 +3857,12 @@ pub(crate) enum ParsedTrade<'a> {
     },
 }
 
-pub(crate) fn parse_trade(is_semicentennial: bool) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
+pub(crate) fn parse_trade(is_post_semicentennial: bool) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
     move |input| {
         alt((
             parse_terminated(" sought out a trade, but nothing caught their eye.")
                 .map(|trader_name| ParsedTrade::NothingCaughtTheirEye { trader_name }),
-            parse_successful_trade(is_semicentennial).map(
+            parse_successful_trade(is_post_semicentennial).map(
                 |(trader_traitor, trader_name, donated_item_name, victim_name, taken_item_name)| {
                     ParsedTrade::Traded {
                         trader_traitor,
@@ -3885,7 +3885,7 @@ pub(crate) fn parse_trade(is_semicentennial: bool) -> impl Fn(&str) -> ParserRes
 }
 
 pub(crate) fn parse_successful_trade(
-    is_semicentennial: bool,
+    is_post_semicentennial: bool,
 ) -> impl Fn(&str) -> ParserResult<(ParsedTraderTraitor, &str, &str, &str, &str)> {
     move |input| {
         // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
@@ -3904,9 +3904,9 @@ pub(crate) fn parse_successful_trade(
         // TODO Clean up semicentennial stuff
         let (input, taken_item_name) =
             parse_terminated(match trader_traitor {
-                ParsedTraderTraitor::Trader if is_semicentennial => "!",
+                ParsedTraderTraitor::Trader if is_post_semicentennial => "!",
                 ParsedTraderTraitor::Trader => ".",
-                ParsedTraderTraitor::Traitor if is_semicentennial => "!",
+                ParsedTraderTraitor::Traitor if is_post_semicentennial => "!",
                 ParsedTraderTraitor::Traitor => ".",
                 ParsedTraderTraitor::Unknown => ".",
                 ParsedTraderTraitor::Neither => "!",

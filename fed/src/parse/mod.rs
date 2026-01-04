@@ -5077,7 +5077,7 @@ pub fn parse_next_event(
             team_id: event.next_team_id()?,
         },
         EventType::Trade => {
-            match event.next_parse(parse_trade(event.is_semicentennial()))? {
+            match event.next_parse(parse_trade(event.is_post_semicentennial()))? {
                 ParsedTrade::NothingCaughtTheirEye { trader_name } => {
                     let mut child_event = event.next_child(EventType::TradeFailed)?;
                     let trader_id = child_event.next_player_id()?;
