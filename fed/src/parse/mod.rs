@@ -1337,7 +1337,7 @@ pub fn parse_next_event(
             }
         }
         EventType::BigDeal => FedEventData::BeingSpeech {
-            being: Being::try_from(event.metadata_i64("being")? as i64)
+            being: Being::try_from(event.metadata_i64("being")?)
                 .map_err(|e| FeedParseError::UnknownBeing(e.number))?,
             message: event.consume_description().to_string(),
         },
@@ -1348,7 +1348,7 @@ pub fn parse_next_event(
 
             let burp = event.parse_win_event()?
                 .map_or(BlackHoleBurp::None, |(win_event, amount)| {
-                    if amount > 1 {
+                    if amount > 0 {
                         BlackHoleBurp::Win(win_event)
                     } else {
                         BlackHoleBurp::Unwin(win_event)

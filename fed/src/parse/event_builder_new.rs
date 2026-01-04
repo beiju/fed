@@ -1029,35 +1029,40 @@ impl EventBuilder {
 
     pub fn push_earned_win(&mut self, win: EarnedWin) {
         let day = self.event.day;
+        let unwin = win.turntables && !win.sun_sun;
         self.push_child(win.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Outcomes);
+            let win_text = if unwin { "an Unwin" } else { "a Win" };
             child_eb.push_description(format!(
-                "The {} collected a Win.",
+                "The {} collected {win_text}.",
                 win.winning_team_nickname
             ));
             child_eb.push_team_tag(win.winning_team_id);
             // There were decrees that would have increased amount but they never won a vote
-            child_eb.push_metadata_i64("amount", 1);
-            child_eb.push_metadata_i64("before", win.wins_after - 1);
+            let amount = if unwin { -1 } else { 1 };
+            child_eb.push_metadata_i64("amount", amount);
+            child_eb.push_metadata_i64("before", win.wins_after - amount);
             child_eb.push_metadata_i64("after", win.wins_after);
-            // This won't be hard-coded forever, but I won't change it until I need to
-            child_eb.push_metadata_str_vec(
-                "lines",
-                if let Some(BracketType::Underbracket) = win.bracket_type {
-                    // Postseason underbracket. You win by losing. God knows why it's negative.
-                    vec!["Loss: -1".to_string(), "Sun(Sun): -1 ^ 2 = 1".to_string()]
-                } else if let Some(BracketType::Overbracket) = win.bracket_type {
-                    // Postseason underbracket. You win by winning.
-                    vec!["Non-Loss: 1".to_string(), "Sun(Sun): 1 ^ 2 = 1".to_string()]
+
+            let (mut lines, mut wins) = if let Some(BracketType::Underbracket) = win.bracket_type {
+                // Postseason underbracket. You win by losing. God knows why it's negative.
+                (vec!["Loss: -1".to_string()], -1)
+            } else {
+                // Postseason underbracket and regular season. You win by winning.
+                (vec!["Non-Loss: 1".to_string()], 1)
+            };
+            if win.turntables {
+                lines.push("Turntables: 1 * -1 = -1".to_string());
+                wins *= -1;
+            }
+            if win.sun_sun {
+                if wins < 0 {
+                    lines.push("Sun(Sun): -1 ^ 2 = 1".to_string());
                 } else {
-                    // Regular season. You win by winning, and there's turntables.
-                    vec![
-                        "Non-Loss: 1".to_string(),
-                        "Turntables: 1 * -1 = -1".to_string(),
-                        "Sun(Sun): -1 ^ 2 = 1".to_string(),
-                    ]
-                },
-            );
+                    lines.push("Sun(Sun): 1 ^ 2 = 1".to_string());
+                }
+            }
+            child_eb.push_metadata_str_vec("lines", lines);
             child_eb.build(if day < 99 {
                 EventType::WinCollectedRegular
             } else {

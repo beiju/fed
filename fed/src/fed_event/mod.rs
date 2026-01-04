@@ -3201,6 +3201,12 @@ pub struct EarnedWin {
     /// If this is a postseason event, whether it's an overbracket or underbracket game. Otherwise
     /// null
     pub bracket_type: Option<BracketType>,
+
+    /// Indicates whether Turntables is active
+    pub turntables: bool,
+
+    /// Indicates whether Sun(Sun) is active
+    pub sun_sun: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]

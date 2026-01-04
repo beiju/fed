@@ -3150,11 +3150,14 @@ pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
     Ok((input, runs * negator))
 }
 
-pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<(&str, bool)> {
     let (input, _) = tag("The ").parse(input)?;
-    let (input, team_nickname) = parse_terminated(" collected a Win.").parse(input)?;
+    let (input, result) = alt((
+         parse_terminated(" collected a Win.").map(|n| (n, false)),
+         parse_terminated(" collected an Unwin.").map(|n| (n, true)),
+    )).parse(input)?;
 
-    Ok((input, team_nickname))
+    Ok((input, result))
 }
 
 pub(crate) fn parse_moderation(input: &str) -> ParserResult<&str> {

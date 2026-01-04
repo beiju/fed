@@ -1477,11 +1477,12 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     fn make_earned_win(mut win_event: EventParseWrapper) -> Result<EarnedWin, FeedParseError> {
-        let winning_team_nickname = win_event.next_parse(parse_team_earned_win)?;
+        let (winning_team_nickname, _is_unwin) = win_event.next_parse(parse_team_earned_win)?;
         assert!(is_known_team_nickname(winning_team_nickname));
 
         let lines = win_event.metadata_str_vec("lines")?;
-        let bracket_type = if lines.len() == 2 {
+        // Don't need to worry about the s24 postseason because there wasn't one
+        let bracket_type = if lines.len() == 2 && win_event.season < 23 {
             if lines[0] == "Loss: -1" {
                 Some(BracketType::Underbracket)
             } else if lines[0] == "Non-Loss: 1" {
@@ -1499,6 +1500,8 @@ impl<'e> EventParseWrapper<'e> {
             wins_after: win_event.metadata_i64("after")?,
             sub_event: win_event.as_sub_event(),
             bracket_type,
+            turntables: lines.iter().any(|n| n.starts_with("Turntables:")),
+            sun_sun: lines.iter().any(|n| n.starts_with("Sun(Sun):")),
         })
     }
 
