@@ -5423,6 +5423,18 @@ pub fn parse_next_event(
             }
         }
         EventType::TarotCardChanged => { todo!() }
+        EventType::PlayerBecameStuck => {
+            let player_name = event.next_parse(parse_terminated(" became Stuck!"))?;
+            let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
+
+            FedEventData::PlayerBecameStuck {
+                game: event.game(unscatter, attractor_secret_base)?,
+                player_name: player_name.to_string(),
+                player_id: child.next_player_id()?,
+                team_id: child.next_team_id()?,
+                sub_event: child.as_sub_event(),
+            }
+        }
         EventType::HorsePower => {
             let [away_team_name, home_team_name] = event.next_parse(parse_horse_power)?
                 .map(|n| n.to_string());

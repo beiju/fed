@@ -8042,7 +8042,26 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with the replacement team
         /// replacing the incinerated team
         team_replaced_sub_event: SubEvent,
-    }
+    },
+
+    /// Player became Stuck due to the Avoidance mod
+    #[serde(rename_all = "camelCase")]
+    PlayerBecameStuck {
+        #[serde(flatten)]
+        game: GameEvent,
+        
+        /// Name of the player who became Stuck
+        player_name: String,
+        
+        /// Uuid of the player who became Stuck
+        player_id: Uuid,
+        
+        /// Uuid of the team of the player who became Stuck
+        team_id: Uuid,
+        
+        /// Metadata for the mod-added-from-other-mod sub-event
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(
@@ -8322,6 +8341,7 @@ impl FedEventData {
             FedEventData::PlayerLeftVault { .. } => None,
             FedEventData::PlayerLeftVaultSuperRoam { .. } => None,
             FedEventData::TeamIncineration { game, .. } => Some(game),
+            FedEventData::PlayerBecameStuck { game, .. } => Some(game),
         }
     }
 }

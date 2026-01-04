@@ -4981,6 +4981,22 @@ impl FedEvent {
 
                 eb.build(EventType::Incineration)
             }
+            FedEventData::PlayerBecameStuck { game, player_name, player_id, team_id, sub_event } => {
+                eb.set_game(game);
+                let description = format!("{player_name} became Stuck!");
+                eb.push_description(&description);
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(description);
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_str("mod", "STUCK");
+                    child_eb.push_metadata_str("source", "AVOIDANCE");
+                    child_eb.push_metadata_i64("type", ModDuration::Game);
+                    child_eb.build(EventType::AddedModFromOtherMod)
+                });
+
+                eb.build(EventType::PlayerBecameStuck)
+            }
         };
 
         vec![item]
