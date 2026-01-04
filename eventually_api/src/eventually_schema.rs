@@ -460,6 +460,7 @@ pub enum EventType {
     Supernova = 247,
     RiffOpened = 251,
     NightShift = 252,
+    TarotCardChanged = 253,
     HorsePower = 255,
     StormWarning = 263,
     Snowflakes = 264,

@@ -1870,6 +1870,20 @@ pub(crate) fn parse_party(input: &str) -> ParserResult<(&str, Option<&str>)> {
     Ok((input, (player_name, attracted_birds)))
 }
 
+pub(crate) enum ParsedRoamBoost<'a> {
+    ShadowBoost(&'a str),
+    Odyssey(&'a str),
+    GoodRiddanceParty(&'a str, Option<&'a str>),
+}
+
+pub(crate) fn parse_roam_boost(input: &str) -> ParserResult<ParsedRoamBoost> {
+    alt((
+        parse_terminated(" entered the Shadows.").map(|n| ParsedRoamBoost::ShadowBoost(n)),
+        parse_terminated(" was boosted.").map(|n| ParsedRoamBoost::Odyssey(n)),
+        parse_party.map(|(n, b)| ParsedRoamBoost::GoodRiddanceParty(n, b)),
+    )).parse(input)
+}
+
 pub(crate) fn parse_player_hatched(input: &str) -> ParserResult<&str> {
     let (input, player_name) =
         parse_terminated(" has been hatched from the field of eggs.").parse(input)?;
@@ -2109,10 +2123,10 @@ pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<ParsedBlessing
 
 pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("Blessing Won: ").parse(input)?;
-    // This should take the rest because there shouldn't be any newlines
-    let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
 
-    Ok((input, blessing_title))
+    // There are blessing names with newlines. Just take the entire rest of the
+    // text as the blessing name.
+    Ok(("", input))
 }
 
 pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
@@ -4093,8 +4107,9 @@ pub(crate) fn parse_stables(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<&str> {
-    let (input, player_name) = parse_terminated(" left the Vault.").parse(input)?;
-
-    Ok((input, player_name))
+pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<(&str, bool)> {
+    alt((
+        parse_terminated(" left the Vault.").map(|n| (n, false)),
+        parse_terminated(" Super Roamed out of the Vault.").map(|n| (n, true)),
+    )).parse(input)
 }

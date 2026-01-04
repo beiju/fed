@@ -603,6 +603,26 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub player_name: String,
 }
 
+// Like ModChangeSubEventWithNamedPlayer but the team id is optional.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct ModChangeSubEventWithHallPlayer {
+    /// Metadata for the sub-event associated with the mod change
+    pub sub_event: SubEvent,
+
+    /// Uuid of the team whose player's mod changed
+    ///
+    /// `null` for players who died before team ids were stored on player
+    /// objects
+    pub team_id: Option<Uuid>,
+
+    /// Uuid of the player whose mod changed
+    pub player_id: Uuid,
+
+    /// Name of the player whose mod changed
+    pub player_name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FlipNegative {
@@ -2287,6 +2307,14 @@ pub enum RoamFromLocation {
 
         /// Nickname of player's previous team
         previous_team_nickname: String,
+
+        /// If the player has the On an Odyssey mod, contains info about the
+        /// roam boost they received
+        odyssey_boost: Option<PlayerBoostSubEvent>,
+
+        /// If the player roamed to the Shadows, contains info about the shadow
+        /// boost they received
+        shadow_boost: Option<PlayerBoostSubEvent>,
 
         /// Parties as a result of the Good Riddance mod
         good_riddance_parties: Vec<GoodRiddanceParty>,
@@ -6309,7 +6337,7 @@ pub enum FedEventData {
         previous_team_id: Uuid,
         previous_team_nickname: String,
 
-        /// If the player roamed to the Shadows, contains info about the shadow boost they recieved
+        /// If the player roamed to the Shadows, contains info about the shadow boost they received
         shadow_boost: Option<PlayerBoostSubEvent>,
     },
 
@@ -7825,6 +7853,61 @@ pub enum FedEventData {
         /// event.
         shadow_boost: Option<PlayerBoostSubEvent>,
     },
+
+    /// Parker MacMillan Super Roamed out of the Vault
+    // TODO recombine this with PlayerLeftVault?
+    #[serde(rename_all = "camelCase")]
+    PlayerLeftVaultSuperRoam {
+        /// Name of the player who left the Vault
+        player_name: String,
+
+        /// Uuid of the player who left the Vault
+        player_id: Uuid,
+
+        /// Nickname of the non-Vault team the player joined
+        new_team_nickname: String,
+
+        /// Uuid of the non-Vault team the player joined
+        new_team_id: Uuid,
+
+        /// Roster location of the player who left the vault
+        location: PositionType,
+
+        /// Metadata for the successor event associated with the instability
+        /// being spread to the Vault
+        ///
+        /// This is not a child event. It's a separate event that appears after
+        /// the PlayerLeftVault event, but it was likely intended to be a child
+        /// event.
+        instability_sub_event: SubEvent,
+
+        /// Metadata for the successor events associated with the Hall players
+        /// getting the Unstable mod
+        ///
+        /// These are not child events. They're separate events that appear
+        /// after the PlayerLeftVault event, but it's likely they were intended
+        /// to be a child event.
+        players_gained_unstable: Vec<ModChangeSubEventWithNamedPlayer>,
+
+        /// Metadata for the successor event associated with the player being
+        /// added to their new, non-Vault team
+        ///
+        /// This is not a child event. It's a separate event that appears after
+        /// the PlayerLeftVault event, but it was likely intended to be a child
+        /// event.
+        add_to_team_sub_event: SubEvent,
+
+        /// If the player has the On an Odyssey mod, contains info about the
+        /// roam boost they received
+        odyssey_boost: Option<PlayerBoostSubEvent>,
+
+        /// If the player roamed to the Shadows, contains info about the shadow
+        /// boost they received
+        shadow_boost: Option<PlayerBoostSubEvent>,
+
+        /// Parties as a result of the Good Riddance mod
+        good_riddance_parties: Vec<GoodRiddanceParty>,
+    },
 }
 
 #[derive(
@@ -8102,6 +8185,7 @@ impl FedEventData {
             FedEventData::GameCanceled { game, .. } => Some(game),
             FedEventData::PlayersCutFromTeam { .. } => None,
             FedEventData::PlayerLeftVault { .. } => None,
+            FedEventData::PlayerLeftVaultSuperRoam { .. } => None,
         }
     }
 }

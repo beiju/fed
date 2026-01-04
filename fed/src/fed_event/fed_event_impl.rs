@@ -3091,8 +3091,26 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname, good_riddance_parties } } => {
+            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname, odyssey_boost, shadow_boost, good_riddance_parties } } => {
                 let mut events = Vec::with_capacity(good_riddance_parties.len() + 1);
+
+                if let Some(odyssey_boost) = odyssey_boost {
+                    let mut odyssey_eb = eb.connected_event(odyssey_boost.sub_event);
+                    odyssey_eb.set_category(EventCategory::Changes);
+                    odyssey_eb.push_description(format!("{player_name} was boosted."));
+                    odyssey_eb.push_player_tag(player_id);
+                    odyssey_eb.push_team_tag(new_team_id);
+                    events.push(odyssey_eb.build_boost(&odyssey_boost));
+                }
+
+                if let Some(shadow_boost) = shadow_boost {
+                    let mut shadow_eb = eb.connected_event(shadow_boost.sub_event);
+                    shadow_eb.set_category(EventCategory::Changes);
+                    shadow_eb.push_description(format!("{player_name} entered the Shadows."));
+                    shadow_eb.push_player_tag(player_id);
+                    shadow_eb.push_team_tag(new_team_id);
+                    events.push(shadow_eb.build_boost(&shadow_boost));
+                }
 
                 for party in good_riddance_parties {
                     let mut party_eb = eb.connected_event(party.sub_event);
@@ -4771,11 +4789,74 @@ impl FedEvent {
 
                 let main_event = eb.build(EventType::PlayerLeftVault);
 
-                if let Some(shadow_boost_event) = shadow_boost_event {
-                    return vec![main_event, add_to_team_event, shadow_boost_event];
+                return if let Some(shadow_boost_event) = shadow_boost_event {
+                    vec![main_event, add_to_team_event, shadow_boost_event]
                 } else {
-                    return vec![main_event, add_to_team_event];
+                    vec![main_event, add_to_team_event]
                 }
+            }
+            FedEventData::PlayerLeftVaultSuperRoam { player_name, player_id, new_team_nickname, new_team_id, location, instability_sub_event, players_gained_unstable, add_to_team_sub_event, odyssey_boost, shadow_boost, good_riddance_parties } => {
+                eb.set_category(EventCategory::Changes);
+                let mut events = Vec::new();
+
+                let mut instability_eb = eb.connected_event(instability_sub_event);
+                instability_eb.set_description(format!("{player_name} left Instability in their wake. The Vault became Unstable!"));
+                instability_eb.push_player_tag(player_id);
+                events.push(instability_eb.build(EventType::AddedMod));
+
+                for player_gained_unstable in players_gained_unstable {
+                    let mut gained_unstable_eb = eb.connected_event(player_gained_unstable.sub_event);
+                    gained_unstable_eb.set_description(format!("{} gained the Unstable mod.", player_gained_unstable.player_name));
+                    gained_unstable_eb.push_team_tag(player_gained_unstable.team_id);
+                    gained_unstable_eb.push_player_tag(player_gained_unstable.player_id);
+                    gained_unstable_eb.push_metadata_str("mod", "MARKED");
+                    gained_unstable_eb.push_metadata_i64("type", ModDuration::Weekly as i64);
+                    events.push(gained_unstable_eb.build(EventType::AddedMod));
+                }
+
+                let mut add_to_team_eb = eb.connected_event(add_to_team_sub_event);
+                add_to_team_eb.set_description(format!("{player_name} Super Roamed to the {new_team_nickname}."));
+                add_to_team_eb.push_metadata_i64("location", location as i64);
+                add_to_team_eb.push_metadata_uuid("teamId", new_team_id);
+                add_to_team_eb.push_metadata_str("teamName", new_team_nickname);
+                add_to_team_eb.push_metadata_uuid("playerId", player_id);
+                add_to_team_eb.push_metadata_str("playerName", &player_name);
+                add_to_team_eb.push_team_tag(new_team_id);
+                add_to_team_eb.push_player_tag(player_id);
+                events.push(add_to_team_eb.build(EventType::PlayerAddedToTeam));
+
+                if let Some(odyssey_boost) = odyssey_boost {
+                    let mut odyssey_boost_event = eb.connected_event(odyssey_boost.sub_event);
+                    odyssey_boost_event.set_description(format!("{player_name} was boosted."));
+                    odyssey_boost_event.push_team_tag(new_team_id);
+                    odyssey_boost_event.push_player_tag(player_id);
+                    events.push(odyssey_boost_event.build_boost(&odyssey_boost));
+                };
+
+                if let Some(shadow_boost) = shadow_boost {
+                    let mut shadow_boost_event = eb.connected_event(shadow_boost.sub_event);
+                    shadow_boost_event.set_description(format!("{player_name} entered the Shadows."));
+                    shadow_boost_event.push_team_tag(new_team_id);
+                    shadow_boost_event.push_player_tag(player_id);
+                    events.push(shadow_boost_event.build_boost(&shadow_boost));
+                };
+
+                for party in good_riddance_parties {
+                    let mut party_eb = eb.connected_event(party.sub_event);
+                    party_eb.set_category(EventCategory::Changes);
+                    party_eb.push_description(format!("{} is Partying!", party.player_name));
+                    party_eb.push_player_tag(party.player_id);
+                    party_eb.push_metadata_f64("before", party.rating_before);
+                    party_eb.push_metadata_f64("after", party.rating_after);
+                    party_eb.push_metadata_i64("type", 4); // "all categories"
+                    events.push(party_eb.build(EventType::PlayerStatIncrease));
+                }
+
+                eb.push_description(format!("{player_name} Super Roamed out of the Vault."));
+                eb.push_player_tag(player_id);
+                events.insert(0, eb.build(EventType::PlayerLeftVault));
+
+                return events;
             }
         };
 
