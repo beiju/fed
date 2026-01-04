@@ -3964,10 +3964,14 @@ impl FedEvent {
                                 child_eb.push_metadata_i64("amount", 1);
                                 child_eb.push_metadata_i64("before", win.wins_after - 1);
                                 child_eb.push_metadata_i64("after", win.wins_after);
-                                child_eb.push_metadata_str_vec("lines", vec![
-                                    "Sun 30: 1".to_string(),
-                                    "Sun(Sun): 1 ^ 2 = 1".to_string(),
-                                ]);
+                                child_eb.push_metadata_str_vec("lines", if self.season < 23 {
+                                    vec![
+                                        "Sun 30: 1".to_string(),
+                                        "Sun(Sun): 1 ^ 2 = 1".to_string(),
+                                    ]
+                                } else {
+                                    Vec::new()
+                                });
                                 child_eb.build(if self.day < 99 { EventType::WinCollectedRegular } else { EventType::WinCollectedPostseason })
                             });
                         }
