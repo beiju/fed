@@ -7799,6 +7799,31 @@ pub enum FedEventData {
 
         /// Uuid of the player who left the Vault
         player_id: Uuid,
+
+        /// Nickname of the non-Vault team the player joined
+        new_team_nickname: String,
+
+        /// Uuid of the non-Vault team the player joined
+        new_team_id: Uuid,
+
+        /// Roster location of the player who left the vault
+        location: PositionType,
+
+        /// Metadata for the successor event associated with the player being
+        /// added to their new, non-Vault team
+        ///
+        /// This is not a child event. It's a separate event that appears after
+        /// the PlayerLeftVault event, but it was likely intended to be a child
+        /// event.
+        add_to_team_sub_event: SubEvent,
+
+        /// Metadata for the successor event associated with the player's shadow
+        /// boost, if any
+        ///
+        /// This is not a child event. It's a separate event that appears after
+        /// the PlayerLeftVault event, but it was likely intended to be a child
+        /// event.
+        shadow_boost: Option<PlayerBoostSubEvent>,
     },
 }
 

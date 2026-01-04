@@ -1,4 +1,4 @@
-use crate::fed_event::{BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{ActivePositionType, BatterSkippedReason, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
 use crate::fed_event::HomeRunHypeSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -4747,12 +4747,35 @@ impl FedEvent {
 
                 eb.build(EventType::PlayersCutFromTeam)
             }
-            FedEventData::PlayerLeftVault { player_name, player_id } => {
+            FedEventData::PlayerLeftVault { player_name, player_id, new_team_nickname, new_team_id, location, add_to_team_sub_event, shadow_boost } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(format!("{player_name} left the Vault."));
                 eb.push_player_tag(player_id);
 
-                eb.build(EventType::PlayerLeftVault)
+                let mut add_to_team_eb = eb.connected_event(add_to_team_sub_event);
+                add_to_team_eb.set_description(format!("The {new_team_nickname} added a player to their roster."));
+                add_to_team_eb.push_metadata_i64("location", location as i64);
+                add_to_team_eb.push_metadata_uuid("teamId", new_team_id);
+                add_to_team_eb.push_metadata_str("teamName", new_team_nickname);
+                add_to_team_eb.push_metadata_uuid("playerId", player_id);
+                add_to_team_eb.push_metadata_str("playerName", &player_name);
+                add_to_team_eb.push_team_tag(new_team_id);
+                let add_to_team_event = add_to_team_eb.build(EventType::PlayerAddedToTeam);
+
+                let shadow_boost_event = shadow_boost.map(|shadow_boost| {
+                    let mut shadow_boost_event = eb.connected_event(shadow_boost.sub_event);
+                    shadow_boost_event.set_description(format!("{player_name} entered the Shadows."));
+                    shadow_boost_event.push_team_tag(new_team_id);
+                    shadow_boost_event.build_boost(&shadow_boost)
+                });
+
+                let main_event = eb.build(EventType::PlayerLeftVault);
+
+                if let Some(shadow_boost_event) = shadow_boost_event {
+                    return vec![main_event, add_to_team_event, shadow_boost_event];
+                } else {
+                    return vec![main_event, add_to_team_event];
+                }
             }
         };
 

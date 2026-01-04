@@ -4562,9 +4562,55 @@ pub fn parse_next_event(
         EventType::PlayerLeftVault => {
             let player_name = event.next_parse(parse_player_left_vault)?;
 
+            // These events are all followed by a PlayerAddedToTeam event which
+            // probably was meant to be a child
+            let add_to_team_event = event_iter.next()
+                .ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                    expected_types: vec![EventType::PlayerAddedToTeam],
+                    after_type: event.event_type,
+                })?;
+            if add_to_team_event.r#type != EventType::PlayerAddedToTeam {
+                return Err(FeedParseError::UnexpectedFollowingEvent {
+                    expected_types: vec![EventType::PlayerAddedToTeam],
+                    found_type: add_to_team_event.r#type,
+                    after_type: event.event_type,
+                })
+            }
+            let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
+
+            let location = add_to_team_event.metadata_enum("location")?;
+            // The player boost event, if there is one, is also a successor
+            // when it was probably meant to be a child
+            let shadow_boost = (location == PositionType::BenchOrShadows).then(|| {
+                let shadow_boost_event = event_iter.next()
+                    .ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                        expected_types: vec![EventType::PlayerStatIncrease],
+                        after_type: event.event_type,
+                    })?;
+                if shadow_boost_event.r#type != EventType::PlayerStatIncrease {
+                    return Err(FeedParseError::UnexpectedFollowingEvent {
+                        expected_types: vec![EventType::PlayerStatIncrease],
+                        found_type: shadow_boost_event.r#type,
+                        after_type: event.event_type,
+                    })
+                }
+                let shadow_boost_event = EventParseWrapper::new(&shadow_boost_event)?;
+
+                ParseOk(PlayerBoostSubEvent {
+                    rating_before: shadow_boost_event.metadata_f64("before")?,
+                    rating_after: shadow_boost_event.metadata_f64("after")?,
+                    sub_event: shadow_boost_event.as_sub_event(),
+                })
+            }).transpose()?;
+
             FedEventData::PlayerLeftVault {
                 player_name: player_name.to_string(),
                 player_id: event.next_player_id()?,
+                new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
+                new_team_id: add_to_team_event.metadata_uuid("teamId")?,
+                location,
+                add_to_team_sub_event: add_to_team_event.as_sub_event(),
+                shadow_boost,
             }
         }
         EventType::ABloodType => {
