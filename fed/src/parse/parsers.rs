@@ -3980,6 +3980,7 @@ pub(crate) fn parse_weather(input: &str) -> ParserResult<Weather> {
             tag(Weather::BlackHoleBlackHole.to_str()).map(|_| Weather::BlackHoleBlackHole),
             tag(Weather::Jazz.to_str()).map(|_| Weather::Jazz),
             tag(Weather::Night.to_str()).map(|_| Weather::Night),
+            tag(Weather::Night.to_str()).map(|_| Weather::Night),
         )),
     ))
     .parse(input)
@@ -4018,6 +4019,7 @@ pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, 
             alt((
                 tag(RiffElement::Bip.as_ref()).map(|_| RiffElement::Bip),
                 tag(RiffElement::Ska.as_ref()).map(|_| RiffElement::Ska),
+                tag(RiffElement::Skoo.as_ref()).map(|_| RiffElement::Skoo),
             )),
         )),
     )

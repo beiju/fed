@@ -26,8 +26,8 @@ const SEASONS: [(&'static str, i64, i64); 1] = [
     // ("thisidisstaticyo", 19, 411748),
     // ("thisidisstaticyo", 20, 401722),
     // ("thisidisstaticyo", 21, 410259),
-    ("thisidisstaticyo", 22, 408058),
-    // ("thisidisstaticyo", 23, 354855),
+    // ("thisidisstaticyo", 22, 408058),
+    ("thisidisstaticyo", 23, 354855),
 ];
 
 fn check_parse(parsed_event: &FedEvent, source_events: &[EventuallyEvent]) -> anyhow::Result<()> {

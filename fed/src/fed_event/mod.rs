@@ -3414,6 +3414,8 @@ pub enum RiffElement {
     Bip,
     #[strum(to_string = "ska")]
     Ska,
+    #[strum(to_string = "skoo")]
+    Skoo,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
