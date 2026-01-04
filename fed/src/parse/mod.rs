@@ -24,7 +24,7 @@ use crate::parse::parsers::*;
 // pub use stream::expansion_era_events;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 27] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 28] = [
     "Fridays",
     "Moist Talkers",
     "Lovers",
@@ -52,6 +52,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 27] = [
     "Mechanics",
     "Legends",
     "Rising Stars",
+    "Paws",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -1929,68 +1930,171 @@ pub fn parse_next_event(
             }
         }
         EventType::Incineration => {
-            let (victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed) =
-                event.next_parse(parse_incineration)?;
+            match event.next_parse(parse_incineration)? {
+                ParsedIncineration::Player((victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed)) => {
+                    // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
+                    // Incineration sub-event instead of adding a new event type.
+                    let mut incin_child =
+                        event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
+                    let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
+                    let mut pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
+                    let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
+                    let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
 
-            // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
-            // Incineration sub-event instead of adding a new event type.
-            let mut incin_child =
-                event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
-            let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
-            let mut pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
-            let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
-            let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
+                    let unstable_chain = unstable_chain_name
+                        .map(|player_name| {
+                            let mut child = event.next_child(EventType::AddedMod)?;
+                            ParseOk(ModChangeSubEventWithNamedPlayer {
+                                sub_event: child.as_sub_event(),
+                                team_id: child.next_team_id()?,
+                                player_id: child.next_player_id()?,
+                                player_name: player_name.to_string(),
+                            })
+                        })
+                        .transpose()?;
 
-            let unstable_chain = unstable_chain_name
-                .map(|player_name| {
-                    let mut child = event.next_child(EventType::AddedMod)?;
-                    ParseOk(ModChangeSubEventWithNamedPlayer {
-                        sub_event: child.as_sub_event(),
-                        team_id: child.next_team_id()?,
-                        player_id: child.next_player_id()?,
-                        player_name: player_name.to_string(),
+                    let ambush = ambush.map(|(p, t)| event.parse_ambush(p, t)).transpose()?;
+
+                    let pressure_built = pressure_built_event
+                        .map(|mut pressure_built_event| {
+                            ParseOk(PressureBuilt {
+                                pressure_after: pressure_built_event.metadata_f64("current")?,
+                                sub_event: pressure_built_event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
+
+                    let heat_magnet = event
+                        .parse_score_summary()?
+                        .map(|score| ParseOk((score, event.parse_balloons(5)?)))
+                        .transpose()?;
+                    assert_eq!(heat_magnet.is_some(), heat_magnet_parsed.is_some());
+
+                    let team_nickname = replace_child.metadata_str("teamName")?;
+                    assert!(is_known_team_nickname(team_nickname));
+                    FedEventData::Incineration {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: incin_child.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        victim_id: incin_child.next_player_id()?,
+                        victim_name: victim_name.to_string(),
+                        replacement_id: hatch_child.next_player_id()?,
+                        replacement_name: replacement_name.to_string(),
+                        location: replace_child.metadata_enum("location")?,
+                        unstable_chain,
+                        sub_events: (
+                            incin_child.as_sub_event(),
+                            enter_hall_child.as_sub_event(),
+                            hatch_child.as_sub_event(),
+                            replace_child.as_sub_event(),
+                        ),
+                        ambush,
+                        pressure_built,
+                        heat_magnet,
+                    }
+                }
+                ParsedIncineration::Team((incinerated_team_name, replacement_team_name, replacement_team_nickname, surviving_players)) => {
+                    assert!(is_known_team_name(incinerated_team_name));
+                    assert!(is_known_team_name(replacement_team_name));
+                    assert!(is_known_team_nickname(replacement_team_nickname));
+
+                    let surviving_players = surviving_players.into_iter()
+                        .map(|player_name| {
+                            let child = event.next_child(EventType::PlayerRemovedFromTeam)?;
+                            assert_eq!(player_name, child.metadata_str("playerName")?);
+                            let player_id = child.metadata_uuid("playerId")?;
+                            ParseOk((player_name, player_id, child.as_sub_event()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let weather_event = event.next_child(EventType::WeatherEvent)?;
+                    let team_entered_hall_event = event.next_child(EventType::EnterHallOfFlame)?;
+
+                    let incinerated_players = std::iter::from_fn(|| {
+                        event.next_child_opt(EventType::EnterHallOfFlame).transpose()
+                            .map(|result| {
+                                let mut child = result?;
+                                let player_name = child.next_parse(parse_terminated(" entered the Hall of Flame."))?;
+                                let player_id = child.next_player_id()?;
+
+                                ParseOk(TeamIncinerationVictim {
+                                    player_name: player_name.to_string(),
+                                    player_id,
+                                    player_entered_hall_sub_event: child.as_sub_event(),
+                                })
+                            })
                     })
-                })
-                .transpose()?;
+                        .collect::<Result<Vec<_>, _>>()?;
 
-            let ambush = ambush.map(|(p, t)| event.parse_ambush(p, t)).transpose()?;
+                    let surviving_players = surviving_players.into_iter()
+                        .map(|(player_name, player_id, removed_from_team_sub_event)| {
+                            let mut child = event.next_child(EventType::AddedMod)?;
+                            assert_eq!(player_name, child.next_parse(parse_terminated(" ate some flame."))?);
+                            assert_eq!(player_id, child.next_player_id()?);
+                            ParseOk((player_name, player_id, removed_from_team_sub_event, child.as_sub_event()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
 
-            let pressure_built = pressure_built_event
-                .map(|mut pressure_built_event| {
-                    ParseOk(PressureBuilt {
-                        pressure_after: pressure_built_event.metadata_f64("current")?,
-                        sub_event: pressure_built_event.as_sub_event(),
+                    let team_formed_event = event.next_child(EventType::TeamFormed)?;
+
+                    let new_players = std::iter::from_fn(|| {
+                        event.next_child_opt(EventType::PlayerDivisionMove).transpose()
+                            .map(|result| {
+                                let mut child = result?;
+                                let player_name = child.next_parse(parse_terminated(" was a founding member of the "))?;
+                                // These events don't have player ids for some reason
+
+                                ParseOk(TeamIncinerationReplacement {
+                                    player_name: player_name.to_string(),
+                                    player_born_sub_event: child.as_sub_event(),
+                                })
+                            })
                     })
-                })
-                .transpose()?;
+                        .collect::<Result<Vec<_>, _>>()?;
 
-            let heat_magnet = event
-                .parse_score_summary()?
-                .map(|score| ParseOk((score, event.parse_balloons(5)?)))
-                .transpose()?;
-            assert_eq!(heat_magnet.is_some(), heat_magnet_parsed.is_some());
+                    let team_replaced_event = event.next_child(EventType::TeamIncinerationReplacement)?;
+                    let incinerated_team_nickname = team_replaced_event.metadata_str("outTeamName")?;
+                    assert!(is_known_team_nickname(incinerated_team_nickname));
+                    let incinerated_team_id = team_replaced_event.metadata_uuid("outTeamId")?;
+                    let replacement_team_id = team_replaced_event.metadata_uuid("inTeamId")?;
+                    let division_name = team_replaced_event.metadata_str("divisionName")?;
+                    let division_id = team_replaced_event.metadata_uuid("divisionId")?;
 
-            let team_nickname = replace_child.metadata_str("teamName")?;
-            assert!(is_known_team_nickname(team_nickname));
-            FedEventData::Incineration {
-                game: event.game(unscatter, attractor_secret_base)?,
-                team_id: incin_child.next_team_id()?,
-                team_nickname: team_nickname.to_string(),
-                victim_id: incin_child.next_player_id()?,
-                victim_name: victim_name.to_string(),
-                replacement_id: hatch_child.next_player_id()?,
-                replacement_name: replacement_name.to_string(),
-                location: replace_child.metadata_enum("location")?,
-                unstable_chain,
-                sub_events: (
-                    incin_child.as_sub_event(),
-                    enter_hall_child.as_sub_event(),
-                    hatch_child.as_sub_event(),
-                    replace_child.as_sub_event(),
-                ),
-                ambush,
-                pressure_built,
-                heat_magnet,
+                    let surviving_players = surviving_players.into_iter()
+                        .map(|(player_name, player_id, jumped_sub_event, fire_eater_sub_event)| {
+                            let child = event.next_child(EventType::PlayerAddedToTeam)?;
+                            assert_eq!(player_name, child.metadata_str("playerName")?);
+                            assert_eq!(player_id, child.metadata_uuid("playerId")?);
+                            ParseOk(TeamIncinerationSurvivor {
+                                player_name: player_name.to_string(),
+                                player_id,
+                                roster_location: child.metadata_enum("location")?,
+                                jumped_sub_event,
+                                fire_eater_sub_event,
+                                join_team_sub_event: child.as_sub_event(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    FedEventData::TeamIncineration {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        incinerated_team_name: incinerated_team_name.to_string(),
+                        incinerated_team_nickname: incinerated_team_nickname.to_string(),
+                        incinerated_team_id,
+                        replacement_team_name: replacement_team_name.to_string(),
+                        replacement_team_nickname: replacement_team_nickname.to_string(),
+                        replacement_team_id,
+                        division_name: division_name.to_string(),
+                        division_id,
+                        surviving_players,
+                        incinerated_players,
+                        new_players,
+                        weather_sub_event: weather_event.as_sub_event(),
+                        team_entered_hall_sub_event: team_entered_hall_event.as_sub_event(),
+                        team_formed_sub_event: team_formed_event.as_sub_event(),
+                        team_replaced_sub_event: team_replaced_event.as_sub_event(),
+                    }
+                }
             }
         }
         EventType::IncinerationBlocked => {
@@ -4087,6 +4191,9 @@ pub fn parse_next_event(
         EventType::PlayerEvolves => {
             todo!()
         }
+        EventType::TeamIncinerationReplacement => {
+            todo!()
+        }
         EventType::TeamDivisionMove => {
             // For now this only has the breach events, it will need to be updated for s24
             let (team_nickname, division_name) = event.next_parse(parse_team_division_move)?;
@@ -5721,6 +5828,7 @@ fn is_known_team_name(name: &str) -> bool {
         "Core Mechanics",
         "Vault Legends",
         "Rising Stars",
+        "Oxford Paws",
     ]
     .contains(&name)
 }

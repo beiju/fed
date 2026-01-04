@@ -4876,6 +4876,111 @@ impl FedEvent {
 
                 return events;
             }
+            FedEventData::TeamIncineration { game, incinerated_team_name, incinerated_team_nickname, incinerated_team_id, replacement_team_name, replacement_team_nickname, replacement_team_id, division_name, division_id, surviving_players, incinerated_players, new_players, weather_sub_event, team_entered_hall_sub_event, team_formed_sub_event, team_replaced_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("A Rogue Umpire incinerated the {incinerated_team_name}!"));
+                eb.push_description(format!("They're replaced by the {replacement_team_name}!"));
+                let names_str = surviving_players.iter()
+                    .map(|player| &player.player_name)
+                    .join(" and ");
+                eb.push_description(format!("{names_str} joined the {replacement_team_nickname}!"));
+
+                for surviving_player in &surviving_players {
+                    eb.push_child(surviving_player.jumped_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{} jumped from the incinerated {incinerated_team_nickname}.", surviving_player.player_name));
+                        child_eb.push_player_tag(surviving_player.player_id);
+                        child_eb.push_team_tag(incinerated_team_id);
+                        child_eb.push_metadata_str("teamName", &incinerated_team_nickname);
+                        child_eb.push_metadata_uuid("teamId", incinerated_team_id);
+                        child_eb.push_metadata_str("playerName", &surviving_player.player_name);
+                        child_eb.push_metadata_uuid("playerId", surviving_player.player_id);
+                        child_eb.build(EventType::PlayerRemovedFromTeam)
+                    });
+                }
+
+                eb.push_child(weather_sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Special);
+                    child_eb.push_description(format!("A Rogue Umpire incinerated the {incinerated_team_name}!"));
+                    child_eb.push_team_tag(incinerated_team_id);
+                    for victim in &incinerated_players {
+                        child_eb.push_player_tag(victim.player_id);
+                    }
+                    child_eb.push_metadata_str("effect", "Team Incineration");
+                    child_eb.push_metadata_i64("weather", Weather::SupernovaEclipse);
+                    child_eb.build(EventType::WeatherEvent)
+                });
+
+                eb.push_child(team_entered_hall_sub_event, |mut child_eb| {
+                    child_eb.push_description(format!("The {incinerated_team_nickname} entered the Hall of Flame."));
+                    child_eb.push_team_tag(incinerated_team_id);
+                    child_eb.build(EventType::EnterHallOfFlame)
+                });
+
+                for victim in incinerated_players {
+                    eb.push_child(victim.player_entered_hall_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{} entered the Hall of Flame.", victim.player_name));
+                        child_eb.push_player_tag(victim.player_id);
+                        child_eb.build(EventType::EnterHallOfFlame)
+                    });
+                }
+
+                for surviving_player in &surviving_players {
+                    eb.push_child(surviving_player.fire_eater_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{} ate some flame.", surviving_player.player_name));
+                        child_eb.push_player_tag(surviving_player.player_id);
+                        child_eb.push_team_tag(incinerated_team_id);
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child_eb.push_metadata_str("mod", "MAGMATIC");
+                        child_eb.build(EventType::AddedMod)
+                    });
+                }
+
+                eb.push_child(team_formed_sub_event, |mut child_eb| {
+                    child_eb.push_description(format!("The {replacement_team_name} formed."));
+                    child_eb.push_team_tag(replacement_team_id);
+                    child_eb.push_metadata_uuid("id", replacement_team_id);
+                    child_eb.build(EventType::TeamFormed)
+                });
+
+                for new_player in new_players {
+                    eb.push_child(new_player.player_born_sub_event, |mut child_eb| {
+                        // The rare child event in the Game category
+                        child_eb.set_category(EventCategory::Game);
+                        child_eb.push_description(format!("{} was a founding member of the {replacement_team_nickname}.", new_player.player_name));
+                        child_eb.build(EventType::PlayerDivisionMove)
+                    });
+                }
+
+                eb.push_child(team_replaced_sub_event, |mut child_eb| {
+                    child_eb.push_description(format!("The {replacement_team_name} replaced the incinerated {incinerated_team_name}."));
+                    child_eb.push_team_tag(incinerated_team_id);
+                    child_eb.push_team_tag(replacement_team_id);
+                    child_eb.push_metadata_uuid("inTeamId", replacement_team_id);
+                    child_eb.push_metadata_str("inTeamName", &replacement_team_nickname);
+                    child_eb.push_metadata_uuid("outTeamId", incinerated_team_id);
+                    child_eb.push_metadata_str("outTeamName", incinerated_team_nickname);
+                    child_eb.push_metadata_uuid("divisionId", division_id);
+                    child_eb.push_metadata_str("divisionName", division_name);
+                    child_eb.build(EventType::TeamIncinerationReplacement)
+                });
+
+                for surviving_player in surviving_players {
+                    eb.push_child(surviving_player.join_team_sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("{} joined the {replacement_team_name}.", surviving_player.player_name));
+                        child_eb.push_player_tag(surviving_player.player_id);
+                        child_eb.push_team_tag(replacement_team_id);
+                        child_eb.push_metadata_i64("location", surviving_player.roster_location);
+                        child_eb.push_metadata_str("teamName", &replacement_team_nickname);
+                        child_eb.push_metadata_uuid("teamId", replacement_team_id);
+                        child_eb.push_metadata_str("playerName", &surviving_player.player_name);
+                        child_eb.push_metadata_uuid("playerId", surviving_player.player_id);
+                        child_eb.build(EventType::PlayerAddedToTeam)
+                    });
+                }
+
+                eb.build(EventType::Incineration)
+            }
         };
 
         vec![item]

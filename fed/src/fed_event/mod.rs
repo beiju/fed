@@ -3701,6 +3701,49 @@ pub enum BlackHoleBurp {
     Unwin(WinSubEvent),
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TeamIncinerationSurvivor {
+    /// Name of the player who survived
+    pub player_name: String,
+
+    /// Uuid of the player who survived
+    pub player_id: Uuid,
+
+    /// Roster location of the player on the old and new teams
+    pub roster_location: PositionType,
+
+    /// Metadata for the sub event for the player jumping from the incinerated
+    /// team
+    pub jumped_sub_event: SubEvent,
+
+    /// Metadata for the sub event for the player eating fire
+    pub fire_eater_sub_event: SubEvent,
+
+    /// Metadata for the sub event for the player joining the new team
+    pub join_team_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TeamIncinerationVictim {
+    /// Name of the player who was incinerated
+    pub player_name: String,
+
+    /// Uuid of the player who was incinerated
+    pub player_id: Uuid,
+
+    /// Metadata for the sub event for the player entering the hall of flame
+    pub player_entered_hall_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TeamIncinerationReplacement {
+    /// Name of the player who was born to the new team
+    pub player_name: String,
+
+    /// Metadata for the sub event for the player being born
+    pub player_born_sub_event: SubEvent,
+}
+
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
@@ -7943,6 +7986,63 @@ pub enum FedEventData {
         /// Parties as a result of the Good Riddance mod
         good_riddance_parties: Vec<GoodRiddanceParty>,
     },
+
+    /// Team was incinerated
+    #[serde(rename_all = "camelCase")]
+    TeamIncineration {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Full name of the team who was incinerated
+        incinerated_team_name: String,
+
+        /// Nickname of the team who was incinerated
+        incinerated_team_nickname: String,
+
+        /// Uuid of the team who was incinerated
+        incinerated_team_id: Uuid,
+
+        /// Full name of the replacement team
+        replacement_team_name: String,
+
+        /// Nickname of the replacement team
+        replacement_team_nickname: String,
+
+        /// Uuid of the replacement team
+        replacement_team_id: Uuid,
+
+        /// Name of the division both teams belong to
+        division_name: String,
+
+        /// Uuid of the division both teams belong to
+        division_id: Uuid,
+
+        /// List of players who survived the incineration and jumped to the new
+        /// team and the associated metadata
+        surviving_players: Vec<TeamIncinerationSurvivor>,
+
+        /// List of players who did not survive the incineration and the
+        /// associated metadata
+        incinerated_players: Vec<TeamIncinerationVictim>,
+
+        /// List of players who were born onto the new team
+        new_players: Vec<TeamIncinerationReplacement>,
+
+        /// Metadata for the sub-event associated with the weather triggering
+        weather_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with the team entering the
+        /// Hall of Flame
+        team_entered_hall_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with the replacement team
+        /// forming
+        team_formed_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with the replacement team
+        /// replacing the incinerated team
+        team_replaced_sub_event: SubEvent,
+    }
 }
 
 #[derive(
@@ -8221,6 +8321,7 @@ impl FedEventData {
             FedEventData::PlayersCutFromTeam { .. } => None,
             FedEventData::PlayerLeftVault { .. } => None,
             FedEventData::PlayerLeftVaultSuperRoam { .. } => None,
+            FedEventData::TeamIncineration { game, .. } => Some(game),
         }
     }
 }

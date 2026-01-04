@@ -1794,7 +1794,22 @@ pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserRes
     Ok((input, (seeker_name, sought_name)))
 }
 
+pub(crate) enum ParsedIncineration<'a> {
+    Player((&'a str, &'a str, Option<&'a str>, Option<(&'a str, &'a str)>, Option<&'a str>)),
+    Team((&'a str, &'a str, &'a str, Vec<&'a str>)),
+}
+
 pub(crate) fn parse_incineration(
+    input: &str,
+) -> ParserResult<ParsedIncineration> {
+    alt((
+        parse_player_incineration.map(ParsedIncineration::Player),
+        parse_team_incineration.map(ParsedIncineration::Team),
+    ))
+    .parse(input)
+}
+
+pub(crate) fn parse_player_incineration(
     input: &str,
 ) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>, Option<&str>)> {
     alt((
@@ -1849,6 +1864,22 @@ pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &s
     let (input, chained_to_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (victim_name, replacement_name, chained_to_name)))
+}
+
+pub(crate) fn parse_team_incineration(input: &str) -> ParserResult<(&str, &str, &str, Vec<&str>)> {
+    // A Rogue Umpire incinerated the Kansas City Breath Mints!
+    // They're replaced by the Oxford Paws!
+    // Rodriguez Internet and Leach Ingram joined the Paws!
+    let (input, _) = tag("A Rogue Umpire incinerated the ").parse(input)?;
+    let (input, incinerated_team_name) = parse_terminated("!\nThey're replaced by the ").parse(input)?;
+    let (input, replacement_team_name) = parse_terminated("!\n").parse(input)?;
+
+    // TODO Support arbitrary number of surviving players 
+    let (input, surviving_player_1) = parse_terminated(" and ").parse(input)?;
+    let (input, surviving_player_2) = parse_terminated(" joined the ").parse(input)?;
+    let (input, replacement_team_nickname) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (incinerated_team_name, replacement_team_name, replacement_team_nickname, vec![surviving_player_1, surviving_player_2])))
 }
 
 pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {

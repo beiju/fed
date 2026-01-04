@@ -366,6 +366,7 @@ pub enum EventType {
     ReverbFullShuffle = 130,
     ReverbLineupShuffle = 131,
     ReverbRotationShuffle = 132,
+    TeamIncinerationReplacement = 133,
     TeamDivisionMove = 135,
     PlayerDivisionMove = 136,
     PlayerHatched = 137,
