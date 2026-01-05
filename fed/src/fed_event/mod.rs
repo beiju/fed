@@ -6268,6 +6268,10 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::HitByPitch>>,
+
+        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
+        /// mod, otherwise null.
+        stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
     /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating

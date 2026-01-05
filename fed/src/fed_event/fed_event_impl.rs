@@ -2906,7 +2906,7 @@ impl FedEvent {
 
                 eb.build(EventType::SalmonSwim)
             }
-            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, debt_type, sub_event, scores } => {
+            FedEventData::HitByPitch { game, pitcher_id, pitcher_name, batter_team_id, batter_id, batter_name, debt_type, sub_event, scores, stopped_inhabiting } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -2934,6 +2934,8 @@ impl FedEvent {
                 });
 
                 eb.push_scores(&scores, home_team_id, "scores!", false, false);
+
+                eb.push_stopped_inhabiting(stopped_inhabiting.as_ref());
 
                 eb.build(EventType::HitByPitch)
             }

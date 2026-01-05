@@ -1246,6 +1246,7 @@ pub fn parse_next_event(
             let mut sub_event = event.next_child(EventType::AddedMod)?;
 
             let scores = event.parse_scores(" scores!", false)?;
+            let stopped_inhabiting = event.parse_stopped_inhabiting(Some(batter_id))?;
 
             FedEventData::HitByPitch {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -1257,6 +1258,7 @@ pub fn parse_next_event(
                 debt_type,
                 sub_event: sub_event.as_sub_event(),
                 scores,
+                stopped_inhabiting,
             }
         }
         EventType::BatterSkipped => {
