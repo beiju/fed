@@ -2299,6 +2299,49 @@ pub struct Ambush {
     pub player_rating_after: f64,
 }
 
+// This struct is meant to be used with #[serde(flatten)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct Firewalker {
+    /// Name of the location the Firewalker left. This can be a team's full
+    /// name or the Vault
+    pub previous_location_name: String,
+
+    /// Metadata for the successor event associated with the instability
+    /// being spread to the Vault
+    ///
+    /// This is not a child event. It's a separate event that appears after
+    /// the PlayerLeftVault event, but it was likely intended to be a child
+    /// event.
+    pub instability_sub_event: SubEvent,
+
+    /// Metadata for the successor events associated with the Hall players
+    /// getting the Unstable mod
+    ///
+    /// These are not child events. They're separate events that appear
+    /// after the PlayerLeftVault event, but it's likely they were intended
+    /// to be a child event.
+    pub players_gained_unstable: Vec<ModChangeSubEventWithNamedPlayer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct RoamConnectedEvents {
+    /// If the player has the Firewalker mod, contains info about the
+    /// Instability spreading in their wake
+    pub firewalker: Option<Firewalker>,
+
+    /// If the player has the On an Odyssey mod, contains info about the
+    /// roam boost they received
+    pub odyssey_boost: Option<PlayerBoostSubEvent>,
+
+    /// If the player roamed to the Shadows, contains info about the shadow
+    /// boost they received
+    pub shadow_boost: Option<PlayerBoostSubEvent>,
+
+    /// Parties as a result of the Good Riddance mod
+    pub good_riddance_parties: Vec<GoodRiddanceParty>,
+
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum RoamFromLocation {
     Team {
@@ -2307,19 +2350,12 @@ pub enum RoamFromLocation {
 
         /// Nickname of player's previous team
         previous_team_nickname: String,
-
-        /// If the player has the On an Odyssey mod, contains info about the
-        /// roam boost they received
-        odyssey_boost: Option<PlayerBoostSubEvent>,
-
-        /// If the player roamed to the Shadows, contains info about the shadow
-        /// boost they received
-        shadow_boost: Option<PlayerBoostSubEvent>,
-
-        /// Parties as a result of the Good Riddance mod
-        good_riddance_parties: Vec<GoodRiddanceParty>,
     },
     HallOfFlame {
+        /// Metadata for the player-left-hall-of-flame sub-event
+        sub_event: SubEvent,
+    },
+    Vault {
         /// Metadata for the player-left-hall-of-flame sub-event
         sub_event: SubEvent,
     },
@@ -6372,6 +6408,9 @@ pub enum FedEventData {
     /// Player Roamed at the end of the Season
     #[serde(rename_all = "camelCase")]
     Roam {
+        /// True if this was a super roam, false otherwise
+        is_super: bool,
+
         /// Uuid of player who roamed
         player_id: Uuid,
 
@@ -6390,33 +6429,9 @@ pub enum FedEventData {
 
         /// Where the player roamed from, either another team or the Hall of Flame
         roam_from: RoamFromLocation,
-    },
 
-    /// Player Roamed at the end of the Week
-    #[serde(rename_all = "camelCase")]
-    SuperRoam {
-        /// Uuid of player who roamed
-        player_id: Uuid,
-
-        /// Name of player who roamed
-        player_name: String,
-
-        /// Location of player on the new team. If the player roamed from the team, this is also
-        /// the location on their old team
-        location: PositionType,
-
-        /// Uuid of player's new team
-        new_team_id: Uuid,
-
-        /// Nickname of player's new team
-        new_team_nickname: String,
-
-        // TODO document these
-        previous_team_id: Uuid,
-        previous_team_nickname: String,
-
-        /// If the player roamed to the Shadows, contains info about the shadow boost they received
-        shadow_boost: Option<PlayerBoostSubEvent>,
+        #[serde(flatten)]
+        connected_events: RoamConnectedEvents,
     },
 
     /// A shimmering Crate descends during Glitter weather
@@ -7931,62 +7946,6 @@ pub enum FedEventData {
         /// event.
         shadow_boost: Option<PlayerBoostSubEvent>,
     },
-
-    /// Parker MacMillan Super Roamed out of the Vault
-    // TODO recombine this with PlayerLeftVault?
-    #[serde(rename_all = "camelCase")]
-    PlayerLeftVaultSuperRoam {
-        /// Name of the player who left the Vault
-        player_name: String,
-
-        /// Uuid of the player who left the Vault
-        player_id: Uuid,
-
-        /// Nickname of the non-Vault team the player joined
-        new_team_nickname: String,
-
-        /// Uuid of the non-Vault team the player joined
-        new_team_id: Uuid,
-
-        /// Roster location of the player who left the vault
-        location: PositionType,
-
-        /// Metadata for the successor event associated with the instability
-        /// being spread to the Vault
-        ///
-        /// This is not a child event. It's a separate event that appears after
-        /// the PlayerLeftVault event, but it was likely intended to be a child
-        /// event.
-        instability_sub_event: SubEvent,
-
-        /// Metadata for the successor events associated with the Hall players
-        /// getting the Unstable mod
-        ///
-        /// These are not child events. They're separate events that appear
-        /// after the PlayerLeftVault event, but it's likely they were intended
-        /// to be a child event.
-        players_gained_unstable: Vec<ModChangeSubEventWithNamedPlayer>,
-
-        /// Metadata for the successor event associated with the player being
-        /// added to their new, non-Vault team
-        ///
-        /// This is not a child event. It's a separate event that appears after
-        /// the PlayerLeftVault event, but it was likely intended to be a child
-        /// event.
-        add_to_team_sub_event: SubEvent,
-
-        /// If the player has the On an Odyssey mod, contains info about the
-        /// roam boost they received
-        odyssey_boost: Option<PlayerBoostSubEvent>,
-
-        /// If the player roamed to the Shadows, contains info about the shadow
-        /// boost they received
-        shadow_boost: Option<PlayerBoostSubEvent>,
-
-        /// Parties as a result of the Good Riddance mod
-        good_riddance_parties: Vec<GoodRiddanceParty>,
-    },
-
     /// Team was incinerated
     #[serde(rename_all = "camelCase")]
     TeamIncineration {
@@ -8049,16 +8008,16 @@ pub enum FedEventData {
     PlayerBecameStuck {
         #[serde(flatten)]
         game: GameEvent,
-        
+
         /// Name of the player who became Stuck
         player_name: String,
-        
+
         /// Uuid of the player who became Stuck
         player_id: Uuid,
-        
+
         /// Uuid of the team of the player who became Stuck
         team_id: Uuid,
-        
+
         /// Metadata for the mod-added-from-other-mod sub-event
         sub_event: SubEvent,
     },
@@ -8271,7 +8230,6 @@ impl FedEventData {
             FedEventData::ExitSecretBase { game, .. } => Some(game),
             FedEventData::EchoChamber { game, .. } => Some(game),
             FedEventData::Roam { .. } => None,
-            FedEventData::SuperRoam { .. } => None,
             FedEventData::GlitterCrate { game, .. } => Some(game),
             FedEventData::ModsFromAnotherModRemoved { .. } => None,
             FedEventData::ConsumerExpelled { game, .. } => Some(game),
@@ -8339,7 +8297,6 @@ impl FedEventData {
             FedEventData::GameCanceled { game, .. } => Some(game),
             FedEventData::PlayersCutFromTeam { .. } => None,
             FedEventData::PlayerLeftVault { .. } => None,
-            FedEventData::PlayerLeftVaultSuperRoam { .. } => None,
             FedEventData::TeamIncineration { game, .. } => Some(game),
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
         }

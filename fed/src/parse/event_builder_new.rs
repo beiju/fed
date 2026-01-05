@@ -15,6 +15,7 @@ use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
 use uuid::Uuid;
+use crate::fed_event::RoamConnectedEvents;
 
 pub struct EventBuilder {
     event: EventuallyEvent,
@@ -79,6 +80,81 @@ impl EventBuilder {
             },
             phantom_children: 0,
         }
+    }
+
+    pub fn build_roam_connected_events(
+        &self,
+        connected: RoamConnectedEvents,
+        player_name: &str,
+        player_id: Uuid,
+        previous_team_id: Option<Uuid>,
+        new_team_id: Uuid,
+    ) -> Vec<EventuallyEvent> {
+        // Not worth computing capacity tbh
+        let mut events = Vec::new();
+
+        if let Some(firewalker) = connected.firewalker {
+            let mut instability_eb = self.connected_event(firewalker.instability_sub_event);
+            instability_eb.set_category(EventCategory::Changes);
+            instability_eb.set_description(format!("{player_name} left Instability in their wake. {} became Unstable!", firewalker.previous_location_name));
+            if let Some(previous_team_id) = previous_team_id {
+                instability_eb.push_team_tag(previous_team_id);
+                // The Vault isn't capable of gaining a mod, so this metadata
+                // is only present on the team version
+                instability_eb.push_metadata_str("mod", "MARKED");
+                instability_eb.push_metadata_i64("type", ModDuration::Weekly as i64);
+            } else {
+                // For some reason the roaming player's ID is present in the vault
+                // version of this event, but not the team version
+                instability_eb.push_player_tag(player_id);
+            }
+            events.push(instability_eb.build(EventType::AddedMod));
+
+            for player_gained_unstable in firewalker.players_gained_unstable {
+                let mut gained_unstable_eb = self.connected_event(player_gained_unstable.sub_event);
+                gained_unstable_eb.set_category(EventCategory::Changes);
+                gained_unstable_eb.set_description(format!("{} gained the Unstable mod.", player_gained_unstable.player_name));
+                gained_unstable_eb.push_team_tag(player_gained_unstable.team_id);
+                gained_unstable_eb.push_player_tag(player_gained_unstable.player_id);
+                gained_unstable_eb.push_metadata_str("mod", "MARKED");
+                gained_unstable_eb.push_metadata_i64("type", ModDuration::Weekly as i64);
+                events.push(gained_unstable_eb.build(EventType::AddedMod));
+            }
+        }
+
+        if let Some(odyssey_boost) = connected.odyssey_boost {
+            let mut odyssey_eb = self.connected_event(odyssey_boost.sub_event);
+            odyssey_eb.set_category(EventCategory::Changes);
+            odyssey_eb.push_description(format!("{player_name} was boosted."));
+            odyssey_eb.push_player_tag(player_id);
+            odyssey_eb.push_team_tag(new_team_id);
+            events.push(odyssey_eb.build_boost(&odyssey_boost));
+        }
+
+        if let Some(shadow_boost) = connected.shadow_boost {
+            let mut shadow_eb = self.connected_event(shadow_boost.sub_event);
+            shadow_eb.set_category(EventCategory::Changes);
+            shadow_eb.push_description(format!("{player_name} entered the Shadows."));
+            shadow_eb.push_player_tag(player_id);
+            shadow_eb.push_team_tag(new_team_id);
+            events.push(shadow_eb.build_boost(&shadow_boost));
+        }
+
+        for party in connected.good_riddance_parties {
+            let mut party_eb = self.connected_event(party.sub_event);
+            party_eb.set_category(EventCategory::Changes);
+            party_eb.push_description(format!("{} is Partying!", party.player_name));
+            party_eb.push_player_tag(party.player_id);
+            if let Some(previous_team_id) = previous_team_id {
+                party_eb.push_team_tag(previous_team_id);
+            }
+            party_eb.push_metadata_f64("before", party.rating_before);
+            party_eb.push_metadata_f64("after", party.rating_after);
+            party_eb.push_metadata_i64("type", 4); // "all categories"
+            events.push(party_eb.build(EventType::PlayerStatIncrease));
+        }
+
+        events
     }
 
     pub fn description(&self) -> &str {

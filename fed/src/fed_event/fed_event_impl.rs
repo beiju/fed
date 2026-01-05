@@ -3108,42 +3108,18 @@ impl FedEvent {
                     .child(child)
                     .build()
             }
-            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname, odyssey_boost, shadow_boost, good_riddance_parties } } => {
-                let mut events = Vec::with_capacity(good_riddance_parties.len() + 1);
-
-                if let Some(odyssey_boost) = odyssey_boost {
-                    let mut odyssey_eb = eb.connected_event(odyssey_boost.sub_event);
-                    odyssey_eb.set_category(EventCategory::Changes);
-                    odyssey_eb.push_description(format!("{player_name} was boosted."));
-                    odyssey_eb.push_player_tag(player_id);
-                    odyssey_eb.push_team_tag(new_team_id);
-                    events.push(odyssey_eb.build_boost(&odyssey_boost));
-                }
-
-                if let Some(shadow_boost) = shadow_boost {
-                    let mut shadow_eb = eb.connected_event(shadow_boost.sub_event);
-                    shadow_eb.set_category(EventCategory::Changes);
-                    shadow_eb.push_description(format!("{player_name} entered the Shadows."));
-                    shadow_eb.push_player_tag(player_id);
-                    shadow_eb.push_team_tag(new_team_id);
-                    events.push(shadow_eb.build_boost(&shadow_boost));
-                }
-
-                for party in good_riddance_parties {
-                    let mut party_eb = eb.connected_event(party.sub_event);
-                    party_eb.set_category(EventCategory::Changes);
-                    party_eb.push_description(format!("{} is Partying!", party.player_name));
-                    party_eb.push_player_tag(party.player_id);
-                    party_eb.push_team_tag(previous_team_id);
-                    party_eb.push_metadata_f64("before", party.rating_before);
-                    party_eb.push_metadata_f64("after", party.rating_after);
-                    party_eb.push_metadata_i64("type", 4); // "all categories"
-                    events.push(party_eb.build(EventType::PlayerStatIncrease));
-                }
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname }, connected_events } => {
+                let mut events = eb.build_roam_connected_events(
+                    connected_events,
+                    &player_name,
+                    player_id,
+                    Some(previous_team_id),
+                    new_team_id,
+                );
 
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(format!("{player_name} {} to a new team.",
-                                             if self.season < 17 { "wandered" } else { "roamed" }));
+                                             if self.season < 17 { "wandered" } else if is_super { "super roamed" } else { "roamed" }));
                 eb.push_player_tag(player_id);
                 eb.push_team_tag(previous_team_id);
                 eb.push_team_tag(new_team_id);
@@ -3159,13 +3135,22 @@ impl FedEvent {
 
                 return events;
             }
-            FedEventData::Roam { player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event } } => {
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event }, connected_events } |
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Vault { sub_event }, connected_events } => {
+                let mut events = eb.build_roam_connected_events(
+                    connected_events,
+                    &player_name,
+                    player_id,
+                    None,
+                    new_team_id,
+                );
+
                 // In season 22 they capitalized the R
-                let r = if self.season < 21 { "r" } else { "R" };
+                let roamed = if is_super { "super roamed" } else if self.season < 21 { "roamed" } else { "Roamed" };
 
                 let mut team_eb = eb.connected_event(sub_event);
                 team_eb.set_category(EventCategory::Changes);
-                team_eb.push_description(format!("{player_name} {r}oamed to The {new_team_nickname}."));
+                team_eb.push_description(format!("{player_name} {roamed} to The {new_team_nickname}."));
                 team_eb.push_player_tag(player_id);
                 team_eb.push_team_tag(new_team_id);
                 team_eb.push_metadata_i64("location", location);
@@ -3173,46 +3158,14 @@ impl FedEvent {
                 team_eb.push_metadata_str("playerName", &player_name);
                 team_eb.push_metadata_uuid("teamId", new_team_id);
                 team_eb.push_metadata_str("teamName", new_team_nickname);
-                let added_to_team_event = team_eb.build(EventType::PlayerAddedToTeam);
+                events.insert(0, team_eb.build(EventType::PlayerAddedToTeam));
 
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(format!("{player_name} {r}oamed out of the Hall of Flame."));
+                eb.push_description(format!("{player_name} {roamed} out of the Hall of Flame."));
                 eb.push_player_tag(player_id);
-                let left_hall_event = eb.build(EventType::ExitHallOfFlame);
+                events.insert(0, eb.build(EventType::ExitHallOfFlame));
 
-                return vec![left_hall_event, added_to_team_event];
-            }
-            FedEventData::SuperRoam { player_id, player_name, location, new_team_id, new_team_nickname, previous_team_id, previous_team_nickname, shadow_boost } => {
-                let boost_event = shadow_boost.map(|boost| {
-                    let mut boost_eb = eb.connected_event(boost.sub_event);
-
-                    boost_eb.set_category(EventCategory::Changes);
-                    boost_eb.push_description(&format!("{player_name} entered the Shadows."));
-                    boost_eb.push_player_tag(player_id);
-                    boost_eb.push_team_tag(new_team_id);
-                    boost_eb.build_boost(&boost)
-                });
-
-                eb.set_category(EventCategory::Changes);
-                eb.push_description(format!("{player_name} super roamed to a new team."));
-                eb.push_player_tag(player_id);
-                eb.push_team_tag(previous_team_id);
-                eb.push_team_tag(new_team_id);
-                eb.push_metadata_i64("location", location);
-                eb.push_metadata_uuid("playerId", player_id);
-                eb.push_metadata_str("playerName", player_name);
-                eb.push_metadata_i64("receiveLocation", location);
-                eb.push_metadata_uuid("receiveTeamId", new_team_id);
-                eb.push_metadata_str("receiveTeamName", new_team_nickname);
-                eb.push_metadata_uuid("sendTeamId", previous_team_id);
-                eb.push_metadata_str("sendTeamName", previous_team_nickname);
-
-                let main_event = eb.build(EventType::PlayerMoved);
-                if let Some(boost_event) = boost_event {
-                    return vec![main_event, boost_event];
-                } else {
-                    main_event
-                }
+                return events;
             }
             FedEventData::GlitterCrate { game, player_name, gained_item } => {
                 eb.set_game(game);
@@ -4815,69 +4768,6 @@ impl FedEvent {
                 } else {
                     vec![main_event, add_to_team_event]
                 }
-            }
-            FedEventData::PlayerLeftVaultSuperRoam { player_name, player_id, new_team_nickname, new_team_id, location, instability_sub_event, players_gained_unstable, add_to_team_sub_event, odyssey_boost, shadow_boost, good_riddance_parties } => {
-                eb.set_category(EventCategory::Changes);
-                let mut events = Vec::new();
-
-                let mut instability_eb = eb.connected_event(instability_sub_event);
-                instability_eb.set_description(format!("{player_name} left Instability in their wake. The Vault became Unstable!"));
-                instability_eb.push_player_tag(player_id);
-                events.push(instability_eb.build(EventType::AddedMod));
-
-                for player_gained_unstable in players_gained_unstable {
-                    let mut gained_unstable_eb = eb.connected_event(player_gained_unstable.sub_event);
-                    gained_unstable_eb.set_description(format!("{} gained the Unstable mod.", player_gained_unstable.player_name));
-                    gained_unstable_eb.push_team_tag(player_gained_unstable.team_id);
-                    gained_unstable_eb.push_player_tag(player_gained_unstable.player_id);
-                    gained_unstable_eb.push_metadata_str("mod", "MARKED");
-                    gained_unstable_eb.push_metadata_i64("type", ModDuration::Weekly as i64);
-                    events.push(gained_unstable_eb.build(EventType::AddedMod));
-                }
-
-                let mut add_to_team_eb = eb.connected_event(add_to_team_sub_event);
-                add_to_team_eb.set_description(format!("{player_name} Super Roamed to the {new_team_nickname}."));
-                add_to_team_eb.push_metadata_i64("location", location as i64);
-                add_to_team_eb.push_metadata_uuid("teamId", new_team_id);
-                add_to_team_eb.push_metadata_str("teamName", new_team_nickname);
-                add_to_team_eb.push_metadata_uuid("playerId", player_id);
-                add_to_team_eb.push_metadata_str("playerName", &player_name);
-                add_to_team_eb.push_team_tag(new_team_id);
-                add_to_team_eb.push_player_tag(player_id);
-                events.push(add_to_team_eb.build(EventType::PlayerAddedToTeam));
-
-                if let Some(odyssey_boost) = odyssey_boost {
-                    let mut odyssey_boost_event = eb.connected_event(odyssey_boost.sub_event);
-                    odyssey_boost_event.set_description(format!("{player_name} was boosted."));
-                    odyssey_boost_event.push_team_tag(new_team_id);
-                    odyssey_boost_event.push_player_tag(player_id);
-                    events.push(odyssey_boost_event.build_boost(&odyssey_boost));
-                };
-
-                if let Some(shadow_boost) = shadow_boost {
-                    let mut shadow_boost_event = eb.connected_event(shadow_boost.sub_event);
-                    shadow_boost_event.set_description(format!("{player_name} entered the Shadows."));
-                    shadow_boost_event.push_team_tag(new_team_id);
-                    shadow_boost_event.push_player_tag(player_id);
-                    events.push(shadow_boost_event.build_boost(&shadow_boost));
-                };
-
-                for party in good_riddance_parties {
-                    let mut party_eb = eb.connected_event(party.sub_event);
-                    party_eb.set_category(EventCategory::Changes);
-                    party_eb.push_description(format!("{} is Partying!", party.player_name));
-                    party_eb.push_player_tag(party.player_id);
-                    party_eb.push_metadata_f64("before", party.rating_before);
-                    party_eb.push_metadata_f64("after", party.rating_after);
-                    party_eb.push_metadata_i64("type", 4); // "all categories"
-                    events.push(party_eb.build(EventType::PlayerStatIncrease));
-                }
-
-                eb.push_description(format!("{player_name} Super Roamed out of the Vault."));
-                eb.push_player_tag(player_id);
-                events.insert(0, eb.build(EventType::PlayerLeftVault));
-
-                return events;
             }
             FedEventData::TeamIncineration { game, incinerated_team_name, incinerated_team_nickname, incinerated_team_id, replacement_team_name, replacement_team_nickname, replacement_team_id, division_name, division_id, surviving_players, incinerated_players, new_players, weather_sub_event, team_entered_hall_sub_event, team_formed_sub_event, team_replaced_sub_event } => {
                 eb.set_game(game);

@@ -3442,46 +3442,10 @@ pub fn parse_next_event(
                     }
                 }
                 ParsedPlayerMoved::Roamin(player_name) => {
-                    let mut shadow_boost = None;
-                    let mut odyssey_boost = None;
-                    let mut good_riddance_parties = Vec::new();
-
-                    while let Some(boost) = event_iter
-                        .next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved)
-                        .ok()
-                    {
-                        let mut boost = EventParseWrapper::new(&boost)?;
-                        match boost.next_parse(parse_roam_boost)? {
-                            ParsedRoamBoost::ShadowBoost(_player_name) => {
-                                // TODO Check that shadow_boost is not already populated
-                                shadow_boost = Some(PlayerBoostSubEvent {
-                                    rating_before: boost.metadata_f64("before")?,
-                                    rating_after: boost.metadata_f64("after")?,
-                                    sub_event: boost.as_sub_event(),
-                                })
-                            }
-                            ParsedRoamBoost::Odyssey(_player_name) => {
-                                // TODO Check that odyssey_boost is not already populated
-                                odyssey_boost = Some(PlayerBoostSubEvent {
-                                    rating_before: boost.metadata_f64("before")?,
-                                    rating_after: boost.metadata_f64("after")?,
-                                    sub_event: boost.as_sub_event(),
-                                })
-                            }
-                            ParsedRoamBoost::GoodRiddanceParty(player_name, attracted_birds) => {
-                                assert!(attracted_birds.is_none());
-                                good_riddance_parties.push(GoodRiddanceParty {
-                                    player_id: boost.next_player_id()?,
-                                    player_name: player_name.to_string(),
-                                    sub_event: boost.as_sub_event(),
-                                    rating_before: boost.metadata_f64("before")?,
-                                    rating_after: boost.metadata_f64("after")?,
-                                });
-                            }
-                        }
-                    }
+                    let connected_events = parse_connected_roam_events(event_iter)?;
 
                     FedEventData::Roam {
+                        is_super: false,
                         player_id: event.metadata_uuid("playerId")?,
                         player_name: player_name.to_string(),
                         location: event.metadata_enum("location")?,
@@ -3490,38 +3454,25 @@ pub fn parse_next_event(
                         roam_from: RoamFromLocation::Team {
                             previous_team_id: event.metadata_uuid("sendTeamId")?,
                             previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
-                            odyssey_boost,
-                            shadow_boost,
-                            good_riddance_parties,
                         },
+                        connected_events,
                     }
                 }
                 ParsedPlayerMoved::SuperRoamin(player_name) => {
-                    // If the player Roamed to the shadows, there will be a top-level boost event
-                    // (erroneously) emitted _after_ this one (and not as a child, which is what
-                    // you would expect). We yoink that and include it as part of this event.
-                    let shadow_boost = event_iter
-                        .next_if_type(EventType::PlayerStatIncrease)
-                        .map(|event| {
-                            let mut event = EventParseWrapper::new(&event)?;
+                    let connected_events = parse_connected_roam_events(event_iter)?;
 
-                            ParseOk(PlayerBoostSubEvent {
-                                rating_before: event.metadata_f64("before")?,
-                                rating_after: event.metadata_f64("after")?,
-                                sub_event: event.as_sub_event(),
-                            })
-                        })
-                        .transpose()?;
-
-                    FedEventData::SuperRoam {
+                    FedEventData::Roam {
+                        is_super: true,
                         player_id: event.metadata_uuid("playerId")?,
                         player_name: player_name.to_string(),
                         location: event.metadata_enum("location")?,
                         new_team_id: event.metadata_uuid("receiveTeamId")?,
                         new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
-                        previous_team_id: event.metadata_uuid("sendTeamId")?,
-                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
-                        shadow_boost,
+                        roam_from: RoamFromLocation::Team {
+                            previous_team_id: event.metadata_uuid("sendTeamId")?,
+                            previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                        },
+                        connected_events,
                     }
                 }
             }
@@ -3583,15 +3534,19 @@ pub fn parse_next_event(
                 .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
             let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
+            let connected_events = parse_connected_roam_events(event_iter)?;
+
             FedEventData::Roam {
+                is_super: false,
                 player_id: add_to_team_event.metadata_uuid("playerId")?,
                 player_name: add_to_team_event.metadata_str("playerName")?.to_string(),
                 location: add_to_team_event.metadata_enum("location")?,
+                new_team_id: add_to_team_event.metadata_uuid("teamId")?,
+                new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
                 roam_from: RoamFromLocation::HallOfFlame {
                     sub_event: add_to_team_event.as_sub_event(),
                 },
-                new_team_id: add_to_team_event.metadata_uuid("teamId")?,
-                new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
+                connected_events,
             }
         }
         EventType::PlayerGainedItem => {
@@ -4701,80 +4656,27 @@ pub fn parse_next_event(
         }
         EventType::PlayerLeftVault => {
             let (player_name, is_super_roam) = event.next_parse(parse_player_left_vault)?;
+            // TODO This isn't the right signal to decide whether this was a
+            //   roam or a semicentennial player returning
             if is_super_roam {
-                let instability_event = event_iter.next_expect_type(EventType::AddedMod, event.event_type)?;
-                let instability_event = EventParseWrapper::new(&instability_event)?;
-
-                let players_gained_unstable = std::iter::from_fn(|| {
-                    event_iter.next_if_type(EventType::AddedMod)
-                        .map(|unstable_event| {
-                            let mut unstable_event = EventParseWrapper::new(&unstable_event)?;
-                            let player_name = unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
-                            ParseOk(ModChangeSubEventWithNamedPlayer {
-                                sub_event: unstable_event.as_sub_event(),
-                                team_id: unstable_event.next_team_id()?,
-                                player_id: unstable_event.next_player_id()?,
-                                player_name: player_name.to_string(),
-                            })
-                        })
-                }).collect::<Result<Vec<_>, _>>()?;
-
                 let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::AddedMod)?;
                 let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
                 let location = add_to_team_event.metadata_enum("location")?;
 
-                let mut shadow_boost = None;
-                let mut odyssey_boost = None;
-                let mut good_riddance_parties = Vec::new();
+                let connected_events = parse_connected_roam_events(event_iter)?;
 
-                while let Some(boost) = event_iter
-                    .next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerAddedToTeam)
-                    .ok()
-                {
-                    let mut boost = EventParseWrapper::new(&boost)?;
-                    match boost.next_parse(parse_roam_boost)? {
-                        ParsedRoamBoost::ShadowBoost(_player_name) => {
-                            // TODO Check that shadow_boost is not already populated
-                            shadow_boost = Some(PlayerBoostSubEvent {
-                                rating_before: boost.metadata_f64("before")?,
-                                rating_after: boost.metadata_f64("after")?,
-                                sub_event: boost.as_sub_event(),
-                            })
-                        }
-                        ParsedRoamBoost::Odyssey(_player_name) => {
-                            // TODO Check that odyssey_boost is not already populated
-                            odyssey_boost = Some(PlayerBoostSubEvent {
-                                rating_before: boost.metadata_f64("before")?,
-                                rating_after: boost.metadata_f64("after")?,
-                                sub_event: boost.as_sub_event(),
-                            })
-                        }
-                        ParsedRoamBoost::GoodRiddanceParty(player_name, attracted_birds) => {
-                            assert!(attracted_birds.is_none());
-                            good_riddance_parties.push(GoodRiddanceParty {
-                                player_id: boost.next_player_id()?,
-                                player_name: player_name.to_string(),
-                                sub_event: boost.as_sub_event(),
-                                rating_before: boost.metadata_f64("before")?,
-                                rating_after: boost.metadata_f64("after")?,
-                            });
-                        }
-                    }
-                }
-
-                FedEventData::PlayerLeftVaultSuperRoam {
+                FedEventData::Roam {
+                    is_super: true,
                     player_name: player_name.to_string(),
                     player_id: event.next_player_id()?,
+                    location,
                     new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
                     new_team_id: add_to_team_event.metadata_uuid("teamId")?,
-                    location,
-                    instability_sub_event: instability_event.as_sub_event(),
-                    players_gained_unstable,
-                    add_to_team_sub_event: add_to_team_event.as_sub_event(),
-                    odyssey_boost,
-                    shadow_boost,
-                    good_riddance_parties,
+                    roam_from: RoamFromLocation::Vault {
+                        sub_event: add_to_team_event.as_sub_event(),
+                    },
+                    connected_events,
                 }
             } else {
                 // These events are all followed by a PlayerAddedToTeam event which
@@ -5565,6 +5467,92 @@ pub fn parse_next_event(
     };
 
     Ok(Some(event.to_fed(data)?))
+}
+
+pub fn parse_firewalker(
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
+) -> Result<Option<Firewalker>, FeedParseError> {
+    let Some(instability_event) = event_iter.next_if_type(EventType::AddedMod) else {
+        return Ok(None);
+    };
+    let mut instability_event = EventParseWrapper::new(&instability_event)?;
+    // Make sure this is the right mod, otherwise we'll error later and the
+    // error will be much more confusing
+    assert_eq!(instability_event.metadata_str("mod")?, "MARKED");
+    let (_, previous_location_name) = instability_event.next_parse(parse_firewalker_instability_spread)?;
+
+    let players_gained_unstable = std::iter::from_fn(|| {
+        event_iter.next_if_type(EventType::AddedMod)
+            .map(|unstable_event| {
+                let mut unstable_event = EventParseWrapper::new(&unstable_event)?;
+                let player_name = unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
+                ParseOk(ModChangeSubEventWithNamedPlayer {
+                    sub_event: unstable_event.as_sub_event(),
+                    team_id: unstable_event.next_team_id()?,
+                    player_id: unstable_event.next_player_id()?,
+                    player_name: player_name.to_string(),
+                })
+            })
+    }).collect::<Result<Vec<_>, _>>()?;
+
+    Ok(Some(Firewalker {
+        previous_location_name: previous_location_name.to_string(),
+        instability_sub_event: instability_event.as_sub_event(),
+        players_gained_unstable,
+    }))
+
+}
+
+pub fn parse_connected_roam_events(
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
+) -> Result<RoamConnectedEvents, FeedParseError> {
+    let firewalker = parse_firewalker(event_iter)?;
+
+    let mut shadow_boost = None;
+    let mut odyssey_boost = None;
+    let mut good_riddance_parties = Vec::new();
+
+    while let Some(boost) = event_iter
+        .next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved)
+        .ok()
+    {
+        let mut boost = EventParseWrapper::new(&boost)?;
+        match boost.next_parse(parse_roam_boost)? {
+            ParsedRoamBoost::ShadowBoost(_player_name) => {
+                assert!(shadow_boost.is_none());
+                shadow_boost = Some(PlayerBoostSubEvent {
+                    rating_before: boost.metadata_f64("before")?,
+                    rating_after: boost.metadata_f64("after")?,
+                    sub_event: boost.as_sub_event(),
+                })
+            }
+            ParsedRoamBoost::Odyssey(_player_name) => {
+                assert!(odyssey_boost.is_none());
+                odyssey_boost = Some(PlayerBoostSubEvent {
+                    rating_before: boost.metadata_f64("before")?,
+                    rating_after: boost.metadata_f64("after")?,
+                    sub_event: boost.as_sub_event(),
+                })
+            }
+            ParsedRoamBoost::GoodRiddanceParty(player_name, attracted_birds) => {
+                assert!(attracted_birds.is_none());
+                good_riddance_parties.push(GoodRiddanceParty {
+                    player_id: boost.next_player_id()?,
+                    player_name: player_name.to_string(),
+                    sub_event: boost.as_sub_event(),
+                    rating_before: boost.metadata_f64("before")?,
+                    rating_after: boost.metadata_f64("after")?,
+                });
+            }
+        }
+    }
+
+    Ok(RoamConnectedEvents {
+        firewalker,
+        shadow_boost,
+        odyssey_boost,
+        good_riddance_parties,
+    })
 }
 
 fn parse_subseasonal_mod_change_event(

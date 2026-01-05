@@ -4169,3 +4169,11 @@ pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<(&str, bool)>
         parse_terminated(" Super Roamed out of the Vault.").map(|n| (n, true)),
     )).parse(input)
 }
+
+pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" left Instability in their wake. ").parse(input)?;
+    // This is "location name" because it can also be the vault
+    let (input, location_name) = parse_terminated(" became Unstable!").parse(input)?;
+
+    Ok((input, (player_name, location_name)))
+}
