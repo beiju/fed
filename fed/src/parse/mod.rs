@@ -24,7 +24,7 @@ use crate::parse::parsers::*;
 // pub use stream::expansion_era_events;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 28] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 29] = [
     "Fridays",
     "Moist Talkers",
     "Lovers",
@@ -53,6 +53,7 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 28] = [
     "Legends",
     "Rising Stars",
     "Paws",
+    "Queens",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -1993,19 +1994,25 @@ pub fn parse_next_event(
                         heat_magnet,
                     }
                 }
-                ParsedIncineration::Team((incinerated_team_name, replacement_team_name, replacement_team_nickname, surviving_players)) => {
+                ParsedIncineration::Team((incinerated_team_name, replacement_team_name, surviving_players, unstable)) => {
                     assert!(is_known_team_name(incinerated_team_name));
                     assert!(is_known_team_name(replacement_team_name));
-                    assert!(is_known_team_nickname(replacement_team_nickname));
 
-                    let surviving_players = surviving_players.into_iter()
-                        .map(|player_name| {
-                            let child = event.next_child(EventType::PlayerRemovedFromTeam)?;
-                            assert_eq!(player_name, child.metadata_str("playerName")?);
-                            let player_id = child.metadata_uuid("playerId")?;
-                            ParseOk((player_name, player_id, child.as_sub_event()))
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    // surviving_players is redefined several times over the course of this
+                    // function as child events related to it are spread apart in the event order
+                    let surviving_players = surviving_players.map_or(
+                        Ok(Vec::new()),
+                        |(_, surviving_players)| {
+                            surviving_players.into_iter()
+                                .map(|player_name| {
+                                    let child = event.next_child(EventType::PlayerRemovedFromTeam)?;
+                                    assert_eq!(player_name, child.metadata_str("playerName")?);
+                                    let player_id = child.metadata_uuid("playerId")?;
+                                    ParseOk((player_name, player_id, child.as_sub_event()))
+                                })
+                                .collect::<Result<Vec<_>, _>>()
+                        },
+                    )?;
 
                     let weather_event = event.next_child(EventType::WeatherEvent)?;
                     let team_entered_hall_event = event.next_child(EventType::EnterHallOfFlame)?;
@@ -2035,27 +2042,64 @@ pub fn parse_next_event(
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    let team_formed_event = event.next_child(EventType::TeamFormed)?;
+                    // No way to know the order of squiddish vs. magmatic, they never happened on
+                    // the same event. Squiddish-last is more convenient for the code though.
+                    let replacement_team_source = match event.next_child_if_mod_effect(EventType::AddedMod, "SQUIDDISH")? {
+                        Some(gained_squiddish_event) => {
+                            let exited_hall_event = event.next_child(EventType::ExitHallOfFlame)?;
 
-                    let new_players = std::iter::from_fn(|| {
-                        event.next_child_opt(EventType::PlayerDivisionMove).transpose()
-                            .map(|result| {
-                                let mut child = result?;
-                                let player_name = child.next_parse(parse_terminated(" was a founding member of the "))?;
-                                // These events don't have player ids for some reason
+                            let resurrected_players = std::iter::from_fn(|| {
+                                event.next_child_opt(EventType::ExitHallOfFlame).transpose()
+                                    .map(|result| {
+                                        let mut child = result?;
+                                        let player_name = child.next_parse(parse_terminated(" exited the Hall of Flame"))?;
 
-                                ParseOk(TeamIncinerationReplacement {
-                                    player_name: player_name.to_string(),
-                                    player_born_sub_event: child.as_sub_event(),
-                                })
+                                        ParseOk(TeamIncinerationSquiddishResurrection {
+                                            player_name: player_name.to_string(),
+                                            player_id: child.next_player_id()?,
+                                            player_born_sub_event: child.as_sub_event(),
+                                        })
+                                    })
                             })
-                    })
-                        .collect::<Result<Vec<_>, _>>()?;
+                                .collect::<Result<Vec<_>, _>>()?;
+
+                            TeamIncinerationReplacementSource::Squiddish {
+                                gained_squiddish_sub_event: gained_squiddish_event.as_sub_event(),
+                                exited_hall_sub_event: exited_hall_event.as_sub_event(),
+                                resurrected_players,
+                            }
+                        },
+                        None => {
+                            let team_formed_event = event.next_child(EventType::TeamFormed)?;
+
+                            let new_players = std::iter::from_fn(|| {
+                                event.next_child_opt(EventType::PlayerDivisionMove).transpose()
+                                    .map(|result| {
+                                        let mut child = result?;
+                                        let player_name = child.next_parse(parse_terminated(" was a founding member of the "))?;
+                                        // These events don't have player ids for some reason
+
+                                        ParseOk(TeamIncinerationReplacement {
+                                            player_name: player_name.to_string(),
+                                            player_born_sub_event: child.as_sub_event(),
+                                        })
+                                    })
+                            })
+                                .collect::<Result<Vec<_>, _>>()?;
+
+                            TeamIncinerationReplacementSource::NewTeam {
+                                team_formed_sub_event: team_formed_event.as_sub_event(),
+                                new_players,
+                            }
+                        }
+                    };
 
                     let team_replaced_event = event.next_child(EventType::TeamIncinerationReplacement)?;
                     let incinerated_team_nickname = team_replaced_event.metadata_str("outTeamName")?;
                     assert!(is_known_team_nickname(incinerated_team_nickname));
                     let incinerated_team_id = team_replaced_event.metadata_uuid("outTeamId")?;
+                    let replacement_team_nickname = team_replaced_event.metadata_str("inTeamName")?;
+                    assert!(is_known_team_nickname(incinerated_team_nickname));
                     let replacement_team_id = team_replaced_event.metadata_uuid("inTeamId")?;
                     let division_name = team_replaced_event.metadata_str("divisionName")?;
                     let division_id = team_replaced_event.metadata_uuid("divisionId")?;
@@ -2076,6 +2120,19 @@ pub fn parse_next_event(
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
+                    let instability_chain = unstable.map(|(incinerated_team_nickname, chained_to_team_nickname)| {
+                        assert!(is_known_team_nickname(incinerated_team_nickname));
+                        assert!(is_known_team_nickname(chained_to_team_nickname));
+                        let mut unstable_added_event = event.next_child(EventType::AddedMod)?;
+
+                        ParseOk(TeamUnstableChain {
+                            incinerated_team_nickname: incinerated_team_nickname.to_string(),
+                            chained_to_team_nickname: chained_to_team_nickname.to_string(),
+                            chained_to_team_id: unstable_added_event.next_team_id()?,
+                            sub_event: unstable_added_event.as_sub_event(),
+                        })
+                    }).transpose()?;
+
                     FedEventData::TeamIncineration {
                         game: event.game(unscatter, attractor_secret_base)?,
                         incinerated_team_name: incinerated_team_name.to_string(),
@@ -2088,11 +2145,11 @@ pub fn parse_next_event(
                         division_id,
                         surviving_players,
                         incinerated_players,
-                        new_players,
                         weather_sub_event: weather_event.as_sub_event(),
                         team_entered_hall_sub_event: team_entered_hall_event.as_sub_event(),
-                        team_formed_sub_event: team_formed_event.as_sub_event(),
+                        replacement_team_source,
                         team_replaced_sub_event: team_replaced_event.as_sub_event(),
+                        instability_chain,
                     }
                 }
             }
@@ -5816,6 +5873,7 @@ fn is_known_team_name(name: &str) -> bool {
         "Vault Legends",
         "Rising Stars",
         "Oxford Paws",
+        "Carolina Queens",
     ]
     .contains(&name)
 }

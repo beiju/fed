@@ -1,4 +1,4 @@
-use crate::fed_event::{ActivePositionType, BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{ActivePositionType, BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
 use crate::fed_event::HomeRunHypeSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -4806,15 +4806,24 @@ impl FedEvent {
                     vec![main_event, add_to_team_event]
                 }
             }
-            FedEventData::TeamIncineration { game, incinerated_team_name, incinerated_team_nickname, incinerated_team_id, replacement_team_name, replacement_team_nickname, replacement_team_id, division_name, division_id, surviving_players, incinerated_players, new_players, weather_sub_event, team_entered_hall_sub_event, team_formed_sub_event, team_replaced_sub_event } => {
+            FedEventData::TeamIncineration { game, incinerated_team_name, incinerated_team_nickname, incinerated_team_id, replacement_team_name, replacement_team_nickname, replacement_team_id, division_name, division_id, surviving_players, incinerated_players, weather_sub_event, team_entered_hall_sub_event, replacement_team_source, team_replaced_sub_event, instability_chain } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
+                if let Some(instability) = &instability_chain {
+                    eb.push_description(format!("The {} are Unstable!", instability.incinerated_team_nickname));
+                    eb.push_description("A Debt was collected.");
+                }
                 eb.push_description(format!("A Rogue Umpire incinerated the {incinerated_team_name}!"));
                 eb.push_description(format!("They're replaced by the {replacement_team_name}!"));
-                let names_str = surviving_players.iter()
-                    .map(|player| &player.player_name)
-                    .join(" and ");
-                eb.push_description(format!("{names_str} joined the {replacement_team_nickname}!"));
+                if !surviving_players.is_empty() {
+                    let names_str = surviving_players.iter()
+                        .map(|player| &player.player_name)
+                        .join(" and ");
+                    eb.push_description(format!("{names_str} joined the {replacement_team_nickname}!"));
+                }
+                if let Some(instability) = &instability_chain {
+                    eb.push_description(format!("The Instability chains to the {}!", instability.chained_to_team_nickname));
+                }
 
                 for surviving_player in &surviving_players {
                     eb.push_child(surviving_player.jumped_sub_event, |mut child_eb| {
@@ -4866,20 +4875,47 @@ impl FedEvent {
                     });
                 }
 
-                eb.push_child(team_formed_sub_event, |mut child_eb| {
-                    child_eb.push_description(format!("The {replacement_team_name} formed."));
-                    child_eb.push_team_tag(replacement_team_id);
-                    child_eb.push_metadata_uuid("id", replacement_team_id);
-                    child_eb.build(EventType::TeamFormed)
-                });
+                match replacement_team_source {
+                    TeamIncinerationReplacementSource::NewTeam { team_formed_sub_event, new_players } => {
+                        eb.push_child(team_formed_sub_event, |mut child_eb| {
+                            child_eb.push_description(format!("The {replacement_team_name} formed."));
+                            child_eb.push_team_tag(replacement_team_id);
+                            child_eb.push_metadata_uuid("id", replacement_team_id);
+                            child_eb.build(EventType::TeamFormed)
+                        });
 
-                for new_player in new_players {
-                    eb.push_child(new_player.player_born_sub_event, |mut child_eb| {
-                        // The rare child event in the Game category
-                        child_eb.set_category(EventCategory::Game);
-                        child_eb.push_description(format!("{} was a founding member of the {replacement_team_nickname}.", new_player.player_name));
-                        child_eb.build(EventType::PlayerDivisionMove)
-                    });
+                        for new_player in new_players {
+                            eb.push_child(new_player.player_born_sub_event, |mut child_eb| {
+                                // The rare child event in the Game category
+                                child_eb.set_category(EventCategory::Game);
+                                child_eb.push_description(format!("{} was a founding member of the {replacement_team_nickname}.", new_player.player_name));
+                                child_eb.build(EventType::PlayerDivisionMove)
+                            });
+                        }
+                    }
+                    TeamIncinerationReplacementSource::Squiddish { gained_squiddish_sub_event, exited_hall_sub_event, resurrected_players } => {
+                        eb.push_child(gained_squiddish_sub_event, |mut child_eb| {
+                            child_eb.push_description(format!("The {replacement_team_nickname} became Squiddish!"));
+                            child_eb.push_team_tag(replacement_team_id);
+                            child_eb.push_metadata_str("mod", "SQUIDDISH");
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                            child_eb.build(EventType::AddedMod)
+                        });
+
+                        eb.push_child(exited_hall_sub_event, |mut child_eb| {
+                            child_eb.push_description(format!("The {replacement_team_nickname} exited the Hall of Flame"));
+                            child_eb.push_team_tag(replacement_team_id);
+                            child_eb.build(EventType::ExitHallOfFlame)
+                        });
+
+                        for resurrected_player in resurrected_players {
+                            eb.push_child(resurrected_player.player_born_sub_event, |mut child_eb| {
+                                child_eb.push_description(format!("{} exited the Hall of Flame", resurrected_player.player_name));
+                                child_eb.push_player_tag(resurrected_player.player_id);
+                                child_eb.build(EventType::ExitHallOfFlame)
+                            });
+                        }
+                    }
                 }
 
                 eb.push_child(team_replaced_sub_event, |mut child_eb| {
@@ -4906,6 +4942,16 @@ impl FedEvent {
                         child_eb.push_metadata_str("playerName", &surviving_player.player_name);
                         child_eb.push_metadata_uuid("playerId", surviving_player.player_id);
                         child_eb.build(EventType::PlayerAddedToTeam)
+                    });
+                }
+
+                if let Some(instability_chain) = instability_chain {
+                    eb.push_child(instability_chain.sub_event, |mut child_eb| {
+                        child_eb.push_description(format!("The Instability chains to the {}!", instability_chain.chained_to_team_nickname));
+                        child_eb.push_team_tag(instability_chain.chained_to_team_id);
+                        child_eb.push_metadata_str("mod", "MARKED");
+                        child_eb.push_metadata_i64("type", ModDuration::Weekly);
+                        child_eb.build(EventType::AddedMod)
                     });
                 }
 

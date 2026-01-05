@@ -1796,7 +1796,7 @@ pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserRes
 
 pub(crate) enum ParsedIncineration<'a> {
     Player((&'a str, &'a str, Option<&'a str>, Option<(&'a str, &'a str)>, Option<&'a str>)),
-    Team((&'a str, &'a str, &'a str, Vec<&'a str>)),
+    Team((&'a str, &'a str, Option<(&'a str, Vec<&'a str>)>, Option<(&'a str, &'a str)>)),
 }
 
 pub(crate) fn parse_incineration(
@@ -1866,20 +1866,48 @@ pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &s
     Ok((input, (victim_name, replacement_name, chained_to_name)))
 }
 
-pub(crate) fn parse_team_incineration(input: &str) -> ParserResult<(&str, &str, &str, Vec<&str>)> {
-    // A Rogue Umpire incinerated the Kansas City Breath Mints!
-    // They're replaced by the Oxford Paws!
-    // Rodriguez Internet and Leach Ingram joined the Paws!
-    let (input, _) = tag("A Rogue Umpire incinerated the ").parse(input)?;
-    let (input, incinerated_team_name) = parse_terminated("!\nThey're replaced by the ").parse(input)?;
-    let (input, replacement_team_name) = parse_terminated("!\n").parse(input)?;
-
+pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<(&str, Vec<&str>)> {
     // TODO Support arbitrary number of surviving players 
     let (input, surviving_player_1) = parse_terminated(" and ").parse(input)?;
     let (input, surviving_player_2) = parse_terminated(" joined the ").parse(input)?;
     let (input, replacement_team_nickname) = parse_terminated("!").parse(input)?;
+    
+    Ok((input, (replacement_team_nickname, vec![surviving_player_1, surviving_player_2])))
+}
 
-    Ok((input, (incinerated_team_name, replacement_team_name, replacement_team_nickname, vec![surviving_player_1, surviving_player_2])))
+pub(crate) fn parse_team_unstable_incineration_preamble(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    parse_terminated(" are Unstable!\nA Debt was collected.\n").parse(input)
+}
+
+pub(crate) fn parse_team_incineration(input: &str) -> ParserResult<(&str, &str, Option<(&str, Vec<&str>)>, Option<(&str, &str)>)> {
+    // A Rogue Umpire incinerated the Kansas City Breath Mints!
+    // They're replaced by the Oxford Paws!
+    // Rodriguez Internet and Leach Ingram joined the Paws!
+
+    // The Fridays are Unstable!
+    // A Debt was collected.
+    // A Rogue Umpire incinerated the Hawai'i Fridays!
+    // They're replaced by the Carolina Queens!
+    // The Instability chains to the Crabs!
+
+    let (input, unstable_preamble) = opt(parse_team_unstable_incineration_preamble).parse(input)?;
+
+    let (input, _) = tag("A Rogue Umpire incinerated the ").parse(input)?;
+    let (input, incinerated_team_name) = parse_terminated("!\nThey're replaced by the ").parse(input)?;
+    let (input, replacement_team_name) = parse_terminated("!\n").parse(input)?;
+    
+    let (input, surviving_players) = opt(parse_team_incineration_survivors).parse(input)?;
+
+    let (input, unstable) = if let Some(incinerated_team_nickname) = unstable_preamble {
+        let (input, _) = tag("The Instability chains to the ").parse(input)?;
+        let (input, chained_to_team_nickname) = parse_terminated("!").parse(input)?;
+        (input, Some((incinerated_team_nickname, chained_to_team_nickname)))
+    } else {
+        (input, None)
+    };
+
+    Ok((input, (incinerated_team_name, replacement_team_name, surviving_players, unstable)))
 }
 
 pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {

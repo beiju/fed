@@ -603,26 +603,6 @@ pub struct ModChangeSubEventWithNamedPlayer {
     pub player_name: String,
 }
 
-// Like ModChangeSubEventWithNamedPlayer but the team id is optional.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-#[serde(rename_all = "camelCase")]
-pub struct ModChangeSubEventWithHallPlayer {
-    /// Metadata for the sub-event associated with the mod change
-    pub sub_event: SubEvent,
-
-    /// Uuid of the team whose player's mod changed
-    ///
-    /// `null` for players who died before team ids were stored on player
-    /// objects
-    pub team_id: Option<Uuid>,
-
-    /// Uuid of the player whose mod changed
-    pub player_id: Uuid,
-
-    /// Name of the player whose mod changed
-    pub player_name: String,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct FlipNegative {
@@ -3778,6 +3758,59 @@ pub struct TeamIncinerationReplacement {
 
     /// Metadata for the sub event for the player being born
     pub player_born_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TeamIncinerationSquiddishResurrection {
+    /// Name of the player who was resurrected from Squiddish
+    pub player_name: String,
+
+    /// Uuid of the player who was resurrected from Squiddish
+    pub player_id: Uuid,
+
+    /// Metadata for the sub event for the player resurrected from Squiddish
+    pub player_born_sub_event: SubEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TeamUnstableChain {
+    /// Nickname of the incinerated team, from whom the instability chained.
+    /// This is only available when there is a chain.
+    pub incinerated_team_nickname: String,
+
+    /// Nickname of the team to whom the instability chained
+    pub chained_to_team_nickname: String,
+
+    /// Uuid of the team to whom the instability chained
+    pub chained_to_team_id: Uuid,
+
+    /// Metadata for the sub-event for the instability chaining
+    pub sub_event: SubEvent,
+}
+
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
+pub enum TeamIncinerationReplacementSource {
+    /// The replacement team was generated on the spot
+    NewTeam {
+        /// Sub-event associated with the new team being generated
+        team_formed_sub_event: SubEvent,
+
+        /// List of players who were born onto the new team
+        new_players: Vec<TeamIncinerationReplacement>,
+    },
+    /// The replacement team was taken from the Hall of Flame
+    Squiddish {
+        /// Sub-event associated with the replacement team gaining the Squiddish mod
+        gained_squiddish_sub_event: SubEvent,
+
+        /// Sub-event associated with the replacement team exiting the Hall of Flame
+        exited_hall_sub_event: SubEvent,
+
+        /// List of players on the replacement team who were resurrected by Squiddish
+        resurrected_players: Vec<TeamIncinerationSquiddishResurrection>,
+    },
 }
 
 #[derive(
@@ -7984,9 +8017,6 @@ pub enum FedEventData {
         /// associated metadata
         incinerated_players: Vec<TeamIncinerationVictim>,
 
-        /// List of players who were born onto the new team
-        new_players: Vec<TeamIncinerationReplacement>,
-
         /// Metadata for the sub-event associated with the weather triggering
         weather_sub_event: SubEvent,
 
@@ -7995,12 +8025,16 @@ pub enum FedEventData {
         team_entered_hall_sub_event: SubEvent,
 
         /// Metadata for the sub-event associated with the replacement team
-        /// forming
-        team_formed_sub_event: SubEvent,
+        /// forming or being removed from the hall
+        replacement_team_source: TeamIncinerationReplacementSource,
 
         /// Metadata for the sub-event associated with the replacement team
         /// replacing the incinerated team
         team_replaced_sub_event: SubEvent,
+
+        /// Metadata for the sub-event associated with the instability chaining
+        /// to a new team, if it did so
+        instability_chain: Option<TeamUnstableChain>,
     },
 
     /// Player became Stuck due to the Avoidance mod
