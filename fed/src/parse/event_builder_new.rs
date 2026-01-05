@@ -15,7 +15,7 @@ use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
 use uuid::Uuid;
-use crate::fed_event::RoamConnectedEvents;
+use crate::fed_event::{Firewalker, RoamConnectedEvents};
 
 pub struct EventBuilder {
     event: EventuallyEvent,
@@ -82,18 +82,17 @@ impl EventBuilder {
         }
     }
 
-    pub fn build_roam_connected_events(
+    pub fn build_firewalker_events(
         &self,
-        connected: RoamConnectedEvents,
+        firewalker: Option<&Firewalker>,
         player_name: &str,
         player_id: Uuid,
         previous_team_id: Option<Uuid>,
-        new_team_id: Uuid,
     ) -> Vec<EventuallyEvent> {
         // Not worth computing capacity tbh
         let mut events = Vec::new();
 
-        if let Some(firewalker) = connected.firewalker {
+        if let Some(firewalker) = firewalker {
             let mut instability_eb = self.connected_event(firewalker.instability_sub_event);
             instability_eb.set_category(EventCategory::Changes);
             instability_eb.set_description(format!("{player_name} left Instability in their wake. {} became Unstable!", firewalker.previous_location_name));
@@ -110,7 +109,7 @@ impl EventBuilder {
             }
             events.push(instability_eb.build(EventType::AddedMod));
 
-            for player_gained_unstable in firewalker.players_gained_unstable {
+            for player_gained_unstable in &firewalker.players_gained_unstable {
                 let mut gained_unstable_eb = self.connected_event(player_gained_unstable.sub_event);
                 gained_unstable_eb.set_category(EventCategory::Changes);
                 gained_unstable_eb.set_description(format!("{} gained the Unstable mod.", player_gained_unstable.player_name));
@@ -122,7 +121,20 @@ impl EventBuilder {
             }
         }
 
-        if let Some(odyssey_boost) = connected.odyssey_boost {
+        events
+    }
+
+    pub fn build_roam_boost_connected_events(
+        &self,
+        connected: &RoamConnectedEvents,
+        player_name: &str,
+        player_id: Uuid,
+        previous_team_id: Option<Uuid>,
+        new_team_id: Uuid,
+    ) -> Vec<EventuallyEvent> {
+        let mut events = Vec::new();
+
+        if let Some(odyssey_boost) = &connected.odyssey_boost {
             let mut odyssey_eb = self.connected_event(odyssey_boost.sub_event);
             odyssey_eb.set_category(EventCategory::Changes);
             odyssey_eb.push_description(format!("{player_name} was boosted."));
@@ -131,7 +143,7 @@ impl EventBuilder {
             events.push(odyssey_eb.build_boost(&odyssey_boost));
         }
 
-        if let Some(shadow_boost) = connected.shadow_boost {
+        if let Some(shadow_boost) = &connected.shadow_boost {
             let mut shadow_eb = self.connected_event(shadow_boost.sub_event);
             shadow_eb.set_category(EventCategory::Changes);
             shadow_eb.push_description(format!("{player_name} entered the Shadows."));
@@ -140,7 +152,7 @@ impl EventBuilder {
             events.push(shadow_eb.build_boost(&shadow_boost));
         }
 
-        for party in connected.good_riddance_parties {
+        for party in &connected.good_riddance_parties {
             let mut party_eb = self.connected_event(party.sub_event);
             party_eb.set_category(EventCategory::Changes);
             party_eb.push_description(format!("{} is Partying!", party.player_name));
@@ -153,6 +165,32 @@ impl EventBuilder {
             party_eb.push_metadata_i64("type", 4); // "all categories"
             events.push(party_eb.build(EventType::PlayerStatIncrease));
         }
+
+        events
+    }
+
+    pub fn build_roam_connected_events(
+        &self,
+        connected: &RoamConnectedEvents,
+        player_name: &str,
+        player_id: Uuid,
+        previous_team_id: Option<Uuid>,
+        new_team_id: Uuid,
+    ) -> Vec<EventuallyEvent> {
+        let mut events = self.build_firewalker_events(
+            connected.firewalker.as_ref(),
+            player_name,
+            player_id,
+            previous_team_id,
+        );
+
+        events.extend(self.build_roam_boost_connected_events(
+            connected,
+            player_name,
+            player_id,
+            previous_team_id,
+            new_team_id,
+        ));
 
         events
     }

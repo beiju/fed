@@ -3110,7 +3110,7 @@ impl FedEvent {
             }
             FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Team { previous_team_id, previous_team_nickname }, connected_events } => {
                 let mut events = eb.build_roam_connected_events(
-                    connected_events,
+                    &connected_events,
                     &player_name,
                     player_id,
                     Some(previous_team_id),
@@ -3135,10 +3135,9 @@ impl FedEvent {
 
                 return events;
             }
-            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event }, connected_events } |
-            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Vault { sub_event }, connected_events } => {
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event }, connected_events } => {
                 let mut events = eb.build_roam_connected_events(
-                    connected_events,
+                    &connected_events,
                     &player_name,
                     player_id,
                     None,
@@ -3164,6 +3163,44 @@ impl FedEvent {
                 eb.push_description(format!("{player_name} {roamed} out of the Hall of Flame."));
                 eb.push_player_tag(player_id);
                 events.insert(0, eb.build(EventType::ExitHallOfFlame));
+
+                return events;
+            }
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::Vault { sub_event }, connected_events } => {
+                let mut events = eb.build_firewalker_events(
+                    connected_events.firewalker.as_ref(),
+                    &player_name,
+                    player_id,
+                    None,
+                );
+
+                // In season 22 they capitalized the R
+                let roamed = if is_super { "Super Roamed" } else if self.season < 21 { "roamed" } else { "Roamed" };
+
+                let mut team_eb = eb.connected_event(sub_event);
+                team_eb.set_category(EventCategory::Changes);
+                team_eb.push_description(format!("{player_name} {roamed} to the {new_team_nickname}."));
+                team_eb.push_player_tag(player_id);
+                team_eb.push_team_tag(new_team_id);
+                team_eb.push_metadata_i64("location", location);
+                team_eb.push_metadata_uuid("playerId", player_id);
+                team_eb.push_metadata_str("playerName", &player_name);
+                team_eb.push_metadata_uuid("teamId", new_team_id);
+                team_eb.push_metadata_str("teamName", new_team_nickname);
+                events.push(team_eb.build(EventType::PlayerAddedToTeam));
+
+                events.extend(eb.build_roam_boost_connected_events(
+                    &connected_events,
+                    &player_name,
+                    player_id,
+                    None,
+                    new_team_id,
+                ));
+
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("{player_name} {roamed} out of the Vault."));
+                eb.push_player_tag(player_id);
+                events.insert(0, eb.build(EventType::PlayerLeftVault));
 
                 return events;
             }

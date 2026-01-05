@@ -3243,8 +3243,7 @@ pub fn parse_next_event(
         EventType::RemovedMod => {
             if TAROT_EVENTS.iter().any(|uuid| uuid == &event.id) {
                 let pending_sub_removal = event_iter
-                    .next_expect_type(EventType::RemovedModsFromAnotherMod, EventType::RemovedMod)
-                    .ok()
+                    .next_if_type(EventType::RemovedModsFromAnotherMod)
                     .map(|event| {
                         let mut event = EventParseWrapper::new(&event)?;
                         ModsFromAnotherModRemovedWithName::from_event(&mut event)
@@ -3683,8 +3682,7 @@ pub fn parse_next_event(
             let mut prev_type = EventType::PlayerHatched;
 
             let boost_event = event_iter
-                .next_expect_type(EventType::PlayerStatIncrease, prev_type)
-                .ok()
+                .next_if_type(EventType::PlayerStatIncrease)
                 .map(|e| (e, PostseasonBirthBoostEventOrder::AfterHatch));
             if let Some((e, _)) = &boost_event {
                 prev_type = e.r#type;
@@ -3694,12 +3692,11 @@ pub fn parse_next_event(
             // This is *almost* always there, but the lovers in the s19 postseason were missing this
             // event
             let earned_birth_event = event_iter
-                .next_expect_type(EventType::PlayerAddedToTeam, prev_type)
-                .ok();
+                .next_if_type(EventType::PlayerAddedToTeam);
             if let Some(e) = &earned_birth_event {
                 prev_type = e.r#type;
             }
-            let mut earned_birth_event = earned_birth_event
+            let earned_birth_event = earned_birth_event
                 .as_ref()
                 .map(EventParseWrapper::new)
                 .transpose()?;
@@ -3712,8 +3709,7 @@ pub fn parse_next_event(
                 Some(e)
             } else {
                 event_iter
-                    .next_expect_type(EventType::PlayerStatIncrease, prev_type)
-                    .ok()
+                    .next_if_type(EventType::PlayerStatIncrease)
                     .map(|e| (e, PostseasonBirthBoostEventOrder::AfterBirth))
             };
             if let Some((e, _)) = &boost_event {
@@ -3721,19 +3717,14 @@ pub fn parse_next_event(
             }
 
             let left_party_event = event_iter
-                .next_expect_type(EventType::RemovedMod, prev_type)
-                .ok();
-            if let Some(e) = &left_party_event {
-                prev_type = e.r#type;
-            }
-            let mut left_party_event = left_party_event
+                .next_if_type(EventType::RemovedMod);
+            let left_party_event = left_party_event
                 .as_ref()
                 .map(EventParseWrapper::new)
                 .transpose()?;
 
             let earned_spot_event =
                 event_iter.next_expect_type(EventType::EarnedPostseasonSlot, prev_type)?;
-            prev_type = earned_spot_event.r#type;
             let mut earned_spot_event = EventParseWrapper::new(&earned_spot_event)?;
             let (team_nickname, displayed_season_number) =
                 earned_spot_event.next_parse(parse_earned_postseason_slot)?;
@@ -3744,14 +3735,10 @@ pub fn parse_next_event(
                 Some(e)
             } else {
                 event_iter
-                    .next_expect_type(EventType::PlayerStatIncrease, prev_type)
-                    .ok()
+                    .next_if_type(EventType::PlayerStatIncrease)
                     .map(|e| (e, PostseasonBirthBoostEventOrder::AfterEarnedSlot))
             };
-            if let Some((e, _)) = &boost_event {
-                prev_type = e.r#type;
-            }
-            let mut boost_event = boost_event
+            let boost_event = boost_event
                 .as_ref()
                 .map(|(e, o)| EventParseWrapper::new(e).map(|w| (w, *o)))
                 .transpose()?;
@@ -4659,12 +4646,17 @@ pub fn parse_next_event(
             // TODO This isn't the right signal to decide whether this was a
             //   roam or a semicentennial player returning
             if is_super_roam {
+                // Firewalker is first in this case
+                let firewalker = parse_firewalker(event_iter)?;
+
                 let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::AddedMod)?;
                 let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
                 let location = add_to_team_event.metadata_enum("location")?;
 
-                let connected_events = parse_connected_roam_events(event_iter)?;
+                let mut connected_events = parse_connected_roam_events(event_iter)?;
+                assert!(connected_events.firewalker.is_none(), "Firewalker is parsed separately in this event");
+                connected_events.firewalker = firewalker;
 
                 FedEventData::Roam {
                     is_super: true,
@@ -5476,9 +5468,6 @@ pub fn parse_firewalker(
         return Ok(None);
     };
     let mut instability_event = EventParseWrapper::new(&instability_event)?;
-    // Make sure this is the right mod, otherwise we'll error later and the
-    // error will be much more confusing
-    assert_eq!(instability_event.metadata_str("mod")?, "MARKED");
     let (_, previous_location_name) = instability_event.next_parse(parse_firewalker_instability_spread)?;
 
     let players_gained_unstable = std::iter::from_fn(|| {
@@ -5512,9 +5501,7 @@ pub fn parse_connected_roam_events(
     let mut odyssey_boost = None;
     let mut good_riddance_parties = Vec::new();
 
-    while let Some(boost) = event_iter
-        .next_expect_type(EventType::PlayerStatIncrease, EventType::PlayerMoved)
-        .ok()
+    while let Some(boost) = event_iter.next_if_type(EventType::PlayerStatIncrease)
     {
         let mut boost = EventParseWrapper::new(&boost)?;
         match boost.next_parse(parse_roam_boost)? {
