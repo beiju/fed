@@ -125,10 +125,13 @@ impl<'e> EventParseWrapper<'e> {
                 tag_type: "player",
             })?
             .split_first()
-            .ok_or_else(|| FeedParseError::NotEnoughTags {
-                event_type: self.event_type,
-                tag_type: "player",
-                expected_at_least: self.consumed_player_id_count,
+            .ok_or_else(|| {
+                // This is in a block to facilitate breakpoints
+                FeedParseError::NotEnoughTags {
+                    event_type: self.event_type,
+                    tag_type: "player",
+                    expected_at_least: self.consumed_player_id_count,
+                }
             })?;
         self.player_ids = Some(rest);
         Ok(id)

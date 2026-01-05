@@ -3134,8 +3134,26 @@ pub(crate) fn parse_coasting(input: &str) -> ParserResult<(bool, Vec<&str>)> {
     .parse(input)
 }
 
+pub(crate) enum ParsedPlayerRemovedFromTeam<'a> {
+    FadedAwayFromTeam((&'a str, &'a str)),
+    PulledFromIncineratedTeam((&'a str, &'a str)),
+}
+
+pub(crate) fn parse_top_level_player_removed_from_team(input: &str) -> ParserResult<ParsedPlayerRemovedFromTeam> {
+    alt((
+        parse_player_dusted.map(ParsedPlayerRemovedFromTeam::FadedAwayFromTeam),
+        parse_player_was_pulled.map(ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam),
+    )).parse(input)
+}
+
 pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
     let (input, player_name) = parse_terminated(" faded away from the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(".").parse(input)?;
+    Ok((input, (player_name, team_nickname)))
+}
+
+pub(crate) fn parse_player_was_pulled(input: &str) -> ParserResult<(&str, &str)> {
+    let (input, player_name) = parse_terminated(" was pulled from the incinerated ").parse(input)?;
     let (input, team_nickname) = parse_terminated(".").parse(input)?;
     Ok((input, (player_name, team_nickname)))
 }

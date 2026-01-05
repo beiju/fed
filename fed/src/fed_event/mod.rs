@@ -2319,7 +2319,19 @@ pub struct RoamConnectedEvents {
 
     /// Parties as a result of the Good Riddance mod
     pub good_riddance_parties: Vec<GoodRiddanceParty>,
+}
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct PlayerPulledFromIncineratedTeam {
+    /// Nickname of the Incinerated team that the player was pulled from
+    pub incinerated_team_nickname: String,
+
+    /// Uuid of the Incinerated team that the player was pulled from
+    pub incinerated_team_id: Uuid,
+
+    /// Metadata for the sub-event associated with the player leaving the
+    /// incinerated team
+    pub sub_event: SubEvent,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
@@ -2334,6 +2346,8 @@ pub enum RoamFromLocation {
     HallOfFlame {
         /// Metadata for the player-left-hall-of-flame sub-event
         sub_event: SubEvent,
+
+        from_team: Option<PlayerPulledFromIncineratedTeam>,
     },
     Vault {
         /// Metadata for the player-left-hall-of-flame sub-event
@@ -7441,7 +7455,10 @@ pub enum FedEventData {
         trader_id: Uuid,
 
         /// Uuid of the player who the trader looked at
-        victim_id: Uuid,
+        ///
+        /// This field was removed in s24 (TODO: Check that it was removed and
+        ///   it's not just a single event that's d03e47a0-cec5-4c8c-9d1c-a47880d9f954)
+        victim_id: Option<Uuid>,
 
         /// Sub-event associated with finding nothing to trade. Not sure why this requires a
         /// sub-event.

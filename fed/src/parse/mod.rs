@@ -115,6 +115,7 @@ pub struct InterEventState {
     // TODO: After the upcoming changes this should only ever have one (Uuid, String), so it should
     //   be either a vec or option
     pending_mod_removed_from_other_mod: Mutex<HashMap<(Uuid, String), ModsFromAnotherModRemoved>>,
+    pending_hall_roamer_pulled_from_team: Option<SubEvent>,
 }
 
 impl InterEventState {
@@ -3437,46 +3438,84 @@ pub fn parse_next_event(
             }
         }
         EventType::PlayerRemovedFromTeam => {
-            // For now replica fading to dust is the only variant I handle, but that should
-            // presumably change
-            let (player_name, team_nickname) = event.next_parse(parse_player_dusted)?;
-            assert!(is_known_team_nickname(team_nickname));
+            match event.next_parse(parse_top_level_player_removed_from_team)? {
+                ParsedPlayerRemovedFromTeam::FadedAwayFromTeam((player_name, team_nickname)) => {
+                    assert!(is_known_team_nickname(team_nickname));
 
-            let player_id = event.next_player_id()?;
-            let mod_event = event_iter
-                .extract_next_match(|e| {
-                    e.r#type == EventType::AddedMod
-                        && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
-                })
-                .ok_or_else(|| FeedParseError::MissingFollowingEvent {
-                    expected_types: vec![EventType::AddedMod],
-                    after_type: EventType::PlayerRemovedFromTeam,
-                })?;
-            let mod_event = EventParseWrapper::new(&mod_event)?;
+                    let player_id = event.next_player_id()?;
+                    let mod_event = event_iter
+                        .extract_next_match(|e| {
+                            e.r#type == EventType::AddedMod
+                                && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+                        })
+                        .ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                            expected_types: vec![EventType::AddedMod],
+                            after_type: EventType::PlayerRemovedFromTeam,
+                        })?;
+                    let mod_event = EventParseWrapper::new(&mod_event)?;
 
-            let weaker_apart_event = event_iter
-                .extract_next_match(|e| {
-                    e.r#type == EventType::RemovedModFromOtherMod
-                        && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
-                })
-                .map(|weaker_apart_event| {
-                    let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
-                    let names = weaker_apart_event
-                        .next_parse(parse_yolk_message(player_name, "weaker apart"))?;
-                    ParseOk(PlayerTogethernessModChange {
-                        other_player_names: names.into_iter().map(str::to_string).collect(),
-                        sub_event: weaker_apart_event.as_sub_event(),
-                    })
-                })
-                .transpose()?;
+                    let weaker_apart_event = event_iter
+                        .extract_next_match(|e| {
+                            e.r#type == EventType::RemovedModFromOtherMod
+                                && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
+                        })
+                        .map(|weaker_apart_event| {
+                            let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
+                            let names = weaker_apart_event
+                                .next_parse(parse_yolk_message(player_name, "weaker apart"))?;
+                            ParseOk(PlayerTogethernessModChange {
+                                other_player_names: names.into_iter().map(str::to_string).collect(),
+                                sub_event: weaker_apart_event.as_sub_event(),
+                            })
+                        })
+                        .transpose()?;
 
-            FedEventData::ReplicaFadedToDust {
-                team_id: event.next_team_id()?,
-                team_nickname: team_nickname.to_string(),
-                player_id,
-                player_name: player_name.to_string(),
-                mod_added_event: mod_event.as_sub_event(),
-                weaker_apart_event,
+                    FedEventData::ReplicaFadedToDust {
+                        team_id: event.next_team_id()?,
+                        team_nickname: team_nickname.to_string(),
+                        player_id,
+                        player_name: player_name.to_string(),
+                        mod_added_event: mod_event.as_sub_event(),
+                        weaker_apart_event,
+                    }
+                }
+                ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam((player_name, team_nickname)) => {
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    // As of this writing, this variant only appears directly before a Super Roam
+                    // out of the Hall
+                    let exit_hall_event = event_iter
+                        .next_expect_type(EventType::ExitHallOfFlame, EventType::PlayerRemovedFromTeam)?;
+                    let exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
+
+                    let add_to_team_event = event_iter
+                        .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
+                    let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
+
+                    let connected_events = parse_connected_roam_events(event_iter)?;
+
+                    let data = FedEventData::Roam {
+                        is_super: true,
+                        player_id: add_to_team_event.metadata_uuid("playerId")?,
+                        player_name: player_name.to_string(),
+                        location: add_to_team_event.metadata_enum("location")?,
+                        new_team_id: add_to_team_event.metadata_uuid("teamId")?,
+                        new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
+                        roam_from: RoamFromLocation::HallOfFlame {
+                            sub_event: add_to_team_event.as_sub_event(),
+                            from_team: Some(PlayerPulledFromIncineratedTeam {
+                                incinerated_team_nickname: team_nickname.to_string(),
+                                incinerated_team_id: event.metadata_uuid("teamId")?,
+                                sub_event: event.as_sub_event(),
+                            })
+                        },
+                        connected_events,
+                    };
+
+                    // Shortcutting the return because the returned FedEvent should be based on the `earned_spot_event`
+                    // EventuallyEvent but the return statement at the end of the function uses `event`
+                    return Ok(Some(exit_hall_event.to_fed(data)?));
+                }
             }
         }
         EventType::PlayerTraded => {
@@ -3603,6 +3642,9 @@ pub fn parse_next_event(
                 new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
                 roam_from: RoamFromLocation::HallOfFlame {
                     sub_event: add_to_team_event.as_sub_event(),
+                    // This is only populated in cases where there's a different event prior to
+                    // this one, in which case it's that event's branch that populates FedEventData
+                    from_team: None,
                 },
                 connected_events,
             }
@@ -5141,7 +5183,7 @@ pub fn parse_next_event(
                 ParsedTrade::NothingCaughtTheirEye { trader_name } => {
                     let mut child_event = event.next_child(EventType::TradeFailed)?;
                     let trader_id = child_event.next_player_id()?;
-                    let victim_id = child_event.next_player_id()?;
+                    let victim_id = child_event.next_player_id_opt();
 
                     FedEventData::NothingToTrade {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -5516,6 +5558,9 @@ pub fn parse_next_event(
             }
         }
     };
+    // NOTE: There are some paths in the big `match event.event_type` statement
+    // that assume they know what happens after the match statement and
+    // early-return accordingly. Be careful if you're adding anything here.
 
     Ok(Some(event.to_fed(data)?))
 }

@@ -3137,7 +3137,7 @@ impl FedEvent {
 
                 return events;
             }
-            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event }, connected_events } => {
+            FedEventData::Roam { is_super, player_id, player_name, location, new_team_id, new_team_nickname, roam_from: RoamFromLocation::HallOfFlame { sub_event, from_team }, connected_events } => {
                 let mut events = eb.build_roam_connected_events(
                     &connected_events,
                     &player_name,
@@ -3147,11 +3147,13 @@ impl FedEvent {
                 );
 
                 // In season 22 they capitalized the R
-                let roamed = if is_super { "super roamed" } else if self.season < 21 { "roamed" } else { "Roamed" };
+                let roamed = if is_super { "Super Roamed" } else if self.season < 21 { "roamed" } else { "Roamed" };
+                // Annoying
+                let sub_roamed = if self.season < 21 { "roamed" } else { "Roamed" };
 
                 let mut team_eb = eb.connected_event(sub_event);
                 team_eb.set_category(EventCategory::Changes);
-                team_eb.push_description(format!("{player_name} {roamed} to The {new_team_nickname}."));
+                team_eb.push_description(format!("{player_name} {sub_roamed} to The {new_team_nickname}."));
                 team_eb.push_player_tag(player_id);
                 team_eb.push_team_tag(new_team_id);
                 team_eb.push_metadata_i64("location", location);
@@ -3161,10 +3163,30 @@ impl FedEvent {
                 team_eb.push_metadata_str("teamName", new_team_nickname);
                 events.insert(0, team_eb.build(EventType::PlayerAddedToTeam));
 
+                // If present, this happens even before the main event. We have to wait to
+                // insert it into events
+                let from_team_event = from_team.map(|from_team| {
+                    let mut left_incinerated_team_eb = eb.connected_event(from_team.sub_event);
+                    left_incinerated_team_eb.set_category(EventCategory::Changes);
+                    left_incinerated_team_eb.push_description(format!("{player_name} was pulled from the incinerated {}.", from_team.incinerated_team_nickname));
+                    left_incinerated_team_eb.push_player_tag(player_id);
+                    left_incinerated_team_eb.push_team_tag(from_team.incinerated_team_id);
+                    left_incinerated_team_eb.push_metadata_uuid("playerId", player_id);
+                    left_incinerated_team_eb.push_metadata_str("playerName", &player_name);
+                    left_incinerated_team_eb.push_metadata_uuid("teamId", from_team.incinerated_team_id);
+                    left_incinerated_team_eb.push_metadata_str("teamName", from_team.incinerated_team_nickname);
+                    left_incinerated_team_eb.build(EventType::PlayerRemovedFromTeam)
+                });
+
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(format!("{player_name} {roamed} out of the Hall of Flame."));
                 eb.push_player_tag(player_id);
                 events.insert(0, eb.build(EventType::ExitHallOfFlame));
+
+                // Now we insert from_team_event before everything else
+                if let Some(from_team_event) = from_team_event {
+                    events.insert(0, from_team_event);
+                }
 
                 return events;
             }
@@ -4065,7 +4087,9 @@ impl FedEvent {
                     child_eb.set_category(EventCategory::Outcomes);
                     child_eb.push_description(&description);
                     child_eb.push_player_tag(trader_id);
-                    child_eb.push_player_tag(victim_id);
+                    if let Some(victim_id) = victim_id {
+                        child_eb.push_player_tag(victim_id);
+                    }
 
                     child_eb.build(EventType::TradeFailed)
                 });
