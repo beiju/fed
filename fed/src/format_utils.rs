@@ -41,9 +41,21 @@ impl Display for Runs {
         } else if self.0 == 1.0 {
             write!(f, "1 Run")
         } else if self.0 < 0.0 {
-            write!(f, "{} Unruns", -self.0)
+            // If the value is an int, we need to print it with no decimal
+            // places. Otherwise, 1 decimal place.
+            if self.0.fract() == 0.0 {
+                write!(f, "{} Unruns", -self.0)
+            } else {
+                write!(f, "{:.1} Unruns", -self.0)
+            }
         } else {
-            write!(f, "{} Runs", self.0)
+            // If the value is an int, we need to print it with no decimal
+            // places. Otherwise, 1 decimal place.
+            if self.0.fract() == 0.0 {
+                write!(f, "{} Runs", self.0)
+            } else {
+                write!(f, "{:.1} Runs", self.0)
+            }
         }
     }
 }

@@ -311,11 +311,13 @@ impl FedEvent {
                 }
                 if self.season < 19 { eb.push_stopped_inhabiting(stopped_inhabiting.as_ref()); }
                 // `scorers` is before spicy, but `score_event` is after
-                eb.push_scores_without_event(&scores, home_team_id, "scores!", false, self.season < 21);
+                eb.push_scorers(&scores.scores, home_team_id, "scores!", false, self.season < 21);
+
                 eb.push_spicy(spicy_status, &batter_name, batter_id);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_named_item_damage(other_player_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 if self.season >= 19 { eb.push_stopped_inhabiting(stopped_inhabiting.as_ref()); }
+                eb.push_free_refills(&scores.free_refills);
                 eb.push_score_summary(&scores);
 
                 eb.build(EventType::Hit)

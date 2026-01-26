@@ -713,6 +713,21 @@ impl<'e> EventParseWrapper<'e> {
         attractions: Vec<(Uuid, String, String)>,
         is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
     ) -> Result<Scores<LedgerT>, FeedParseError> {
+        let scores = self.parse_base_scores(scoring_players, attractions, is_fc)?;
+
+        let free_refills = self.parse_free_refills()?;
+
+        Ok(Scores {
+            scores,
+            free_refills,
+            // TODO Consider changing around the types to make these Nones unnecessary (see TODO
+            //   comment on `Scores` struct
+            score_summary: None, // Filled in by a later function
+            balloons: None,      // Filled in by a later function
+        })
+    }
+
+    fn parse_base_scores(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>, attractions: Vec<(Uuid, String, String)>, is_fc: bool) -> Result<Vec<ScoringPlayer>, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores: Vec<_> = scoring_players.into_iter()
             .map(|(player_id, item_name, player_name, hotel_motel_party, hype_stadium_name)| {
@@ -781,17 +796,7 @@ impl<'e> EventParseWrapper<'e> {
 
         // The above code should always drain the attractions iterator
         assert_eq!(attractions.peek(), None);
-
-        let free_refills = self.parse_free_refills()?;
-
-        Ok(Scores {
-            scores,
-            free_refills,
-            // TODO Consider changing around the types to make these Nones unnecessary (see TODO
-            //   comment on `Scores` struct
-            score_summary: None, // Filled in by a later function
-            balloons: None,      // Filled in by a later function
-        })
+        Ok(scores)
     }
 
     pub fn parse_score_summary<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
