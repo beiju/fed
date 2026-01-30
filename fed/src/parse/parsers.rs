@@ -4024,13 +4024,15 @@ pub(crate) fn parse_successful_trade(
         let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         // TODO Clean up semicentennial stuff
         let (input, taken_item_name) =
-            parse_terminated(match trader_traitor {
-                ParsedTraderTraitor::Trader if is_post_semicentennial => "!",
-                ParsedTraderTraitor::Trader => ".",
-                ParsedTraderTraitor::Traitor if is_post_semicentennial => "!",
-                ParsedTraderTraitor::Traitor => ".",
-                ParsedTraderTraitor::Unknown => ".",
-                ParsedTraderTraitor::Neither => "!",
+            parse_terminated(if is_post_semicentennial {
+                "!"
+            } else {
+                match trader_traitor {
+                    ParsedTraderTraitor::Trader => ".",
+                    ParsedTraderTraitor::Traitor => ".",
+                    ParsedTraderTraitor::Unknown => ".",
+                    ParsedTraderTraitor::Neither => "!",
+                }
             })
                 .parse(input)?;
 
