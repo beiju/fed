@@ -5046,7 +5046,7 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::Announcement));
                 return events;
             },
-            FedEventData::BlackHoleBlackHole { game, team_nickname, nullified_mod_name, nullified_mod_id, nullified_mod_sub_event } => {
+            FedEventData::BlackHoleBlackHoleNullifiedLeagueModification { game, team_nickname, nullified_mod_name, nullified_mod_id, nullified_mod_sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("The {team_nickname} collected 10!"));
@@ -5059,6 +5059,29 @@ impl FedEvent {
                     child_eb.push_metadata_str("mod", nullified_mod_id);
                     child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
                     child_eb.build(EventType::LeagueModificationRemoved)
+                });
+
+                eb.build(EventType::BlackHoleAgitated)
+            },
+            FedEventData::BlackHoleBlackHoleNullifiedItem { game, player_name, player_id, team_nickname, team_id, item_name, item_id, item_mods, player_item_rating_before, player_item_rating_after, player_rating, item_removed_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("The {team_nickname} collected 10!"));
+                eb.push_description("Black Hole (Black Hole) became Agitated.");
+                let nullified_description = format!("Black Hole (Black Hole) nullified {player_name}'s {item_name}!");
+                eb.push_description(&nullified_description);
+
+                eb.push_child(item_removed_sub_event, |mut child_eb| {
+                    child_eb.push_description(nullified_description);
+                    child_eb.push_player_tag(player_id);
+                    child_eb.push_team_tag(team_id);
+                    child_eb.push_metadata_str("itemName", item_name);
+                    child_eb.push_metadata_uuid("itemId", item_id);
+                    child_eb.push_metadata_str_vec("mods", item_mods);
+                    child_eb.push_metadata_f64_opt("playerItemRatingBefore", player_item_rating_before);
+                    child_eb.push_metadata_f64("playerItemRatingAfter", player_item_rating_after);
+                    child_eb.push_metadata_f64("playerRating", player_rating);
+                    child_eb.build(EventType::PlayerLostItem)
                 });
 
                 eb.build(EventType::BlackHoleAgitated)

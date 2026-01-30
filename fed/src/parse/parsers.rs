@@ -4273,10 +4273,19 @@ pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(
     Ok((input, (player_name, location_name)))
 }
 
-pub(crate) fn black_hole_agitated(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn black_hole_nullified_mod(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, nullified_mod_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (team_nickname, nullified_mod_name)))
+}
+
+pub(crate) fn black_hole_nullified_item(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
+    let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
+    let (input, nullified_item_name) = parse_terminated("!").parse(input)?;
+
+    Ok((input, (team_nickname, player_name, nullified_item_name)))
 }

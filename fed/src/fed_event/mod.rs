@@ -8113,7 +8113,7 @@ pub enum FedEventData {
     /// Black Hole (Black Hole) became agitated and nullified a league
     /// modification
     #[serde(rename_all = "camelCase")]
-    BlackHoleBlackHole {
+    BlackHoleBlackHoleNullifiedLeagueModification {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -8128,6 +8128,48 @@ pub enum FedEventData {
 
         /// Metadata associated with the league modification being removed
         nullified_mod_sub_event: SubEvent,
+    },
+
+    /// Black Hole (Black Hole) became agitated and nullified a item
+    #[serde(rename_all = "camelCase")]
+    BlackHoleBlackHoleNullifiedItem {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Name of the player who had the nullified item equipped
+        player_name: String,
+
+        /// Uuid of the player who had the nullified item equipped
+        player_id: Uuid,
+
+        /// Nickname of the team who scored to trigger Black Hole (Black Hole)
+        team_nickname: String,
+
+        /// Uuid of the team who scored to trigger Black Hole (Black Hole)
+        team_id: Uuid,
+
+        /// Name of the item that was nullified from this event
+        item_name: String,
+
+        /// ID of the item that was nullified from this event
+        item_id: Uuid,
+
+        /// Mods bestowed by item that was nullified
+        item_mods: Vec<String>,
+
+        /// The increase or decrease that all the wielding player's items caused
+        /// to their star rating before this item was nullified
+        player_item_rating_before: Option<f64>,
+
+        /// The increase or decrease that all the wielding player's items now
+        /// cause to their star rating
+        player_item_rating_after: f64,
+
+        /// The player's star rating. TODO: Is this with or without items?
+        player_rating: f64,
+
+        /// Metadata associated with the player's item being removed
+        item_removed_sub_event: SubEvent,
     },
 
     /// Team shifted from one division to another. This happened post-Supernova
@@ -8432,7 +8474,8 @@ impl FedEventData {
             FedEventData::TeamIncineration { game, .. } => Some(game),
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
             FedEventData::SupernovaLeagueReassignment { .. } => None,
-            FedEventData::BlackHoleBlackHole { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedLeagueModification { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
         }
     }
