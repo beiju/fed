@@ -3841,6 +3841,15 @@ pub enum FedEventData {
         message: String,
     },
 
+    /// When an annoucement happens that isn't attributed to a particular being.
+    ///
+    /// Only occured in s24.
+    #[serde(rename_all = "camelCase")]
+    Announcement {
+        /// The text of the being's message
+        message: String,
+    },
+
     /// This is always the first event of every game
     #[serde(rename_all = "camelCase")]
     GameStart {
@@ -8164,6 +8173,7 @@ impl FedEventData {
     pub fn game(&self) -> Option<&GameEvent> {
         match self {
             FedEventData::BeingSpeech { .. } => None,
+            FedEventData::Announcement { .. } => None,
             FedEventData::GameStart { game, .. } => Some(game),
             FedEventData::PlayBall { game, .. } => Some(game),
             FedEventData::HalfInningStart { game, .. } => Some(game),

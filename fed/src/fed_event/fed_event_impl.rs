@@ -115,6 +115,14 @@ impl FedEvent {
                 eb.push_metadata_i64("being", being);
                 eb.build(EventType::BigDeal)
             }
+            FedEventData::Announcement { message } => {
+                eb.set_category(EventCategory::Outcomes);
+                eb.set_description(message);
+                // I've only ever seen this with an empty vec, so the type
+                // is anybody's guess
+                eb.push_metadata_str_vec("beings", Vec::new());
+                eb.build(EventType::Announcement)
+            }
             FedEventData::GameStart { game, weather, stadium_id, announcement } => {
                 match announcement {
                     GameStartAnnouncement::LetsGo => { eb.push_description("Let's Go!"); }

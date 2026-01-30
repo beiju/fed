@@ -1061,7 +1061,7 @@ pub fn parse_next_event(
             let cooled_off = event.parse_cooled_off(batter_name)?;
 
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
-            
+
             let mut scores = event.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, false)?;
 
             // This should fire iff season >= 20
@@ -4847,7 +4847,9 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::Announcement => {
-            todo!()
+            FedEventData::Announcement {
+                message: event.consume_description().to_string(),
+            }
         }
         EventType::Ratification => {
             let renovation_name =
