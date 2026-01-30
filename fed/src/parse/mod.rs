@@ -790,6 +790,7 @@ pub fn parse_next_event(
                 ParsedGroundOut::Simple {
                     batter_name,
                     fielder_name,
+                    fielder_shelled,
                 } => {
                     let batter_debt = event.parse_batter_debt(batter_name, fielder_name)?;
                     let fielder_item_damage_from_out = event.parse_item_damage(fielder_name)?;
@@ -813,6 +814,7 @@ pub fn parse_next_event(
                         pitch,
                         batter_name: batter_name.to_string(),
                         fielder_name: fielder_name.to_string(),
+                        fielder_shelled,
                         scores,
                         stopped_inhabiting,
                         cooled_off,
@@ -4878,6 +4880,8 @@ pub fn parse_next_event(
             pulsar_mod_added_event.next_parse_tag("PULSAR (PULSAR) BEAMS")?;
 
             // TODO There should be a lot more here, but somehow I'm not getting errors for it?
+            //   follow-up: it's because the next events are Tidings, which have lax parsing because
+            //   they're in the election. Ideally this would consume all EventType 176 following it
             FedEventData::SupernovaLeagueReassignment {
                 black_hole_mod_added_sub_event: black_hole_mod_added_event.as_sub_event(),
                 pulsar_mod_added_sub_event: pulsar_mod_added_event.as_sub_event(),

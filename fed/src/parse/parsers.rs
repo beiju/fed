@@ -251,6 +251,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     Simple {
         batter_name: &'a str,
         fielder_name: &'a str,
+        fielder_shelled: bool,
     },
     FieldersChoice {
         runner_out_name: &'a str,
@@ -263,11 +264,25 @@ pub(crate) enum ParsedGroundOut<'a> {
 
 pub(crate) fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
     alt((
+        // Shelled ground out must be before simple ground out
+        parse_shelled_ground_out,
         parse_simple_ground_out,
         parse_fielders_choice,
         parse_double_play,
     ))
     .parse(input)
+}
+
+pub(crate) fn parse_shelled_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+    let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
+    let (input, fielder_name) = parse_terminated("'s Shell.").parse(input)?;
+
+    let parsed = ParsedGroundOut::Simple {
+        batter_name,
+        fielder_name,
+        fielder_shelled: true,
+    };
+    Ok((input, (parsed)))
 }
 
 pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
@@ -277,6 +292,7 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundO
     let parsed = ParsedGroundOut::Simple {
         batter_name,
         fielder_name,
+        fielder_shelled: false,
     };
     Ok((input, (parsed)))
 }

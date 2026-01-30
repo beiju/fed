@@ -4121,6 +4121,9 @@ pub enum FedEventData {
         /// Name of fielder who caught the ground out
         fielder_name: String,
 
+        /// Whether the fielder who caught the ground out was shelled
+        fielder_shelled: bool,
+
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::GroundOut>>,
 
