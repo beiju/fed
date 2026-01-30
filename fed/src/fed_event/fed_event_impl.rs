@@ -2298,6 +2298,17 @@ impl FedEvent {
 
                 eb.build(EventType::IncinerationBlocked)
             }
+            FedEventData::ShelledIncineration { game, player_id, player_name, is_unstable } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                if is_unstable {
+                    eb.push_description(format!("{player_name} is Unstable!"));
+                }
+                eb.push_description(format!("Rogue Umpire tried to incinerate {player_name}, but they're protected by their Shell!"));
+                eb.push_player_tag(player_id);
+
+                eb.build(EventType::IncinerationBlocked)
+            }
             FedEventData::LineupSorted { team_id, team_nickname } => {
                 event_builder
                     .fill(EventBuilderUpdate {

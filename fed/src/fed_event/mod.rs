@@ -5831,6 +5831,23 @@ pub enum FedEventData {
         is_unstable: bool,
     },
 
+    /// Umpire tried to incinerate the player, but the player was Shelled
+    // TODO Combine ShelledIncineration, FireproofIncineration, and BecameMagmatic
+    #[serde(rename_all = "camelCase")]
+    ShelledIncineration {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Uuid of fireproof player
+        player_id: Uuid,
+
+        /// Name of fireproof player
+        player_name: String,
+
+        /// Whether the fireproof player was Unstable
+        is_unstable: bool,
+    },
+
     /// Team's lineup was sorted as a result of gaining Base Dealing
     #[serde(rename_all = "camelCase")]
     LineupSorted {
@@ -8307,6 +8324,7 @@ impl FedEventData {
             FedEventData::PlayerJoinedILB { .. } => None,
             FedEventData::PlayerPermittedToStay { .. } => None,
             FedEventData::FireproofIncineration { game, .. } => Some(game),
+            FedEventData::ShelledIncineration { game, .. } => Some(game),
             FedEventData::LineupSorted { .. } => None,
             FedEventData::Undersea { game, .. } => Some(game),
             FedEventData::RenovationBuilt { .. } => None,

@@ -2191,6 +2191,12 @@ pub fn parse_next_event(
                     player_name: player_name.to_string(),
                     is_unstable,
                 },
+                IncinerationBlockedReason::Shelled => FedEventData::ShelledIncineration {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    player_id: event.next_player_id()?,
+                    player_name: player_name.to_string(),
+                    is_unstable,
+                },
             }
         }
         EventType::FlagPlanted => {

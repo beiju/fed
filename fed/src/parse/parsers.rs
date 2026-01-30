@@ -1122,6 +1122,7 @@ pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<(&str, &str, &
 pub(crate) enum IncinerationBlockedReason {
     Magmatic,
     Fireproof,
+    Shelled,
 }
 
 pub(crate) fn parse_incineration_blocked(
@@ -1143,6 +1144,8 @@ pub(crate) fn parse_incineration_blocked(
         .map(|_| IncinerationBlockedReason::Magmatic),
         tag("they're Fireproof! The Umpire was incinerated instead!")
             .map(|_| IncinerationBlockedReason::Fireproof),
+        tag("they're protected by their Shell!")
+            .map(|_| IncinerationBlockedReason::Shelled),
     ))
     .parse(input)?;
     Ok((
