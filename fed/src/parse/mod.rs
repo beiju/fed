@@ -4847,8 +4847,19 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::Announcement => {
-            FedEventData::Announcement {
-                message: event.consume_description().to_string(),
+            event.next_parse_tag("EMERGENCY ALERT\nRIFFING INTENSIFIES\nSUPERNOVA COLLAPSES\nREALITY TEARS\nSTRANDS BRIDGED\nENDS ZONE")?;
+
+            let black_hole_mod_added_event = event_iter.next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
+            let mut black_hole_mod_added_event = EventParseWrapper::new(&black_hole_mod_added_event)?;
+            black_hole_mod_added_event.next_parse_tag("BLACK HOLE (BLACK HOLE) DRAINS")?;
+
+            let pulsar_mod_added_event = event_iter.next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
+            let mut pulsar_mod_added_event = EventParseWrapper::new(&pulsar_mod_added_event)?;
+            pulsar_mod_added_event.next_parse_tag("PULSAR (PULSAR) BEAMS")?;
+
+            FedEventData::SupernovaLeagueReassignment {
+                black_hole_mod_added_sub_event: black_hole_mod_added_event.as_sub_event(),
+                pulsar_mod_added_sub_event: pulsar_mod_added_event.as_sub_event(),
             }
         }
         EventType::Ratification => {

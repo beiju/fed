@@ -3841,15 +3841,6 @@ pub enum FedEventData {
         message: String,
     },
 
-    /// When an annoucement happens that isn't attributed to a particular being.
-    ///
-    /// Only occured in s24.
-    #[serde(rename_all = "camelCase")]
-    Announcement {
-        /// The text of the being's message
-        message: String,
-    },
-
     /// This is always the first event of every game
     #[serde(rename_all = "camelCase")]
     GameStart {
@@ -8085,6 +8076,19 @@ pub enum FedEventData {
         /// Metadata for the mod-added-from-other-mod sub-event
         sub_event: SubEvent,
     },
+
+    /// The s24 event where the supernova collapsed and leagues were reassigned
+    ///
+    /// The parsing for this is going to be very specific to the one time this
+    /// event appeared in Blaseball.
+    #[serde(rename_all = "camelCase")]
+    SupernovaLeagueReassignment {
+        /// Sub-event associated with TODO Does this actually add a mod?
+        black_hole_mod_added_sub_event: SubEvent,
+
+        /// Sub-event associated with TODO Does this actually add a mod?
+        pulsar_mod_added_sub_event: SubEvent,
+    },
 }
 
 #[derive(
@@ -8173,7 +8177,6 @@ impl FedEventData {
     pub fn game(&self) -> Option<&GameEvent> {
         match self {
             FedEventData::BeingSpeech { .. } => None,
-            FedEventData::Announcement { .. } => None,
             FedEventData::GameStart { game, .. } => Some(game),
             FedEventData::PlayBall { game, .. } => Some(game),
             FedEventData::HalfInningStart { game, .. } => Some(game),
@@ -8364,6 +8367,7 @@ impl FedEventData {
             FedEventData::PlayerLeftVault { .. } => None,
             FedEventData::TeamIncineration { game, .. } => Some(game),
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
+            FedEventData::SupernovaLeagueReassignment { .. } => None,
         }
     }
 }

@@ -115,14 +115,6 @@ impl FedEvent {
                 eb.push_metadata_i64("being", being);
                 eb.build(EventType::BigDeal)
             }
-            FedEventData::Announcement { message } => {
-                eb.set_category(EventCategory::Outcomes);
-                eb.set_description(message);
-                // I've only ever seen this with an empty vec, so the type
-                // is anybody's guess
-                eb.push_metadata_str_vec("beings", Vec::new());
-                eb.build(EventType::Announcement)
-            }
             FedEventData::GameStart { game, weather, stadium_id, announcement } => {
                 match announcement {
                     GameStartAnnouncement::LetsGo => { eb.push_description("Let's Go!"); }
@@ -5008,7 +5000,37 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::PlayerBecameStuck)
-            }
+            },
+            FedEventData::SupernovaLeagueReassignment { black_hole_mod_added_sub_event, pulsar_mod_added_sub_event } => {
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description("EMERGENCY ALERT");
+                eb.push_description("RIFFING INTENSIFIES");
+                eb.push_description("SUPERNOVA COLLAPSES");
+                eb.push_description("REALITY TEARS");
+                eb.push_description("STRANDS BRIDGED");
+                eb.push_description("ENDS ZONE");
+                // I've only ever seen this with an empty vec, so the type
+                // is anybody's guess
+                eb.push_metadata_str_vec("beings", Vec::new());
+
+                let mut events = Vec::new();
+                let mut black_hole_mod_added_event = eb.connected_event(black_hole_mod_added_sub_event);
+                black_hole_mod_added_event.set_category(EventCategory::Changes);
+                black_hole_mod_added_event.set_description("BLACK HOLE (BLACK HOLE) DRAINS".to_string());
+                black_hole_mod_added_event.push_metadata_str("mod", "SMBH");
+                black_hole_mod_added_event.push_metadata_i64("type", ModDuration::Permanent as i64);
+                events.push(black_hole_mod_added_event.build(EventType::LeagueModificationAdded));
+
+                let mut pulsar_mod_added_event = eb.connected_event(pulsar_mod_added_sub_event);
+                pulsar_mod_added_event.set_category(EventCategory::Changes);
+                pulsar_mod_added_event.set_description("PULSAR (PULSAR) BEAMS".to_string());
+                pulsar_mod_added_event.push_metadata_str("mod", "PULSAR");
+                pulsar_mod_added_event.push_metadata_i64("type", ModDuration::Permanent as i64);
+                events.push(pulsar_mod_added_event.build(EventType::LeagueModificationAdded));
+
+                events.insert(0, eb.build(EventType::Announcement));
+                return events;
+            },
         };
 
         vec![item]
