@@ -1142,6 +1142,7 @@ impl EventBuilder {
     }
 
     pub fn push_earned_win(&mut self, win: EarnedWin) {
+        let season = self.event.season;
         let day = self.event.day;
         let unwin = win.turntables && !win.sun_sun;
         self.push_child(win.sub_event, |mut child_eb| {
@@ -1161,9 +1162,12 @@ impl EventBuilder {
             let (mut lines, mut wins) = if let Some(BracketType::Underbracket) = win.bracket_type {
                 // Postseason underbracket. You win by losing. God knows why it's negative.
                 (vec!["Loss: -1".to_string()], -1)
-            } else {
+            } else if (season, day) < (23, 29) {
                 // Postseason underbracket and regular season. You win by winning.
                 (vec!["Non-Loss: 1".to_string()], 1)
+            } else {
+                // TODO Explain why 
+                (Vec::new(), 1)
             };
             if win.turntables {
                 lines.push("Turntables: 1 * -1 = -1".to_string());
