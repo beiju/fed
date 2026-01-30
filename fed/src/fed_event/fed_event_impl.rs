@@ -5038,7 +5038,7 @@ impl FedEvent {
                 eb.push_description("Black Hole (Black Hole) became Agitated.");
                 let nullified_description = format!("Black Hole (Black Hole) nullified {nullified_mod_name}!");
                 eb.push_description(&nullified_description);
-                
+
                 eb.push_child(nullified_mod_sub_event, |mut child_eb| {
                     child_eb.push_description(nullified_description);
                     child_eb.push_metadata_str("mod", nullified_mod_id);
@@ -5047,6 +5047,19 @@ impl FedEvent {
                 });
 
                 eb.build(EventType::BlackHoleAgitated)
+            },
+            FedEventData::TeamShiftedDivision { team_id, team_nickname, from_division_id, from_division_name, to_division_id, to_division_name } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("The {team_nickname} Shifted from the {from_division_name} to the {to_division_name}."));
+                eb.push_team_tag(team_id);
+
+                eb.push_metadata_uuid("teamId", team_id);
+                eb.push_metadata_str("teamName", team_nickname);eb.push_metadata_uuid("fromDivisionId", from_division_id);
+                eb.push_metadata_str("fromDivisionName", from_division_name);
+                eb.push_metadata_uuid("toDivisionId", to_division_id);
+                eb.push_metadata_str("toDivisionName", to_division_name);
+
+                eb.build(EventType::TeamDivisionMove)
             },
         };
 

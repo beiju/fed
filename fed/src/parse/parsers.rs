@@ -1588,13 +1588,41 @@ pub(crate) fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str,
     Ok((input, (team_nickname, park_name, prefab_name, is_first)))
 }
 
-pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) enum ParsedTeamDivisionMove<'a> {
+    TeamJoinedILB {
+        team_nickname: &'a str,
+        division_name: &'a str,
+    },
+    TeamShifted {
+        team_nickname: &'a str,
+        from_division_name: &'a str,
+        to_division_name: &'a str,
+    }
+}
+
+pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<ParsedTeamDivisionMove> {
+    alt((
+        parse_team_joined_ilb.map(|(team_nickname, division_name)| ParsedTeamDivisionMove::TeamJoinedILB { team_nickname, division_name }),
+        parse_team_shifted_division.map(|(team_nickname, from_division_name, to_division_name)| ParsedTeamDivisionMove::TeamShifted { team_nickname, from_division_name, to_division_name }),
+    )).parse(input)
+}
+
+pub(crate) fn parse_team_joined_ilb(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) =
         parse_terminated(" have joined the ILB!\nThey will play in the ").parse(input)?;
     let (input, division_name) = parse_terminated(" division.").parse(input)?;
 
     Ok((input, (team_nickname, division_name)))
+}
+
+pub(crate) fn parse_team_shifted_division(input: &str) -> ParserResult<(&str, &str, &str)> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" Shifted from the ").parse(input)?;
+    let (input, from_division_name) = parse_terminated(" to the ").parse(input)?;
+    let (input, to_division_name) = parse_until_period_eof.parse(input)?;
+
+    Ok((input, (team_nickname, from_division_name, to_division_name)))
 }
 
 pub(crate) enum ParsedPlayerDivisionMove<'a> {

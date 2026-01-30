@@ -8108,7 +8108,30 @@ pub enum FedEventData {
 
         /// Metadata associated with the league modification being removed
         nullified_mod_sub_event: SubEvent,
-    }
+    },
+
+    /// Team shifted from one division to another. This happened post-Supernova
+    /// in s24.
+    #[serde(rename_all = "camelCase")]
+    TeamShiftedDivision {
+        /// Uuid of newly added team
+        team_id: Uuid,
+
+        /// Nickname of newly added team
+        team_nickname: String,
+
+        /// Uuid of division the team left
+        from_division_id: Uuid,
+
+        /// Name of division the team left
+        from_division_name: String,
+
+        /// Uuid of division the team joined
+        to_division_id: Uuid,
+
+        /// Name of division the team joined
+        to_division_name: String,
+    },
 }
 
 #[derive(
@@ -8389,6 +8412,7 @@ impl FedEventData {
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
             FedEventData::SupernovaLeagueReassignment { .. } => None,
             FedEventData::BlackHoleBlackHole { game, .. } => Some(game),
+            FedEventData::TeamShiftedDivision { .. } => None,
         }
     }
 }

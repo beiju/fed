@@ -4241,19 +4241,39 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::TeamDivisionMove => {
-            // For now this only has the breach events, it will need to be updated for s24
-            let (team_nickname, division_name) = event.next_parse(parse_team_division_move)?;
-            assert!(is_known_team_nickname(team_nickname));
-            assert_eq!(team_nickname, event.metadata_str("teamName")?);
-            assert_eq!(division_name, event.metadata_str("divisionName")?);
-            let team_id = event.next_team_id()?;
-            assert_eq!(team_id, event.metadata_uuid("teamId")?);
+            match event.next_parse(parse_team_division_move)? {
+                ParsedTeamDivisionMove::TeamJoinedILB { team_nickname, division_name } => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    assert_eq!(team_nickname, event.metadata_str("teamName")?);
+                    assert_eq!(division_name, event.metadata_str("divisionName")?);
+                    let team_id = event.next_team_id()?;
+                    assert_eq!(team_id, event.metadata_uuid("teamId")?);
 
-            FedEventData::TeamJoinedILB {
-                team_id,
-                team_nickname: team_nickname.to_string(),
-                division_id: event.metadata_uuid("divisionId")?,
-                division_name: division_name.to_string(),
+                    FedEventData::TeamJoinedILB {
+                        team_id,
+                        team_nickname: team_nickname.to_string(),
+                        division_id: event.metadata_uuid("divisionId")?,
+                        division_name: division_name.to_string(),
+                    }
+                },
+                ParsedTeamDivisionMove::TeamShifted { team_nickname, from_division_name, to_division_name } => {
+                    assert!(is_known_team_nickname(team_nickname));
+                    assert_eq!(team_nickname, event.metadata_str("teamName")?);
+                    assert_eq!(from_division_name, event.metadata_str("fromDivisionName")?);
+                    assert_eq!(to_division_name, event.metadata_str("toDivisionName")?);
+
+                    let team_id = event.next_team_id()?;
+                    assert_eq!(team_id, event.metadata_uuid("teamId")?);
+
+                    FedEventData::TeamShiftedDivision {
+                        team_id,
+                        team_nickname: team_nickname.to_string(),
+                        from_division_id: event.metadata_uuid("fromDivisionId")?,
+                        from_division_name: from_division_name.to_string(),
+                        to_division_id: event.metadata_uuid("toDivisionId")?,
+                        to_division_name: to_division_name.to_string(),
+                    }
+                }
             }
         }
         EventType::PlayerDivisionMove => match event.next_parse(parse_player_division_move)? {
