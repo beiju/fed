@@ -5031,6 +5031,23 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::Announcement));
                 return events;
             },
+            FedEventData::BlackHoleBlackHole { game, team_nickname, nullified_mod_name, nullified_mod_id, nullified_mod_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("The {team_nickname} collected 10!"));
+                eb.push_description("Black Hole (Black Hole) became Agitated.");
+                let nullified_description = format!("Black Hole (Black Hole) nullified {nullified_mod_name}!");
+                eb.push_description(&nullified_description);
+                
+                eb.push_child(nullified_mod_sub_event, |mut child_eb| {
+                    child_eb.push_description(nullified_description);
+                    child_eb.push_metadata_str("mod", nullified_mod_id);
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child_eb.build(EventType::LeagueModificationRemoved)
+                });
+
+                eb.build(EventType::BlackHoleAgitated)
+            },
         };
 
         vec![item]

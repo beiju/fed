@@ -4857,6 +4857,7 @@ pub fn parse_next_event(
             let mut pulsar_mod_added_event = EventParseWrapper::new(&pulsar_mod_added_event)?;
             pulsar_mod_added_event.next_parse_tag("PULSAR (PULSAR) BEAMS")?;
 
+            // TODO There should be a lot more here, but somehow I'm not getting errors for it?
             FedEventData::SupernovaLeagueReassignment {
                 black_hole_mod_added_sub_event: black_hole_mod_added_event.as_sub_event(),
                 pulsar_mod_added_sub_event: pulsar_mod_added_event.as_sub_event(),
@@ -4932,6 +4933,9 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::LeagueModificationAdded => {
+            todo!()
+        }
+        EventType::LeagueModificationRemoved => {
             todo!()
         }
         EventType::BalloonsInflatedFromWin => {
@@ -5405,6 +5409,20 @@ pub fn parse_next_event(
                 game: event.game(unscatter, attractor_secret_base)?,
             }
         }
+        EventType::BlackHoleAgitated => {
+            let (team_nickname, nullified_mod_name) = event.next_parse(black_hole_agitated)?;
+            assert!(is_known_team_nickname(team_nickname));
+
+            let mod_nullified_event = event.next_child(EventType::LeagueModificationRemoved)?;
+
+            FedEventData::BlackHoleBlackHole {
+                game: event.game(unscatter, attractor_secret_base)?,
+                team_nickname: team_nickname.to_string(),
+                nullified_mod_name: nullified_mod_name.to_string(),
+                nullified_mod_id: mod_nullified_event.metadata_str("mod")?.to_string(),
+                nullified_mod_sub_event: mod_nullified_event.as_sub_event(),
+            }
+        },
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened)?;
 
@@ -5489,6 +5507,12 @@ pub fn parse_next_event(
                 unruns_scored: 25, // TODO
                 unruns_sub_event: unruns_event.as_sub_event(),
             }
+        }
+        EventType::FromDiagonal => {
+            todo!()
+        }
+        EventType::SupernovaLeagueCreated => {
+            todo!()
         }
         EventType::StormWarning => {
             todo!()

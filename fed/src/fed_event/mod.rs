@@ -8089,6 +8089,26 @@ pub enum FedEventData {
         /// Sub-event associated with TODO Does this actually add a mod?
         pulsar_mod_added_sub_event: SubEvent,
     },
+
+    /// Black Hole (Black Hole) became agitated and nullified a league
+    /// modification
+    #[serde(rename_all = "camelCase")]
+    BlackHoleBlackHole {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the team who scored to trigger Black Hole (Black Hole)
+        team_nickname: String,
+
+        /// Name of the mod that was nullified from this event
+        nullified_mod_name: String,
+
+        /// ID of the mod that was nullified from this event
+        nullified_mod_id: String,
+
+        /// Metadata associated with the league modification being removed
+        nullified_mod_sub_event: SubEvent,
+    }
 }
 
 #[derive(
@@ -8368,6 +8388,7 @@ impl FedEventData {
             FedEventData::TeamIncineration { game, .. } => Some(game),
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
             FedEventData::SupernovaLeagueReassignment { .. } => None,
+            FedEventData::BlackHoleBlackHole { game, .. } => Some(game),
         }
     }
 }

@@ -242,7 +242,10 @@ impl Weather {
             Weather::SunPoint1 => "Sun .1",
             Weather::SumSun => "Sum Sun",
             Weather::SupernovaEclipse => "Supernova Eclipse",
-            Weather::BlackHoleBlackHole => "Black Hole (Black Hole)",
+            // TODO Jazz weather appears to refer to Black Hole (Black Hole) as
+            //   "Supermassive Black Hole". Is this consistent across the whole
+            //   of Blaseball?
+            Weather::BlackHoleBlackHole => "Supermassive Black Hole",
             Weather::Jazz => "Jazz",
             Weather::Night => "Night",
         }
@@ -433,6 +436,7 @@ pub enum EventType {
     Moderation = 208,
     RunsScored = 209,
     LeagueModificationAdded = 210,
+    LeagueModificationRemoved = 211,
     BalloonsInflatedFromWin = 213,
     WinCollectedRegular = 214,
     WinCollectedPostseason = 215,
@@ -459,11 +463,16 @@ pub enum EventType {
     PlayersCutFromTeam = 245,
     GameCanceled = 246,
     Supernova = 247,
+    // Black hole being agitated captures nullifying league mods and items, but
+    // not teams (which are event type 250)
+    BlackHoleAgitated = 249,
     RiffOpened = 251,
     NightShift = 252,
     TarotCardChanged = 253,
     PlayerBecameStuck = 254,
     HorsePower = 255,
+    FromDiagonal = 256,
+    SupernovaLeagueCreated = 257,
     StormWarning = 263,
     Snowflakes = 264,
 }
