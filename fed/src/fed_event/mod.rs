@@ -3842,6 +3842,18 @@ pub enum TeamIncinerationReplacementSource {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct TouchedDownPlayer {
+    /// Name of the player who touched down, in all caps
+    pub player_name_all_caps: String,
+
+    /// Uuid of the player who touched down
+    pub player_id: Uuid,
+
+    /// Sub-event associated with the player gaining the Scattered modification
+    pub sub_event: SubEvent,
+}
+
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
@@ -8237,6 +8249,17 @@ pub enum FedEventData {
         /// Name of division the team joined
         to_division_name: String,
     },
+
+    // TODO What did this mean? Was it hitting the desert on the imPositon
+    //   chart? Was it to do with rocketry? Both? It started in s24
+    // TODO Document fields
+    #[serde(rename_all = "camelCase")]
+    TeamTouchedDown {
+        team_nickname_caps: String,
+        team_id: Uuid,
+
+        players: Vec<TouchedDownPlayer>
+    },
 }
 
 #[derive(
@@ -8521,6 +8544,7 @@ impl FedEventData {
             FedEventData::BlackHoleBlackHoleNullifiedStadiumModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
+            FedEventData::TeamTouchedDown { .. } => None,
         }
     }
 }

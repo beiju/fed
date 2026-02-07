@@ -5103,6 +5103,30 @@ impl FedEvent {
 
                 eb.build(EventType::TeamDivisionMove)
             },
+            FedEventData::TeamTouchedDown { team_nickname_caps, team_id, players } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("{team_nickname_caps}, TOUCH DOWN"));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", "SCATTERED");
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                let mut events = players.into_iter()
+                    .map(|player| {
+                        let mut eb = eb.connected_event(player.sub_event);
+                        // TODO I think I clear or reset the description now 
+                        //   more than I set it. Make that the default.
+                        eb.clear_description();
+                        eb.push_description(format!("{}, TOUCH DOWN", player.player_name_all_caps));
+                        eb.push_player_tag(player.player_id);
+                        eb.push_metadata_str("mod", "SCATTERED");
+                        eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                        eb.build(EventType::AddedMod)
+                    })
+                    .collect_vec();
+                events.insert(0, eb.build(EventType::AddedMod));
+                return events;
+            }
         };
 
         vec![item]

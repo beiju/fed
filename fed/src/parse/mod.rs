@@ -10,6 +10,7 @@ use itertools::{Either, Itertools};
 use nom::combinator::opt;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::iter;
 use std::sync::{Arc, Mutex};
 // the second one is a macro
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
@@ -3322,6 +3323,40 @@ pub fn parse_next_event(
                         player_id: event.next_player_id()?,
                         player_name: player_name.to_string(),
                         level: 1,
+                    },
+                    ParsedAddedMod::TouchDown(team_nickname_caps) => {
+                        // This event is followed by N AddedMod events for
+                        // players. We know these events are done if:
+                        // 1. There's a non-AddedMod event
+                        // 2. There's a AddedMod event without a player (this
+                        //    is another team's event starting)
+                        // 3. The team ID changes (this is an error I think, if
+                        //    neither of the previous is true)
+
+                        let team_id = event.next_team_id()?;
+                        let players = iter::from_fn(|| {
+                            event_iter.next_if(|e| {
+                                e.r#type == EventType::AddedMod &&
+                                    e.player_tags.as_ref().is_some_and(|pt| !pt.is_empty()) &&
+                                    e.team_tags.as_ref().is_some_and(|tt| *tt == vec![team_id])
+                            })
+                        })
+                            .map(|ev| {
+                                let mut ev = EventParseWrapper::new(&ev)?;
+                                let player_name_all_caps = ev.next_parse(parse_terminated(", TOUCH DOWN"))?;
+                                ParseOk(TouchedDownPlayer {
+                                    player_name_all_caps: player_name_all_caps.to_string(),
+                                    player_id: ev.next_player_id()?,
+                                    sub_event: ev.as_sub_event(),
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+
+                        FedEventData::TeamTouchedDown {
+                            team_nickname_caps: team_nickname_caps.to_string(),
+                            team_id,
+                            players,
+                        }
                     },
                 }
             }

@@ -203,6 +203,10 @@ impl EventBuilder {
         self.event.description = description;
     }
 
+    pub fn clear_description(&mut self) {
+        self.event.description.clear();
+    }
+
     pub fn set_category(&mut self, category: EventCategory) {
         self.event.category = category;
     }
