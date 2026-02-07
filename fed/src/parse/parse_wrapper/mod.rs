@@ -658,19 +658,17 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_scores<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
         &mut self,
         label: &'static str,
-        is_fc: bool,
     ) -> Result<Scores<LedgerT>, FeedParseError> {
-        let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
-        self.parse_scores_with_scoring_players(scoring_players, attractions, is_fc)
+        let (scoring_players, attractions) = self.parse_scoring_players(label)?;
+        self.parse_scores_with_scoring_players(scoring_players, attractions)
     }
 
     pub fn parse_scores_without_summary<LedgerT: LedgerV2 + ParseableLedger<Ledger = LedgerT>>(
         &mut self,
         label: &'static str,
-        is_fc: bool,
     ) -> Result<Scores<LedgerT>, FeedParseError> {
-        let (scoring_players, attractions) = self.parse_scoring_players(label, is_fc)?;
-        self.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, is_fc)
+        let (scoring_players, attractions) = self.parse_scoring_players(label)?;
+        self.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, false)
     }
 
     pub fn parse_scores_with_scoring_players<
@@ -685,12 +683,11 @@ impl<'e> EventParseWrapper<'e> {
             Option<String>,
         )>,
         attractions: Vec<(Uuid, String, String)>,
-        is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
     ) -> Result<Scores<LedgerT>, FeedParseError> {
         let mut scores = self.parse_scores_with_scoring_players_without_summary(
             scoring_players,
             attractions,
-            is_fc,
+            false,
         )?;
         scores.score_summary = self.parse_score_summary()?;
         scores.balloons = self.parse_balloons_from_score_summary(scores.score_summary.as_ref())?;
@@ -911,7 +908,6 @@ impl<'e> EventParseWrapper<'e> {
     pub fn parse_scoring_players(
         &mut self,
         label: &'static str,
-        is_fc: bool,
     ) -> Result<
         (
             Vec<(
@@ -928,7 +924,6 @@ impl<'e> EventParseWrapper<'e> {
         let (scorers, attractions) = self.next_parse(parse_scores(
             label,
             (self.season, self.day) < (15, 3),
-            is_fc,
             // TODO Should I reference event types here or should I add another argument?
             // (if this is even the right thing to check)
             self.season < 21 || self.event_type == EventType::Walk,
@@ -957,6 +952,62 @@ impl<'e> EventParseWrapper<'e> {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok((scoring_players, attracted_players))
+    }
+
+    // This is only for parsing standalone attractions. Attractions usually
+    // get parsed as part of parse_scoring_players. As of this writing, this
+    // is only used in fielder's choices
+    pub fn parse_attractions(
+        &mut self,
+    ) -> Result<
+        Vec<(Uuid, String, String)>,
+        FeedParseError,
+    > {
+        self.next_parse(parse_attractions)?
+            .into_iter()
+            .map(|attraction| {
+                ParseOk((
+                    self.next_player_id()?,
+                    attraction.team_nickname.to_string(),
+                    attraction.player_name.to_string(),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    pub fn parse_scoring_players_fc(
+        &mut self,
+        label: &'static str,
+    ) -> Result<
+        Vec<(
+            Uuid,
+            Option<(String, Option<bool>)>,
+            String,
+            Option<Option<String>>,
+            Option<String>,
+        )>,
+        FeedParseError,
+    > {
+        let scorers = self.next_parse(parse_scores_fc(
+            label,
+            (self.season, self.day) < (15, 3),
+            // TODO Should I reference event types here or should I add another argument?
+            // (if this is even the right thing to check)
+            self.season < 21 || self.event_type == EventType::Walk,
+        ))?;
+
+        scorers
+            .into_iter()
+            .map(|score| {
+                ParseOk((
+                    self.next_player_id()?,
+                    score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
+                    score.player_name.to_string(),
+                    score.hotel_motel_party.map(|n| n.map(str::to_string)),
+                    score.hype_stadium_name.map(str::to_string),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 
     pub fn next_item_damage(

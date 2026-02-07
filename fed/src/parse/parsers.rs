@@ -468,32 +468,48 @@ pub(crate) struct ParsedAttraction<'a> {
 pub(crate) fn parse_scores<'a>(
     score_label: &'static str,
     extra_space: bool,
-    is_fc: bool,
     hype_before_score: bool,
 ) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
         let (input, mut scorers) = many0(parse_score(
             score_label,
             extra_space,
-            is_fc,
+            false,
             hype_before_score,
         ))
         .parse(input)?;
 
-        let (mut input, attractions) = many0(parse_attraction).parse(input)?;
+        let (mut input, attractions) = parse_attractions.parse(input)?;
 
         // Fill in hotel_motel_parties, which were defaulted to false
-        // Unless this is an FC, in which case hotel motel parties are even later! Isn't this fun
-        if !is_fc {
-            for scorer in &mut scorers {
-                let (i, party) =
-                    opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
-                scorer.hotel_motel_party = party;
-                input = i;
-            }
+        for scorer in &mut scorers {
+            let (i, party) =
+                opt(parse_hotel_motel_party_with_name(scorer.player_name)).parse(input)?;
+            scorer.hotel_motel_party = party;
+            input = i;
         }
 
         Ok((input, (scorers, attractions)))
+    }
+}
+
+// Everything is in weird orders for FC, particularly attractions and hotel
+// motel parties being after the "Reaches on fielder's choice!" message
+pub(crate) fn parse_scores_fc<'a>(
+    score_label: &'static str,
+    extra_space: bool,
+    hype_before_score: bool,
+) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
+    move |input| {
+        let (input, mut scorers) = many0(parse_score(
+            score_label,
+            extra_space,
+            true,
+            hype_before_score,
+        ))
+        .parse(input)?;
+
+        Ok((input, scorers))
     }
 }
 
@@ -608,6 +624,10 @@ pub(crate) fn parse_attraction(input: &str) -> ParserResult<ParsedAttraction> {
             player_name,
         },
     ))
+}
+
+pub(crate) fn parse_attractions(input: &str) -> ParserResult<Vec<ParsedAttraction>> {
+    many0(parse_attraction).parse(input)
 }
 
 pub(crate) fn parse_hotel_motel_party_with_name(

@@ -848,6 +848,12 @@ impl EventBuilder {
                 self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
             }
         }
+        if !is_fc {
+            self.push_scorers_trailing_matter(scorers);
+        }
+    }
+
+    pub fn push_scorers_trailing_matter(&mut self, scorers: &[ScoringPlayer]) {
         // Attractions happen in a block after the scores block
         for scorer in scorers {
             if let Some(attraction) = &scorer.attraction {
@@ -855,10 +861,8 @@ impl EventBuilder {
             }
         }
         // Hotel motel parties happen in a block after the scores block (not sure of order w/r/t
-        // attractions) (unless it's an FC in which case they're later! i love parsing blaseball.)
-        if !is_fc {
-            self.push_scorer_hotel_motel_parties(scorers);
-        }
+        // attractions)
+        self.push_scorer_hotel_motel_parties(scorers);
     }
 
     pub fn push_scorer_hotel_motel_parties(&mut self, scorers: &[ScoringPlayer]) {

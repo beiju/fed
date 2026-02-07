@@ -1,4 +1,4 @@
-use crate::fed_event::{ActivePositionType, BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
 use crate::fed_event::HomeRunHypeSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -572,9 +572,10 @@ impl FedEvent {
                 eb.push_scorers(&scores.scores, home_team_id, "scores!", true, self.season < 21);
                 eb.push_named_item_damages(damaged_items.iter().map(|(x, y)| (x.as_str(), y)));
                 eb.push_description(format!("{batter_name} reaches on fielder's choice."));
-                // Unsure of order of free refills vs hotel motel parties
+                // This includes attractions and hotel motel parties, which are
+                // part of push_scorers for every other event
+                eb.push_scorers_trailing_matter(&scores.scores);
                 eb.push_free_refills(&scores.free_refills);
-                eb.push_scorer_hotel_motel_parties(&scores.scores);
                 eb.push_cooled_off(cooled_off, &batter_name);
                 eb.push_score_summary(&scores);
                 eb.build(EventType::GroundOut)
