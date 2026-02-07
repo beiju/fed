@@ -6063,6 +6063,11 @@ fn zip_mod_change_events(
 // }
 
 fn is_known_team_name(name: &str) -> bool {
+    // In s24, entire teams became scattered
+    if name.chars().all(|c| c.is_whitespace() || c == '-') {
+        return true;
+    }
+
     vec![
         "Hawai'i Fridays",
         "Canada Moist Talkers",
@@ -6097,6 +6102,11 @@ fn is_known_team_name(name: &str) -> bool {
 }
 
 fn is_known_team_nickname(name: &str) -> bool {
+    // In s24, entire teams became scattered
+    if name.chars().all(|c| c.is_whitespace() || c == '-') {
+        return true;
+    }
+
     KNOWN_TEAM_NICKNAMES.contains(&name)
 }
 
