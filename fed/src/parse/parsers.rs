@@ -98,7 +98,7 @@ pub(crate) fn parse_batter_up(
     let (input, repeating) = opt(parse_terminated("is Repeating!\n")).parse(input)?;
     let (input, (batter_name, inhabiting_name, is_skipping)) = alt((
         // NOTE order matters here. inhabiting must be first
-        parse_batter_up_inhabiting.map(|(n, i)| (n, i, false)),
+        parse_batter_up_inhabiting.map(|(n, i, sk)| (n, i, sk)),
         parse_terminated(" batting for the ").map(|n| (n, None, false)),
         parse_terminated(" skipped up to bat for the ").map(|n| (n, None, true)),
     ))
@@ -126,13 +126,16 @@ pub(crate) fn parse_batter_up(
     ))
 }
 
-pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
     let (input, batter_name) = parse_terminated(" is Inhabiting ").parse(input)?;
     let (input, inhabiting_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
-    let (input, _) = tag(" batting for the ").parse(input)?;
+    let (input, skipping) = alt((
+        tag(" batting for the ").map(|_| false),
+        tag(" skipped up to bat for the ").map(|_| true),
+    )).parse(input)?;
 
-    Ok((input, (batter_name, Some(inhabiting_name))))
+    Ok((input, (batter_name, Some(inhabiting_name), skipping)))
 }
 
 pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<&str> {
