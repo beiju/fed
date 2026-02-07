@@ -5457,18 +5457,35 @@ pub fn parse_next_event(
         EventType::BlackHoleAgitated => {
             let expected_types = [
                 EventType::LeagueModificationRemoved,
+                // This is at least used for removed stadium mods (see event
+                // 1f254903-73dd-4d03-8f2f-4735a6c4ee5c), maybe others
+                EventType::RemovedMod,
                 EventType::PlayerLostItem,
             ];
             let mut child_event = event.next_child_any(&expected_types)?;
 
             match child_event.event_type {
                 EventType::LeagueModificationRemoved => {
-                    let (team_nickname, nullified_mod_name) = event.next_parse(black_hole_nullified_mod)?;
+                    let (team_nickname, nullified_mod_name) = event.next_parse(black_hole_nullified_league_mod)?;
                     assert!(is_known_team_nickname(team_nickname));
 
                     FedEventData::BlackHoleBlackHoleNullifiedLeagueModification {
                         game: event.game(unscatter, attractor_secret_base)?,
                         team_nickname: team_nickname.to_string(),
+                        nullified_mod_name: nullified_mod_name.to_string(),
+                        nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
+                        nullified_mod_sub_event: child_event.as_sub_event(),
+                    }
+                },
+                EventType::RemovedMod => {
+                    let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(black_hole_nullified_stadium_mod)?;
+                    assert!(is_known_team_nickname(team_nickname));
+
+                    FedEventData::BlackHoleBlackHoleNullifiedStadiumModification {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_nickname: team_nickname.to_string(),
+                        someones_team_id: child_event.next_team_id()?,
+                        stadium_name: stadium_name.to_string(),
                         nullified_mod_name: nullified_mod_name.to_string(),
                         nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
                         nullified_mod_sub_event: child_event.as_sub_event(),

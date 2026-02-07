@@ -8146,6 +8146,33 @@ pub enum FedEventData {
         nullified_mod_sub_event: SubEvent,
     },
 
+    /// Black Hole (Black Hole) became agitated and nullified a stadium
+    /// modification
+    #[serde(rename_all = "camelCase")]
+    BlackHoleBlackHoleNullifiedStadiumModification {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the team who scored to trigger Black Hole (Black Hole)
+        team_nickname: String,
+
+        // TODO Figure out if this is the scoring team or the stadium-owning
+        //   team
+        someones_team_id: Uuid,
+
+        /// Name of the stadium whose mod was nullified
+        stadium_name: String,
+
+        /// Name of the mod that was nullified from this event
+        nullified_mod_name: String,
+
+        /// ID of the mod that was nullified from this event
+        nullified_mod_id: String,
+
+        /// Metadata associated with the league modification being removed
+        nullified_mod_sub_event: SubEvent,
+    },
+
     /// Black Hole (Black Hole) became agitated and nullified a item
     #[serde(rename_all = "camelCase")]
     BlackHoleBlackHoleNullifiedItem {
@@ -8491,6 +8518,7 @@ impl FedEventData {
             FedEventData::PlayerBecameStuck { game, .. } => Some(game),
             FedEventData::SupernovaLeagueReassignment { .. } => None,
             FedEventData::BlackHoleBlackHoleNullifiedLeagueModification { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedStadiumModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
         }

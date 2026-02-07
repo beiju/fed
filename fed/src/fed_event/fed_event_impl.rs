@@ -5049,6 +5049,24 @@ impl FedEvent {
 
                 eb.build(EventType::BlackHoleAgitated)
             },
+            FedEventData::BlackHoleBlackHoleNullifiedStadiumModification { game, team_nickname, someones_team_id, stadium_name, nullified_mod_name, nullified_mod_id, nullified_mod_sub_event } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("The {team_nickname} collected 10!"));
+                eb.push_description("Black Hole (Black Hole) became Agitated.");
+                let nullified_description = format!("Black Hole (Black Hole) nullified {stadium_name}'s {nullified_mod_name}!");
+                eb.push_description(&nullified_description);
+
+                eb.push_child(nullified_mod_sub_event, |mut child_eb| {
+                    child_eb.push_description(nullified_description);
+                    child_eb.push_team_tag(someones_team_id);
+                    child_eb.push_metadata_str("mod", nullified_mod_id);
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child_eb.build(EventType::RemovedMod)
+                });
+
+                eb.build(EventType::BlackHoleAgitated)
+            },
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, player_name, player_id, team_nickname, team_id, item_name, item_id, item_mods, player_item_rating_before, player_item_rating_after, player_rating, item_removed_sub_event } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
