@@ -5072,7 +5072,7 @@ impl FedEvent {
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("The {team_nickname} collected 10!"));
                 eb.push_description("Black Hole (Black Hole) became Agitated.");
-                let nullified_description = format!("Black Hole (Black Hole) nullified {player_name}'s {item_name}!");
+                let nullified_description = format!("Black Hole (Black Hole) nullified {} {item_name}!", Possessive(&player_name));
                 eb.push_description(&nullified_description);
 
                 eb.push_child(item_removed_sub_event, |mut child_eb| {
