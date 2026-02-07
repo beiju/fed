@@ -202,8 +202,8 @@ pub struct ScoringPlayer {
     /// Info about the Hotel Motel party on this score, if any
     pub hotel_motel_party: Option<HotelMotelParty>,
 
-    /// Info about Hype building as a result of this score, if any
-    pub hype: Option<Hype>,
+    /// Info about the Shame on this score, if any
+    pub shame: Shame,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
@@ -1127,8 +1127,8 @@ pub enum FloodingSweptEffect {
         /// Info about the Hotel Motel party on this score, if any
         hotel_motel_party: Option<HotelMotelParty>,
 
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<Hype>,
+        /// If this event caused Shame, the metadata about the Shame, including any associated Hype
+        shame: Shame,
     },
     Ego(PlayerNameId),
 }
@@ -2198,28 +2198,43 @@ pub struct Hype {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+// TODO Document variants
+pub enum Shame {
+    // TODO Return this for games pre-s18
+    Unknown,
+    No,
+    Yes {
+        hype: Option<Hype>,
+    },
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
-pub enum HomeRunHypeSource {
+pub enum HomeRunShameSource {
     HomeRun,
     Buckets,
     Hoops,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct HomeRunHype {
-    #[serde(flatten)]
-    pub hype: Hype,
+// TODO Document variants
+pub enum HomeRunShame {
+    // TODO Return this for games pre-s18
+    // TODO Serialize this as `null`
+    Unknown,
+    // TODO Serialize this as `true`
+    No,
+    Yes {
+        /// Which part of this home run caused the Shame
+        source: HomeRunShameSource,
 
-    /// Which part of this home run caused the hype
-    pub source: HomeRunHypeSource,
-}
-
-impl HomeRunHype {
-    pub fn from_hype_and_source(hype: Hype, source: HomeRunHypeSource) -> Self {
-        Self { hype, source }
-    }
+        /// If this Shame caused Hype to build, metadata about the Hype building
+        ///
+        /// All Shame from the Fee
+        hype: Option<Hype>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
@@ -4342,8 +4357,8 @@ pub enum FedEventData {
         /// If this was a Holiday Inning, contains the Hotel Motel parties
         hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
 
-        /// If the home run built hype, the metadata about the hype event
-        hype: Option<HomeRunHype>,
+        /// If the home run caused Shame, the metadata about the hype event
+        shame: HomeRunShame,
 
         /// TODO Describe alley oops
         alley_oop: Option<(String, bool)>,
@@ -4393,8 +4408,8 @@ pub enum FedEventData {
         /// circumstances that cause an otherwise-undetectable Special event.)
         is_special: bool,
 
-        /// If this event built hype, the metadata about the hype event
-        hype: Option<Hype>,
+        /// If this event caused Shame, the metadata about the Shame, including any associated Hype
+        shame: Shame,
 
         /// Score summary effects, if applicable. This will be populated if the season is 20 or
         /// later and either the base stolen was home or if blaserunning is true, otherwise null.
@@ -7122,7 +7137,7 @@ pub enum FedEventData {
 
         /// Once, due to a bug, Moderation accidentally took too many runs and caused the opposing
         /// team to win. Since this was at the end of the game it counted as Shame and built Hype.
-        hype: Option<Hype>,
+        shame: Shame,
 
         /// The associated score summary, if applicable.
         score_summary: Option<ScoreSummary<ModerationLedger>>,
@@ -7221,8 +7236,9 @@ pub enum FedEventData {
         /// number of balloons.
         balloons: Option<Balloons>,
 
-        /// If this run activated Hype, information about the hype. Ohterwise null.
-        hype: Option<Hype>,
+        /// If this run steal caused Shame, information about the Shame, including Hype. Otherwise
+        /// `null`.
+        shame: Shame,
 
         /// Free Refill data if one was used, otherwise null
         free_refill: Option<FreeRefill>,

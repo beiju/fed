@@ -1,3 +1,4 @@
+use chrono::format::parse;
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 use crate::{
@@ -388,19 +389,39 @@ pub(crate) fn parse_hit(
 }
 
 // The difference between hype suffix and hype prefix is which newline it consumes
-pub(crate) fn parse_hype_prefix(input: &str) -> ParserResult<&str> {
-    let (input, _) = tag("Shame!\nHype Builds in ").parse(input)?;
+fn parse_hype_prefix(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Hype Builds in ").parse(input)?;
     let (input, stadium_name) = parse_terminated("!\n").parse(input)?;
 
     Ok((input, stadium_name))
 }
 
 // The difference between hype suffix and hype prefix is which newline it consumes
-pub(crate) fn parse_hype_suffix(input: &str) -> ParserResult<&str> {
-    let (input, _) = tag("\nShame!\nHype Builds in ").parse(input)?;
+fn parse_hype_suffix(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("\nHype Builds in ").parse(input)?;
     let (input, stadium_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, stadium_name))
+}
+
+// The difference between shame suffix and hype prefix is which newline it consumes
+// If this parser doesn't fail, it was a shame. The Optional in the return value
+// is whether it was hype
+pub(crate) fn parse_shame_prefix(input: &str) -> ParserResult<Option<&str>> {
+    let (input, _) = tag("Shame!\n").parse(input)?;
+    let (input, hype) = opt(parse_hype_prefix).parse(input)?;
+
+    Ok((input, hype))
+}
+
+// The difference between shame suffix and hype prefix is which newline it consumes
+// If this parser doesn't fail, it was a shame. The Optional in the return value
+// is whether it was hype
+pub(crate) fn parse_shame_suffix(input: &str) -> ParserResult<Option<&str>> {
+    let (input, _) = tag("\nShame!").parse(input)?;
+    let (input, hype) = opt(parse_hype_suffix).parse(input)?;
+
+    Ok((input, hype))
 }
 
 #[derive(PartialEq)]
@@ -457,7 +478,7 @@ pub(crate) struct ParsedScore<'a> {
     // Outer option: whether there was a party. Inner option: whether the party attracted birds.
     // str inside options: name of stadium birds were attracted to
     pub(crate) hotel_motel_party: Option<Option<&'a str>>,
-    pub(crate) hype_stadium_name: Option<&'a str>,
+    pub(crate) shame: Option<Option<&'a str>>,
 }
 
 pub(crate) struct ParsedAttraction<'a> {
@@ -557,12 +578,12 @@ pub(crate) fn parse_score(
     score_label: &'static str,
     extra_space: bool,
     is_fc: bool,
-    hype_before_score: bool,
+    shame_before_score: bool,
 ) -> impl Fn(&str) -> ParserResult<ParsedScore> {
     move |input| {
         // Prior to s22, hype was listed before the score and scorer name
-        let (input, hype_stadium_name) = if hype_before_score {
-            opt(parse_hype_suffix).parse(input)?
+        let (input, shame) = if shame_before_score {
+            opt(parse_shame_suffix).parse(input)?
         } else {
             (input, None)
         };
@@ -594,10 +615,10 @@ pub(crate) fn parse_score(
         // Starting in s22, the hype message was moved after the "<player name> scored!" message, at
         // least for base hits. Unconfirmed whether it happened for other hits. Not yet confirmed
         // how this change interacts with damage messages
-        let (input, hype_stadium_name) = if hype_before_score {
-            (input, hype_stadium_name)
+        let (input, shame) = if shame_before_score {
+            (input, shame)
         } else {
-            opt(parse_hype_suffix).parse(input)?
+            opt(parse_shame_suffix).parse(input)?
         };
 
         Ok((
@@ -606,7 +627,7 @@ pub(crate) fn parse_score(
                 damaged_item_name,
                 player_name,
                 hotel_motel_party: None, // Filled in later in a subsequent loop
-                hype_stadium_name,
+                shame,
             },
         ))
     }
@@ -711,7 +732,7 @@ pub(crate) enum ParsedStolenBase<'a> {
         is_successful: bool,
         blaserunning: bool,
         free_refiller: Option<&'a str>,
-        hype_stadium_name: Option<&'a str>,
+        shame: Option<Option<&'a str>>,
     },
     Fifth {
         runner_name: &'a str,
@@ -727,14 +748,14 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
                 is_successful,
                 blaserunning,
                 free_refiller,
-                hype_stadium_name,
+                shame,
             )| ParsedStolenBase::Normal {
                 runner_name,
                 base_stolen,
                 is_successful,
                 blaserunning,
                 free_refiller,
-                hype_stadium_name,
+                shame,
             },
         ),
         parse_stolen_fifth_base.map(|runner_name| ParsedStolenBase::Fifth { runner_name }),
@@ -744,7 +765,7 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
 
 pub(crate) fn parse_normal_stolen_base(
     input: &str,
-) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<&str>)> {
+) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<Option<&str>>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -756,7 +777,7 @@ pub(crate) fn parse_normal_stolen_base(
     // Decide whether to be excited
     let (input, _) = tag(if is_successful { " base!" } else { " base." }).parse(input)?;
 
-    let (input, hype_stadium_name) = opt(parse_hype_suffix).parse(input)?;
+    let (input, shame) = opt(parse_shame_suffix).parse(input)?;
 
     let (input, blaserunning) = opt(preceded(
         tag("\n"),
@@ -773,7 +794,7 @@ pub(crate) fn parse_normal_stolen_base(
             is_successful,
             blaserunning.is_some(),
             free_refill,
-            hype_stadium_name,
+            shame,
         ),
     ))
 }
@@ -1685,7 +1706,7 @@ pub(crate) enum ParsedFloodingEffect<'a> {
     // TODO these comments are stupid, make this a struct variant
     Flippers(
         &'a str,                 /* scorer name */
-        Option<&'a str>,         /* hype */
+        Option<Option<&'a str>>, /* shame */
         Option<Option<&'a str>>, /* hotel motel party with optional birds */
     ),
     Ego(&'a str),
@@ -1731,7 +1752,7 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
         parse_flippers_score
             // The None is for a hotel motel party which must be filled in
             // later because of order of effects
-            .map(|(n, h)| ParsedFloodingEffect::Flippers(n, h, None)),
+            .map(|(n, s)| ParsedFloodingEffect::Flippers(n, s, None)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
     ))
@@ -1752,13 +1773,13 @@ pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<(&str, Option<&
     Ok((input, (swept_name, flipped_negative)))
 }
 
-pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<(&str, Option<Option<&str>>)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, scorer_name) =
         parse_terminated(" uses their Flippers to slingshot home!").parse(input)?;
-    let (input, hype) = opt(parse_hype_suffix).parse(input)?;
+    let (input, shame) = opt(parse_shame_suffix).parse(input)?;
 
-    Ok((input, (scorer_name, hype)))
+    Ok((input, (scorer_name, shame)))
 }
 
 pub(crate) fn parse_flipped_negative(

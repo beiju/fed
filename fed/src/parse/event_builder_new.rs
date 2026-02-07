@@ -15,7 +15,7 @@ use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
 use uuid::Uuid;
-use crate::fed_event::{Firewalker, RoamConnectedEvents};
+use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, RoamConnectedEvents, Shame};
 
 pub struct EventBuilder {
     event: EventuallyEvent,
@@ -827,13 +827,13 @@ impl EventBuilder {
         home_team_id: Uuid,
         score_label: &str,
         is_fc: bool,
-        hype_before_score: bool,
+        shame_before_score: bool,
     ) {
         // Base scores
         for scorer in scorers {
             self.push_player_tag(scorer.player_id);
-            if hype_before_score {
-                self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
+            if shame_before_score {
+                self.push_shame(&scorer.shame, home_team_id);
             }
             // Fielders Choice has scorer damage after the score message, just for fun. Everything
             // else has it before.
@@ -844,8 +844,8 @@ impl EventBuilder {
                 self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
                 self.push_description(format!("{} {score_label}", scorer.player_name));
             }
-            if !hype_before_score {
-                self.push_hype_opt(scorer.hype.as_ref(), home_team_id);
+            if !shame_before_score {
+                self.push_shame(&scorer.shame, home_team_id);
             }
         }
         if !is_fc {
@@ -1059,6 +1059,30 @@ impl EventBuilder {
         }
     }
 
+    pub fn push_shame(&mut self, shame: &Shame, home_team_id: Uuid) {
+        match shame {
+            Shame::Unknown => {}
+            Shame::No => {}
+            Shame::Yes { hype } => {
+                self.push_description("Shame!");
+                self.push_hype_opt(hype.as_ref(), home_team_id)
+            }
+        }
+    }
+
+    pub fn push_home_run_shame_from_source(&mut self, shame: &HomeRunShame, if_from_source: HomeRunShameSource, home_team_id: Uuid) {
+        match shame {
+            HomeRunShame::Unknown => {}
+            HomeRunShame::No => {}
+            HomeRunShame::Yes { hype, source } => {
+                if *source == if_from_source {
+                    self.push_description("Shame!");
+                    self.push_hype_opt(hype.as_ref(), home_team_id)
+                }
+            }
+        }
+    }
+
     pub fn push_hype_opt(&mut self, hype: Option<&Hype>, home_team_id: Uuid) {
         if let Some(h) = hype {
             self.push_hype(h, home_team_id);
@@ -1066,7 +1090,6 @@ impl EventBuilder {
     }
 
     pub fn push_hype(&mut self, hype: &Hype, home_team_id: Uuid) {
-        self.push_description("Shame!");
         self.push_description(format!("Hype Builds in {}!", hype.stadium_name));
         self.push_child(hype.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Changes);

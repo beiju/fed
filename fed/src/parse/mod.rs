@@ -449,7 +449,7 @@ pub fn parse_next_event(
                     is_successful,
                     blaserunning,
                     free_refiller,
-                    hype_stadium_name,
+                    shame,
                 } => {
                     // TODO Right now each of these is in one branch and both should be in both
                     let runner_item_damage = event.parse_item_damage(runner_name)?;
@@ -496,9 +496,7 @@ pub fn parse_next_event(
                             None
                         };
 
-                        let hype = hype_stadium_name
-                            .map(|n| event.parse_hype_from_stadium(n.to_string()))
-                            .transpose()?;
+                        let shame = event.parse_shame_from_parsed(shame)?;
 
                         let free_refill = free_refiller
                             .map(|refiller_name| {
@@ -535,7 +533,7 @@ pub fn parse_next_event(
                             free_refill,
                             runner_item_damage,
                             is_special: event.category == EventCategory::Special,
-                            hype,
+                            shame,
                             score_summary,
                             balloons,
                             hotel_motel_party,
@@ -891,7 +889,7 @@ pub fn parse_next_event(
             // Magmatic is weird, the text comes before hype but the event comes after
             let magmatic_parsed = event.next_parse(parse_magmatic)?;
 
-            let home_run_hype = event.parse_prefixed_hype()?;
+            let home_run_shame = event.parse_prefixed_shame()?;
 
             let magmatic_expanded = magmatic_parsed
                 .map(|player_name| {
@@ -939,21 +937,25 @@ pub fn parse_next_event(
                 .transpose()?;
 
             let big_bucket = event.next_parse(parse_big_bucket)?;
-            let big_bucket_hype = if big_bucket {
-                event.parse_hype()?
+            let big_bucket_shame = if big_bucket {
+                event.parse_shame()?
+            } else if event.season < 17 {
+                Shame::Unknown
             } else {
-                None
+                Shame::No
             };
 
             let alley_oop = event.next_parse(opt(parse_hoops))?;
-            let alley_oop_hype = if alley_oop.is_some() {
-                event.parse_hype()?
+            let alley_oop_shame = if alley_oop.is_some() {
+                event.parse_shame()?
+            } else if event.season < 17 {
+                Shame::Unknown
             } else {
-                None
+                Shame::No
             };
 
             // balloons_popped definitely happens before hotel_motel_parties
-            // (event "ac0d2a81-d453-47d1-99d6-b166bd912880)
+            // (event ac0d2a81-d453-47d1-99d6-b166bd912880)
             let balloons_popped = event.next_parse(opt(parse_balloons_popped))?;
 
             // stopped_inhabiting definitely happens before free_refills
@@ -968,23 +970,38 @@ pub fn parse_next_event(
             // (event 1d0ac8c5-0ea3-48ce-b393-27287b0df121)
             let hotel_motel_parties = event.parse_hotel_motel_parties()?;
 
-            let hype = if let Some(h) = home_run_hype {
-                Some(HomeRunHype::from_hype_and_source(
-                    h,
-                    HomeRunHypeSource::HomeRun,
-                ))
-            } else if let Some(h) = big_bucket_hype {
-                Some(HomeRunHype::from_hype_and_source(
-                    h,
-                    HomeRunHypeSource::Buckets,
-                ))
-            } else if let Some(h) = alley_oop_hype {
-                Some(HomeRunHype::from_hype_and_source(
-                    h,
-                    HomeRunHypeSource::Hoops,
-                ))
-            } else {
-                None
+            let shame = match (home_run_shame, big_bucket_shame, alley_oop_shame) {
+                // All 3 unknown => result is unknown
+                (Shame::Unknown, Shame::Unknown, Shame::Unknown) => HomeRunShame::Unknown,
+                // One, but not all, unknown => error
+                (Shame::Unknown, _, _) |
+                (_, Shame::Unknown, _) |
+                (_, _, Shame::Unknown) => {
+                    panic!(
+                        "The three possible shame sources in EventType::HomeRun \
+                        must either all be Unknown or all be non-Unknown",
+                    )
+                },
+                // All 3 no => result is no
+                (Shame::No, Shame::No, Shame::No) => HomeRunShame::No,
+                // One of the 3 yes => result is yes, with the appropriate source
+                (Shame::Yes { hype }, Shame::No, Shame::No) => HomeRunShame::Yes {
+                    source: HomeRunShameSource::HomeRun,
+                    hype,
+                },
+                (Shame::No, Shame::Yes { hype }, Shame::No) => HomeRunShame::Yes {
+                    source: HomeRunShameSource::Buckets,
+                    hype,
+                },
+                (Shame::No, Shame::No, Shame::Yes { hype }) => HomeRunShame::Yes {
+                    source: HomeRunShameSource::Hoops,
+                    hype,
+                },
+                // Otherwise, the only leftover possibility is more than one yes,
+                // which is an error
+                _ => {
+                    panic!("Only one shame source in EventType::HomeRun should be Yes");
+                }
             };
 
             // I have no idea where this needs to go in relation to the other sub-events
@@ -1008,7 +1025,7 @@ pub fn parse_next_event(
                 attraction,
                 damaged_items,
                 hotel_motel_parties,
-                hype,
+                shame,
                 alley_oop: alley_oop.map(|(name, success)| (name.to_string(), success)),
                 score_summary,
                 balloons_inflated,
@@ -2351,7 +2368,7 @@ pub fn parse_next_event(
                                 flipped_negative,
                             })
                         }
-                        ParsedFloodingEffect::Flippers(player_name, hype, hotel_motel_party) => {
+                        ParsedFloodingEffect::Flippers(player_name, shame, hotel_motel_party) => {
                             let hotel_motel_party = hotel_motel_party
                                 .map(|stadium_name| {
                                     ParseOk(HotelMotelParty {
@@ -2361,17 +2378,13 @@ pub fn parse_next_event(
                                 })
                                 .transpose()?;
 
-                            let hype = hype
-                                .map(|stadium_name| {
-                                    event.parse_hype_from_stadium(stadium_name.to_string())
-                                })
-                                .transpose()?;
+                            let shame = event.parse_shame_from_parsed(shame)?;
 
                             FloodingSweptEffect::Flippers {
                                 player_id: event.next_player_id()?,
                                 player_name: player_name.to_string(),
                                 hotel_motel_party,
-                                hype,
+                                shame,
                             }
                         }
                         ParsedFloodingEffect::Ego(player_name) => {
@@ -2642,7 +2655,7 @@ pub fn parse_next_event(
                         assert!(is_known_team_nickname(victim_team_nickname));
 
                         let free_refill = event.parse_free_refill()?;
-                        let hype = event.parse_hype()?;
+                        let shame = event.parse_shame()?;
 
                         // On exactly two occasions (dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
                         // 4338a482-f7eb-448c-9827-e9220f2e86a4) a RunStolenThroughTunnels was emitted
@@ -2734,7 +2747,7 @@ pub fn parse_next_event(
                             victim_team_nickname: victim_team_nickname.to_string(),
                             details,
                             balloons: event.parse_unknown_number_of_balloons()?,
-                            hype,
+                            shame,
                             free_refill,
                         }
                     }
@@ -4948,16 +4961,16 @@ pub fn parse_next_event(
             assert!(is_known_team_nickname(team_nickname));
 
             // Exactly one time, Moderation accidentally took too many runs and caused the Moist
-            // Talkers to lose. They happened to be away at the time so it caused Hype for the
+            // Talkers to lose. They happened to be away at the time so it caused Shame for the
             // opposing team (the Shoe Thieves).
-            let hype = event.parse_hype()?;
+            let shame = event.parse_shame()?;
 
             let score_summary = event.parse_score_summary()?;
 
             FedEventData::Moderation {
                 game: event.game(unscatter, attractor_secret_base)?,
                 team_nickname: team_nickname.to_string(),
-                hype,
+                shame,
                 score_summary,
             }
         }

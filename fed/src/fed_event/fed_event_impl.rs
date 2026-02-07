@@ -1,5 +1,5 @@
-use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
-use crate::fed_event::HomeRunHypeSource;
+use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, HomeRunShame, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
 use crate::fed_event::FedEventData;
@@ -322,7 +322,7 @@ impl FedEvent {
 
                 eb.build(EventType::Hit)
             }
-            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, hype, alley_oop, score_summary, balloons_inflated, balloons_popped } => {
+            FedEventData::HomeRun { game, pitch, magmatic, batter_name, batter_id, home_run_type, free_refills, spicy_status, stopped_inhabiting, is_special, big_bucket, attraction, damaged_items, hotel_motel_parties, shame, alley_oop, score_summary, balloons_inflated, balloons_popped } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 if is_special { eb.set_category(EventCategory::Special) }
@@ -334,12 +334,7 @@ impl FedEvent {
                 }
 
                 // ...then hype...
-                // TODO Let chain
-                if let Some(h) = &hype {
-                    if h.source == HomeRunHypeSource::HomeRun {
-                        eb.push_hype(&h.hype, home_team_id);
-                    }
-                }
+                eb.push_home_run_shame_from_source(&shame, HomeRunShameSource::HomeRun, home_team_id);
 
                 // ...then the magmatic event
                 if let Some(mod_change) = &magmatic {
@@ -361,12 +356,7 @@ impl FedEvent {
 
                 if big_bucket {
                     eb.push_description("The ball lands in a Big Bucket. An extra Run scores!");
-                    if let Some(h) = &hype {
-                        // TODO let chain
-                        if h.source == HomeRunHypeSource::Buckets {
-                            eb.push_hype(&h.hype, home_team_id);
-                        }
-                    }
+                    eb.push_home_run_shame_from_source(&shame, HomeRunShameSource::Buckets, home_team_id);
                 }
 
                 if let Some((ooper, success)) = alley_oop {
@@ -376,12 +366,7 @@ impl FedEvent {
                     } else {
                         "...but they can't connect."
                     });
-                    if let Some(h) = &hype {
-                        // TODO Let chain
-                        if h.source == HomeRunHypeSource::Hoops {
-                            eb.push_hype(&h.hype, home_team_id);
-                        }
-                    }
+                    eb.push_home_run_shame_from_source(&shame, HomeRunShameSource::Hoops, home_team_id);
                 }
 
                 if let Some(pop) = balloons_popped {
@@ -428,13 +413,13 @@ impl FedEvent {
                 eb.push_flood_balloon_popped(flood_balloon_popped);
                 eb.build(EventType::GroundOut)
             }
-            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, hype, score_summary, balloons, hotel_motel_party, took_the_fifth_base } => {
+            FedEventData::StolenBase { game, runner_name, runner_id, base_stolen, blaserunning, free_refill, runner_item_damage, is_special, shame, score_summary, balloons, hotel_motel_party, took_the_fifth_base } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.push_player_tag(runner_id);
                 eb.set_category(EventCategory::special_if(blaserunning || free_refill.is_some() || is_special));
                 eb.push_description(format!("{runner_name} steals {base_stolen} base!"));
-                eb.push_hype_opt(hype.as_ref(), home_team_id);
+                eb.push_shame(&shame, home_team_id);
 
                 if blaserunning {
                     eb.push_description(format!("{runner_name} scores with Blaserunning!"));
@@ -1699,10 +1684,10 @@ impl FedEvent {
                                                       if self.season < 18 { "is" } else { "was" });
                             eb.push_sent_elsewhere(sent_elsewhere, &description, &description);
                         }
-                        FloodingSweptEffect::Flippers { player_name, player_id, hype, .. } => {
+                        FloodingSweptEffect::Flippers { player_name, player_id, shame, .. } => {
                             eb.push_description(format!("{player_name} uses their Flippers to slingshot home!"));
                             eb.push_player_tag(*player_id);
-                            eb.push_hype_opt(hype.as_ref(), home_team);
+                            eb.push_shame(&shame, home_team);
                         }
                         FloodingSweptEffect::Ego(PlayerNameId { player_name, player_id }) => {
                             eb.push_description(format!("{player_name}'s Ego keeps them on base!"));
@@ -3688,12 +3673,12 @@ impl FedEvent {
 
                 eb.build(EventType::BalloonsInflatedFromWin)
             }
-            FedEventData::Moderation { game, team_nickname, hype, score_summary } => {
+            FedEventData::Moderation { game, team_nickname, shame, score_summary } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("The {team_nickname} practice Moderation."));
-                eb.push_hype_opt(hype.as_ref(), home_team_id);
+                eb.push_shame(&shame, home_team_id);
                 eb.push_opt_direct_score_summary(score_summary.as_ref());
                 eb.build(EventType::Moderation)
             }
@@ -3760,14 +3745,14 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::Ratification));
                 return events;
             }
-            FedEventData::RunStolenThroughTunnels { game, thieving_player_name, thieving_player_id, victim_team_nickname, details, balloons, hype, free_refill } => {
+            FedEventData::RunStolenThroughTunnels { game, thieving_player_name, thieving_player_id, victim_team_nickname, details, balloons, shame, free_refill } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("{thieving_player_name} entered the Tunnels..."));
                 eb.push_description(format!("{thieving_player_name} stole a Run from the {victim_team_nickname}!"));
                 eb.push_free_refill(free_refill);
-                eb.push_hype_opt(hype.as_ref(), home_team_id);
+                eb.push_shame(&shame, home_team_id);
                 eb.push_unknown_number_of_balloons(balloons.as_ref());
                 eb.push_player_tag(thieving_player_id);
 

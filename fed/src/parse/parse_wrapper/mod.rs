@@ -10,7 +10,7 @@ use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use nom::bytes::complete::tag;
 use nom::combinator::opt;
 use nom::{Finish, Parser};
-use nom_language::error::convert_error;
+use nom_language::error::{convert_error, VerboseError};
 use std::fmt::Display;
 use uuid::Uuid;
 
@@ -680,7 +680,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
-            Option<String>,
+            Option<Option<String>>,
         )>,
         attractions: Vec<(Uuid, String, String)>,
     ) -> Result<Scores<LedgerT>, FeedParseError> {
@@ -705,7 +705,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
-            Option<String>,
+            Option<Option<String>>,
         )>,
         attractions: Vec<(Uuid, String, String)>,
         is_fc: bool, // If this is an FC, we need to parse hotel motel parties here and ignore the input
@@ -724,10 +724,10 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    fn parse_base_scores(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<String>)>, attractions: Vec<(Uuid, String, String)>, is_fc: bool) -> Result<Vec<ScoringPlayer>, FeedParseError> {
+    fn parse_base_scores(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<Option<String>>)>, attractions: Vec<(Uuid, String, String)>, is_fc: bool) -> Result<Vec<ScoringPlayer>, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores: Vec<_> = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name, hotel_motel_party, hype_stadium_name)| {
+            .map(|(player_id, item_name, player_name, hotel_motel_party, shame)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
@@ -778,7 +778,12 @@ impl<'e> EventParseWrapper<'e> {
                     None
                 };
 
-                let hype = hype_stadium_name.map(|n| self.parse_hype_from_stadium(n)).transpose()?;
+                let shame = if self.season < 17 {
+                    assert!(shame.is_none(), "My understanding is that the Shame message was introduced in s18");
+                    Shame::Unknown
+                } else {
+                    self.parse_shame_from_parsed(shame)?
+                };
 
                 ParseOk(ScoringPlayer {
                     player_id,
@@ -786,7 +791,7 @@ impl<'e> EventParseWrapper<'e> {
                     item_damage,
                     attraction,
                     hotel_motel_party,
-                    hype,
+                    shame,
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -915,7 +920,7 @@ impl<'e> EventParseWrapper<'e> {
                 Option<(String, Option<bool>)>,
                 String,
                 Option<Option<String>>,
-                Option<String>,
+                Option<Option<String>>,
             )>,
             Vec<(Uuid, String, String)>,
         ),
@@ -937,7 +942,7 @@ impl<'e> EventParseWrapper<'e> {
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
                     score.hotel_motel_party.map(|n| n.map(str::to_string)),
-                    score.hype_stadium_name.map(str::to_string),
+                    score.shame.map(|s| s.map(str::to_string)),
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -984,7 +989,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
-            Option<String>,
+            Option<Option<String>>,
         )>,
         FeedParseError,
     > {
@@ -1004,7 +1009,7 @@ impl<'e> EventParseWrapper<'e> {
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
                     score.hotel_motel_party.map(|n| n.map(str::to_string)),
-                    score.hype_stadium_name.map(str::to_string),
+                    score.shame.map(|s| s.map(str::to_string)),
                 ))
             })
             .collect::<Result<Vec<_>, _>>()
@@ -1258,16 +1263,46 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    pub fn parse_hype(&mut self) -> Result<Option<Hype>, FeedParseError> {
-        self.next_parse(opt(parse_hype_suffix))?
-            .map(|stadium| self.parse_hype_from_stadium(stadium.to_string()))
-            .transpose()
+    // This needs a better name. The first `parse` is meant to clue you in to the
+    // fact that it's popping a child event, and the second is meant to indicate
+    // that it's from a previously-parsed input value
+    pub fn parse_shame_from_parsed<T: Into<String>>(
+        &mut self,
+        shame: Option<Option<T>>,
+    ) -> Result<Shame, FeedParseError> {
+        Ok(match shame {
+            // Outer None: no shame
+            None => Shame::No,
+            // Inner None: Shame without Hype
+            Some(None) => Shame::Yes { hype: None },
+            // All-Some: Shame and Hype
+            Some(Some(stadium_name)) => {
+                let hype = self.parse_hype_from_stadium(stadium_name.into())?;
+                Shame::Yes { hype: Some(hype) }
+            }
+        })
     }
 
-    pub fn parse_prefixed_hype(&mut self) -> Result<Option<Hype>, FeedParseError> {
-        self.next_parse(opt(parse_hype_prefix))?
-            .map(|stadium| self.parse_hype_from_stadium(stadium.to_string()))
-            .transpose()
+    fn parse_shame_from_parser(&mut self, parser: impl Parser<&'e str, Output=Option<&'e str>, Error=VerboseError<&'e str>>) -> Result<Shame, FeedParseError> {
+        if self.season < 17 {
+            return Ok(Shame::Unknown)
+        }
+        match self.next_parse(opt(parser))? {
+            None => Ok(Shame::No),
+            Some(None) => Ok(Shame::Yes { hype: None }),
+            Some(Some(stadium)) => {
+                let hype = self.parse_hype_from_stadium(stadium.to_string())?;
+                Ok(Shame::Yes { hype: Some(hype) })
+            }
+        }
+    }
+
+    pub fn parse_shame(&mut self) -> Result<Shame, FeedParseError> {
+        self.parse_shame_from_parser(parse_shame_suffix)
+    }
+
+    pub fn parse_prefixed_shame(&mut self) -> Result<Shame, FeedParseError> {
+        self.parse_shame_from_parser(parse_shame_prefix)
     }
 
     pub fn parse_ambush(
