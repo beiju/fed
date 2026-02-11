@@ -5139,6 +5139,15 @@ impl FedEvent {
                 events.insert(0, eb.build(EventType::AddedMod));
                 return events;
             }
+            FedEventData::CoinScattered { attacking_team_name } => {
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(format!("The {attacking_team_name} Scattered the Coin!"));
+                eb.build(EventType::CoinHit)
+            }
+            FedEventData::CoinIncinerated { attacking_division_name } => {
+                eb.push_description(format!("{attacking_division_name} Teams Incinerated the Coin!"));
+                eb.build(EventType::CoinHit)
+            }
         };
 
         vec![item]

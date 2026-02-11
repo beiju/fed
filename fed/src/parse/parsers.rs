@@ -4346,7 +4346,7 @@ pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(
     Ok((input, (player_name, location_name)))
 }
 
-pub(crate) fn black_hole_nullified_league_mod(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult<(&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, nullified_mod_name) = parse_terminated("!").parse(input)?;
@@ -4354,7 +4354,7 @@ pub(crate) fn black_hole_nullified_league_mod(input: &str) -> ParserResult<(&str
     Ok((input, (team_nickname, nullified_mod_name)))
 }
 
-pub(crate) fn black_hole_nullified_stadium_mod(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_black_hole_nullified_stadium_mod(input: &str) -> ParserResult<(&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, stadium_name) = parse_terminated("'s ").parse(input)?;
@@ -4363,11 +4363,23 @@ pub(crate) fn black_hole_nullified_stadium_mod(input: &str) -> ParserResult<(&st
     Ok((input, (team_nickname, stadium_name, nullified_mod_name)))
 }
 
-pub(crate) fn black_hole_nullified_item(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<(&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, nullified_item_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (team_nickname, player_name, nullified_item_name)))
+}
+
+pub(crate) enum ParsedCoinHit<'a> {
+    Scattered(&'a str),
+    Incinerated(&'a str)
+}
+
+pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<ParsedCoinHit> {
+    alt((
+        preceded(tag("The "), parse_terminated(" Scattered the Coin!")).map(|n| ParsedCoinHit::Scattered(n)),
+        parse_terminated(" Teams Incinerated the Coin").map(|n| ParsedCoinHit::Incinerated(n)),
+    )).parse(input)
 }

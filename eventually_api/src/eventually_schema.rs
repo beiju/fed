@@ -471,6 +471,10 @@ pub enum EventType {
     HorsePower = 255,
     FromDiagonal = 256,
     SupernovaLeagueCreated = 257,
+    // My rationale for name this specifically to the coin is that there's no
+    // metadata to indicate any target. It has to be the coin, or some entity
+    // that's well-known to be in the coin's position
+    CoinHit = 259,
     StormWarning = 263,
     Snowflakes = 264,
 }

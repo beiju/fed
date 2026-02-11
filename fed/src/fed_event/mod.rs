@@ -8281,6 +8281,27 @@ pub enum FedEventData {
 
         players: Vec<TouchedDownPlayer>
     },
+
+    /// The Coin was Scattered
+    ///
+    /// This happened exactly once in Season 24
+    #[serde(rename_all = "camelCase")]
+    CoinScattered {
+        /// Name of the team who Scattered the Coin
+        ///
+        /// Note that the only time this happened, the attacking team's name was
+        /// fully Scattered (i.e. completely replaced with '-' characters)
+        attacking_team_name: String,
+    },
+
+    /// The Coin was Incinerated
+    ///
+    /// This happened exactly once in Season 24
+    #[serde(rename_all = "camelCase")]
+    CoinIncinerated {
+        /// Name of the division who Incinerated the Coin
+        attacking_division_name: String,
+    },
 }
 
 #[derive(
@@ -8566,6 +8587,8 @@ impl FedEventData {
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
             FedEventData::TeamTouchedDown { .. } => None,
+            FedEventData::CoinScattered { .. } => None,
+            FedEventData::CoinIncinerated { .. } => None,
         }
     }
 }

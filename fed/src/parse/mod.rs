@@ -5512,7 +5512,7 @@ pub fn parse_next_event(
 
             match child_event.event_type {
                 EventType::LeagueModificationRemoved => {
-                    let (team_nickname, nullified_mod_name) = event.next_parse(black_hole_nullified_league_mod)?;
+                    let (team_nickname, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_league_mod)?;
                     assert!(is_known_team_nickname(team_nickname));
 
                     FedEventData::BlackHoleBlackHoleNullifiedLeagueModification {
@@ -5524,7 +5524,7 @@ pub fn parse_next_event(
                     }
                 },
                 EventType::RemovedMod => {
-                    let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(black_hole_nullified_stadium_mod)?;
+                    let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_stadium_mod)?;
                     assert!(is_known_team_nickname(team_nickname));
 
                     FedEventData::BlackHoleBlackHoleNullifiedStadiumModification {
@@ -5538,7 +5538,7 @@ pub fn parse_next_event(
                     }
                 },
                 EventType::PlayerLostItem => {
-                    let (team_nickname, player_name, nullified_item_name) = event.next_parse(black_hole_nullified_item)?;
+                    let (team_nickname, player_name, nullified_item_name) = event.next_parse(parse_black_hole_nullified_item)?;
                     assert!(is_known_team_nickname(team_nickname));
 
                     assert_eq!(nullified_item_name, child_event.metadata_str("itemName")?);
@@ -5655,6 +5655,21 @@ pub fn parse_next_event(
         }
         EventType::SupernovaLeagueCreated => {
             todo!()
+        }
+        EventType::CoinHit => {
+            match event.next_parse(parse_coin_hit)? {
+                ParsedCoinHit::Scattered(attacking_team_name) => {
+                    FedEventData::CoinScattered {
+                        attacking_team_name: attacking_team_name.to_string(),
+                    }
+                }
+                ParsedCoinHit::Incinerated(attacking_division_name) => {
+                    FedEventData::CoinIncinerated {
+                        attacking_division_name: attacking_division_name.to_string(),
+                    }
+
+                }
+            }
         }
         EventType::StormWarning => {
             todo!()
