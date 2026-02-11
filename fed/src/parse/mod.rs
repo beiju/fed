@@ -2394,6 +2394,17 @@ pub fn parse_next_event(
                                 player_name: player_name.to_string(),
                             })
                         }
+                        ParsedFloodingEffect::Slippery(player_name) => {
+                            // Slippery player ids are *not* on the parent event, but are on a
+                            // child event
+                            let mut slippery_child = event.next_child(EventType::AddedMod)?;
+                            FloodingSweptEffect::Slippery {
+                                player_id: slippery_child.next_player_id()?,
+                                player_name: player_name.to_string(),
+                                team_id: slippery_child.next_team_id()?,
+                                sub_event: slippery_child.as_sub_event(),
+                            }
+                        }
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?;

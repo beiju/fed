@@ -1693,6 +1693,18 @@ impl FedEvent {
                             eb.push_description(format!("{player_name}'s Ego keeps them on base!"));
                             eb.push_player_tag(*player_id);
                         }
+                        FloodingSweptEffect::Slippery { player_name, player_id, team_id, sub_event } => {
+                            let description = format!("{player_name} is now Slippery!");
+                            eb.push_child(*sub_event, |mut child_eb| {
+                                child_eb.push_description(&description);
+                                child_eb.push_player_tag(*player_id);
+                                child_eb.push_team_tag(*team_id);
+                                child_eb.push_metadata_str("mod", "SLIPPERY");
+                                child_eb.push_metadata_i64("type", ModDuration::Game);
+                                child_eb.build(EventType::AddedMod)
+                            });
+                            eb.push_description(description);
+                        }
                     }
                 }
 

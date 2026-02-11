@@ -1131,6 +1131,19 @@ pub enum FloodingSweptEffect {
         shame: Shame,
     },
     Ego(PlayerNameId),
+    Slippery {
+        /// Uuid of player who became Slippery
+        player_id: Uuid,
+
+        /// Name of player who became Slippery
+        player_name: String,
+
+        /// Uuid of team of player who became Slippery
+        team_id: Uuid,
+
+        /// Sub-event associated with gaining the Slippery mod
+        sub_event: SubEvent,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]

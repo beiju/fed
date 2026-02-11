@@ -1713,6 +1713,7 @@ pub(crate) enum ParsedFloodingEffect<'a> {
         Option<Option<&'a str>>, /* hotel motel party with optional birds */
     ),
     Ego(&'a str),
+    Slippery(&'a str),
 }
 
 pub(crate) fn parse_flooding_swept(
@@ -1721,6 +1722,7 @@ pub(crate) fn parse_flooding_swept(
     let (input, _) =
         tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")
             .parse(input)?;
+
     let (input, mut effects) = many0(parse_flooding_swept_effect).parse(input)?;
 
     let (mut input, flumps) = opt(tag("\nThe Flood Pumps activate!")).parse(input)?;
@@ -1758,6 +1760,8 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
             .map(|(n, s)| ParsedFloodingEffect::Flippers(n, s, None)),
         preceded(tag("\n"), parse_terminated("'s Ego keeps them on base!"))
             .map(|n| ParsedFloodingEffect::Ego(n)),
+        preceded(tag("\n"), parse_terminated(" is now Slippery!"))
+            .map(|n| ParsedFloodingEffect::Slippery(n)),
     ))
     .parse(input)
 }
