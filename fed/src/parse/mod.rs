@@ -153,6 +153,7 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
 trait EventIterator {
     fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
+    fn next_if_type_and(&mut self, ty: EventType, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
     fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent>;
     fn next_expect_type(
         &mut self,
@@ -177,6 +178,10 @@ impl<T: Iterator<Item = EventuallyEvent>> EventIterator for PeekableWithLogging<
 
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent> {
         self.next_if(|event| event.r#type == ty)
+    }
+
+    fn next_if_type_and(&mut self, ty: EventType, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent> {
+        self.next_if(|event| event.r#type == ty && cond(event))
     }
 
     fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent> {
@@ -2080,7 +2085,7 @@ pub fn parse_next_event(
                                 event.next_child_opt(EventType::ExitHallOfFlame).transpose()
                                     .map(|result| {
                                         let mut child = result?;
-                                        let player_name = child.next_parse(parse_terminated(" exited the Hall of Flame"))?;
+                                        let player_name = child.next_parse(parse_exited_hall_of_flame)?;
 
                                         ParseOk(TeamIncinerationSquiddishResurrection {
                                             player_name: player_name.to_string(),
@@ -3698,27 +3703,95 @@ pub fn parse_next_event(
             }
         }
         EventType::ExitHallOfFlame => {
-            // So far the only instance of this at the top level is Roamers roaming out of the Hall
-            let add_to_team_event = event_iter
-                .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
-            let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
+            // There are two instances of this event as a top-level event:
+            // 1. Player roaming out of Hall of Flame -- event is followed by a
+            //    PlayerAddedToTeam event
+            // 2. Team was (lowercase-r) released from the Hall of Flame during
+            //    s24 -- event is followed by another ExitHallOfFlame event
+            let next_event_raw = event_iter
+                .next_expect_type_any(&[
+                    // This indicates a Roaming, and is the Roamer joining a team
+                    EventType::PlayerAddedToTeam,
+                    // This indicating a team leaving the Hall, and is a player
+                    // leaving the Hall
+                    EventType::ExitHallOfFlame,
+                    // This indicates a team leaving the Hall, and is that team
+                    // joining a division (when there are no players to leave
+                    // the Hall)
+                    EventType::TeamDivisionMove,
+                ], EventType::ExitHallOfFlame)?;
 
-            let connected_events = parse_connected_roam_events(event_iter)?;
+            match next_event_raw.r#type {
+                EventType::PlayerAddedToTeam => {
+                    let next_event = EventParseWrapper::new(&next_event_raw)?;
+                    let connected_events = parse_connected_roam_events(event_iter)?;
 
-            FedEventData::Roam {
-                is_super: false,
-                player_id: add_to_team_event.metadata_uuid("playerId")?,
-                player_name: add_to_team_event.metadata_str("playerName")?.to_string(),
-                location: add_to_team_event.metadata_enum("location")?,
-                new_team_id: add_to_team_event.metadata_uuid("teamId")?,
-                new_team_nickname: add_to_team_event.metadata_str("teamName")?.to_string(),
-                roam_from: RoamFromLocation::HallOfFlame {
-                    sub_event: add_to_team_event.as_sub_event(),
-                    // This is only populated in cases where there's a different event prior to
-                    // this one, in which case it's that event's branch that populates FedEventData
-                    from_team: None,
-                },
-                connected_events,
+                    FedEventData::Roam {
+                        is_super: false,
+                        player_id: next_event.metadata_uuid("playerId")?,
+                        player_name: next_event.metadata_str("playerName")?.to_string(),
+                        location: next_event.metadata_enum("location")?,
+                        new_team_id: next_event.metadata_uuid("teamId")?,
+                        new_team_nickname: next_event.metadata_str("teamName")?.to_string(),
+                        roam_from: RoamFromLocation::HallOfFlame {
+                            sub_event: next_event.as_sub_event(),
+                            // This is only populated in cases where there's a different event prior to
+                            // this one, in which case it's that event's branch that populates FedEventData
+                            from_team: None,
+                        },
+                        connected_events,
+                    }
+                }
+                EventType::ExitHallOfFlame => {
+                    let team_name = event.next_parse(parse_team_exited_hall_of_flame)?;
+                    let team_id = event.next_team_id()?;
+
+                    let players = iter::once(next_event_raw)
+                        .chain(iter::from_fn(|| {
+                            event_iter.next_if_type_and(EventType::ExitHallOfFlame, |event| {
+                                event.player_tags.as_ref().map_or(false, |tags| !tags.is_empty())
+                            })
+                        }))
+                        .map(|ev| {
+                            let mut ev = EventParseWrapper::new(&ev)?;
+                            ParseOk(IdentifiedPlayerSubEvent {
+                                player_name: ev.next_parse(parse_exited_hall_of_flame)?.to_string(),
+                                player_id: ev.next_player_id()?,
+                                sub_event: ev.as_sub_event(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let team_joined_division_event = event_iter.next_expect_type(EventType::TeamDivisionMove, event.event_type)?;
+                    let team_joined_division_event = EventParseWrapper::new(&team_joined_division_event)?;
+
+                    FedEventData::TeamExitedHallOfFlame {
+                        team_name: team_name.to_string(),
+                        team_id,
+                        division_name: team_joined_division_event.metadata_str("divisionName")?.to_string(),
+                        division_id: team_joined_division_event.metadata_uuid("divisionId")?,
+                        players,
+                        team_joined_division_sub_event: team_joined_division_event.as_sub_event(),
+                    }
+                }
+                EventType::TeamDivisionMove => {
+                    let team_name = event.next_parse(parse_team_exited_hall_of_flame)?;
+                    let team_id = event.next_team_id()?;
+
+                    let team_joined_division_event = EventParseWrapper::new(&next_event_raw)?;
+
+                    FedEventData::TeamExitedHallOfFlame {
+                        team_name: team_name.to_string(),
+                        team_id,
+                        division_name: team_joined_division_event.metadata_str("divisionName")?.to_string(),
+                        division_id: team_joined_division_event.metadata_uuid("divisionId")?,
+                        players: Vec::new(),
+                        team_joined_division_sub_event: team_joined_division_event.as_sub_event(),
+                    }
+                }
+                _ => {
+                    panic!("next_expect_type_any returned an event of a type we didn't ask for")
+                }
             }
         }
         EventType::PlayerGainedItem => {

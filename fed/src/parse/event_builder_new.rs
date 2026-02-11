@@ -449,6 +449,10 @@ impl EventBuilder {
             self.push_metadata_null(key)
         }
     }
+    
+    pub fn push_metadata_bool(&mut self, key: impl Into<String>, val: bool) {
+        self.metadata_mut().insert(key.into(), Value::Bool(val));
+    }
 
     pub fn push_known_boost(&mut self, boost: &KnownPlayerStatChange) {
         self.push_metadata_f64("before", boost.rating_before);

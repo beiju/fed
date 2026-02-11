@@ -5148,6 +5148,40 @@ impl FedEvent {
                 eb.push_description(format!("{attacking_division_name} Teams Incinerated the Coin!"));
                 eb.build(EventType::CoinHit)
             }
+            FedEventData::TeamExitedHallOfFlame { team_id, team_name, division_id, division_name, players, team_joined_division_sub_event } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("The {team_name} exited the Hall of Flame"));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_bool("hideOnResults", true);
+
+                let mut events = players.iter()
+                    .map(|player| {
+                        let mut conn_eb = eb.connected_event(player.sub_event);
+                        // TODO This is only set_* because connected_event copies the description.
+                        //   It should probably not do that.
+                        conn_eb.set_description(format!("{} exited the Hall of Flame", player.player_name));
+                        conn_eb.push_player_tag(player.player_id);
+                        conn_eb.set_team_tags(Vec::new());
+                        conn_eb.push_metadata_bool("hideOnResults", true);
+                        conn_eb.build(EventType::ExitHallOfFlame)
+                    })
+                    .collect_vec();
+
+                let mut team_joined_division_eb = eb.connected_event(team_joined_division_sub_event);
+                team_joined_division_eb.clear_description(); // TODO connected_event shouldn't save description
+                team_joined_division_eb.push_description(format!("The {team_name} have joined the {division_name} division."));
+                team_joined_division_eb.push_metadata_uuid("teamId", team_id);
+                team_joined_division_eb.push_metadata_str("teamName", team_name);
+                team_joined_division_eb.push_metadata_uuid("divisionId", division_id);
+                team_joined_division_eb.push_metadata_str("divisionName", division_name);
+                team_joined_division_eb.push_metadata_bool("hideOnResults", true);
+
+                events.push(team_joined_division_eb.build(EventType::TeamDivisionMove));
+
+                let first_event = eb.build(EventType::ExitHallOfFlame);
+                events.insert(0, first_event);
+                return events;
+            }
         };
 
         vec![item]

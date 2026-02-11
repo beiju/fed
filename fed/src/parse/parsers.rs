@@ -4383,3 +4383,12 @@ pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<ParsedCoinHit> {
         parse_terminated(" Teams Incinerated the Coin").map(|n| ParsedCoinHit::Incinerated(n)),
     )).parse(input)
 }
+
+pub(crate) fn parse_team_exited_hall_of_flame(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    parse_terminated(" exited the Hall of Flame").parse(input)
+}
+
+pub(crate) fn parse_exited_hall_of_flame(input: &str) -> ParserResult<&str> {
+    parse_terminated(" exited the Hall of Flame").parse(input)
+}

@@ -3875,6 +3875,18 @@ pub struct TouchedDownPlayer {
     pub sub_event: SubEvent,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct IdentifiedPlayerSubEvent {
+    /// Name of the player
+    pub player_name: String,
+
+    /// Uuid of the player
+    pub player_id: Uuid,
+
+    /// Sub-event associated with the player
+    pub sub_event: SubEvent,
+}
+
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
@@ -8302,6 +8314,31 @@ pub enum FedEventData {
         /// Name of the division who Incinerated the Coin
         attacking_division_name: String,
     },
+
+    /// An entire team exited the Hall of Flame
+    ///
+    /// This only happened during s24
+    #[serde(rename_all = "camelCase")]
+    TeamExitedHallOfFlame {
+        /// Name of the team who exited the Hall of Flame
+        team_name: String,
+
+        /// Uuid of the team who exited the Hall of Flame
+        team_id: Uuid,
+
+        /// Name of the division that the team joined
+        division_name: String,
+
+        /// Uuid of the division that the team joined
+        division_id: Uuid,
+
+        /// Metadata associated with each player on this team exiting the Hall
+        /// of Flame
+        players: Vec<IdentifiedPlayerSubEvent>,
+
+        /// The sub-event for this team joining its new Division
+        team_joined_division_sub_event: SubEvent,
+    },
 }
 
 #[derive(
@@ -8589,6 +8626,7 @@ impl FedEventData {
             FedEventData::TeamTouchedDown { .. } => None,
             FedEventData::CoinScattered { .. } => None,
             FedEventData::CoinIncinerated { .. } => None,
+            FedEventData::TeamExitedHallOfFlame { .. } => None,
         }
     }
 }
