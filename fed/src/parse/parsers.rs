@@ -4392,3 +4392,17 @@ pub(crate) fn parse_team_exited_hall_of_flame(input: &str) -> ParserResult<&str>
 pub(crate) fn parse_exited_hall_of_flame(input: &str) -> ParserResult<&str> {
     parse_terminated(" exited the Hall of Flame").parse(input)
 }
+
+pub(crate) enum ParsedAnnouncement {
+    SupernovaLeagueReassignment,
+    HallOfFlameOpened,
+}
+
+pub(crate) fn parse_announcement(input: &str) -> ParserResult<ParsedAnnouncement> {
+    alt((
+        tag("EMERGENCY ALERT\nRIFFING INTENSIFIES\nSUPERNOVA COLLAPSES\nREALITY TEARS\nSTRANDS BRIDGED\nENDS ZONE")
+            .map(|_| ParsedAnnouncement::SupernovaLeagueReassignment),
+        tag("The Hall of Flame was opened.")
+            .map(|_| ParsedAnnouncement::HallOfFlameOpened),
+    )).parse(input)
+}

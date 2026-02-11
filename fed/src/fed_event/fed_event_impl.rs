@@ -5182,6 +5182,12 @@ impl FedEvent {
                 events.insert(0, first_event);
                 return events;
             }
+            FedEventData::HallOfFlameOpened => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description("The Hall of Flame was opened.");
+                eb.push_metadata_str_vec("beings", vec!["monitor".to_string()]);
+                eb.build(EventType::Announcement)
+            }
         };
 
         vec![item]

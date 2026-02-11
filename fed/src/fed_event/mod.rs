@@ -3897,6 +3897,7 @@ pub enum FedEventData {
     BeingSpeech {
         /// Which being is speaking
         being: Being,
+        
         /// The text of the being's message
         message: String,
     },
@@ -8339,6 +8340,14 @@ pub enum FedEventData {
         /// The sub-event for this team joining its new Division
         team_joined_division_sub_event: SubEvent,
     },
+
+    /// The Hall of Flame was Opened
+    ///
+    /// This only happened during s24
+    // TODO This appears to have happened exactly after a bunch of
+    //   TeamExitedHallOfFlame. Merge this with them?
+    #[serde(rename_all = "camelCase")]
+    HallOfFlameOpened,
 }
 
 #[derive(
@@ -8627,6 +8636,7 @@ impl FedEventData {
             FedEventData::CoinScattered { .. } => None,
             FedEventData::CoinIncinerated { .. } => None,
             FedEventData::TeamExitedHallOfFlame { .. } => None,
+            FedEventData::HallOfFlameOpened { .. } => None,
         }
     }
 }
