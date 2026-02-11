@@ -970,23 +970,27 @@ impl EventBuilder {
 
     pub fn push_charge_blood(
         &mut self,
-        power_charge: Option<ModChangeSubEvent>,
+        // Outer option: Was the text present in the description. Inner option:
+        // was the sub-event present in the metadata
+        power_charge: Option<Option<ModChangeSubEvent>>,
         batter_name: &str,
         batter_id: Uuid,
         a: &str,
     ) {
-        if let Some(charge) = power_charge {
+        if let Some(charge_msg) = power_charge {
             let description = format!("{batter_name} Power Ch{a}rged!");
             self.push_description(&description);
-            self.push_child(charge.sub_event, |mut child| {
-                child.push_description(&description);
-                child.push_player_tag(batter_id);
-                child.push_team_tag(charge.team_id);
-                child.push_metadata_str("mod", "OVERPERFORMING");
-                child.push_metadata_str("source", a.to_ascii_uppercase());
-                child.push_metadata_i64("type", ModDuration::Game as i64);
-                child.build(EventType::AddedModFromOtherMod)
-            })
+            if let Some(charge) = charge_msg {
+                self.push_child(charge.sub_event, |mut child| {
+                    child.push_description(&description);
+                    child.push_player_tag(batter_id);
+                    child.push_team_tag(charge.team_id);
+                    child.push_metadata_str("mod", "OVERPERFORMING");
+                    child.push_metadata_str("source", a.to_ascii_uppercase());
+                    child.push_metadata_i64("type", ModDuration::Game as i64);
+                    child.build(EventType::AddedModFromOtherMod)
+                })
+            }
         }
     }
 

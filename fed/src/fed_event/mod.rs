@@ -1903,8 +1903,13 @@ impl Into<serde_json::Value> for ModDesc {
 #[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HitType {
     Single,
-    Double(Option<ModChangeSubEvent>),
-    Triple(Option<ModChangeSubEvent>),
+    /// TODO Change the double-nested option into something more ergonomic when
+    ///   serialized to json
+    // Note: Outer option is whether the blood message was in the event
+    // description, inner option is whether the sub-event was present in the
+    // event metadata
+    Double(Option<Option<ModChangeSubEvent>>),
+    Triple(Option<Option<ModChangeSubEvent>>),
     Quadruple,
 }
 

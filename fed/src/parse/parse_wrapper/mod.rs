@@ -1152,18 +1152,26 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
+    // Outer option: was the charge blood message present in the description
+    // Inner option: was the charge blood sub-event present in the metadata
     pub fn parse_charge_blood(
         &mut self,
         batter_name: &str,
         a: &str,
-    ) -> Result<Option<ModChangeSubEvent>, FeedParseError> {
+    ) -> Result<Option<Option<ModChangeSubEvent>>, FeedParseError> {
         self.next_parse_opt(parse_charge_blood(batter_name, a))
             .map(|()| {
-                let mut child = self.next_child(EventType::AddedModFromOtherMod)?;
-                ParseOk(ModChangeSubEvent {
-                    sub_event: child.as_sub_event(),
-                    team_id: child.next_team_id()?,
-                })
+                // At least once (event 6bbe5107-9123-42fd-8269-7416d6adaa7b),
+                // the charge blood text was in the event but the child event
+                // was not present
+                let child = self.next_child_opt(EventType::AddedModFromOtherMod)?;
+                ParseOk(child
+                    .map(|mut child| ParseOk(ModChangeSubEvent {
+                        sub_event: child.as_sub_event(),
+                        team_id: child.next_team_id()?,
+                    }))
+                    .transpose()?
+                )
             })
             .transpose()
     }
