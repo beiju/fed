@@ -2155,6 +2155,7 @@ pub(crate) enum ParsedAddedMod<'a> {
     GainFreeWill(&'a str),
     MVP(&'a str),
     TouchDown(&'a str),
+    WentRogue(&'a str),
 }
 
 pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
@@ -2165,6 +2166,8 @@ pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
             .map(|n| ParsedAddedMod::GainFreeWill(n)),
         parse_terminated(" is named an MVP.").map(|n| ParsedAddedMod::MVP(n)),
         parse_terminated(", TOUCH DOWN").map(|n| ParsedAddedMod::TouchDown(n)),
+        preceded(tag("The "), parse_terminated(" went Rogue."))
+            .map(|n| ParsedAddedMod::WentRogue(n)),
     ))
     .parse(input)?;
 

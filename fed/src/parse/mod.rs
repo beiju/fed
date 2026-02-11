@@ -3374,6 +3374,12 @@ pub fn parse_next_event(
                             players,
                         }
                     },
+                    ParsedAddedMod::WentRogue(team_nickname) => {
+                        FedEventData::TeamWentRogue {
+                            team_nickname: team_nickname.to_string(),
+                            team_id: event.next_team_id()?,
+                        }
+                    },
                 }
             }
         }

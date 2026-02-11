@@ -5188,6 +5188,14 @@ impl FedEvent {
                 eb.push_metadata_str_vec("beings", vec!["monitor".to_string()]);
                 eb.build(EventType::Announcement)
             }
+            FedEventData::TeamWentRogue { team_nickname, team_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("The {team_nickname} went Rogue."));
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", "ROGUE");
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+                eb.build(EventType::AddedMod)
+            }
         };
 
         vec![item]

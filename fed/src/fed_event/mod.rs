@@ -3897,7 +3897,7 @@ pub enum FedEventData {
     BeingSpeech {
         /// Which being is speaking
         being: Being,
-        
+
         /// The text of the being's message
         message: String,
     },
@@ -8348,6 +8348,14 @@ pub enum FedEventData {
     //   TeamExitedHallOfFlame. Merge this with them?
     #[serde(rename_all = "camelCase")]
     HallOfFlameOpened,
+
+    /// Team went Rogue
+    // TODO Does this mean joined the Rogue division? If so is there an extant
+    //  event this can be merged with?
+    TeamWentRogue {
+        team_nickname: String,
+        team_id: Uuid,
+    }
 }
 
 #[derive(
@@ -8637,6 +8645,7 @@ impl FedEventData {
             FedEventData::CoinIncinerated { .. } => None,
             FedEventData::TeamExitedHallOfFlame { .. } => None,
             FedEventData::HallOfFlameOpened { .. } => None,
+            FedEventData::TeamWentRogue { .. } => None,
         }
     }
 }
