@@ -166,7 +166,7 @@ pub enum FeedParseError {
     UnexpectedCompoundEvent { event_type: EventType },
 
     #[error(
-        "Expected a Polarity weather (PolarityPlus or PolarityMinus), but got {weather} in \
+        "Expected a Polarity weather (PolarityPlus or PolarityMinus), but got {weather:?} in \
         {event_type:?} event"
     )]
     UnexpectedPolarityWeather {

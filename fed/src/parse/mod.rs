@@ -5555,7 +5555,7 @@ pub fn parse_next_event(
 
         },
         EventType::RiffOpened => {
-            let (riff, weather) = event.next_parse(parse_riff_opened)?;
+            let (riff, weather) = event.next_parse(parse_riff_opened(event.season, event.day))?;
 
             FedEventData::RiffOpened {
                 game: event.game(unscatter, attractor_secret_base)?,

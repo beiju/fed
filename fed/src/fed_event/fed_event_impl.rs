@@ -4309,7 +4309,7 @@ impl FedEvent {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description("A Riff Opened.");
-                eb.push_description(format!("🎵 {} {new_weather} 🎵", riff.iter().map(RiffElement::as_ref).join(" ")));
+                eb.push_description(format!("🎵 {} {} 🎵", riff.iter().map(RiffElement::as_ref).join(" "), new_weather.to_str(self.season, self.day)));
                 eb.build(EventType::RiffOpened)
             }
             FedEventData::BandBeginsToPlay { game, numbers_went, sub_event } => {
@@ -5113,7 +5113,7 @@ impl FedEvent {
                 let mut events = players.into_iter()
                     .map(|player| {
                         let mut eb = eb.connected_event(player.sub_event);
-                        // TODO I think I clear or reset the description now 
+                        // TODO I think I clear or reset the description now
                         //   more than I set it. Make that the default.
                         eb.clear_description();
                         eb.push_description(format!("{}, TOUCH DOWN", player.player_name_all_caps));

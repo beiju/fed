@@ -4139,91 +4139,98 @@ pub(crate) fn parse_thieves_guild_stole_item(
     ))
 }
 
-pub(crate) fn parse_weather(input: &str) -> ParserResult<Weather> {
-    // This has to be split up because alt only supports tuples up to 21 elements
-    alt((
+pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserResult<Weather> {
+    move |input| {
+        // This has to be split up because alt only supports tuples up to 21 elements
         alt((
-            tag(Weather::Void.to_str()).map(|_| Weather::Void),
-            tag(Weather::Sun2.to_str()).map(|_| Weather::Sun2),
-            tag(Weather::Overcast.to_str()).map(|_| Weather::Overcast),
-            tag(Weather::Rainy.to_str()).map(|_| Weather::Rainy),
-            tag(Weather::Sandstorm.to_str()).map(|_| Weather::Sandstorm),
-            tag(Weather::Snowy.to_str()).map(|_| Weather::Snowy),
-            tag(Weather::Acidic.to_str()).map(|_| Weather::Acidic),
-            tag(Weather::SolarEclipse.to_str()).map(|_| Weather::SolarEclipse),
-            tag(Weather::Glitter.to_str()).map(|_| Weather::Glitter),
-            tag(Weather::Blooddrain.to_str()).map(|_| Weather::Blooddrain),
-            tag(Weather::Peanuts.to_str()).map(|_| Weather::Peanuts),
-            tag(Weather::Birds.to_str()).map(|_| Weather::Birds),
-            tag(Weather::Feedback.to_str()).map(|_| Weather::Feedback),
-            tag(Weather::Reverb.to_str()).map(|_| Weather::Reverb),
-            tag(Weather::BlackHole.to_str()).map(|_| Weather::BlackHole),
-        )),
-        alt((
-            tag(Weather::Coffee2.to_str()).map(|_| Weather::Coffee2),
-            tag(Weather::Coffee3s.to_str()).map(|_| Weather::Coffee3s),
-            // Coffee has to be after both Coffee 3s and Coffee 2 because it is a prefix of them
-            tag(Weather::Coffee.to_str()).map(|_| Weather::Coffee),
-            tag(Weather::Flooding.to_str()).map(|_| Weather::Flooding),
-            tag(Weather::Salmon.to_str()).map(|_| Weather::Salmon),
-            tag(Weather::PolarityPlus.to_str()).map(|_| Weather::PolarityPlus),
-            tag(Weather::PolarityMinus.to_str()).map(|_| Weather::PolarityMinus),
-            tag(Weather::Sun90.to_str()).map(|_| Weather::Sun90),
-            tag(Weather::SunPoint1.to_str()).map(|_| Weather::SunPoint1),
-            tag(Weather::SumSun.to_str()).map(|_| Weather::SumSun),
-            tag(Weather::SupernovaEclipse.to_str()).map(|_| Weather::SupernovaEclipse),
-            tag(Weather::BlackHoleBlackHole.to_str()).map(|_| Weather::BlackHoleBlackHole),
-            tag(Weather::Jazz.to_str()).map(|_| Weather::Jazz),
-            tag(Weather::Night.to_str()).map(|_| Weather::Night),
-            tag(Weather::Night.to_str()).map(|_| Weather::Night),
-        )),
-    ))
-    .parse(input)
+            alt((
+                // BlackHoleBlackHole must appear before BlackHole, because the
+                // latter is a prefix of the former. (I'm putting it first to
+                // make it very certain that it's before the other.)
+                tag(Weather::BlackHoleBlackHole.to_str(season, day)).map(|_| Weather::BlackHoleBlackHole),
+                tag(Weather::Void.to_str(season, day)).map(|_| Weather::Void),
+                tag(Weather::Sun2.to_str(season, day)).map(|_| Weather::Sun2),
+                tag(Weather::Overcast.to_str(season, day)).map(|_| Weather::Overcast),
+                tag(Weather::Rainy.to_str(season, day)).map(|_| Weather::Rainy),
+                tag(Weather::Sandstorm.to_str(season, day)).map(|_| Weather::Sandstorm),
+                tag(Weather::Snowy.to_str(season, day)).map(|_| Weather::Snowy),
+                tag(Weather::Acidic.to_str(season, day)).map(|_| Weather::Acidic),
+                tag(Weather::SolarEclipse.to_str(season, day)).map(|_| Weather::SolarEclipse),
+                tag(Weather::Glitter.to_str(season, day)).map(|_| Weather::Glitter),
+                tag(Weather::Blooddrain.to_str(season, day)).map(|_| Weather::Blooddrain),
+                tag(Weather::Peanuts.to_str(season, day)).map(|_| Weather::Peanuts),
+                tag(Weather::Birds.to_str(season, day)).map(|_| Weather::Birds),
+                tag(Weather::Feedback.to_str(season, day)).map(|_| Weather::Feedback),
+                tag(Weather::Reverb.to_str(season, day)).map(|_| Weather::Reverb),
+            )),
+            alt((
+                tag(Weather::BlackHole.to_str(season, day)).map(|_| Weather::BlackHole),
+                tag(Weather::Coffee2.to_str(season, day)).map(|_| Weather::Coffee2),
+                tag(Weather::Coffee3s.to_str(season, day)).map(|_| Weather::Coffee3s),
+                // Coffee has to be after both Coffee 3s and Coffee 2 because it is a prefix of them
+                tag(Weather::Coffee.to_str(season, day)).map(|_| Weather::Coffee),
+                tag(Weather::Flooding.to_str(season, day)).map(|_| Weather::Flooding),
+                tag(Weather::Salmon.to_str(season, day)).map(|_| Weather::Salmon),
+                tag(Weather::PolarityPlus.to_str(season, day)).map(|_| Weather::PolarityPlus),
+                tag(Weather::PolarityMinus.to_str(season, day)).map(|_| Weather::PolarityMinus),
+                tag(Weather::Sun90.to_str(season, day)).map(|_| Weather::Sun90),
+                tag(Weather::SunPoint1.to_str(season, day)).map(|_| Weather::SunPoint1),
+                tag(Weather::SumSun.to_str(season, day)).map(|_| Weather::SumSun),
+                tag(Weather::SupernovaEclipse.to_str(season, day)).map(|_| Weather::SupernovaEclipse),
+                tag(Weather::Jazz.to_str(season, day)).map(|_| Weather::Jazz),
+                tag(Weather::Night.to_str(season, day)).map(|_| Weather::Night),
+                tag(Weather::Night.to_str(season, day)).map(|_| Weather::Night),
+            )),
+        ))
+            .parse(input)
+    }
 }
 
-pub(crate) fn parse_riff_opened(input: &str) -> ParserResult<(Vec<RiffElement>, Weather)> {
-    let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
-    // Needs a nested alt() because alt has a max of 21 sub-parsers
-    let (input, riff) = separated_list1(
-        tag(" "),
-        alt((
+pub(crate) fn parse_riff_opened(season: i64, day: i64) -> impl Fn(&str) -> ParserResult<(Vec<RiffElement>, Weather)> {
+    move |input| {
+        let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
+        // Needs a nested alt() because alt has a max of 21 sub-parsers
+        let (input, riff) = separated_list1(
+            tag(" "),
             alt((
-                tag(RiffElement::Bow.as_ref()).map(|_| RiffElement::Bow),
-                tag(RiffElement::Bah.as_ref()).map(|_| RiffElement::Bah),
-                tag(RiffElement::Wah.as_ref()).map(|_| RiffElement::Wah),
-                tag(RiffElement::Ah.as_ref()).map(|_| RiffElement::Ah),
-                tag(RiffElement::Doo.as_ref()).map(|_| RiffElement::Doo),
-                tag(RiffElement::La.as_ref()).map(|_| RiffElement::La),
-                tag(RiffElement::Ooo.as_ref()).map(|_| RiffElement::Ooo),
-                tag(RiffElement::Bee.as_ref()).map(|_| RiffElement::Bee),
-                tag(RiffElement::Ski.as_ref()).map(|_| RiffElement::Ski),
-                tag(RiffElement::Ooie.as_ref()).map(|_| RiffElement::Ooie),
-                // Dah has to come before Da
-                tag(RiffElement::Dah.as_ref()).map(|_| RiffElement::Dah),
-                tag(RiffElement::Da.as_ref()).map(|_| RiffElement::Da),
-                tag(RiffElement::Louie.as_ref()).map(|_| RiffElement::Louie),
-                tag(RiffElement::Shoo.as_ref()).map(|_| RiffElement::Shoo),
-                tag(RiffElement::Boh.as_ref()).map(|_| RiffElement::Boh),
-                tag(RiffElement::Dee.as_ref()).map(|_| RiffElement::Dee),
-                tag(RiffElement::Sha.as_ref()).map(|_| RiffElement::Sha),
-                tag(RiffElement::Doh.as_ref()).map(|_| RiffElement::Doh),
-                tag(RiffElement::Bop.as_ref()).map(|_| RiffElement::Bop),
-                tag(RiffElement::Boo.as_ref()).map(|_| RiffElement::Boo),
-                tag(RiffElement::Do.as_ref()).map(|_| RiffElement::Do),
+                alt((
+                    tag(RiffElement::Bow.as_ref()).map(|_| RiffElement::Bow),
+                    tag(RiffElement::Bah.as_ref()).map(|_| RiffElement::Bah),
+                    tag(RiffElement::Wah.as_ref()).map(|_| RiffElement::Wah),
+                    tag(RiffElement::Ah.as_ref()).map(|_| RiffElement::Ah),
+                    tag(RiffElement::Doo.as_ref()).map(|_| RiffElement::Doo),
+                    tag(RiffElement::La.as_ref()).map(|_| RiffElement::La),
+                    tag(RiffElement::Ooo.as_ref()).map(|_| RiffElement::Ooo),
+                    tag(RiffElement::Bee.as_ref()).map(|_| RiffElement::Bee),
+                    tag(RiffElement::Ski.as_ref()).map(|_| RiffElement::Ski),
+                    tag(RiffElement::Ooie.as_ref()).map(|_| RiffElement::Ooie),
+                    // Dah has to come before Da
+                    tag(RiffElement::Dah.as_ref()).map(|_| RiffElement::Dah),
+                    tag(RiffElement::Da.as_ref()).map(|_| RiffElement::Da),
+                    tag(RiffElement::Louie.as_ref()).map(|_| RiffElement::Louie),
+                    tag(RiffElement::Shoo.as_ref()).map(|_| RiffElement::Shoo),
+                    tag(RiffElement::Boh.as_ref()).map(|_| RiffElement::Boh),
+                    tag(RiffElement::Dee.as_ref()).map(|_| RiffElement::Dee),
+                    tag(RiffElement::Sha.as_ref()).map(|_| RiffElement::Sha),
+                    tag(RiffElement::Doh.as_ref()).map(|_| RiffElement::Doh),
+                    tag(RiffElement::Bop.as_ref()).map(|_| RiffElement::Bop),
+                    tag(RiffElement::Boo.as_ref()).map(|_| RiffElement::Boo),
+                    tag(RiffElement::Do.as_ref()).map(|_| RiffElement::Do),
+                )),
+                alt((
+                    tag(RiffElement::Bip.as_ref()).map(|_| RiffElement::Bip),
+                    tag(RiffElement::Ska.as_ref()).map(|_| RiffElement::Ska),
+                    tag(RiffElement::Skoo.as_ref()).map(|_| RiffElement::Skoo),
+                )),
             )),
-            alt((
-                tag(RiffElement::Bip.as_ref()).map(|_| RiffElement::Bip),
-                tag(RiffElement::Ska.as_ref()).map(|_| RiffElement::Ska),
-                tag(RiffElement::Skoo.as_ref()).map(|_| RiffElement::Skoo),
-            )),
-        )),
-    )
-    .parse(input)?;
-    let (input, _) = tag(" ").parse(input)?;
-    let (input, weather) = parse_weather.parse(input)?;
-    let (input, _) = tag(" 🎵").parse(input)?;
+        )
+            .parse(input)?;
+        let (input, _) = tag(" ").parse(input)?;
+        let (input, weather) = parse_weather(season, day).parse(input)?;
+        let (input, _) = tag(" 🎵").parse(input)?;
 
-    Ok((input, (riff, weather)))
+        Ok((input, (riff, weather)))
+    }
 }
 
 pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
