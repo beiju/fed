@@ -848,6 +848,9 @@ impl EventBuilder {
                 self.push_opt_item_damage(scorer.item_damage.as_ref(), &scorer.player_name);
                 self.push_description(format!("{} {score_label}", scorer.player_name));
             }
+            if scorer.is_slippery {
+                self.push_description(format!("{} slips and slides to first!", scorer.player_name));
+            }
             if !shame_before_score {
                 self.push_shame(&scorer.shame, home_team_id);
             }

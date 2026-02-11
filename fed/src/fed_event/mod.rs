@@ -202,6 +202,9 @@ pub struct ScoringPlayer {
     /// Info about the Hotel Motel party on this score, if any
     pub hotel_motel_party: Option<HotelMotelParty>,
 
+    /// Was this scoring player Slippery?
+    pub is_slippery: bool,
+
     /// Info about the Shame on this score, if any
     pub shame: Shame,
 }

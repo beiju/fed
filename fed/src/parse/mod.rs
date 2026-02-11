@@ -908,7 +908,7 @@ pub fn parse_next_event(
 
             let (batter_name, home_run_type) = event.next_parse(parse_hr)?;
 
-            // Parsed specially because AFAIK this is the only place an attraction happens and you
+            // Parsed specially because AFAIK this is the only place an attraction happens where you
             // don't already know the player name
             let attraction = event
                 .next_parse(parse_attract_player)?

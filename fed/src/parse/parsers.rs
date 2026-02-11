@@ -481,6 +481,7 @@ pub(crate) struct ParsedScore<'a> {
     // Outer option: whether there was a party. Inner option: whether the party attracted birds.
     // str inside options: name of stadium birds were attracted to
     pub(crate) hotel_motel_party: Option<Option<&'a str>>,
+    pub(crate) is_slippery: bool,
     pub(crate) shame: Option<Option<&'a str>>,
 }
 
@@ -615,6 +616,10 @@ pub(crate) fn parse_score(
             }
         };
 
+        // Slippery only happened a handful of times, so it may not be possible
+        // to narrow its relative order down precisely
+        let (input, slippery) = opt(parse_slippery(player_name)).parse(input)?;
+
         // Starting in s22, the hype message was moved after the "<player name> scored!" message, at
         // least for base hits. Unconfirmed whether it happened for other hits. Not yet confirmed
         // how this change interacts with damage messages
@@ -630,9 +635,20 @@ pub(crate) fn parse_score(
                 damaged_item_name,
                 player_name,
                 hotel_motel_party: None, // Filled in later in a subsequent loop
+                is_slippery: slippery.is_some(),
                 shame,
             },
         ))
+    }
+}
+
+pub(crate) fn parse_slippery(player_name: &str) -> impl Fn(&str) -> ParserResult<()> {
+    move |input| {
+        let (input, _) = tag("\n").parse(input)?;
+        let (input, _) = tag(player_name).parse(input)?;
+        let (input, _) = tag(" slips and slides to first!").parse(input)?;
+
+        Ok((input, ()))
     }
 }
 

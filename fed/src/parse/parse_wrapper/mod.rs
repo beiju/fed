@@ -680,6 +680,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
+            bool,
             Option<Option<String>>,
         )>,
         attractions: Vec<(Uuid, String, String)>,
@@ -705,6 +706,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
+            bool,
             Option<Option<String>>,
         )>,
         attractions: Vec<(Uuid, String, String)>,
@@ -724,10 +726,22 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    fn parse_base_scores(&mut self, scoring_players: Vec<(Uuid, Option<(String, Option<bool>)>, String, Option<Option<String>>, Option<Option<String>>)>, attractions: Vec<(Uuid, String, String)>, is_fc: bool) -> Result<Vec<ScoringPlayer>, FeedParseError> {
+    fn parse_base_scores(
+        &mut self,
+        scoring_players: Vec<(
+            Uuid,
+            Option<(String, Option<bool>)>,
+            String,
+            Option<Option<String>>,
+            bool,
+            Option<Option<String>>)
+        >,
+        attractions: Vec<(Uuid, String, String)>,
+        is_fc: bool,
+    ) -> Result<Vec<ScoringPlayer>, FeedParseError> {
         let mut attractions = attractions.into_iter().peekable();
         let scores: Vec<_> = scoring_players.into_iter()
-            .map(|(player_id, item_name, player_name, hotel_motel_party, shame)| {
+            .map(|(player_id, item_name, player_name, hotel_motel_party, slippery, shame)| {
                 let item_damage = item_name
                     .map(|(_name, plural)| self.next_item_damage(plural))
                     .transpose()?;
@@ -791,6 +805,7 @@ impl<'e> EventParseWrapper<'e> {
                     item_damage,
                     attraction,
                     hotel_motel_party,
+                    is_slippery: slippery,
                     shame,
                 })
             })
@@ -920,6 +935,7 @@ impl<'e> EventParseWrapper<'e> {
                 Option<(String, Option<bool>)>,
                 String,
                 Option<Option<String>>,
+                bool,
                 Option<Option<String>>,
             )>,
             Vec<(Uuid, String, String)>,
@@ -942,6 +958,7 @@ impl<'e> EventParseWrapper<'e> {
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
                     score.hotel_motel_party.map(|n| n.map(str::to_string)),
+                    score.is_slippery,
                     score.shame.map(|s| s.map(str::to_string)),
                 ))
             })
@@ -989,6 +1006,7 @@ impl<'e> EventParseWrapper<'e> {
             Option<(String, Option<bool>)>,
             String,
             Option<Option<String>>,
+            bool,
             Option<Option<String>>,
         )>,
         FeedParseError,
@@ -1009,6 +1027,7 @@ impl<'e> EventParseWrapper<'e> {
                     score.damaged_item_name.map(|(n, p)| (n.to_string(), p)),
                     score.player_name.to_string(),
                     score.hotel_motel_party.map(|n| n.map(str::to_string)),
+                    score.is_slippery,
                     score.shame.map(|s| s.map(str::to_string)),
                 ))
             })
