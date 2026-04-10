@@ -4417,3 +4417,10 @@ pub(crate) fn parse_announcement(input: &str) -> ParserResult<ParsedAnnouncement
             .map(|_| ParsedAnnouncement::HallOfFlameOpened),
     )).parse(input)
 }
+
+pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The {nullteam} were nullified.\nThe ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" non-lost the game.").parse(input)?;
+
+    Ok((input, team_nickname))
+}

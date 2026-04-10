@@ -8387,7 +8387,19 @@ pub enum FedEventData {
     TeamWentRogue {
         team_nickname: String,
         team_id: Uuid,
-    }
+    },
+
+    #[serde(rename_all = "camelCase")]
+    GameEndFromNullification {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// The nickname of the team who non-lost the game
+        non_loser_team_nickname: String,
+
+        /// Metadata for the non-loss sub-event
+        non_loss_sub_event: WinSubEvent,
+    },
 }
 
 #[derive(
@@ -8679,6 +8691,7 @@ impl FedEventData {
             FedEventData::TeamExitedHallOfFlame { .. } => None,
             FedEventData::HallOfFlameOpened { .. } => None,
             FedEventData::TeamWentRogue { .. } => None,
+            FedEventData::GameEndFromNullification { game, .. } => Some(game),
         }
     }
 }

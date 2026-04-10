@@ -463,6 +463,7 @@ pub enum EventType {
     // Black hole being agitated captures nullifying league mods and items, but
     // not teams (which are event type 250)
     BlackHoleAgitated = 249,
+    GameEndedFromNullification = 250,
     RiffOpened = 251,
     NightShift = 252,
     TarotCardChanged = 253,

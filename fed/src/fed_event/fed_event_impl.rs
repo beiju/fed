@@ -5229,6 +5229,27 @@ impl FedEvent {
                 eb.push_metadata_i64("type", ModDuration::Permanent);
                 eb.build(EventType::AddedMod)
             }
+            FedEventData::GameEndFromNullification { game, non_loser_team_nickname, non_loss_sub_event, } => {
+                eb.set_game(game);
+                // {nullteam} looks like an interpolation param but it did appear like that literally.
+                // It may have been intended to be the opponent nickname, but they forgot a $ in the JS
+                eb.push_description(format!("The {{nullteam}} were nullified.\nThe {non_loser_team_nickname} non-lost the game."));
+
+                assert!(non_loss_sub_event.balloons.is_none(), "No support for balloons in GameEndFromNullification yet");
+
+                eb.push_child(non_loss_sub_event.sub_event, |mut child_eb| {
+                    child_eb.set_category(EventCategory::Outcomes);
+                    child_eb.push_description(format!("The {non_loser_team_nickname} non-lost due to nullification."));
+                    child_eb.push_team_tag(non_loss_sub_event.team_id);
+                    child_eb.push_metadata_i64("after", non_loss_sub_event.wins_after);
+                    child_eb.push_metadata_i64("amount", 1);
+                    child_eb.push_metadata_i64("before", non_loss_sub_event.wins_after - 1);
+                    child_eb.push_metadata_str_vec("lines", Vec::new()); // Always empty so far 
+                    child_eb.build(EventType::WinCollectedRegular)
+                });
+
+                eb.build(EventType::GameEndedFromNullification)
+            }
         };
 
         vec![item]

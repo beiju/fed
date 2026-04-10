@@ -5658,6 +5658,20 @@ pub fn parse_next_event(
                 }
             }
         },
+        EventType::GameEndedFromNullification => {
+            let team_nickname = event.next_parse(parse_game_end_by_nullification)?;
+            let mut child = event.next_child(EventType::WinCollectedRegular)?;
+            FedEventData::GameEndFromNullification {
+                game: event.game(unscatter, attractor_secret_base)?,
+                non_loser_team_nickname: team_nickname.to_string(),
+                non_loss_sub_event: WinSubEvent {
+                    team_id: child.next_team_id()?,
+                    wins_after: child.metadata_i64("after")?,
+                    sub_event: child.as_sub_event(),
+                    balloons: None,
+                },
+            }
+        }
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened(event.season, event.day))?;
 
