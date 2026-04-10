@@ -1,4 +1,4 @@
-use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, HomeRunShame, ModChangeSubEventWithNamedPlayer, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
 use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -4350,40 +4350,64 @@ impl FedEvent {
                 eb.push_player_tag(player_id);
                 eb.build(EventType::BasesReloaded)
             }
-            FedEventData::NightShift { game, team_id, team_nickname, shadowed_player_id, shadowed_player_name, unshadowed_player_id, unshadowed_player_name, active_location, player_swap_sub_event, player_shadowed_sub_event, player_unshadowed_sub_event } => {
+            FedEventData::NightShift { game, team_id, shadowed_player_id, shadowed_player_name, unshadowed_player_id, unshadowed_player_name, outcome, night_shift_boost_sub_event } => {
                 eb.set_game(game);
                 eb.push_description("Night Shift.");
                 eb.push_description(format!("Deep Darkness took {shadowed_player_name}."));
                 eb.push_description(format!("{unshadowed_player_name} clocked in."));
 
-                eb.push_child(player_swap_sub_event, |mut child_eb| {
-                    child_eb.push_description(&format!("The {team_nickname} swapped two players on their roster."));
-                    child_eb.push_player_tag(shadowed_player_id);
-                    child_eb.push_player_tag(unshadowed_player_id);
-                    child_eb.push_team_tag(team_id);
-                    child_eb.push_metadata_i64("aLocation", active_location as i64);
-                    child_eb.push_metadata_uuid("aPlayerId", shadowed_player_id);
-                    child_eb.push_metadata_str("aPlayerName", &shadowed_player_name);
-                    child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows as i64);
-                    child_eb.push_metadata_uuid("bPlayerId", unshadowed_player_id);
-                    child_eb.push_metadata_str("bPlayerName", &unshadowed_player_name);
-                    child_eb.push_metadata_uuid("teamId", team_id);
-                    child_eb.push_metadata_str("teamName", &team_nickname);
-                    child_eb.build(EventType::PlayerSwap)
-                });
+                match outcome {
+                    NightShiftOutcome::PlayersSwapped { team_nickname, active_location, player_swap_sub_event, player_shadowed_sub_event } => {
+                        eb.push_child(player_swap_sub_event, |mut child_eb| {
+                            child_eb.push_description(&format!("The {team_nickname} swapped two players on their roster."));
+                            child_eb.push_player_tag(shadowed_player_id);
+                            child_eb.push_player_tag(unshadowed_player_id);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_metadata_i64("aLocation", active_location as i64);
+                            child_eb.push_metadata_uuid("aPlayerId", shadowed_player_id);
+                            child_eb.push_metadata_str("aPlayerName", &shadowed_player_name);
+                            child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows as i64);
+                            child_eb.push_metadata_uuid("bPlayerId", unshadowed_player_id);
+                            child_eb.push_metadata_str("bPlayerName", &unshadowed_player_name);
+                            child_eb.push_metadata_uuid("teamId", team_id);
+                            child_eb.push_metadata_str("teamName", &team_nickname);
+                            child_eb.build(EventType::PlayerSwap)
+                        });
 
-                eb.push_child(player_shadowed_sub_event.sub_event, |mut child_eb| {
-                    child_eb.push_description(format!("{shadowed_player_name} entered the Shadows."));
-                    child_eb.push_player_tag(shadowed_player_id);
-                    child_eb.push_team_tag(team_id);
-                    child_eb.build_boost(&player_shadowed_sub_event)
-                });
+                        eb.push_child(player_shadowed_sub_event.sub_event, |mut child_eb| {
+                            child_eb.push_description(format!("{shadowed_player_name} entered the Shadows."));
+                            child_eb.push_player_tag(shadowed_player_id);
+                            child_eb.push_team_tag(team_id);
+                            child_eb.build_boost(&player_shadowed_sub_event)
+                        });
+                    }
+                    NightShiftOutcome::BooksCooked { books_cooked_sub_event, gained_unstable_sub_event } => {
+                        eb.push_child(books_cooked_sub_event, |mut child_eb| {
+                            child_eb.push_description("WARNING");
+                            child_eb.push_description("EXTRAPLANAR ACTIVITY");
+                            child_eb.push_description("BOOKS COOKED");
+                            child_eb.push_description("INSTABILITY DETECTED");
+                            child_eb.push_player_tag(shadowed_player_id);
+                            child_eb.build(EventType::NecromancyOrPlunderNarration)
+                        });
 
-                eb.push_child(player_unshadowed_sub_event.sub_event, |mut child_eb| {
+                        eb.push_child(gained_unstable_sub_event, |mut child_eb| {
+                            child_eb.set_description(format!("{shadowed_player_name} gained the Unstable mod."));
+                            child_eb.push_team_tag(team_id);
+                            child_eb.push_player_tag(shadowed_player_id);
+                            child_eb.push_metadata_str("mod", "MARKED");
+                            // Permanent! oh shit
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                            child_eb.build(EventType::AddedMod)
+                        });
+                    }
+                }
+
+                eb.push_child(night_shift_boost_sub_event.sub_event, |mut child_eb| {
                     child_eb.push_description(format!("{unshadowed_player_name} clocked in."));
                     child_eb.push_player_tag(unshadowed_player_id);
                     child_eb.push_team_tag(team_id);
-                    child_eb.build_boost(&player_unshadowed_sub_event)
+                    child_eb.build_boost(&night_shift_boost_sub_event)
                 });
 
                 eb.build(EventType::NightShift)

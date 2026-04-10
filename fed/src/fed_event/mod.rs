@@ -3886,6 +3886,41 @@ pub struct IdentifiedPlayerSubEvent {
     /// Sub-event associated with the player
     pub sub_event: SubEvent,
 }
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
+pub enum NightShiftOutcome {
+    /// This is the normal outcome of a Night Shift: the players are swapped
+    PlayersSwapped {
+        /// Nickname of the team who had the Night Shift
+        team_nickname: String,
+
+        /// The position that the outgoing player used to occupy, and the incoming player now
+        /// occupies.
+        ///
+        /// This may only be lineup or rotation. The other location is not stored, because it's
+        /// always the shadows (and Night Shift was added after bench and bullpen were merged)
+        active_location: ActivePositionType,
+
+        /// Metadata for the sub-event for the clocked-in player being swapped
+        /// with the player they replaced
+        player_swap_sub_event: SubEvent,
+
+        /// Metadata for the sub-event for the shadow boost for the player being
+        /// shadowed
+        player_shadowed_sub_event: PlayerBoostSubEvent,
+    },
+    /// If the BOOKS were COOKED on this event, contains details about the BOOK COOKing
+    ///
+    /// TODO: Explain what causes the EXTRAPLANAR ACTIVITY: BOOKS COOKED message
+    BooksCooked {
+        /// Sub-event for the BOOKS COOKED message
+        books_cooked_sub_event: SubEvent,
+
+        /// Sub-event for the player gaining the Unstable mod
+        gained_unstable_sub_event: SubEvent,
+    }
+}
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
@@ -7766,9 +7801,6 @@ pub enum FedEventData {
         /// Uuid of the team who had the Night Shift
         team_id: Uuid,
 
-        /// Nickname of the team who had the Night Shift
-        team_nickname: String,
-
         /// Uuid of the player who was taken by the Deep Darkness
         shadowed_player_id: Uuid,
 
@@ -7781,21 +7813,11 @@ pub enum FedEventData {
         /// Name of the player who clocked in
         unshadowed_player_name: String,
 
-        /// The position that the outgoing player used to occupy, and the incoming player now
-        /// occupies.
-        ///
-        /// This may only be lineup or rotation. The other location is not stored, because it's
-        /// always the shadows (and Night Shift was added after bench and bullpen were merged)
-        active_location: ActivePositionType,
+        /// Outcome of the night shift
+        outcome: NightShiftOutcome,
 
-        /// Metadata for the sub-event for the players being swapped
-        player_swap_sub_event: SubEvent,
-
-        /// Metadata for the sub-event for the player being shadowed
-        player_shadowed_sub_event: PlayerBoostSubEvent,
-
-        /// Metadata for the sub-event for the player being unshadowed
-        player_unshadowed_sub_event: PlayerBoostSubEvent,
+        /// Metadata for the sub-event for the player recieving their Night Shift boost
+        night_shift_boost_sub_event: PlayerBoostSubEvent,
     },
 
     /// A new Team was formed

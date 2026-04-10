@@ -5659,22 +5659,58 @@ pub fn parse_next_event(
             }
         }
         EventType::NightShift => {
-            let player_swap_child = event.next_child(EventType::PlayerSwap)?;
-            let player_shadowed_child = event.next_boost_child()?;
-            let player_unshadowed_child = event.next_boost_child()?;
+            let outcome = event.next_child_any(&[EventType::PlayerSwap, EventType::NecromancyOrPlunderNarration])?;
+            match outcome.event_type {
+                EventType::PlayerSwap => {
+                    let player_shadowed_child = event.next_boost_child()?;
+                    let night_shift_boost_child = event.next_boost_child()?;
 
-            FedEventData::NightShift {
-                game: event.game(unscatter, attractor_secret_base)?,
-                team_id: player_swap_child.metadata_uuid("teamId")?,
-                team_nickname: player_swap_child.metadata_str("teamName")?.to_string(),
-                shadowed_player_id: player_swap_child.metadata_uuid("aPlayerId")?,
-                shadowed_player_name: player_swap_child.metadata_str("aPlayerName")?.to_string(),
-                unshadowed_player_id: player_swap_child.metadata_uuid("bPlayerId")?,
-                unshadowed_player_name: player_swap_child.metadata_str("bPlayerName")?.to_string(),
-                active_location: player_swap_child.metadata_enum("aLocation")?,
-                player_swap_sub_event: player_swap_child.as_sub_event(),
-                player_shadowed_sub_event: player_shadowed_child,
-                player_unshadowed_sub_event: player_unshadowed_child,
+                    FedEventData::NightShift {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: outcome.metadata_uuid("teamId")?,
+                        shadowed_player_id: outcome.metadata_uuid("aPlayerId")?,
+                        shadowed_player_name: outcome.metadata_str("aPlayerName")?.to_string(),
+                        unshadowed_player_id: outcome.metadata_uuid("bPlayerId")?,
+                        unshadowed_player_name: outcome.metadata_str("bPlayerName")?.to_string(),
+                        outcome: NightShiftOutcome::PlayersSwapped {
+                            team_nickname: outcome.metadata_str("teamName")?.to_string(),
+                            active_location: outcome.metadata_enum("aLocation")?,
+                            player_swap_sub_event: outcome.as_sub_event(),
+                            player_shadowed_sub_event: player_shadowed_child,
+                        },
+                        night_shift_boost_sub_event: night_shift_boost_child,
+                    }
+
+                }
+                EventType::NecromancyOrPlunderNarration => {
+                    let mut gained_unstable_event = event.next_child(EventType::AddedMod)?;
+                    let shadowed_player_name = gained_unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
+
+                    let mut night_shift_boost_child = event.next_child(EventType::PlayerStatIncrease)?;
+                    let unshadowed_player_name = night_shift_boost_child.next_parse(parse_terminated(" clocked in."))?;
+
+                    FedEventData::NightShift {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        team_id: gained_unstable_event.next_team_id()?,
+                        shadowed_player_id: gained_unstable_event.next_player_id()?,
+                        shadowed_player_name: shadowed_player_name.to_string(),
+                        unshadowed_player_id: night_shift_boost_child.next_player_id()?,
+                        unshadowed_player_name: unshadowed_player_name.to_string(),
+                        outcome: NightShiftOutcome::BooksCooked {
+                            books_cooked_sub_event: outcome.as_sub_event(),
+                            gained_unstable_sub_event: gained_unstable_event.as_sub_event(),
+                        },
+                        night_shift_boost_sub_event: PlayerBoostSubEvent {
+                            rating_before: night_shift_boost_child.metadata_f64("before")?,
+                            rating_after: night_shift_boost_child.metadata_f64("after")?,
+                            sub_event: night_shift_boost_child.as_sub_event(),
+                        },
+                    }
+
+                }
+                _ => {
+                    panic!("Event type in this statement should be one of the above types");
+                }
             }
         }
         EventType::TarotCardChanged => { todo!() }

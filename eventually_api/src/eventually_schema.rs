@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::borrow::Cow;
-use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 use with_structure::WithStructure;
 
