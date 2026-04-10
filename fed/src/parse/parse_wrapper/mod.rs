@@ -206,6 +206,10 @@ impl<'e> EventParseWrapper<'e> {
         Ok(id)
     }
 
+    pub fn has_more_children(&self) -> bool {
+        !self.children.is_empty()
+    }
+
     pub fn next_child_any(&mut self, expected_types: &[EventType]) -> Result<Self, FeedParseError> {
         let (child, rest) =
             self.children

@@ -1,4 +1,3 @@
-use chrono::format::parse;
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 use crate::{
@@ -4373,6 +4372,15 @@ pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<(&str
     let (input, nullified_item_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (team_nickname, player_name, nullified_item_name)))
+}
+
+pub(crate) fn parse_black_hole_nullified_team(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("The ").parse(input)?;
+    let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified the ").parse(input)?;
+    let (input, _) = tag(team_nickname).parse(input)?;
+    let (input, _) = tag("!").parse(input)?;
+
+    Ok((input, team_nickname))
 }
 
 pub(crate) enum ParsedCoinHit<'a> {

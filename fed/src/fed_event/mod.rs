@@ -8283,6 +8283,16 @@ pub enum FedEventData {
         item_removed_sub_event: SubEvent,
     },
 
+    /// Black Hole (Black Hole) became agitated and nullified a team
+    #[serde(rename_all = "camelCase")]
+    BlackHoleBlackHoleNullifiedTeam {
+        #[serde(flatten)]
+        game: GameEvent,
+
+        /// Nickname of the team that was nullified
+        team_nickname: String,
+    },
+
     /// Team shifted from one division to another. This happened post-Supernova
     /// in s24.
     #[serde(rename_all = "camelCase")]
@@ -8661,6 +8671,7 @@ impl FedEventData {
             FedEventData::BlackHoleBlackHoleNullifiedLeagueModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedStadiumModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedTeam { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
             FedEventData::TeamTouchedDown { .. } => None,
             FedEventData::CoinScattered { .. } => None,

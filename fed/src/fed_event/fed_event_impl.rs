@@ -5126,6 +5126,15 @@ impl FedEvent {
 
                 eb.build(EventType::BlackHoleAgitated)
             },
+            FedEventData::BlackHoleBlackHoleNullifiedTeam { game, team_nickname } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("The {team_nickname} collected 10!"));
+                eb.push_description("Black Hole (Black Hole) became Agitated.");
+                eb.push_description(format!("Black Hole (Black Hole) nullified the {team_nickname}!"));
+
+                eb.build(EventType::BlackHoleAgitated)
+            },
             FedEventData::TeamShiftedDivision { team_id, team_nickname, from_division_id, from_division_name, to_division_id, to_division_name } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(format!("The {team_nickname} Shifted from the {from_division_name} to the {to_division_name}."));

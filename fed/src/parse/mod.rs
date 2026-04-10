@@ -5585,69 +5585,78 @@ pub fn parse_next_event(
             }
         }
         EventType::BlackHoleAgitated => {
-            let expected_types = [
-                EventType::LeagueModificationRemoved,
-                // This is at least used for removed stadium mods (see event
-                // 1f254903-73dd-4d03-8f2f-4735a6c4ee5c), maybe others
-                EventType::RemovedMod,
-                EventType::PlayerLostItem,
-            ];
-            let mut child_event = event.next_child_any(&expected_types)?;
+            if !event.has_more_children() {
+                // Then this must be the Pies nullifying themselves
+                let team_nickname = event.next_parse(parse_black_hole_nullified_team)?;
 
-            match child_event.event_type {
-                EventType::LeagueModificationRemoved => {
-                    let (team_nickname, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_league_mod)?;
-                    assert!(is_known_team_nickname(team_nickname));
+                FedEventData::BlackHoleBlackHoleNullifiedTeam {
+                    game: event.game(unscatter, attractor_secret_base)?,
+                    team_nickname: team_nickname.to_string(),
+                }
+            } else {
+                let expected_types = [
+                    EventType::LeagueModificationRemoved,
+                    // This is at least used for removed stadium mods (see event
+                    // 1f254903-73dd-4d03-8f2f-4735a6c4ee5c), maybe others
+                    EventType::RemovedMod,
+                    EventType::PlayerLostItem,
+                ];
+                let mut child_event = event.next_child_any(&expected_types)?;
 
-                    FedEventData::BlackHoleBlackHoleNullifiedLeagueModification {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_nickname: team_nickname.to_string(),
-                        nullified_mod_name: nullified_mod_name.to_string(),
-                        nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
-                        nullified_mod_sub_event: child_event.as_sub_event(),
-                    }
-                },
-                EventType::RemovedMod => {
-                    let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_stadium_mod)?;
-                    assert!(is_known_team_nickname(team_nickname));
+                match child_event.event_type {
+                    EventType::LeagueModificationRemoved => {
+                        let (team_nickname, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_league_mod)?;
+                        assert!(is_known_team_nickname(team_nickname));
 
-                    FedEventData::BlackHoleBlackHoleNullifiedStadiumModification {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        team_nickname: team_nickname.to_string(),
-                        someones_team_id: child_event.next_team_id()?,
-                        stadium_name: stadium_name.to_string(),
-                        nullified_mod_name: nullified_mod_name.to_string(),
-                        nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
-                        nullified_mod_sub_event: child_event.as_sub_event(),
-                    }
-                },
-                EventType::PlayerLostItem => {
-                    let (team_nickname, player_name, nullified_item_name) = event.next_parse(parse_black_hole_nullified_item)?;
-                    assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::BlackHoleBlackHoleNullifiedLeagueModification {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            team_nickname: team_nickname.to_string(),
+                            nullified_mod_name: nullified_mod_name.to_string(),
+                            nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
+                            nullified_mod_sub_event: child_event.as_sub_event(),
+                        }
+                    },
+                    EventType::RemovedMod => {
+                        let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_stadium_mod)?;
+                        assert!(is_known_team_nickname(team_nickname));
 
-                    assert_eq!(nullified_item_name, child_event.metadata_str("itemName")?);
+                        FedEventData::BlackHoleBlackHoleNullifiedStadiumModification {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            team_nickname: team_nickname.to_string(),
+                            someones_team_id: child_event.next_team_id()?,
+                            stadium_name: stadium_name.to_string(),
+                            nullified_mod_name: nullified_mod_name.to_string(),
+                            nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
+                            nullified_mod_sub_event: child_event.as_sub_event(),
+                        }
+                    },
+                    EventType::PlayerLostItem => {
+                        let (team_nickname, player_name, nullified_item_name) = event.next_parse(parse_black_hole_nullified_item)?;
+                        assert!(is_known_team_nickname(team_nickname));
 
-                    FedEventData::BlackHoleBlackHoleNullifiedItem {
-                        game: event.game(unscatter, attractor_secret_base)?,
-                        player_name: player_name.to_string(),
-                        player_id: child_event.next_player_id()?,
-                        team_nickname: team_nickname.to_string(),
-                        team_id: child_event.next_team_id()?,
-                        item_name: nullified_item_name.to_string(),
-                        item_id: child_event.metadata_uuid("itemId")?,
-                        item_mods: child_event.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
-                        player_item_rating_before: child_event.metadata_f64_opt("playerItemRatingBefore")?,
-                        player_item_rating_after: child_event.metadata_f64("playerItemRatingAfter")?,
-                        player_rating: child_event.metadata_f64("playerRating")?,
-                        item_removed_sub_event: child_event.as_sub_event(),
-                    }
-                },
-                other => panic!(
-                    "Event from EventParseWrapper::next_child_any must be one of the expected \
-                    types ({expected_types:?}), but it was {other:?}",
-                ),
+                        assert_eq!(nullified_item_name, child_event.metadata_str("itemName")?);
+
+                        FedEventData::BlackHoleBlackHoleNullifiedItem {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            player_name: player_name.to_string(),
+                            player_id: child_event.next_player_id()?,
+                            team_nickname: team_nickname.to_string(),
+                            team_id: child_event.next_team_id()?,
+                            item_name: nullified_item_name.to_string(),
+                            item_id: child_event.metadata_uuid("itemId")?,
+                            item_mods: child_event.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
+                            player_item_rating_before: child_event.metadata_f64_opt("playerItemRatingBefore")?,
+                            player_item_rating_after: child_event.metadata_f64("playerItemRatingAfter")?,
+                            player_rating: child_event.metadata_f64("playerRating")?,
+                            item_removed_sub_event: child_event.as_sub_event(),
+                        }
+                    },
+                    other => panic!(
+                        "Event from EventParseWrapper::next_child_any must be one of the expected \
+                        types ({expected_types:?}), but it was {other:?}",
+                    ),
+                }
             }
-
         },
         EventType::RiffOpened => {
             let (riff, weather) = event.next_parse(parse_riff_opened(event.season, event.day))?;
