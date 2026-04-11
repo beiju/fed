@@ -3565,6 +3565,9 @@ pub fn parse_next_event(
                 ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam((player_name, team_nickname)) => {
                     assert!(is_known_team_nickname(team_nickname));
 
+                    // For this event Firewalker happens before the Hall roam messages
+                    let firewalker = parse_firewalker(event_iter)?;
+
                     // As of this writing, this variant only appears directly before a Super Roam
                     // out of the Hall
                     let exit_hall_event = event_iter
@@ -3575,7 +3578,7 @@ pub fn parse_next_event(
                         .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
                     let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
-                    let connected_events = parse_connected_roam_events(event_iter)?;
+                    let connected_events = parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
 
                     let data = FedEventData::Roam {
                         is_super: true,
@@ -4926,9 +4929,7 @@ pub fn parse_next_event(
 
                 let location = add_to_team_event.metadata_enum("location")?;
 
-                let mut connected_events = parse_connected_roam_events(event_iter)?;
-                assert!(connected_events.firewalker.is_none(), "Firewalker is parsed separately in this event");
-                connected_events.firewalker = firewalker;
+                let connected_events = parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
 
                 FedEventData::Roam {
                     is_super: true,
@@ -5941,6 +5942,14 @@ pub fn parse_connected_roam_events(
 ) -> Result<RoamConnectedEvents, FeedParseError> {
     let firewalker = parse_firewalker(event_iter)?;
 
+    parse_connected_roam_events_with_firewalker(firewalker, event_iter)
+}
+
+// For use when Firewalker is separated from the rest
+pub fn parse_connected_roam_events_with_firewalker(
+    firewalker: Option<Firewalker>,
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
+) -> Result<RoamConnectedEvents, FeedParseError> {
     let mut shadow_boost = None;
     let mut odyssey_boost = None;
     let mut good_riddance_parties = Vec::new();
