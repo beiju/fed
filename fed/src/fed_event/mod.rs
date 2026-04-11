@@ -165,6 +165,26 @@ pub struct WinSubEvent {
     pub balloons: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
+pub struct WinSubEventWithNickname {
+    /// Name of the team that gains the Win
+    pub team_nickname: String,
+
+    /// Uuid of the team that gains the Win
+    pub team_id: Uuid,
+
+    /// Number of Wins the winning team has once the newly earned Win is added
+    pub wins_after: i64,
+
+    #[serde(flatten)]
+    pub sub_event: SubEvent,
+
+    /// If the stadium inflated some Balloons from this Win, the name of the stadium that inflated
+    /// the Balloons. Otherwise null.
+    pub balloons: Option<String>,
+}
+
 // TODO Consolidate with ModChangeSubEventWithNamedPlayer
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -3920,6 +3940,22 @@ pub enum NightShiftOutcome {
         /// Sub-event for the player gaining the Unstable mod
         gained_unstable_sub_event: SubEvent,
     }
+}
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+)]
+pub enum EnteredMapQuadrant {
+    Vault,
+    Horizon {
+        /// Nickname of the team that entered the Black Hole (Black Hole)
+        team_nickname: String,
+
+        /// Sub-event associated with the team getting nullified
+        team_nullified_sub_event: SubEvent,
+    },
+    Hall,
+    Desert,
+    TODOWhereDoesForceComeFrom,
 }
 
 #[derive(
@@ -8381,11 +8417,16 @@ pub enum FedEventData {
     #[serde(rename_all = "camelCase")]
     HallOfFlameOpened,
 
-    /// Team went Rogue
-    // TODO Does this mean joined the Rogue division? If so is there an extant
-    //  event this can be merged with?
-    TeamWentRogue {
-        team_nickname: String,
+    /// Team entered a new quadrant on the s24 map and consequently changed
+    /// division
+    TeamEnteredMapQuadrant {
+        /// The quadrant the team entered
+        quadrant: EnteredMapQuadrant,
+
+        /// Name of the team who just entered a new quadrant
+        team_name: String,
+
+        /// Uuid of the team who just entered a new quadrant
         team_id: Uuid,
     },
 
@@ -8394,11 +8435,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// The nickname of the team who non-lost the game
-        non_loser_team_nickname: String,
-
-        /// Metadata for the non-loss sub-event
-        non_loss_sub_event: WinSubEvent,
+        /// If only one team was nullified, the nickname and win sub-event
+        /// for that team non-losing the game. Otherwise null.
+        non_loser: Option<WinSubEventWithNickname>,
     },
 }
 
@@ -8690,7 +8729,7 @@ impl FedEventData {
             FedEventData::CoinIncinerated { .. } => None,
             FedEventData::TeamExitedHallOfFlame { .. } => None,
             FedEventData::HallOfFlameOpened { .. } => None,
-            FedEventData::TeamWentRogue { .. } => None,
+            FedEventData::TeamEnteredMapQuadrant { .. } => None,
             FedEventData::GameEndFromNullification { game, .. } => Some(game),
         }
     }

@@ -25,7 +25,7 @@ use crate::parse::parsers::*;
 // pub use stream::expansion_era_events;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 29] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 32] = [
     "Fridays",
     "Moist Talkers",
     "Lovers",
@@ -55,6 +55,9 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 29] = [
     "Rising Stars",
     "Paws",
     "Queens",
+    "Immortals",
+    "Whales",
+    "Fireballs",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -3374,9 +3377,36 @@ pub fn parse_next_event(
                             players,
                         }
                     },
-                    ParsedAddedMod::WentRogue(team_nickname) => {
-                        FedEventData::TeamWentRogue {
-                            team_nickname: team_nickname.to_string(),
+                    ParsedAddedMod::WentRogue(team_name) => {
+                        assert!(is_known_team_name(team_name));
+                        FedEventData::TeamEnteredMapQuadrant {
+                            quadrant: EnteredMapQuadrant::Hall,
+                            team_name: team_name.to_string(),
+                            team_id: event.next_team_id()?,
+                        }
+                    },
+                    ParsedAddedMod::TeamForced(team_name) => {
+                        assert!(is_known_team_name(team_name));
+                        FedEventData::TeamEnteredMapQuadrant {
+                            quadrant: EnteredMapQuadrant::TODOWhereDoesForceComeFrom,
+                            team_name: team_name.to_string(),
+                            team_id: event.next_team_id()?,
+                        }
+                    },
+                    ParsedAddedMod::TeamEntangled(team_name) => {
+                        assert!(is_known_team_name(team_name));
+
+                        let null_event = event_iter.next_expect_type(EventType::BlackHoleAgitated, event.event_type)?;
+                        let mut null_event = EventParseWrapper::new(&null_event)?;
+                        let team_nickname = null_event.next_parse(parse_black_hole_nullified_team_on_map)?;
+                        assert!(is_known_team_nickname(team_nickname));
+
+                        FedEventData::TeamEnteredMapQuadrant {
+                            quadrant: EnteredMapQuadrant::Horizon {
+                                team_nickname: team_nickname.to_string(),
+                                team_nullified_sub_event: null_event.as_sub_event(),
+                            },
+                            team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
                     },
@@ -5588,7 +5618,7 @@ pub fn parse_next_event(
         EventType::BlackHoleAgitated => {
             if !event.has_more_children() {
                 // Then this must be the Pies nullifying themselves
-                let team_nickname = event.next_parse(parse_black_hole_nullified_team)?;
+                let team_nickname = event.next_parse(parse_black_hole_nullified_team_in_game)?;
 
                 FedEventData::BlackHoleBlackHoleNullifiedTeam {
                     game: event.game(unscatter, attractor_secret_base)?,
@@ -5661,16 +5691,22 @@ pub fn parse_next_event(
         },
         EventType::GameEndedFromNullification => {
             let team_nickname = event.next_parse(parse_game_end_by_nullification)?;
-            let mut child = event.next_child(EventType::WinCollectedRegular)?;
-            FedEventData::GameEndFromNullification {
-                game: event.game(unscatter, attractor_secret_base)?,
-                non_loser_team_nickname: team_nickname.to_string(),
-                non_loss_sub_event: WinSubEvent {
+            let non_loser = team_nickname.map(|team_nickname| {
+                assert!(is_known_team_nickname(team_nickname));
+
+                let mut child = event.next_child(EventType::WinCollectedRegular)?;
+                ParseOk(WinSubEventWithNickname {
+                    team_nickname: team_nickname.to_string(),
                     team_id: child.next_team_id()?,
                     wins_after: child.metadata_i64("after")?,
                     sub_event: child.as_sub_event(),
                     balloons: None,
-                },
+                })
+            }).transpose()?;
+
+            FedEventData::GameEndFromNullification {
+                game: event.game(unscatter, attractor_secret_base)?,
+                non_loser,
             }
         }
         EventType::RiffOpened => {
@@ -6275,6 +6311,20 @@ fn is_known_team_name(name: &str) -> bool {
         "Rising Stars",
         "Oxford Paws",
         "Carolina Queens",
+        "Oregon Psychics",
+        "Mallorca Whales",
+        "Laredo Excavators",
+        "Green Hill Hedgehogs",
+        "Maryland Squirrels",
+        "Oklahoma Heartthrobs",
+        "Louisville Lobsters",
+        "Minneapolis Truckers",
+        "Dallas Cows",
+        "San Diego Saltines",
+        "Kola Boar",
+        "Antarctic Fireballs",
+        "Alaskan Immortals",
+        "Canada Artists",
     ]
     .contains(&name)
 }

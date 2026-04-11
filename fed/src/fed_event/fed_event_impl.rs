@@ -1,4 +1,4 @@
-use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor};
+use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, EnteredMapQuadrant, ModChangeSubEventWithNamedPlayer, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor, WinSubEventWithNickname};
 use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -5184,6 +5184,7 @@ impl FedEvent {
                 eb.build(EventType::CoinHit)
             }
             FedEventData::CoinIncinerated { attacking_division_name } => {
+                eb.set_category(EventCategory::Outcomes);
                 eb.push_description(format!("{attacking_division_name} Teams Incinerated the Coin!"));
                 eb.build(EventType::CoinHit)
             }
@@ -5227,32 +5228,69 @@ impl FedEvent {
                 eb.push_metadata_str_vec("beings", vec!["monitor".to_string()]);
                 eb.build(EventType::Announcement)
             }
-            FedEventData::TeamWentRogue { team_nickname, team_id } => {
+            FedEventData::TeamEnteredMapQuadrant { quadrant, team_name, team_id } => {
+                // This event goes after the main event but we have to build it before consuming `eb`
+                let trailing_event = match &quadrant {
+                    EnteredMapQuadrant::Horizon { team_nickname, team_nullified_sub_event } => {
+                        let mut null_eb = eb.connected_event(*team_nullified_sub_event);
+                        null_eb.set_category(EventCategory::Changes);
+                        null_eb.push_description(format!("Black Hole (Black Hole) nullified the {team_nickname}!"));
+                        null_eb.push_team_tag(team_id);
+                        Some(null_eb.build(EventType::BlackHoleAgitated))
+                    }
+                    _ => None,
+                };
+
                 eb.set_category(EventCategory::Changes);
-                eb.push_description(format!("The {team_nickname} went Rogue."));
-                eb.push_team_tag(team_id);
-                eb.push_metadata_str("mod", "ROGUE");
-                eb.push_metadata_i64("type", ModDuration::Permanent);
-                eb.build(EventType::AddedMod)
-            }
-            FedEventData::GameEndFromNullification { game, non_loser_team_nickname, non_loss_sub_event, } => {
-                eb.set_game(game);
-                // {nullteam} looks like an interpolation param but it did appear like that literally.
-                // It may have been intended to be the opponent nickname, but they forgot a $ in the JS
-                eb.push_description(format!("The {{nullteam}} were nullified.\nThe {non_loser_team_nickname} non-lost the game."));
-
-                assert!(non_loss_sub_event.balloons.is_none(), "No support for balloons in GameEndFromNullification yet");
-
-                eb.push_child(non_loss_sub_event.sub_event, |mut child_eb| {
-                    child_eb.set_category(EventCategory::Outcomes);
-                    child_eb.push_description(format!("The {non_loser_team_nickname} non-lost due to nullification."));
-                    child_eb.push_team_tag(non_loss_sub_event.team_id);
-                    child_eb.push_metadata_i64("after", non_loss_sub_event.wins_after);
-                    child_eb.push_metadata_i64("amount", 1);
-                    child_eb.push_metadata_i64("before", non_loss_sub_event.wins_after - 1);
-                    child_eb.push_metadata_str_vec("lines", Vec::new()); // Always empty so far
-                    child_eb.build(EventType::WinCollectedRegular)
+                eb.push_description(match quadrant {
+                    EnteredMapQuadrant::Vault => format!("The {team_name} went Rogue."),
+                    EnteredMapQuadrant::Horizon { .. } => format!("The {team_name} were Entangled in the Black Hole (Black Hole)."),
+                    EnteredMapQuadrant::Hall => format!("The {team_name} went Rogue."),
+                    EnteredMapQuadrant::Desert => format!("The {team_name} went Rogue."),
+                    EnteredMapQuadrant::TODOWhereDoesForceComeFrom => format!("The {team_name} were Forced into Position."),
                 });
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", match quadrant {
+                    EnteredMapQuadrant::Vault => "ROGUE",
+                    EnteredMapQuadrant::Horizon { .. } => "ENTANGLED",
+                    EnteredMapQuadrant::Hall => "ROGUE",
+                    EnteredMapQuadrant::Desert => "ROGUE",
+                    EnteredMapQuadrant::TODOWhereDoesForceComeFrom => "FORCE",
+                });
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                let mut events = vec![eb.build(EventType::AddedMod)];
+                events.extend(trailing_event);
+
+                return events;
+            }
+            FedEventData::GameEndFromNullification { game, non_loser } => {
+                eb.set_game(game);
+
+                match non_loser {
+                    None => {
+                        eb.push_description("{nullteam} and {nullteam} were both nullified.");
+                        eb.push_description("Game canceled.");
+                        eb.push_description("Neither Team non-lost.");
+                    }
+                    Some(non_loss_sub_event) => {
+                        eb.push_description(format!("The {{nullteam}} were nullified.\nThe {} non-lost the game.", non_loss_sub_event.team_nickname));
+
+                        assert!(non_loss_sub_event.balloons.is_none(), "No support for balloons in GameEndFromNullification yet");
+
+                        eb.push_child(non_loss_sub_event.sub_event, |mut child_eb| {
+                            child_eb.set_category(EventCategory::Outcomes);
+                            child_eb.push_description(format!("The {} non-lost due to nullification.", non_loss_sub_event.team_nickname));
+                            child_eb.push_team_tag(non_loss_sub_event.team_id);
+                            child_eb.push_metadata_i64("after", non_loss_sub_event.wins_after);
+                            child_eb.push_metadata_i64("amount", 1);
+                            child_eb.push_metadata_i64("before", non_loss_sub_event.wins_after - 1);
+                            child_eb.push_metadata_str_vec("lines", Vec::new()); // Always empty so far
+                            child_eb.build(EventType::WinCollectedRegular)
+                        });
+
+                    }
+                }
 
                 eb.build(EventType::GameEndedFromNullification)
             }

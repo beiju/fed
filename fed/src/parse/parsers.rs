@@ -1,3 +1,4 @@
+use chrono::format::parse;
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 use crate::{
@@ -2155,6 +2156,8 @@ pub(crate) enum ParsedAddedMod<'a> {
     MVP(&'a str),
     TouchDown(&'a str),
     WentRogue(&'a str),
+    TeamForced(&'a str),
+    TeamEntangled(&'a str),
 }
 
 pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
@@ -2167,6 +2170,10 @@ pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
         parse_terminated(", TOUCH DOWN").map(|n| ParsedAddedMod::TouchDown(n)),
         preceded(tag("The "), parse_terminated(" went Rogue."))
             .map(|n| ParsedAddedMod::WentRogue(n)),
+        preceded(tag("The "), parse_terminated(" were Forced into Position."))
+            .map(|n| ParsedAddedMod::TeamForced(n)),
+        preceded(tag("The "), parse_terminated(" were Entangled in the Black Hole (Black Hole)."))
+            .map(|n| ParsedAddedMod::TeamEntangled(n)),
     ))
     .parse(input)?;
 
@@ -4374,11 +4381,18 @@ pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<(&str
     Ok((input, (team_nickname, player_name, nullified_item_name)))
 }
 
-pub(crate) fn parse_black_hole_nullified_team(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified the ").parse(input)?;
     let (input, _) = tag(team_nickname).parse(input)?;
     let (input, _) = tag("!").parse(input)?;
+
+    Ok((input, team_nickname))
+}
+
+pub(crate) fn parse_black_hole_nullified_team_on_map(input: &str) -> ParserResult<&str> {
+    let (input, _) = tag("Black Hole (Black Hole) nullified the ").parse(input)?;
+    let (input, team_nickname) = parse_terminated("!").parse(input)?;
 
     Ok((input, team_nickname))
 }
@@ -4418,7 +4432,15 @@ pub(crate) fn parse_announcement(input: &str) -> ParserResult<ParsedAnnouncement
     )).parse(input)
 }
 
-pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<Option<&str>> {
+    alt((
+        parse_game_end_by_single_nullification.map(Some),
+        tag("{nullteam} and {nullteam} were both nullified.\nGame canceled.\nNeither Team non-lost.")
+            .map(|_| None)
+    )).parse(input)
+}
+
+pub(crate) fn parse_game_end_by_single_nullification(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The {nullteam} were nullified.\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" non-lost the game.").parse(input)?;
 

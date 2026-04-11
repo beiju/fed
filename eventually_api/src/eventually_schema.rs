@@ -460,8 +460,9 @@ pub enum EventType {
     PlayersCutFromTeam = 245,
     GameCanceled = 246,
     Supernova = 247,
-    // Black hole being agitated captures nullifying league mods and items, but
-    // not teams (which are event type 250)
+    // Black hole being agitated captures nullifying league mods, items, and
+    // teams, except when the team was nullified during a game, which is event
+    // type 250
     BlackHoleAgitated = 249,
     GameEndedFromNullification = 250,
     RiffOpened = 251,

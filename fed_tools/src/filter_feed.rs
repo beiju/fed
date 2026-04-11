@@ -5,8 +5,14 @@ use std::cmp::Ordering;
 use std::fs::File;
 use std::io::{self, BufReader, prelude::*};
 
-const ALWAYS_SORT_FIRST: [i64; 3] = [
-    171, 203, 244, // TeamFormed events must be before the corresponding following events
+const ALWAYS_SORT_FIRST: [i64; 4] = [
+    171,
+    203,
+    // TeamFormed events must be before the corresponding following events
+    244,
+    // We need the event for getting the Entangled mod from the s24 map to be
+    // before the event for getting nullified
+    106,
 ];
 
 #[derive(PartialEq, Eq)]
