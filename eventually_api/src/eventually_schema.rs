@@ -442,6 +442,7 @@ pub enum EventType {
     FoundNothingInterestingInTunnels = 218,
     FailedTunnelsSteal = 219,
     StoleItemFromTunnels = 220,
+    TeamWillReturn = 222,
     WeatherEvent = 223,
     ElementAddedToItem = 224,
     Sun30Smiles = 226,

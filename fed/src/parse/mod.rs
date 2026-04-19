@@ -23,7 +23,7 @@ use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::parse::parsers::*;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 34] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 43] = [
     "Fridays",
     "Moist Talkers",
     "Lovers",
@@ -58,6 +58,15 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 34] = [
     "Fireballs",
     "Heartthrobs",
     "Lobsters",
+    "Excavators",
+    "Saltines",
+    "Psychics",
+    "Hedgehogs",
+    "Squirrels",
+    "Truckers",
+    "Cows",
+    "Boar",
+    "Artists",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -3379,24 +3388,24 @@ pub fn parse_next_event(
                     },
                     ParsedAddedMod::WentRogue(team_name) => {
                         assert!(is_known_team_name(team_name));
-                        FedEventData::TeamReachedEndZone {
-                            quadrant: EnteredMapQuadrant::Hall,
+                        FedEventData::TeamEnteredEndZone {
+                            quadrant: EndZone::Hall,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
                     },
                     ParsedAddedMod::TeamForced(team_name) => {
                         assert!(is_known_team_name(team_name));
-                        FedEventData::TeamReachedEndZone {
-                            quadrant: EnteredMapQuadrant::TODOWhereDoesForceComeFrom,
+                        FedEventData::TeamEnteredEndZone {
+                            quadrant: EndZone::TODOWhereDoesForceComeFrom,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
                     },
                     ParsedAddedMod::TeamEntangled(team_name) => {
                         assert!(is_known_team_name(team_name));
-                        FedEventData::TeamReachedEndZone {
-                            quadrant: EnteredMapQuadrant::Horizon,
+                        FedEventData::TeamEnteredEndZone {
+                            quadrant: EndZone::Horizon,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
@@ -3452,6 +3461,14 @@ pub fn parse_next_event(
                         FedEventData::InvestigationConcluded {
                             team_id: event.next_team_id()?,
                             stadium_name: stadium_name.to_string(),
+                        }
+                    }
+                    ParsedRemovedMod::TeamStoppedGoingRogue(team_name) => {
+                        assert!(is_known_team_name(team_name));
+                        FedEventData::TeamExitedEndZone {
+                            quadrant: EndZone::Vault,
+                            team_name: team_name.to_string(),
+                            team_id: event.next_team_id()?,
                         }
                     }
                 }
@@ -5190,6 +5207,9 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::StoleItemFromTunnels => {
+            todo!()
+        }
+        EventType::TeamWillReturn => {
             todo!()
         }
         EventType::WeatherEvent => {

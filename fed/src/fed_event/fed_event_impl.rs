@@ -1,4 +1,4 @@
-use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, EnteredMapQuadrant, ModChangeSubEventWithNamedPlayer, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor, WinSubEventWithNickname};
+use crate::fed_event::{BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic, FloodingSweptEffect, EndZone, ModChangeSubEventWithNamedPlayer, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor, WinSubEventWithNickname};
 use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::HitType;
 use crate::fed_event::GameStartAnnouncement;
@@ -5228,22 +5228,22 @@ impl FedEvent {
                 eb.push_metadata_str_vec("beings", vec!["monitor".to_string()]);
                 eb.build(EventType::Announcement)
             }
-            FedEventData::TeamReachedEndZone { quadrant, team_name, team_id } => {
+            FedEventData::TeamEnteredEndZone { quadrant, team_name, team_id } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(match quadrant {
-                    EnteredMapQuadrant::Vault => format!("The {team_name} went Rogue."),
-                    EnteredMapQuadrant::Horizon { .. } => format!("The {team_name} were Entangled in the Black Hole (Black Hole)."),
-                    EnteredMapQuadrant::Hall => format!("The {team_name} went Rogue."),
-                    EnteredMapQuadrant::Desert => format!("The {team_name} went Rogue."),
-                    EnteredMapQuadrant::TODOWhereDoesForceComeFrom => format!("The {team_name} were Forced into Position."),
+                    EndZone::Vault => format!("TODO"),
+                    EndZone::Horizon => format!("The {team_name} were Entangled in the Black Hole (Black Hole)."),
+                    EndZone::Hall => format!("The {team_name} went Rogue."),
+                    EndZone::Desert => format!("TODO"),
+                    EndZone::TODOWhereDoesForceComeFrom => format!("The {team_name} were Forced into Position."),
                 });
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("mod", match quadrant {
-                    EnteredMapQuadrant::Vault => "ROGUE",
-                    EnteredMapQuadrant::Horizon { .. } => "ENTANGLED",
-                    EnteredMapQuadrant::Hall => "ROGUE",
-                    EnteredMapQuadrant::Desert => "ROGUE",
-                    EnteredMapQuadrant::TODOWhereDoesForceComeFrom => "FORCE",
+                    EndZone::Vault => "TODO",
+                    EndZone::Horizon => "ENTANGLED",
+                    EndZone::Hall => "ROGUE",
+                    EndZone::Desert => "TODO",
+                    EndZone::TODOWhereDoesForceComeFrom => "FORCE",
                 });
                 eb.push_metadata_i64("type", ModDuration::Permanent);
 
@@ -5285,6 +5285,27 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
 
                 eb.build(EventType::BlackHoleAgitated)
+            },
+            FedEventData::TeamExitedEndZone { quadrant, team_name, team_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(match quadrant {
+                    EndZone::Vault => format!("The {team_name} stopped going Rogue."),
+                    EndZone::Horizon => format!("TODO"),
+                    EndZone::Hall => format!("TODO"),
+                    EndZone::Desert => format!("TODO"),
+                    EndZone::TODOWhereDoesForceComeFrom => format!("TODO"),
+                });
+                eb.push_team_tag(team_id);
+                eb.push_metadata_str("mod", match quadrant {
+                    EndZone::Vault => "ROGUE",
+                    EndZone::Horizon => "TODO",
+                    EndZone::Hall => "TODO",
+                    EndZone::Desert => "TODO",
+                    EndZone::TODOWhereDoesForceComeFrom => "TODO",
+                });
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+
+                eb.build(EventType::RemovedMod)
             }
         };
 

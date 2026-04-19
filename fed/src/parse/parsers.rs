@@ -2124,6 +2124,7 @@ pub(crate) enum ParsedRemovedMod<'s> {
     TeamUsedFreeGift(&'s str),
     PlayerLostMod((&'s str, &'s str)),
     InvestigationConcluded(&'s str),
+    TeamStoppedGoingRogue(&'s str),
 }
 
 pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
@@ -2144,6 +2145,8 @@ pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
             parse_terminated(" has concluded."),
         )
         .map(|r| ParsedRemovedMod::InvestigationConcluded(r)),
+        preceded(tag("The "), parse_terminated(" stopped going Rogue."))
+            .map(|n| ParsedRemovedMod::TeamStoppedGoingRogue(n)),
     ))
     .parse(input)?;
 

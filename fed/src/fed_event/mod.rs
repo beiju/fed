@@ -3944,7 +3944,7 @@ pub enum NightShiftOutcome {
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
 )]
-pub enum EnteredMapQuadrant {
+pub enum EndZone {
     Vault,
     Horizon,
     Hall,
@@ -8412,9 +8412,9 @@ pub enum FedEventData {
     #[serde(rename_all = "camelCase")]
     HallOfFlameOpened,
 
-    /// Team reached the End Zone of a quadrant on the Season 24 map
+    /// Team entered the End Zone of a quadrant on the Season 24 map.
     ///
-    /// It was not possible to reach an End Zone until Season 24, Day 82. At
+    /// It was not possible to enter an End Zone until Season 24, Day 82. At
     /// that time, any team who was in the corner of the map got one of these
     /// events.
     ///
@@ -8424,14 +8424,14 @@ pub enum FedEventData {
     /// Each team who entered the Horizon end zone when it was first available
     /// on Day 82 all have a (TODO event type) event immediately following the
     /// TeamReachedEndZone event.
-    TeamReachedEndZone {
-        /// The quadrant the team entered
-        quadrant: EnteredMapQuadrant,
+    TeamEnteredEndZone {
+        /// The End Zone the team entered
+        quadrant: EndZone,
 
-        /// Name of the team who just entered a new quadrant
+        /// Name of the team who just entered an End Zone
         team_name: String,
 
-        /// Uuid of the team who just entered a new quadrant
+        /// Uuid of the team who just entered an End Zone
         team_id: Uuid,
     },
 
@@ -8456,6 +8456,21 @@ pub enum FedEventData {
         team_nickname: String,
 
         /// Uuid of the team that was nullified
+        team_id: Uuid,
+    },
+
+    /// Team exited the End Zone of a quadrant on the Season 24 map.
+    ///
+    /// TODO Did some story event kick teams out, or was it from them moving
+    ///   away from the end zone using the navitation screen?
+    TeamExitedEndZone {
+        /// The End Zone the team exited
+        quadrant: EndZone,
+
+        /// Name of the team who just exited an End Zone
+        team_name: String,
+
+        /// Uuid of the team who just exited an End Zone
         team_id: Uuid,
     },
 }
@@ -8748,9 +8763,10 @@ impl FedEventData {
             FedEventData::CoinIncinerated { .. } => None,
             FedEventData::TeamExitedHallOfFlame { .. } => None,
             FedEventData::HallOfFlameOpened { .. } => None,
-            FedEventData::TeamReachedEndZone { .. } => None,
+            FedEventData::TeamEnteredEndZone { .. } => None,
             FedEventData::GameEndFromNullification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedTeamOnMap { .. } => None,
+            FedEventData::TeamExitedEndZone { .. } => None,
         }
     }
 }
