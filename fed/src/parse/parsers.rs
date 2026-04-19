@@ -4366,7 +4366,7 @@ pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult
 pub(crate) fn parse_black_hole_nullified_stadium_mod(input: &str) -> ParserResult<(&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
-    let (input, stadium_name) = parse_terminated("'s ").parse(input)?;
+    let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, nullified_mod_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (team_nickname, stadium_name, nullified_mod_name)))
