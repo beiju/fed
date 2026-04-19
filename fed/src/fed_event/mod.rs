@@ -3946,13 +3946,7 @@ pub enum NightShiftOutcome {
 )]
 pub enum EnteredMapQuadrant {
     Vault,
-    Horizon {
-        /// Nickname of the team that entered the Black Hole (Black Hole)
-        team_nickname: String,
-
-        /// Sub-event associated with the team getting nullified
-        team_nullified_sub_event: SubEvent,
-    },
+    Horizon,
     Hall,
     Desert,
     TODOWhereDoesForceComeFrom,
@@ -8319,9 +8313,10 @@ pub enum FedEventData {
         item_removed_sub_event: SubEvent,
     },
 
-    /// Black Hole (Black Hole) became agitated and nullified a team
+    /// Black Hole (Black Hole) became agitated and nullified a team during
+    /// a game
     #[serde(rename_all = "camelCase")]
-    BlackHoleBlackHoleNullifiedTeam {
+    BlackHoleBlackHoleNullifiedTeamInGame {
         #[serde(flatten)]
         game: GameEvent,
 
@@ -8417,9 +8412,19 @@ pub enum FedEventData {
     #[serde(rename_all = "camelCase")]
     HallOfFlameOpened,
 
-    /// Team entered a new quadrant on the s24 map and consequently changed
-    /// division
-    TeamEnteredMapQuadrant {
+    /// Team reached the End Zone of a quadrant on the Season 24 map
+    ///
+    /// It was not possible to reach an End Zone until Season 24, Day 82. At
+    /// that time, any team who was in the corner of the map got one of these
+    /// events.
+    ///
+    /// This coincided with the first nullifications of teams who entered the
+    /// Black Hole (Black Hole) area on the map. (Note: The Pies were nullified
+    /// earlier due to Black Hole (Black Hole) weather, which is different.)
+    /// Each team who entered the Horizon end zone when it was first available
+    /// on Day 82 all have a (TODO event type) event immediately following the
+    /// TeamReachedEndZone event.
+    TeamReachedEndZone {
         /// The quadrant the team entered
         quadrant: EnteredMapQuadrant,
 
@@ -8438,6 +8443,20 @@ pub enum FedEventData {
         /// If only one team was nullified, the nickname and win sub-event
         /// for that team non-losing the game. Otherwise null.
         non_loser: Option<WinSubEventWithNickname>,
+    },
+
+    /// Black Hole (Black Hole) nullified a team due to the team entering the
+    /// Black Hole (Black Hole) area on the map.
+    ///
+    /// This can happen from the Black Hole (Black Hole) area increasing, or
+    /// from a team piloting itself into the area.
+    #[serde(rename_all = "camelCase")]
+    BlackHoleBlackHoleNullifiedTeamOnMap {
+        /// Nickname of the team that was nullified
+        team_nickname: String,
+
+        /// Uuid of the team that was nullified
+        team_id: Uuid,
     },
 }
 
@@ -8722,15 +8741,16 @@ impl FedEventData {
             FedEventData::BlackHoleBlackHoleNullifiedLeagueModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedStadiumModification { game, .. } => Some(game),
             FedEventData::BlackHoleBlackHoleNullifiedItem { game, .. } => Some(game),
-            FedEventData::BlackHoleBlackHoleNullifiedTeam { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedTeamInGame { game, .. } => Some(game),
             FedEventData::TeamShiftedDivision { .. } => None,
             FedEventData::TeamTouchedDown { .. } => None,
             FedEventData::CoinScattered { .. } => None,
             FedEventData::CoinIncinerated { .. } => None,
             FedEventData::TeamExitedHallOfFlame { .. } => None,
             FedEventData::HallOfFlameOpened { .. } => None,
-            FedEventData::TeamEnteredMapQuadrant { .. } => None,
+            FedEventData::TeamReachedEndZone { .. } => None,
             FedEventData::GameEndFromNullification { game, .. } => Some(game),
+            FedEventData::BlackHoleBlackHoleNullifiedTeamOnMap { .. } => None,
         }
     }
 }

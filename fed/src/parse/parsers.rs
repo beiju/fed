@@ -4381,6 +4381,18 @@ pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<(&str
     Ok((input, (team_nickname, player_name, nullified_item_name)))
 }
 
+pub(crate) enum ParsedBlackHoleNullifiedNoChildren<'a> {
+    InGame(&'a str),
+    OnMap(&'a str),
+}
+
+pub(crate) fn parse_black_hole_nullified_no_children(input: &str) -> ParserResult<ParsedBlackHoleNullifiedNoChildren> {
+    alt((
+        parse_black_hole_nullified_team_in_game.map(ParsedBlackHoleNullifiedNoChildren::InGame),
+        parse_black_hole_nullified_team_on_map.map(ParsedBlackHoleNullifiedNoChildren::OnMap),
+    )).parse(input)
+}
+
 pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResult<&str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified the ").parse(input)?;

@@ -5132,7 +5132,7 @@ impl FedEvent {
 
                 eb.build(EventType::BlackHoleAgitated)
             },
-            FedEventData::BlackHoleBlackHoleNullifiedTeam { game, team_nickname } => {
+            FedEventData::BlackHoleBlackHoleNullifiedTeamInGame { game, team_nickname } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_description(format!("The {team_nickname} collected 10!"));
@@ -5228,19 +5228,7 @@ impl FedEvent {
                 eb.push_metadata_str_vec("beings", vec!["monitor".to_string()]);
                 eb.build(EventType::Announcement)
             }
-            FedEventData::TeamEnteredMapQuadrant { quadrant, team_name, team_id } => {
-                // This event goes after the main event but we have to build it before consuming `eb`
-                let trailing_event = match &quadrant {
-                    EnteredMapQuadrant::Horizon { team_nickname, team_nullified_sub_event } => {
-                        let mut null_eb = eb.connected_event(*team_nullified_sub_event);
-                        null_eb.set_category(EventCategory::Changes);
-                        null_eb.push_description(format!("Black Hole (Black Hole) nullified the {team_nickname}!"));
-                        null_eb.push_team_tag(team_id);
-                        Some(null_eb.build(EventType::BlackHoleAgitated))
-                    }
-                    _ => None,
-                };
-
+            FedEventData::TeamReachedEndZone { quadrant, team_name, team_id } => {
                 eb.set_category(EventCategory::Changes);
                 eb.push_description(match quadrant {
                     EnteredMapQuadrant::Vault => format!("The {team_name} went Rogue."),
@@ -5259,10 +5247,7 @@ impl FedEvent {
                 });
                 eb.push_metadata_i64("type", ModDuration::Permanent);
 
-                let mut events = vec![eb.build(EventType::AddedMod)];
-                events.extend(trailing_event);
-
-                return events;
+                eb.build(EventType::AddedMod)
             }
             FedEventData::GameEndFromNullification { game, non_loser } => {
                 eb.set_game(game);
@@ -5293,6 +5278,13 @@ impl FedEvent {
                 }
 
                 eb.build(EventType::GameEndedFromNullification)
+            },
+            FedEventData::BlackHoleBlackHoleNullifiedTeamOnMap { team_nickname, team_id } => {
+                eb.set_category(EventCategory::Changes);
+                eb.push_description(format!("Black Hole (Black Hole) nullified the {team_nickname}!"));
+                eb.push_team_tag(team_id);
+
+                eb.build(EventType::BlackHoleAgitated)
             }
         };
 

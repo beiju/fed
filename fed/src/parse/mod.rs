@@ -22,10 +22,8 @@ use crate::parse::error::FeedParseError;
 use crate::parse::parse_wrapper::EventParseWrapper;
 use crate::parse::parsers::*;
 
-// pub use stream::expansion_era_events;
-
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
-const KNOWN_TEAM_NICKNAMES: [&'static str; 32] = [
+const KNOWN_TEAM_NICKNAMES: [&'static str; 34] = [
     "Fridays",
     "Moist Talkers",
     "Lovers",
@@ -58,6 +56,8 @@ const KNOWN_TEAM_NICKNAMES: [&'static str; 32] = [
     "Immortals",
     "Whales",
     "Fireballs",
+    "Heartthrobs",
+    "Lobsters",
 ];
 
 const TAROT_EVENTS: [Uuid; 40] = [
@@ -3379,7 +3379,7 @@ pub fn parse_next_event(
                     },
                     ParsedAddedMod::WentRogue(team_name) => {
                         assert!(is_known_team_name(team_name));
-                        FedEventData::TeamEnteredMapQuadrant {
+                        FedEventData::TeamReachedEndZone {
                             quadrant: EnteredMapQuadrant::Hall,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
@@ -3387,7 +3387,7 @@ pub fn parse_next_event(
                     },
                     ParsedAddedMod::TeamForced(team_name) => {
                         assert!(is_known_team_name(team_name));
-                        FedEventData::TeamEnteredMapQuadrant {
+                        FedEventData::TeamReachedEndZone {
                             quadrant: EnteredMapQuadrant::TODOWhereDoesForceComeFrom,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
@@ -3395,17 +3395,8 @@ pub fn parse_next_event(
                     },
                     ParsedAddedMod::TeamEntangled(team_name) => {
                         assert!(is_known_team_name(team_name));
-
-                        let null_event = event_iter.next_expect_type(EventType::BlackHoleAgitated, event.event_type)?;
-                        let mut null_event = EventParseWrapper::new(&null_event)?;
-                        let team_nickname = null_event.next_parse(parse_black_hole_nullified_team_on_map)?;
-                        assert!(is_known_team_nickname(team_nickname));
-
-                        FedEventData::TeamEnteredMapQuadrant {
-                            quadrant: EnteredMapQuadrant::Horizon {
-                                team_nickname: team_nickname.to_string(),
-                                team_nullified_sub_event: null_event.as_sub_event(),
-                            },
+                        FedEventData::TeamReachedEndZone {
+                            quadrant: EnteredMapQuadrant::Horizon,
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
@@ -5617,12 +5608,23 @@ pub fn parse_next_event(
         }
         EventType::BlackHoleAgitated => {
             if !event.has_more_children() {
-                // Then this must be the Pies nullifying themselves
-                let team_nickname = event.next_parse(parse_black_hole_nullified_team_in_game)?;
-
-                FedEventData::BlackHoleBlackHoleNullifiedTeam {
-                    game: event.game(unscatter, attractor_secret_base)?,
-                    team_nickname: team_nickname.to_string(),
+                // Then this must be the Pies nullifying themselves in game, or
+                // a team being nullified by entering the black hole region on
+                // the map
+                match event.next_parse(parse_black_hole_nullified_no_children)? {
+                    ParsedBlackHoleNullifiedNoChildren::InGame(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::BlackHoleBlackHoleNullifiedTeamInGame {
+                            game: event.game(unscatter, attractor_secret_base)?,
+                            team_nickname: team_nickname.to_string(),
+                        }}
+                    ParsedBlackHoleNullifiedNoChildren::OnMap(team_nickname) => {
+                        assert!(is_known_team_nickname(team_nickname));
+                        FedEventData::BlackHoleBlackHoleNullifiedTeamOnMap {
+                            team_nickname: team_nickname.to_string(),
+                            team_id: event.next_team_id()?,
+                        }
+                    }
                 }
             } else {
                 let expected_types = [
