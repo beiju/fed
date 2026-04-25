@@ -2245,9 +2245,7 @@ pub enum Shame {
     // TODO Return this for games pre-s18
     Unknown,
     No,
-    Yes {
-        hype: Option<Hype>,
-    },
+    Yes { hype: Option<Hype> },
 }
 
 #[derive(
@@ -3939,7 +3937,7 @@ pub enum NightShiftOutcome {
 
         /// Sub-event for the player gaining the Unstable mod
         gained_unstable_sub_event: SubEvent,
-    }
+    },
 }
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
@@ -8026,19 +8024,19 @@ pub enum FedEventData {
     HorsePower {
         #[serde(flatten)]
         game: GameEvent,
-        
+
         /// Emoji of the away team during this event
         away_team_emoji: String,
-        
+
         /// Name of the away team during this event
         away_team_name: String,
 
         /// Away team's score (TODO before or after?) the event
         away_team_score: f64,
-        
+
         /// Emoji of the home team during this event
         home_team_emoji: String,
-        
+
         /// Name of the home team during this event
         home_team_name: String,
 
@@ -8355,7 +8353,7 @@ pub enum FedEventData {
         team_nickname_caps: String,
         team_id: Uuid,
 
-        players: Vec<TouchedDownPlayer>
+        players: Vec<TouchedDownPlayer>,
     },
 
     /// The Coin was Scattered

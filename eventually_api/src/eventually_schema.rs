@@ -243,11 +243,13 @@ impl Weather {
             Weather::SupernovaEclipse => "Supernova Eclipse",
             // Jazz weather seems to refer to Black Hole (Black Hole) as
             // "Supermassive Black Hole" until after s24dsomething.
-            Weather::BlackHoleBlackHole => if (season, day) < (23, 50) {
-                "Supermassive Black Hole"
-            } else {
-                "Black Hole (Black Hole)"
-            },
+            Weather::BlackHoleBlackHole => {
+                if (season, day) < (23, 50) {
+                    "Supermassive Black Hole"
+                } else {
+                    "Black Hole (Black Hole)"
+                }
+            }
             // Weather::BlackHoleBlackHole => "Black Hole (Black Hole)",
             Weather::Jazz => "Jazz",
             Weather::Night => "Night",

@@ -6,20 +6,19 @@ mod parsers;
 pub mod stream;
 
 use crate::PeekableWithLogging;
+use crate::fed_event::*;
+use crate::format_utils::Possessive;
+use crate::parse::error::FeedParseError;
+use crate::parse::parse_wrapper::EventParseWrapper;
+use crate::parse::parsers::*;
+use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use itertools::{Either, Itertools};
 use nom::combinator::opt;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::iter;
 use std::sync::{Arc, Mutex};
-// the second one is a macro
-use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use uuid::{Uuid, uuid};
-use crate::fed_event::*;
-use crate::format_utils::Possessive;
-use crate::parse::error::FeedParseError;
-use crate::parse::parse_wrapper::EventParseWrapper;
-use crate::parse::parsers::*;
 
 // Evidently the mills have the prestigious honor of being the only team with a nickname change
 const KNOWN_TEAM_NICKNAMES: [&'static str; 43] = [
@@ -164,7 +163,11 @@ fn ParseOk<T>(v: T) -> Result<T, FeedParseError> {
 trait EventIterator {
     fn next_if(&mut self, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
     fn next_if_type(&mut self, ty: EventType) -> Option<EventuallyEvent>;
-    fn next_if_type_and(&mut self, ty: EventType, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent>;
+    fn next_if_type_and(
+        &mut self,
+        ty: EventType,
+        cond: impl Fn(&EventuallyEvent) -> bool,
+    ) -> Option<EventuallyEvent>;
     fn next_if_type_any(&mut self, types: &[EventType]) -> Option<EventuallyEvent>;
     fn next_expect_type(
         &mut self,
@@ -191,7 +194,11 @@ impl<T: Iterator<Item = EventuallyEvent>> EventIterator for PeekableWithLogging<
         self.next_if(|event| event.r#type == ty)
     }
 
-    fn next_if_type_and(&mut self, ty: EventType, cond: impl Fn(&EventuallyEvent) -> bool) -> Option<EventuallyEvent> {
+    fn next_if_type_and(
+        &mut self,
+        ty: EventType,
+        cond: impl Fn(&EventuallyEvent) -> bool,
+    ) -> Option<EventuallyEvent> {
         self.next_if(|event| event.r#type == ty && cond(event))
     }
 
@@ -830,10 +837,8 @@ pub fn parse_next_event_r(
                     let pitcher_item_damage_from_advance =
                         event.parse_item_damage_and_name(true)?;
                     let stopped_inhabiting = event.parse_stopped_inhabiting(None)?;
-                    let scores = event.parse_scores_with_scoring_players(
-                        scoring_players,
-                        attractions,
-                    )?;
+                    let scores =
+                        event.parse_scores_with_scoring_players(scoring_players, attractions)?;
                     let cooled_off = event.parse_cooled_off(batter_name)?;
                     let flood_balloon_popped = event.parse_flood_balloon_popped();
                     FedEventData::GroundOut {
@@ -861,8 +866,7 @@ pub fn parse_next_event_r(
                 } => {
                     let damaged_items = event.parse_item_damages_and_names(true)?;
                     // Breaking up the call to insert "reaches on fielders choice" in the middle
-                    let scoring_players =
-                        event.parse_scoring_players_fc(" scores!")?;
+                    let scoring_players = event.parse_scoring_players_fc(" scores!")?;
                     let batter_name = event.next_parse(parse_reaches_on_fielders_choice)?;
                     // Attractions happen after "reaches on fielder's choice"
                     // (see event 9f7b9148-6926-4910-8bfb-3dd45b5cd37f)
@@ -1004,14 +1008,12 @@ pub fn parse_next_event_r(
                 // All 3 unknown => result is unknown
                 (Shame::Unknown, Shame::Unknown, Shame::Unknown) => HomeRunShame::Unknown,
                 // One, but not all, unknown => error
-                (Shame::Unknown, _, _) |
-                (_, Shame::Unknown, _) |
-                (_, _, Shame::Unknown) => {
+                (Shame::Unknown, _, _) | (_, Shame::Unknown, _) | (_, _, Shame::Unknown) => {
                     panic!(
                         "The three possible shame sources in EventType::HomeRun \
                         must either all be Unknown or all be non-Unknown",
                     )
-                },
+                }
                 // All 3 no => result is no
                 (Shame::No, Shame::No, Shame::No) => HomeRunShame::No,
                 // One of the 3 yes => result is yes, with the appropriate source
@@ -1113,7 +1115,11 @@ pub fn parse_next_event_r(
 
             let other_player_item_damage = event.parse_item_damage_and_name(true)?;
 
-            let mut scores = event.parse_scores_with_scoring_players_without_summary(scoring_players, attractions, false)?;
+            let mut scores = event.parse_scores_with_scoring_players_without_summary(
+                scoring_players,
+                attractions,
+                false,
+            )?;
 
             // This should fire iff season >= 20
             let stopped_inhabiting = if let Some(si) = stopped_inhabiting {
@@ -1405,14 +1411,16 @@ pub fn parse_next_event_r(
             assert!(is_known_team_nickname(scoring_team));
             assert!(is_known_team_nickname(victim_team));
 
-            let burp = event.parse_win_event()?
-                .map_or(BlackHoleBurp::None, |(win_event, amount)| {
-                    if amount > 0 {
-                        BlackHoleBurp::Win(win_event)
-                    } else {
-                        BlackHoleBurp::Unwin(win_event)
-                    }
-                });
+            let burp =
+                event
+                    .parse_win_event()?
+                    .map_or(BlackHoleBurp::None, |(win_event, amount)| {
+                        if amount > 0 {
+                            BlackHoleBurp::Win(win_event)
+                        } else {
+                            BlackHoleBurp::Unwin(win_event)
+                        }
+                    });
 
             let carcinization = event
                 .next_parse_opt(parse_carcinization)
@@ -1485,8 +1493,7 @@ pub fn parse_next_event_r(
             let scoring_team = event.next_parse(parse_sun2)?;
             assert!(is_known_team_nickname(scoring_team));
 
-            let win_event = event.parse_win_event()?
-                .map(|(win, _)| win);
+            let win_event = event.parse_win_event()?.map(|(win, _)| win);
 
             let rays_player = event.next_parse_opt(parse_catches_rays);
             let caught_some_rays = if let Some(player_name) = rays_player {
@@ -1989,13 +1996,20 @@ pub fn parse_next_event_r(
         }
         EventType::Incineration => {
             match event.next_parse(parse_incineration)? {
-                ParsedIncineration::Player((victim_name, replacement_name, unstable_chain_name, ambush, heat_magnet_parsed)) => {
+                ParsedIncineration::Player((
+                    victim_name,
+                    replacement_name,
+                    unstable_chain_name,
+                    ambush,
+                    heat_magnet_parsed,
+                )) => {
                     // In season 20 when they introduced WeatherEvent sub-events, they just replaced the
                     // Incineration sub-event instead of adding a new event type.
-                    let mut incin_child =
-                        event.next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
+                    let mut incin_child = event
+                        .next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
                     let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
-                    let mut pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
+                    let mut pressure_built_event =
+                        event.next_child_opt(EventType::SunSunPressure)?;
                     let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
                     let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
 
@@ -2051,34 +2065,42 @@ pub fn parse_next_event_r(
                         heat_magnet,
                     }
                 }
-                ParsedIncineration::Team((incinerated_team_name, replacement_team_name, surviving_players, unstable)) => {
+                ParsedIncineration::Team((
+                    incinerated_team_name,
+                    replacement_team_name,
+                    surviving_players,
+                    unstable,
+                )) => {
                     assert!(is_known_team_name(incinerated_team_name));
                     assert!(is_known_team_name(replacement_team_name));
 
                     // surviving_players is redefined several times over the course of this
                     // function as child events related to it are spread apart in the event order
-                    let surviving_players = surviving_players.map_or(
-                        Ok(Vec::new()),
-                        |(_, surviving_players)| {
-                            surviving_players.into_iter()
+                    let surviving_players =
+                        surviving_players.map_or(Ok(Vec::new()), |(_, surviving_players)| {
+                            surviving_players
+                                .into_iter()
                                 .map(|player_name| {
-                                    let child = event.next_child(EventType::PlayerRemovedFromTeam)?;
+                                    let child =
+                                        event.next_child(EventType::PlayerRemovedFromTeam)?;
                                     assert_eq!(player_name, child.metadata_str("playerName")?);
                                     let player_id = child.metadata_uuid("playerId")?;
                                     ParseOk((player_name, player_id, child.as_sub_event()))
                                 })
                                 .collect::<Result<Vec<_>, _>>()
-                        },
-                    )?;
+                        })?;
 
                     let weather_event = event.next_child(EventType::WeatherEvent)?;
                     let team_entered_hall_event = event.next_child(EventType::EnterHallOfFlame)?;
 
                     let incinerated_players = std::iter::from_fn(|| {
-                        event.next_child_opt(EventType::EnterHallOfFlame).transpose()
+                        event
+                            .next_child_opt(EventType::EnterHallOfFlame)
+                            .transpose()
                             .map(|result| {
                                 let mut child = result?;
-                                let player_name = child.next_parse(parse_terminated(" entered the Hall of Flame."))?;
+                                let player_name = child
+                                    .next_parse(parse_terminated(" entered the Hall of Flame."))?;
                                 let player_id = child.next_player_id()?;
 
                                 ParseOk(TeamIncinerationVictim {
@@ -2088,28 +2110,42 @@ pub fn parse_next_event_r(
                                 })
                             })
                     })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                    let surviving_players = surviving_players.into_iter()
+                    let surviving_players = surviving_players
+                        .into_iter()
                         .map(|(player_name, player_id, removed_from_team_sub_event)| {
                             let mut child = event.next_child(EventType::AddedMod)?;
-                            assert_eq!(player_name, child.next_parse(parse_terminated(" ate some flame."))?);
+                            assert_eq!(
+                                player_name,
+                                child.next_parse(parse_terminated(" ate some flame."))?
+                            );
                             assert_eq!(player_id, child.next_player_id()?);
-                            ParseOk((player_name, player_id, removed_from_team_sub_event, child.as_sub_event()))
+                            ParseOk((
+                                player_name,
+                                player_id,
+                                removed_from_team_sub_event,
+                                child.as_sub_event(),
+                            ))
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
                     // No way to know the order of squiddish vs. magmatic, they never happened on
                     // the same event. Squiddish-last is more convenient for the code though.
-                    let replacement_team_source = match event.next_child_if_mod_effect(EventType::AddedMod, "SQUIDDISH")? {
+                    let replacement_team_source = match event
+                        .next_child_if_mod_effect(EventType::AddedMod, "SQUIDDISH")?
+                    {
                         Some(gained_squiddish_event) => {
                             let exited_hall_event = event.next_child(EventType::ExitHallOfFlame)?;
 
                             let resurrected_players = std::iter::from_fn(|| {
-                                event.next_child_opt(EventType::ExitHallOfFlame).transpose()
+                                event
+                                    .next_child_opt(EventType::ExitHallOfFlame)
+                                    .transpose()
                                     .map(|result| {
                                         let mut child = result?;
-                                        let player_name = child.next_parse(parse_exited_hall_of_flame)?;
+                                        let player_name =
+                                            child.next_parse(parse_exited_hall_of_flame)?;
 
                                         ParseOk(TeamIncinerationSquiddishResurrection {
                                             player_name: player_name.to_string(),
@@ -2118,22 +2154,26 @@ pub fn parse_next_event_r(
                                         })
                                     })
                             })
-                                .collect::<Result<Vec<_>, _>>()?;
+                            .collect::<Result<Vec<_>, _>>()?;
 
                             TeamIncinerationReplacementSource::Squiddish {
                                 gained_squiddish_sub_event: gained_squiddish_event.as_sub_event(),
                                 exited_hall_sub_event: exited_hall_event.as_sub_event(),
                                 resurrected_players,
                             }
-                        },
+                        }
                         None => {
                             let team_formed_event = event.next_child(EventType::TeamFormed)?;
 
                             let new_players = std::iter::from_fn(|| {
-                                event.next_child_opt(EventType::PlayerDivisionMove).transpose()
+                                event
+                                    .next_child_opt(EventType::PlayerDivisionMove)
+                                    .transpose()
                                     .map(|result| {
                                         let mut child = result?;
-                                        let player_name = child.next_parse(parse_terminated(" was a founding member of the "))?;
+                                        let player_name = child.next_parse(parse_terminated(
+                                            " was a founding member of the ",
+                                        ))?;
                                         // These events don't have player ids for some reason
 
                                         ParseOk(TeamIncinerationReplacement {
@@ -2142,7 +2182,7 @@ pub fn parse_next_event_r(
                                         })
                                     })
                             })
-                                .collect::<Result<Vec<_>, _>>()?;
+                            .collect::<Result<Vec<_>, _>>()?;
 
                             TeamIncinerationReplacementSource::NewTeam {
                                 team_formed_sub_event: team_formed_event.as_sub_event(),
@@ -2151,44 +2191,52 @@ pub fn parse_next_event_r(
                         }
                     };
 
-                    let team_replaced_event = event.next_child(EventType::TeamIncinerationReplacement)?;
-                    let incinerated_team_nickname = team_replaced_event.metadata_str("outTeamName")?;
+                    let team_replaced_event =
+                        event.next_child(EventType::TeamIncinerationReplacement)?;
+                    let incinerated_team_nickname =
+                        team_replaced_event.metadata_str("outTeamName")?;
                     assert!(is_known_team_nickname(incinerated_team_nickname));
                     let incinerated_team_id = team_replaced_event.metadata_uuid("outTeamId")?;
-                    let replacement_team_nickname = team_replaced_event.metadata_str("inTeamName")?;
+                    let replacement_team_nickname =
+                        team_replaced_event.metadata_str("inTeamName")?;
                     assert!(is_known_team_nickname(incinerated_team_nickname));
                     let replacement_team_id = team_replaced_event.metadata_uuid("inTeamId")?;
                     let division_name = team_replaced_event.metadata_str("divisionName")?;
                     let division_id = team_replaced_event.metadata_uuid("divisionId")?;
 
-                    let surviving_players = surviving_players.into_iter()
-                        .map(|(player_name, player_id, jumped_sub_event, fire_eater_sub_event)| {
-                            let child = event.next_child(EventType::PlayerAddedToTeam)?;
-                            assert_eq!(player_name, child.metadata_str("playerName")?);
-                            assert_eq!(player_id, child.metadata_uuid("playerId")?);
-                            ParseOk(TeamIncinerationSurvivor {
-                                player_name: player_name.to_string(),
-                                player_id,
-                                roster_location: child.metadata_enum("location")?,
-                                jumped_sub_event,
-                                fire_eater_sub_event,
-                                join_team_sub_event: child.as_sub_event(),
-                            })
-                        })
+                    let surviving_players = surviving_players
+                        .into_iter()
+                        .map(
+                            |(player_name, player_id, jumped_sub_event, fire_eater_sub_event)| {
+                                let child = event.next_child(EventType::PlayerAddedToTeam)?;
+                                assert_eq!(player_name, child.metadata_str("playerName")?);
+                                assert_eq!(player_id, child.metadata_uuid("playerId")?);
+                                ParseOk(TeamIncinerationSurvivor {
+                                    player_name: player_name.to_string(),
+                                    player_id,
+                                    roster_location: child.metadata_enum("location")?,
+                                    jumped_sub_event,
+                                    fire_eater_sub_event,
+                                    join_team_sub_event: child.as_sub_event(),
+                                })
+                            },
+                        )
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    let instability_chain = unstable.map(|(incinerated_team_nickname, chained_to_team_nickname)| {
-                        assert!(is_known_team_nickname(incinerated_team_nickname));
-                        assert!(is_known_team_nickname(chained_to_team_nickname));
-                        let mut unstable_added_event = event.next_child(EventType::AddedMod)?;
+                    let instability_chain = unstable
+                        .map(|(incinerated_team_nickname, chained_to_team_nickname)| {
+                            assert!(is_known_team_nickname(incinerated_team_nickname));
+                            assert!(is_known_team_nickname(chained_to_team_nickname));
+                            let mut unstable_added_event = event.next_child(EventType::AddedMod)?;
 
-                        ParseOk(TeamUnstableChain {
-                            incinerated_team_nickname: incinerated_team_nickname.to_string(),
-                            chained_to_team_nickname: chained_to_team_nickname.to_string(),
-                            chained_to_team_id: unstable_added_event.next_team_id()?,
-                            sub_event: unstable_added_event.as_sub_event(),
+                            ParseOk(TeamUnstableChain {
+                                incinerated_team_nickname: incinerated_team_nickname.to_string(),
+                                chained_to_team_nickname: chained_to_team_nickname.to_string(),
+                                chained_to_team_id: unstable_added_event.next_team_id()?,
+                                sub_event: unstable_added_event.as_sub_event(),
+                            })
                         })
-                    }).transpose()?;
+                        .transpose()?;
 
                     FedEventData::TeamIncineration {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -2912,31 +2960,48 @@ pub fn parse_next_event_r(
                         let thieving_team_id = outcome_sub_event.next_team_id()?;
                         let target_team_id = outcome_sub_event.next_team_id()?;
 
-                        let player_collected = successful.then(|| {
-                            let player_collected_event = event.next_child(EventType::PlayerMoved)?;
-                            let artificially_forged_event = event.next_child(EventType::ModChange)?;
-                            // This is probably optional, but I'll wait until I run into an error to
-                            // set it as such
-                            let stronger_together = event.next_child_opt(EventType::AddedModFromOtherMod)?
-                                .map(|mut stronger_together_event| {
-                                    let names = stronger_together_event.next_parse(parse_togetherness_mod)?;
-                                    ParseOk(UncorrelatedTogethernessChanges {
-                                        sub_event: stronger_together_event.as_sub_event(),
-                                        player_names: names.iter().map(|n| n.to_string()).collect(),
-                                        player_ids: stronger_together_event.player_tags()?.into(),
+                        let player_collected = successful
+                            .then(|| {
+                                let player_collected_event =
+                                    event.next_child(EventType::PlayerMoved)?;
+                                let artificially_forged_event =
+                                    event.next_child(EventType::ModChange)?;
+                                // This is probably optional, but I'll wait until I run into an error to
+                                // set it as such
+                                let stronger_together = event
+                                    .next_child_opt(EventType::AddedModFromOtherMod)?
+                                    .map(|mut stronger_together_event| {
+                                        let names = stronger_together_event
+                                            .next_parse(parse_togetherness_mod)?;
+                                        ParseOk(UncorrelatedTogethernessChanges {
+                                            sub_event: stronger_together_event.as_sub_event(),
+                                            player_names: names
+                                                .iter()
+                                                .map(|n| n.to_string())
+                                                .collect(),
+                                            player_ids: stronger_together_event
+                                                .player_tags()?
+                                                .into(),
+                                        })
                                     })
-                                })
-                                .transpose()?;
+                                    .transpose()?;
 
-                            ParseOk(SuccessfulTunnelsTheft {
-                                location: player_collected_event.metadata_enum("location")?,
-                                target_team_nickname: player_collected_event.metadata_str("sendTeamName")?.to_string(),
-                                player_collected_sub_event: player_collected_event.as_sub_event(),
-                                replaced_mod_id: artificially_forged_event.metadata_str("from")?.to_string(),
-                                artificially_forged_sub_event: artificially_forged_event.as_sub_event(),
-                                stronger_together,
+                                ParseOk(SuccessfulTunnelsTheft {
+                                    location: player_collected_event.metadata_enum("location")?,
+                                    target_team_nickname: player_collected_event
+                                        .metadata_str("sendTeamName")?
+                                        .to_string(),
+                                    player_collected_sub_event: player_collected_event
+                                        .as_sub_event(),
+                                    replaced_mod_id: artificially_forged_event
+                                        .metadata_str("from")?
+                                        .to_string(),
+                                    artificially_forged_sub_event: artificially_forged_event
+                                        .as_sub_event(),
+                                    stronger_together,
+                                })
                             })
-                        }).transpose()?;
+                            .transpose()?;
 
                         FedEventData::TeamTunnelHeistBegins {
                             game: event.game(unscatter, attractor_secret_base)?,
@@ -2961,13 +3026,14 @@ pub fn parse_next_event_r(
                             target_player_name: player_name.to_string(),
                         }
                     }
-                    ParsedTeamTunnels::HeistSucceeded { team_nickname, player_name } => {
-                        FedEventData::TeamTunnelHeistSucceeded {
-                            game: event.game(unscatter, attractor_secret_base)?,
-                            target_team_nickname: team_nickname.to_string(),
-                            target_player_name: player_name.to_string(),
-                        }
-                    }
+                    ParsedTeamTunnels::HeistSucceeded {
+                        team_nickname,
+                        player_name,
+                    } => FedEventData::TeamTunnelHeistSucceeded {
+                        game: event.game(unscatter, attractor_secret_base)?,
+                        target_team_nickname: team_nickname.to_string(),
+                        target_player_name: player_name.to_string(),
+                    },
                 },
             }
         }
@@ -3376,28 +3442,29 @@ pub fn parse_next_event_r(
                         let team_id = event.next_team_id()?;
                         let players = iter::from_fn(|| {
                             event_iter.next_if(|e| {
-                                e.r#type == EventType::AddedMod &&
-                                    e.player_tags.as_ref().is_some_and(|pt| !pt.is_empty()) &&
-                                    e.team_tags.as_ref().is_some_and(|tt| *tt == vec![team_id])
+                                e.r#type == EventType::AddedMod
+                                    && e.player_tags.as_ref().is_some_and(|pt| !pt.is_empty())
+                                    && e.team_tags.as_ref().is_some_and(|tt| *tt == vec![team_id])
                             })
                         })
-                            .map(|ev| {
-                                let mut ev = EventParseWrapper::new(&ev)?;
-                                let player_name_all_caps = ev.next_parse(parse_terminated(", TOUCH DOWN"))?;
-                                ParseOk(TouchedDownPlayer {
-                                    player_name_all_caps: player_name_all_caps.to_string(),
-                                    player_id: ev.next_player_id()?,
-                                    sub_event: ev.as_sub_event(),
-                                })
+                        .map(|ev| {
+                            let mut ev = EventParseWrapper::new(&ev)?;
+                            let player_name_all_caps =
+                                ev.next_parse(parse_terminated(", TOUCH DOWN"))?;
+                            ParseOk(TouchedDownPlayer {
+                                player_name_all_caps: player_name_all_caps.to_string(),
+                                player_id: ev.next_player_id()?,
+                                sub_event: ev.as_sub_event(),
                             })
-                            .collect::<Result<Vec<_>, _>>()?;
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
 
                         FedEventData::TeamTouchedDown {
                             team_nickname_caps: team_nickname_caps.to_string(),
                             team_id,
                             players,
                         }
-                    },
+                    }
                     ParsedAddedMod::WentRogue(team_name) => {
                         assert!(is_known_team_name(team_name));
                         FedEventData::TeamEnteredEndZone {
@@ -3405,7 +3472,7 @@ pub fn parse_next_event_r(
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
-                    },
+                    }
                     ParsedAddedMod::TeamForced(team_name) => {
                         assert!(is_known_team_name(team_name));
                         FedEventData::TeamEnteredEndZone {
@@ -3413,7 +3480,7 @@ pub fn parse_next_event_r(
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
-                    },
+                    }
                     ParsedAddedMod::TeamEntangled(team_name) => {
                         assert!(is_known_team_name(team_name));
                         FedEventData::TeamEnteredEndZone {
@@ -3421,7 +3488,7 @@ pub fn parse_next_event_r(
                             team_name: team_name.to_string(),
                             team_id: event.next_team_id()?,
                         }
-                    },
+                    }
                 }
             }
         }
@@ -3593,7 +3660,8 @@ pub fn parse_next_event_r(
                                 && e.player_tags.as_ref().is_some_and(|v| v == &[player_id])
                         })
                         .map(|weaker_apart_event| {
-                            let mut weaker_apart_event = EventParseWrapper::new(&weaker_apart_event)?;
+                            let mut weaker_apart_event =
+                                EventParseWrapper::new(&weaker_apart_event)?;
                             let names = weaker_apart_event
                                 .next_parse(parse_yolk_message(player_name, "weaker apart"))?;
                             ParseOk(PlayerTogethernessModChange {
@@ -3612,7 +3680,10 @@ pub fn parse_next_event_r(
                         weaker_apart_event,
                     }
                 }
-                ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam((player_name, team_nickname)) => {
+                ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam((
+                    player_name,
+                    team_nickname,
+                )) => {
                     assert!(is_known_team_nickname(team_nickname));
 
                     // For this event Firewalker happens before the Hall roam messages
@@ -3620,15 +3691,20 @@ pub fn parse_next_event_r(
 
                     // As of this writing, this variant only appears directly before a Super Roam
                     // out of the Hall
-                    let exit_hall_event = event_iter
-                        .next_expect_type(EventType::ExitHallOfFlame, EventType::PlayerRemovedFromTeam)?;
+                    let exit_hall_event = event_iter.next_expect_type(
+                        EventType::ExitHallOfFlame,
+                        EventType::PlayerRemovedFromTeam,
+                    )?;
                     let exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
 
-                    let add_to_team_event = event_iter
-                        .next_expect_type(EventType::PlayerAddedToTeam, EventType::ExitHallOfFlame)?;
+                    let add_to_team_event = event_iter.next_expect_type(
+                        EventType::PlayerAddedToTeam,
+                        EventType::ExitHallOfFlame,
+                    )?;
                     let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
-                    let connected_events = parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
+                    let connected_events =
+                        parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
 
                     let data = FedEventData::Roam {
                         is_super: true,
@@ -3643,7 +3719,7 @@ pub fn parse_next_event_r(
                                 incinerated_team_nickname: team_nickname.to_string(),
                                 incinerated_team_id: event.metadata_uuid("teamId")?,
                                 sub_event: event.as_sub_event(),
-                            })
+                            }),
                         },
                         connected_events,
                     };
@@ -3660,56 +3736,54 @@ pub fn parse_next_event_r(
         EventType::PlayerSwap => {
             todo!()
         }
-        EventType::PlayerMoved => {
-            match event.next_parse(parse_player_moved)? {
-                ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
-                    FedEventData::ReturnFromInvestigation {
-                        player_id: event.metadata_uuid("playerId")?,
-                        player_name: event.metadata_str("playerName")?.to_string(),
-                        previous_team_id: event.metadata_uuid("sendTeamId")?,
-                        previous_team_name: event.metadata_str("sendTeamName")?.to_string(),
-                        new_location: event.metadata_enum("receiveLocation")?,
-                        new_team_id: event.metadata_uuid("receiveTeamId")?,
-                        new_team_name: event.metadata_str("receiveTeamName")?.to_string(),
-                        emptyhanded,
-                    }
-                }
-                ParsedPlayerMoved::Roamin(player_name) => {
-                    let connected_events = parse_connected_roam_events(event_iter)?;
-
-                    FedEventData::Roam {
-                        is_super: false,
-                        player_id: event.metadata_uuid("playerId")?,
-                        player_name: player_name.to_string(),
-                        location: event.metadata_enum("location")?,
-                        new_team_id: event.metadata_uuid("receiveTeamId")?,
-                        new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
-                        roam_from: RoamFromLocation::Team {
-                            previous_team_id: event.metadata_uuid("sendTeamId")?,
-                            previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
-                        },
-                        connected_events,
-                    }
-                }
-                ParsedPlayerMoved::SuperRoamin(player_name) => {
-                    let connected_events = parse_connected_roam_events(event_iter)?;
-
-                    FedEventData::Roam {
-                        is_super: true,
-                        player_id: event.metadata_uuid("playerId")?,
-                        player_name: player_name.to_string(),
-                        location: event.metadata_enum("location")?,
-                        new_team_id: event.metadata_uuid("receiveTeamId")?,
-                        new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
-                        roam_from: RoamFromLocation::Team {
-                            previous_team_id: event.metadata_uuid("sendTeamId")?,
-                            previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
-                        },
-                        connected_events,
-                    }
+        EventType::PlayerMoved => match event.next_parse(parse_player_moved)? {
+            ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
+                FedEventData::ReturnFromInvestigation {
+                    player_id: event.metadata_uuid("playerId")?,
+                    player_name: event.metadata_str("playerName")?.to_string(),
+                    previous_team_id: event.metadata_uuid("sendTeamId")?,
+                    previous_team_name: event.metadata_str("sendTeamName")?.to_string(),
+                    new_location: event.metadata_enum("receiveLocation")?,
+                    new_team_id: event.metadata_uuid("receiveTeamId")?,
+                    new_team_name: event.metadata_str("receiveTeamName")?.to_string(),
+                    emptyhanded,
                 }
             }
-        }
+            ParsedPlayerMoved::Roamin(player_name) => {
+                let connected_events = parse_connected_roam_events(event_iter)?;
+
+                FedEventData::Roam {
+                    is_super: false,
+                    player_id: event.metadata_uuid("playerId")?,
+                    player_name: player_name.to_string(),
+                    location: event.metadata_enum("location")?,
+                    new_team_id: event.metadata_uuid("receiveTeamId")?,
+                    new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
+                    roam_from: RoamFromLocation::Team {
+                        previous_team_id: event.metadata_uuid("sendTeamId")?,
+                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                    },
+                    connected_events,
+                }
+            }
+            ParsedPlayerMoved::SuperRoamin(player_name) => {
+                let connected_events = parse_connected_roam_events(event_iter)?;
+
+                FedEventData::Roam {
+                    is_super: true,
+                    player_id: event.metadata_uuid("playerId")?,
+                    player_name: player_name.to_string(),
+                    location: event.metadata_enum("location")?,
+                    new_team_id: event.metadata_uuid("receiveTeamId")?,
+                    new_team_nickname: event.metadata_str("receiveTeamName")?.to_string(),
+                    roam_from: RoamFromLocation::Team {
+                        previous_team_id: event.metadata_uuid("sendTeamId")?,
+                        previous_team_nickname: event.metadata_str("sendTeamName")?.to_string(),
+                    },
+                    connected_events,
+                }
+            }
+        },
         EventType::PlayerBornFromIncineration => {
             todo!()
         }
@@ -3767,8 +3841,8 @@ pub fn parse_next_event_r(
             //    PlayerAddedToTeam event
             // 2. Team was (lowercase-r) released from the Hall of Flame during
             //    s24 -- event is followed by another ExitHallOfFlame event
-            let next_event_raw = event_iter
-                .next_expect_type_any(&[
+            let next_event_raw = event_iter.next_expect_type_any(
+                &[
                     // This indicates a Roaming, and is the Roamer joining a team
                     EventType::PlayerAddedToTeam,
                     // This indicating a team leaving the Hall, and is a player
@@ -3778,7 +3852,9 @@ pub fn parse_next_event_r(
                     // joining a division (when there are no players to leave
                     // the Hall)
                     EventType::TeamDivisionMove,
-                ], EventType::ExitHallOfFlame)?;
+                ],
+                EventType::ExitHallOfFlame,
+            )?;
 
             match next_event_raw.r#type {
                 EventType::PlayerAddedToTeam => {
@@ -3808,7 +3884,10 @@ pub fn parse_next_event_r(
                     let players = iter::once(next_event_raw)
                         .chain(iter::from_fn(|| {
                             event_iter.next_if_type_and(EventType::ExitHallOfFlame, |event| {
-                                event.player_tags.as_ref().map_or(false, |tags| !tags.is_empty())
+                                event
+                                    .player_tags
+                                    .as_ref()
+                                    .map_or(false, |tags| !tags.is_empty())
                             })
                         }))
                         .map(|ev| {
@@ -3821,13 +3900,17 @@ pub fn parse_next_event_r(
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    let team_joined_division_event = event_iter.next_expect_type(EventType::TeamDivisionMove, event.event_type)?;
-                    let team_joined_division_event = EventParseWrapper::new(&team_joined_division_event)?;
+                    let team_joined_division_event = event_iter
+                        .next_expect_type(EventType::TeamDivisionMove, event.event_type)?;
+                    let team_joined_division_event =
+                        EventParseWrapper::new(&team_joined_division_event)?;
 
                     FedEventData::TeamExitedHallOfFlame {
                         team_name: team_name.to_string(),
                         team_id,
-                        division_name: team_joined_division_event.metadata_str("divisionName")?.to_string(),
+                        division_name: team_joined_division_event
+                            .metadata_str("divisionName")?
+                            .to_string(),
                         division_id: team_joined_division_event.metadata_uuid("divisionId")?,
                         players,
                         team_joined_division_sub_event: team_joined_division_event.as_sub_event(),
@@ -3842,7 +3925,9 @@ pub fn parse_next_event_r(
                     FedEventData::TeamExitedHallOfFlame {
                         team_name: team_name.to_string(),
                         team_id,
-                        division_name: team_joined_division_event.metadata_str("divisionName")?.to_string(),
+                        division_name: team_joined_division_event
+                            .metadata_str("divisionName")?
+                            .to_string(),
                         division_id: team_joined_division_event.metadata_uuid("divisionId")?,
                         players: Vec::new(),
                         team_joined_division_sub_event: team_joined_division_event.as_sub_event(),
@@ -3996,8 +4081,7 @@ pub fn parse_next_event_r(
 
             // This is *almost* always there, but the lovers in the s19 postseason were missing this
             // event
-            let earned_birth_event = event_iter
-                .next_if_type(EventType::PlayerAddedToTeam);
+            let earned_birth_event = event_iter.next_if_type(EventType::PlayerAddedToTeam);
             if let Some(e) = &earned_birth_event {
                 prev_type = e.r#type;
             }
@@ -4021,8 +4105,7 @@ pub fn parse_next_event_r(
                 prev_type = e.r#type;
             }
 
-            let left_party_event = event_iter
-                .next_if_type(EventType::RemovedMod);
+            let left_party_event = event_iter.next_if_type(EventType::RemovedMod);
             let left_party_event = left_party_event
                 .as_ref()
                 .map(EventParseWrapper::new)
@@ -4274,8 +4357,7 @@ pub fn parse_next_event_r(
                     .next_if_type(EventType::AddedModFromOtherMod)
                     .map(|togetherness_event| {
                         let mut togetherness_event = EventParseWrapper::new(&togetherness_event)?;
-                        let mut names = togetherness_event
-                            .next_parse(parse_togetherness_mod)?;
+                        let mut names = togetherness_event.next_parse(parse_togetherness_mod)?;
 
                         // So the way `names` works is weird. It lists the first player who gained
                         // a togetherness mod, then all players who already had it, then the rest
@@ -4441,42 +4523,47 @@ pub fn parse_next_event_r(
         EventType::TeamIncinerationReplacement => {
             todo!()
         }
-        EventType::TeamDivisionMove => {
-            match event.next_parse(parse_team_division_move)? {
-                ParsedTeamDivisionMove::TeamJoinedILB { team_nickname, division_name } => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    assert_eq!(team_nickname, event.metadata_str("teamName")?);
-                    assert_eq!(division_name, event.metadata_str("divisionName")?);
-                    let team_id = event.next_team_id()?;
-                    assert_eq!(team_id, event.metadata_uuid("teamId")?);
+        EventType::TeamDivisionMove => match event.next_parse(parse_team_division_move)? {
+            ParsedTeamDivisionMove::TeamJoinedILB {
+                team_nickname,
+                division_name,
+            } => {
+                assert!(is_known_team_nickname(team_nickname));
+                assert_eq!(team_nickname, event.metadata_str("teamName")?);
+                assert_eq!(division_name, event.metadata_str("divisionName")?);
+                let team_id = event.next_team_id()?;
+                assert_eq!(team_id, event.metadata_uuid("teamId")?);
 
-                    FedEventData::TeamJoinedILB {
-                        team_id,
-                        team_nickname: team_nickname.to_string(),
-                        division_id: event.metadata_uuid("divisionId")?,
-                        division_name: division_name.to_string(),
-                    }
-                },
-                ParsedTeamDivisionMove::TeamShifted { team_nickname, from_division_name, to_division_name } => {
-                    assert!(is_known_team_nickname(team_nickname));
-                    assert_eq!(team_nickname, event.metadata_str("teamName")?);
-                    assert_eq!(from_division_name, event.metadata_str("fromDivisionName")?);
-                    assert_eq!(to_division_name, event.metadata_str("toDivisionName")?);
-
-                    let team_id = event.next_team_id()?;
-                    assert_eq!(team_id, event.metadata_uuid("teamId")?);
-
-                    FedEventData::TeamShiftedDivision {
-                        team_id,
-                        team_nickname: team_nickname.to_string(),
-                        from_division_id: event.metadata_uuid("fromDivisionId")?,
-                        from_division_name: from_division_name.to_string(),
-                        to_division_id: event.metadata_uuid("toDivisionId")?,
-                        to_division_name: to_division_name.to_string(),
-                    }
+                FedEventData::TeamJoinedILB {
+                    team_id,
+                    team_nickname: team_nickname.to_string(),
+                    division_id: event.metadata_uuid("divisionId")?,
+                    division_name: division_name.to_string(),
                 }
             }
-        }
+            ParsedTeamDivisionMove::TeamShifted {
+                team_nickname,
+                from_division_name,
+                to_division_name,
+            } => {
+                assert!(is_known_team_nickname(team_nickname));
+                assert_eq!(team_nickname, event.metadata_str("teamName")?);
+                assert_eq!(from_division_name, event.metadata_str("fromDivisionName")?);
+                assert_eq!(to_division_name, event.metadata_str("toDivisionName")?);
+
+                let team_id = event.next_team_id()?;
+                assert_eq!(team_id, event.metadata_uuid("teamId")?);
+
+                FedEventData::TeamShiftedDivision {
+                    team_id,
+                    team_nickname: team_nickname.to_string(),
+                    from_division_id: event.metadata_uuid("fromDivisionId")?,
+                    from_division_name: from_division_name.to_string(),
+                    to_division_id: event.metadata_uuid("toDivisionId")?,
+                    to_division_name: to_division_name.to_string(),
+                }
+            }
+        },
         EventType::PlayerDivisionMove => match event.next_parse(parse_player_division_move)? {
             ParsedPlayerDivisionMove::JoinedIlb(player_name) => FedEventData::PlayerJoinedILB {
                 player_id: event.next_player_id()?,
@@ -4980,12 +5067,14 @@ pub fn parse_next_event_r(
                 // Firewalker is first in this case
                 let firewalker = parse_firewalker(event_iter)?;
 
-                let add_to_team_event = event_iter.next_expect_type(EventType::PlayerAddedToTeam, EventType::AddedMod)?;
+                let add_to_team_event = event_iter
+                    .next_expect_type(EventType::PlayerAddedToTeam, EventType::AddedMod)?;
                 let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
                 let location = add_to_team_event.metadata_enum("location")?;
 
-                let connected_events = parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
+                let connected_events =
+                    parse_connected_roam_events_with_firewalker(firewalker, event_iter)?;
 
                 FedEventData::Roam {
                     is_super: true,
@@ -5002,44 +5091,49 @@ pub fn parse_next_event_r(
             } else {
                 // These events are all followed by a PlayerAddedToTeam event which
                 // probably was meant to be a child
-                let add_to_team_event = event_iter.next()
-                    .ok_or_else(|| FeedParseError::MissingFollowingEvent {
-                        expected_types: vec![EventType::PlayerAddedToTeam],
-                        after_type: event.event_type,
-                    })?;
+                let add_to_team_event =
+                    event_iter
+                        .next()
+                        .ok_or_else(|| FeedParseError::MissingFollowingEvent {
+                            expected_types: vec![EventType::PlayerAddedToTeam],
+                            after_type: event.event_type,
+                        })?;
                 if add_to_team_event.r#type != EventType::PlayerAddedToTeam {
                     return Err(FeedParseError::UnexpectedFollowingEvent {
                         expected_types: vec![EventType::PlayerAddedToTeam],
                         found_type: add_to_team_event.r#type,
                         after_type: event.event_type,
-                    })
+                    });
                 }
                 let add_to_team_event = EventParseWrapper::new(&add_to_team_event)?;
 
                 let location = add_to_team_event.metadata_enum("location")?;
                 // The player boost event, if there is one, is also a successor
                 // when it was probably meant to be a child
-                let shadow_boost = (location == PositionType::BenchOrShadows).then(|| {
-                    let shadow_boost_event = event_iter.next()
-                        .ok_or_else(|| FeedParseError::MissingFollowingEvent {
-                            expected_types: vec![EventType::PlayerStatIncrease],
-                            after_type: event.event_type,
+                let shadow_boost = (location == PositionType::BenchOrShadows)
+                    .then(|| {
+                        let shadow_boost_event = event_iter.next().ok_or_else(|| {
+                            FeedParseError::MissingFollowingEvent {
+                                expected_types: vec![EventType::PlayerStatIncrease],
+                                after_type: event.event_type,
+                            }
                         })?;
-                    if shadow_boost_event.r#type != EventType::PlayerStatIncrease {
-                        return Err(FeedParseError::UnexpectedFollowingEvent {
-                            expected_types: vec![EventType::PlayerStatIncrease],
-                            found_type: shadow_boost_event.r#type,
-                            after_type: event.event_type,
-                        })
-                    }
-                    let shadow_boost_event = EventParseWrapper::new(&shadow_boost_event)?;
+                        if shadow_boost_event.r#type != EventType::PlayerStatIncrease {
+                            return Err(FeedParseError::UnexpectedFollowingEvent {
+                                expected_types: vec![EventType::PlayerStatIncrease],
+                                found_type: shadow_boost_event.r#type,
+                                after_type: event.event_type,
+                            });
+                        }
+                        let shadow_boost_event = EventParseWrapper::new(&shadow_boost_event)?;
 
-                    ParseOk(PlayerBoostSubEvent {
-                        rating_before: shadow_boost_event.metadata_f64("before")?,
-                        rating_after: shadow_boost_event.metadata_f64("after")?,
-                        sub_event: shadow_boost_event.as_sub_event(),
+                        ParseOk(PlayerBoostSubEvent {
+                            rating_before: shadow_boost_event.metadata_f64("before")?,
+                            rating_after: shadow_boost_event.metadata_f64("after")?,
+                            sub_event: shadow_boost_event.as_sub_event(),
+                        })
                     })
-                }).transpose()?;
+                    .transpose()?;
 
                 FedEventData::PlayerLeftVault {
                     player_name: player_name.to_string(),
@@ -5074,12 +5168,16 @@ pub fn parse_next_event_r(
         EventType::Announcement => {
             match event.next_parse(parse_announcement)? {
                 ParsedAnnouncement::SupernovaLeagueReassignment => {
-                    let black_hole_mod_added_event = event_iter.next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
-                    let mut black_hole_mod_added_event = EventParseWrapper::new(&black_hole_mod_added_event)?;
+                    let black_hole_mod_added_event = event_iter
+                        .next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
+                    let mut black_hole_mod_added_event =
+                        EventParseWrapper::new(&black_hole_mod_added_event)?;
                     black_hole_mod_added_event.next_parse_tag("BLACK HOLE (BLACK HOLE) DRAINS")?;
 
-                    let pulsar_mod_added_event = event_iter.next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
-                    let mut pulsar_mod_added_event = EventParseWrapper::new(&pulsar_mod_added_event)?;
+                    let pulsar_mod_added_event = event_iter
+                        .next_expect_type(EventType::LeagueModificationAdded, event.event_type)?;
+                    let mut pulsar_mod_added_event =
+                        EventParseWrapper::new(&pulsar_mod_added_event)?;
                     pulsar_mod_added_event.next_parse_tag("PULSAR (PULSAR) BEAMS")?;
 
                     // TODO There should be a lot more here, but somehow I'm not getting errors for it?
@@ -5090,9 +5188,7 @@ pub fn parse_next_event_r(
                         pulsar_mod_added_sub_event: pulsar_mod_added_event.as_sub_event(),
                     }
                 }
-                ParsedAnnouncement::HallOfFlameOpened => {
-                    FedEventData::HallOfFlameOpened
-                }
+                ParsedAnnouncement::HallOfFlameOpened => FedEventData::HallOfFlameOpened,
             }
         }
         EventType::Ratification => {
@@ -5204,20 +5300,14 @@ pub fn parse_next_event_r(
                 temp_stolen_players_returned,
             }
         }
-        EventType::SunSunPressure => {
-            match event.next_parse(parse_sun_sun_pressure)? {
-                ParsedSunSunPressure::Recharged => {
-                    FedEventData::SunSunRecharged {
-                        pressure_after: event.metadata_f64("current")?,
-                    }
-                }
-                ParsedSunSunPressure::PressureBuilt => {
-                    FedEventData::SunSunPressureBuilt {
-                        pressure_after: event.metadata_f64("current")?,
-                    }
-                }
-            }
-        }
+        EventType::SunSunPressure => match event.next_parse(parse_sun_sun_pressure)? {
+            ParsedSunSunPressure::Recharged => FedEventData::SunSunRecharged {
+                pressure_after: event.metadata_f64("current")?,
+            },
+            ParsedSunSunPressure::PressureBuilt => FedEventData::SunSunPressureBuilt {
+                pressure_after: event.metadata_f64("current")?,
+            },
+        },
         EventType::FoundNothingInterestingInTunnels => {
             todo!()
         }
@@ -5623,8 +5713,14 @@ pub fn parse_next_event_r(
             let team_id = event.next_team_id()?;
             let team_nickname = event.metadata_str("teamName")?;
 
-            let players = event.player_tags()?.into_iter().zip_eq(event.metadata_str_vec("playerNames")?)
-                .map(|(player_id, player_name)| PlayerNameId { player_id: *player_id, player_name: player_name.to_string() })
+            let players = event
+                .player_tags()?
+                .into_iter()
+                .zip_eq(event.metadata_str_vec("playerNames")?)
+                .map(|(player_id, player_name)| PlayerNameId {
+                    player_id: *player_id,
+                    player_name: player_name.to_string(),
+                })
                 .collect();
 
             FedEventData::PlayersCutFromTeam {
@@ -5634,16 +5730,12 @@ pub fn parse_next_event_r(
                 players,
             }
         }
-        EventType::GameCanceled => {
-            FedEventData::GameCanceled {
-                game: event.game(unscatter, attractor_secret_base)?,
-            }
-        }
-        EventType::Supernova => {
-            FedEventData::Supernova {
-                game: event.game(unscatter, attractor_secret_base)?,
-            }
-        }
+        EventType::GameCanceled => FedEventData::GameCanceled {
+            game: event.game(unscatter, attractor_secret_base)?,
+        },
+        EventType::Supernova => FedEventData::Supernova {
+            game: event.game(unscatter, attractor_secret_base)?,
+        },
         EventType::BlackHoleAgitated => {
             if !event.has_more_children() {
                 // Then this must be the Pies nullifying themselves in game, or
@@ -5655,7 +5747,8 @@ pub fn parse_next_event_r(
                         FedEventData::BlackHoleBlackHoleNullifiedTeamInGame {
                             game: event.game(unscatter, attractor_secret_base)?,
                             team_nickname: team_nickname.to_string(),
-                        }}
+                        }
+                    }
                     ParsedBlackHoleNullifiedNoChildren::OnMap(team_nickname) => {
                         assert!(is_known_team_nickname(team_nickname));
                         FedEventData::BlackHoleBlackHoleNullifiedTeamOnMap {
@@ -5676,7 +5769,8 @@ pub fn parse_next_event_r(
 
                 match child_event.event_type {
                     EventType::LeagueModificationRemoved => {
-                        let (team_nickname, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_league_mod)?;
+                        let (team_nickname, nullified_mod_name) =
+                            event.next_parse(parse_black_hole_nullified_league_mod)?;
                         assert!(is_known_team_nickname(team_nickname));
 
                         FedEventData::BlackHoleBlackHoleNullifiedLeagueModification {
@@ -5686,9 +5780,10 @@ pub fn parse_next_event_r(
                             nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
                             nullified_mod_sub_event: child_event.as_sub_event(),
                         }
-                    },
+                    }
                     EventType::RemovedMod => {
-                        let (team_nickname, stadium_name, nullified_mod_name) = event.next_parse(parse_black_hole_nullified_stadium_mod)?;
+                        let (team_nickname, stadium_name, nullified_mod_name) =
+                            event.next_parse(parse_black_hole_nullified_stadium_mod)?;
                         assert!(is_known_team_nickname(team_nickname));
 
                         FedEventData::BlackHoleBlackHoleNullifiedStadiumModification {
@@ -5700,9 +5795,10 @@ pub fn parse_next_event_r(
                             nullified_mod_id: child_event.metadata_str("mod")?.to_string(),
                             nullified_mod_sub_event: child_event.as_sub_event(),
                         }
-                    },
+                    }
                     EventType::PlayerLostItem => {
-                        let (team_nickname, player_name, nullified_item_name) = event.next_parse(parse_black_hole_nullified_item)?;
+                        let (team_nickname, player_name, nullified_item_name) =
+                            event.next_parse(parse_black_hole_nullified_item)?;
                         assert!(is_known_team_nickname(team_nickname));
 
                         assert_eq!(nullified_item_name, child_event.metadata_str("itemName")?);
@@ -5715,34 +5811,42 @@ pub fn parse_next_event_r(
                             team_id: child_event.next_team_id()?,
                             item_name: nullified_item_name.to_string(),
                             item_id: child_event.metadata_uuid("itemId")?,
-                            item_mods: child_event.metadata_str_vec("mods")?.into_iter().map(str::to_string).collect(),
-                            player_item_rating_before: child_event.metadata_f64_opt("playerItemRatingBefore")?,
-                            player_item_rating_after: child_event.metadata_f64("playerItemRatingAfter")?,
+                            item_mods: child_event
+                                .metadata_str_vec("mods")?
+                                .into_iter()
+                                .map(str::to_string)
+                                .collect(),
+                            player_item_rating_before: child_event
+                                .metadata_f64_opt("playerItemRatingBefore")?,
+                            player_item_rating_after: child_event
+                                .metadata_f64("playerItemRatingAfter")?,
                             player_rating: child_event.metadata_f64("playerRating")?,
                             item_removed_sub_event: child_event.as_sub_event(),
                         }
-                    },
+                    }
                     other => panic!(
                         "Event from EventParseWrapper::next_child_any must be one of the expected \
                         types ({expected_types:?}), but it was {other:?}",
                     ),
                 }
             }
-        },
+        }
         EventType::GameEndedFromNullification => {
             let team_nickname = event.next_parse(parse_game_end_by_nullification)?;
-            let non_loser = team_nickname.map(|team_nickname| {
-                assert!(is_known_team_nickname(team_nickname));
+            let non_loser = team_nickname
+                .map(|team_nickname| {
+                    assert!(is_known_team_nickname(team_nickname));
 
-                let mut child = event.next_child(EventType::WinCollectedRegular)?;
-                ParseOk(WinSubEventWithNickname {
-                    team_nickname: team_nickname.to_string(),
-                    team_id: child.next_team_id()?,
-                    wins_after: child.metadata_i64("after")?,
-                    sub_event: child.as_sub_event(),
-                    balloons: None,
+                    let mut child = event.next_child(EventType::WinCollectedRegular)?;
+                    ParseOk(WinSubEventWithNickname {
+                        team_nickname: team_nickname.to_string(),
+                        team_id: child.next_team_id()?,
+                        wins_after: child.metadata_i64("after")?,
+                        sub_event: child.as_sub_event(),
+                        balloons: None,
+                    })
                 })
-            }).transpose()?;
+                .transpose()?;
 
             FedEventData::GameEndFromNullification {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -5759,7 +5863,10 @@ pub fn parse_next_event_r(
             }
         }
         EventType::NightShift => {
-            let outcome = event.next_child_any(&[EventType::PlayerSwap, EventType::NecromancyOrPlunderNarration])?;
+            let outcome = event.next_child_any(&[
+                EventType::PlayerSwap,
+                EventType::NecromancyOrPlunderNarration,
+            ])?;
             match outcome.event_type {
                 EventType::PlayerSwap => {
                     let player_shadowed_child = event.next_boost_child()?;
@@ -5780,14 +5887,16 @@ pub fn parse_next_event_r(
                         },
                         night_shift_boost_sub_event: night_shift_boost_child,
                     }
-
                 }
                 EventType::NecromancyOrPlunderNarration => {
                     let mut gained_unstable_event = event.next_child(EventType::AddedMod)?;
-                    let shadowed_player_name = gained_unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
+                    let shadowed_player_name = gained_unstable_event
+                        .next_parse(parse_terminated(" gained the Unstable mod."))?;
 
-                    let mut night_shift_boost_child = event.next_child(EventType::PlayerStatIncrease)?;
-                    let unshadowed_player_name = night_shift_boost_child.next_parse(parse_terminated(" clocked in."))?;
+                    let mut night_shift_boost_child =
+                        event.next_child(EventType::PlayerStatIncrease)?;
+                    let unshadowed_player_name =
+                        night_shift_boost_child.next_parse(parse_terminated(" clocked in."))?;
 
                     FedEventData::NightShift {
                         game: event.game(unscatter, attractor_secret_base)?,
@@ -5806,14 +5915,15 @@ pub fn parse_next_event_r(
                             sub_event: night_shift_boost_child.as_sub_event(),
                         },
                     }
-
                 }
                 _ => {
                     panic!("Event type in this statement should be one of the above types");
                 }
             }
         }
-        EventType::TarotCardChanged => { todo!() }
+        EventType::TarotCardChanged => {
+            todo!()
+        }
         EventType::PlayerBecameStuck => {
             let player_name = event.next_parse(parse_terminated(" became Stuck!"))?;
             let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
@@ -5827,10 +5937,12 @@ pub fn parse_next_event_r(
             }
         }
         EventType::HorsePower => {
-            let [away_team_name, home_team_name] = event.next_parse(parse_horse_power)?
-                .map(|n| n.to_string());
+            let [away_team_name, home_team_name] =
+                event.next_parse(parse_horse_power)?.map(|n| n.to_string());
 
-            fn make_sub_event(mut child: EventParseWrapper) -> Result<GenericPlayerModChange, FeedParseError> {
+            fn make_sub_event(
+                mut child: EventParseWrapper,
+            ) -> Result<GenericPlayerModChange, FeedParseError> {
                 ParseOk(GenericPlayerModChange {
                     team_id: child.next_team_id()?,
                     player_id: child.next_player_id()?,
@@ -5841,15 +5953,12 @@ pub fn parse_next_event_r(
             }
 
             // Don't mark this closure as `move`. It will compile but be wrong at runtime.
-            let stabled_players = std::iter::from_fn(|| {
-                match event.next_child_opt(EventType::RemovedMod) {
-                    Ok(Some(child)) => {
-                        Some(make_sub_event(child))
-                    },
+            let stabled_players =
+                std::iter::from_fn(|| match event.next_child_opt(EventType::RemovedMod) {
+                    Ok(Some(child)) => Some(make_sub_event(child)),
                     Ok(None) => None,
                     Err(e) => Some(Err(e)),
-                }
-            })
+                })
                 .collect::<Result<Vec<_>, _>>()?;
 
             let mut unruns_event = event.next_child(EventType::RunsScored)?;
@@ -5876,21 +5985,14 @@ pub fn parse_next_event_r(
         EventType::SupernovaLeagueCreated => {
             todo!()
         }
-        EventType::CoinHit => {
-            match event.next_parse(parse_coin_hit)? {
-                ParsedCoinHit::Scattered(attacking_team_name) => {
-                    FedEventData::CoinScattered {
-                        attacking_team_name: attacking_team_name.to_string(),
-                    }
-                }
-                ParsedCoinHit::Incinerated(attacking_division_name) => {
-                    FedEventData::CoinIncinerated {
-                        attacking_division_name: attacking_division_name.to_string(),
-                    }
-
-                }
-            }
-        }
+        EventType::CoinHit => match event.next_parse(parse_coin_hit)? {
+            ParsedCoinHit::Scattered(attacking_team_name) => FedEventData::CoinScattered {
+                attacking_team_name: attacking_team_name.to_string(),
+            },
+            ParsedCoinHit::Incinerated(attacking_division_name) => FedEventData::CoinIncinerated {
+                attacking_division_name: attacking_division_name.to_string(),
+            },
+        },
         EventType::StormWarning => {
             todo!()
         }
@@ -5989,13 +6091,16 @@ pub fn parse_firewalker(
         return Ok(None);
     };
     let mut instability_event = EventParseWrapper::new(&instability_event)?;
-    let (_, previous_location_name) = instability_event.next_parse(parse_firewalker_instability_spread)?;
+    let (_, previous_location_name) =
+        instability_event.next_parse(parse_firewalker_instability_spread)?;
 
     let players_gained_unstable = std::iter::from_fn(|| {
-        event_iter.next_if_type(EventType::AddedMod)
+        event_iter
+            .next_if_type(EventType::AddedMod)
             .map(|unstable_event| {
                 let mut unstable_event = EventParseWrapper::new(&unstable_event)?;
-                let player_name = unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
+                let player_name =
+                    unstable_event.next_parse(parse_terminated(" gained the Unstable mod."))?;
                 ParseOk(ModChangeSubEventWithNamedPlayer {
                     sub_event: unstable_event.as_sub_event(),
                     team_id: unstable_event.next_team_id()?,
@@ -6003,14 +6108,14 @@ pub fn parse_firewalker(
                     player_name: player_name.to_string(),
                 })
             })
-    }).collect::<Result<Vec<_>, _>>()?;
+    })
+    .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Some(Firewalker {
         previous_location_name: previous_location_name.to_string(),
         instability_sub_event: instability_event.as_sub_event(),
         players_gained_unstable,
     }))
-
 }
 
 pub fn parse_connected_roam_events(
@@ -6030,8 +6135,7 @@ pub fn parse_connected_roam_events_with_firewalker(
     let mut odyssey_boost = None;
     let mut good_riddance_parties = Vec::new();
 
-    while let Some(boost) = event_iter.next_if_type(EventType::PlayerStatIncrease)
-    {
+    while let Some(boost) = event_iter.next_if_type(EventType::PlayerStatIncrease) {
         let mut boost = EventParseWrapper::new(&boost)?;
         match boost.next_parse(parse_roam_boost)? {
             ParsedRoamBoost::ShadowBoost(_player_name) => {

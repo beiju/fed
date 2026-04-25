@@ -1,4 +1,3 @@
-use chrono::format::parse;
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 use crate::{
@@ -133,7 +132,8 @@ pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Opt
     let (input, skipping) = alt((
         tag(" batting for the ").map(|_| false),
         tag(" skipped up to bat for the ").map(|_| true),
-    )).parse(input)?;
+    ))
+    .parse(input)?;
 
     Ok((input, (batter_name, Some(inhabiting_name), skipping)))
 }
@@ -761,20 +761,15 @@ pub(crate) enum ParsedStolenBase<'a> {
 pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
     alt((
         parse_normal_stolen_base.map(
-            |(
-                runner_name,
-                base_stolen,
-                is_successful,
-                blaserunning,
-                free_refiller,
-                shame,
-            )| ParsedStolenBase::Normal {
-                runner_name,
-                base_stolen,
-                is_successful,
-                blaserunning,
-                free_refiller,
-                shame,
+            |(runner_name, base_stolen, is_successful, blaserunning, free_refiller, shame)| {
+                ParsedStolenBase::Normal {
+                    runner_name,
+                    base_stolen,
+                    is_successful,
+                    blaserunning,
+                    free_refiller,
+                    shame,
+                }
             },
         ),
         parse_stolen_fifth_base.map(|runner_name| ParsedStolenBase::Fifth { runner_name }),
@@ -1204,8 +1199,7 @@ pub(crate) fn parse_incineration_blocked(
         .map(|_| IncinerationBlockedReason::Magmatic),
         tag("they're Fireproof! The Umpire was incinerated instead!")
             .map(|_| IncinerationBlockedReason::Fireproof),
-        tag("they're protected by their Shell!")
-            .map(|_| IncinerationBlockedReason::Shelled),
+        tag("they're protected by their Shell!").map(|_| IncinerationBlockedReason::Shelled),
     ))
     .parse(input)?;
     Ok((
@@ -1676,14 +1670,26 @@ pub(crate) enum ParsedTeamDivisionMove<'a> {
         team_nickname: &'a str,
         from_division_name: &'a str,
         to_division_name: &'a str,
-    }
+    },
 }
 
 pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<ParsedTeamDivisionMove> {
     alt((
-        parse_team_joined_ilb.map(|(team_nickname, division_name)| ParsedTeamDivisionMove::TeamJoinedILB { team_nickname, division_name }),
-        parse_team_shifted_division.map(|(team_nickname, from_division_name, to_division_name)| ParsedTeamDivisionMove::TeamShifted { team_nickname, from_division_name, to_division_name }),
-    )).parse(input)
+        parse_team_joined_ilb.map(|(team_nickname, division_name)| {
+            ParsedTeamDivisionMove::TeamJoinedILB {
+                team_nickname,
+                division_name,
+            }
+        }),
+        parse_team_shifted_division.map(|(team_nickname, from_division_name, to_division_name)| {
+            ParsedTeamDivisionMove::TeamShifted {
+                team_nickname,
+                from_division_name,
+                to_division_name,
+            }
+        }),
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_team_joined_ilb(input: &str) -> ParserResult<(&str, &str)> {
@@ -1906,13 +1912,26 @@ pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserRes
 }
 
 pub(crate) enum ParsedIncineration<'a> {
-    Player((&'a str, &'a str, Option<&'a str>, Option<(&'a str, &'a str)>, Option<&'a str>)),
-    Team((&'a str, &'a str, Option<(&'a str, Vec<&'a str>)>, Option<(&'a str, &'a str)>)),
+    Player(
+        (
+            &'a str,
+            &'a str,
+            Option<&'a str>,
+            Option<(&'a str, &'a str)>,
+            Option<&'a str>,
+        ),
+    ),
+    Team(
+        (
+            &'a str,
+            &'a str,
+            Option<(&'a str, Vec<&'a str>)>,
+            Option<(&'a str, &'a str)>,
+        ),
+    ),
 }
 
-pub(crate) fn parse_incineration(
-    input: &str,
-) -> ParserResult<ParsedIncineration> {
+pub(crate) fn parse_incineration(input: &str) -> ParserResult<ParsedIncineration> {
     alt((
         parse_player_incineration.map(ParsedIncineration::Player),
         parse_team_incineration.map(ParsedIncineration::Team),
@@ -1978,12 +1997,18 @@ pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &s
 }
 
 pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<(&str, Vec<&str>)> {
-    // TODO Support arbitrary number of surviving players 
+    // TODO Support arbitrary number of surviving players
     let (input, surviving_player_1) = parse_terminated(" and ").parse(input)?;
     let (input, surviving_player_2) = parse_terminated(" joined the ").parse(input)?;
     let (input, replacement_team_nickname) = parse_terminated("!").parse(input)?;
-    
-    Ok((input, (replacement_team_nickname, vec![surviving_player_1, surviving_player_2])))
+
+    Ok((
+        input,
+        (
+            replacement_team_nickname,
+            vec![surviving_player_1, surviving_player_2],
+        ),
+    ))
 }
 
 pub(crate) fn parse_team_unstable_incineration_preamble(input: &str) -> ParserResult<&str> {
@@ -1991,34 +2016,38 @@ pub(crate) fn parse_team_unstable_incineration_preamble(input: &str) -> ParserRe
     parse_terminated(" are Unstable!\nA Debt was collected.\n").parse(input)
 }
 
-pub(crate) fn parse_team_incineration(input: &str) -> ParserResult<(&str, &str, Option<(&str, Vec<&str>)>, Option<(&str, &str)>)> {
-    // A Rogue Umpire incinerated the Kansas City Breath Mints!
-    // They're replaced by the Oxford Paws!
-    // Rodriguez Internet and Leach Ingram joined the Paws!
-
-    // The Fridays are Unstable!
-    // A Debt was collected.
-    // A Rogue Umpire incinerated the Hawai'i Fridays!
-    // They're replaced by the Carolina Queens!
-    // The Instability chains to the Crabs!
-
+pub(crate) fn parse_team_incineration(
+    input: &str,
+) -> ParserResult<(&str, &str, Option<(&str, Vec<&str>)>, Option<(&str, &str)>)> {
     let (input, unstable_preamble) = opt(parse_team_unstable_incineration_preamble).parse(input)?;
 
     let (input, _) = tag("A Rogue Umpire incinerated the ").parse(input)?;
-    let (input, incinerated_team_name) = parse_terminated("!\nThey're replaced by the ").parse(input)?;
+    let (input, incinerated_team_name) =
+        parse_terminated("!\nThey're replaced by the ").parse(input)?;
     let (input, replacement_team_name) = parse_terminated("!\n").parse(input)?;
-    
+
     let (input, surviving_players) = opt(parse_team_incineration_survivors).parse(input)?;
 
     let (input, unstable) = if let Some(incinerated_team_nickname) = unstable_preamble {
         let (input, _) = tag("The Instability chains to the ").parse(input)?;
         let (input, chained_to_team_nickname) = parse_terminated("!").parse(input)?;
-        (input, Some((incinerated_team_nickname, chained_to_team_nickname)))
+        (
+            input,
+            Some((incinerated_team_nickname, chained_to_team_nickname)),
+        )
     } else {
         (input, None)
     };
 
-    Ok((input, (incinerated_team_name, replacement_team_name, surviving_players, unstable)))
+    Ok((
+        input,
+        (
+            incinerated_team_name,
+            replacement_team_name,
+            surviving_players,
+            unstable,
+        ),
+    ))
 }
 
 pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {
@@ -2051,7 +2080,8 @@ pub(crate) fn parse_roam_boost(input: &str) -> ParserResult<ParsedRoamBoost> {
         parse_terminated(" entered the Shadows.").map(|n| ParsedRoamBoost::ShadowBoost(n)),
         parse_terminated(" was boosted.").map(|n| ParsedRoamBoost::Odyssey(n)),
         parse_party.map(|(n, b)| ParsedRoamBoost::GoodRiddanceParty(n, b)),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_player_hatched(input: &str) -> ParserResult<&str> {
@@ -2175,8 +2205,11 @@ pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
             .map(|n| ParsedAddedMod::WentRogue(n)),
         preceded(tag("The "), parse_terminated(" were Forced into Position."))
             .map(|n| ParsedAddedMod::TeamForced(n)),
-        preceded(tag("The "), parse_terminated(" were Entangled in the Black Hole (Black Hole)."))
-            .map(|n| ParsedAddedMod::TeamEntangled(n)),
+        preceded(
+            tag("The "),
+            parse_terminated(" were Entangled in the Black Hole (Black Hole)."),
+        )
+        .map(|n| ParsedAddedMod::TeamEntangled(n)),
     ))
     .parse(input)?;
 
@@ -3264,11 +3297,14 @@ pub(crate) enum ParsedPlayerRemovedFromTeam<'a> {
     PulledFromIncineratedTeam((&'a str, &'a str)),
 }
 
-pub(crate) fn parse_top_level_player_removed_from_team(input: &str) -> ParserResult<ParsedPlayerRemovedFromTeam> {
+pub(crate) fn parse_top_level_player_removed_from_team(
+    input: &str,
+) -> ParserResult<ParsedPlayerRemovedFromTeam> {
     alt((
         parse_player_dusted.map(ParsedPlayerRemovedFromTeam::FadedAwayFromTeam),
         parse_player_was_pulled.map(ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
@@ -3278,7 +3314,8 @@ pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
 }
 
 pub(crate) fn parse_player_was_pulled(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, player_name) = parse_terminated(" was pulled from the incinerated ").parse(input)?;
+    let (input, player_name) =
+        parse_terminated(" was pulled from the incinerated ").parse(input)?;
     let (input, team_nickname) = parse_terminated(".").parse(input)?;
     Ok((input, (player_name, team_nickname)))
 }
@@ -3355,9 +3392,10 @@ pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
 pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<(&str, bool)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, result) = alt((
-         parse_terminated(" collected a Win.").map(|n| (n, false)),
-         parse_terminated(" collected an Unwin.").map(|n| (n, true)),
-    )).parse(input)?;
+        parse_terminated(" collected a Win.").map(|n| (n, false)),
+        parse_terminated(" collected an Unwin.").map(|n| (n, true)),
+    ))
+    .parse(input)?;
 
     Ok((input, result))
 }
@@ -3569,9 +3607,7 @@ pub(crate) fn parse_ledger_player_magnified(
     Ok((input, (position, runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_team_magnified(
-    input: &str,
-) -> ParserResult<(f64, f64)> {
+pub(crate) fn parse_ledger_team_magnified(input: &str) -> ParserResult<(f64, f64)> {
     let (input, _) = tag("\tTeam Magnified 2x: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;
     let (input, _) = tag(" * 2 = ").parse(input)?;
@@ -3766,10 +3802,19 @@ pub(crate) enum ParsedPlayerTunnels<'a> {
 }
 
 pub(crate) enum ParsedTeamTunnels<'a> {
-    HeistBegins { team_nickname: &'a str },
-    HeistContinues { player_name: &'a str },
-    HeistFailed { player_name: &'a str },
-    HeistSucceeded { team_nickname: &'a str, player_name: &'a str },
+    HeistBegins {
+        team_nickname: &'a str,
+    },
+    HeistContinues {
+        player_name: &'a str,
+    },
+    HeistFailed {
+        player_name: &'a str,
+    },
+    HeistSucceeded {
+        team_nickname: &'a str,
+        player_name: &'a str,
+    },
 }
 
 pub(crate) fn parse_tunnels(input: &str) -> ParserResult<ParsedTunnels> {
@@ -3817,10 +3862,13 @@ pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<ParsedTeamTunnels>
             .map(|team_nickname| ParsedTeamTunnels::HeistBegins { team_nickname }),
         parse_team_tunnels_continues
             .map(|player_name| ParsedTeamTunnels::HeistContinues { player_name }),
-        parse_team_tunnels_failed
-            .map(|player_name| ParsedTeamTunnels::HeistFailed { player_name }),
-        parse_team_tunnels_succeeded
-            .map(|(team_nickname, player_name)| ParsedTeamTunnels::HeistSucceeded { team_nickname, player_name }),
+        parse_team_tunnels_failed.map(|player_name| ParsedTeamTunnels::HeistFailed { player_name }),
+        parse_team_tunnels_succeeded.map(|(team_nickname, player_name)| {
+            ParsedTeamTunnels::HeistSucceeded {
+                team_nickname,
+                player_name,
+            }
+        }),
     ))
     .parse(input)
 }
@@ -3851,7 +3899,8 @@ pub(crate) fn parse_team_tunnels_succeeded(input: &str) -> ParserResult<(&str, &
     let (input, team_nickname) = parse_terminated(" collected ").parse(input)?;
     let (input, player_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(player_name).parse(input)?;
-    let (input, _) = tag(" was Artificially Forged!\n\nSun(Sun)'s Pressure built...").parse(input)?;
+    let (input, _) =
+        tag(" was Artificially Forged!\n\nSun(Sun)'s Pressure built...").parse(input)?;
     Ok((input, (team_nickname, player_name)))
 }
 
@@ -4059,7 +4108,9 @@ pub(crate) enum ParsedTrade<'a> {
     },
 }
 
-pub(crate) fn parse_trade(is_post_semicentennial: bool) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
+pub(crate) fn parse_trade(
+    is_post_semicentennial: bool,
+) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
     move |input| {
         alt((
             parse_terminated(" sought out a trade, but nothing caught their eye.")
@@ -4082,7 +4133,7 @@ pub(crate) fn parse_trade(is_post_semicentennial: bool) -> impl Fn(&str) -> Pars
                 }
             }),
         ))
-            .parse(input)
+        .parse(input)
     }
 }
 
@@ -4098,24 +4149,23 @@ pub(crate) fn parse_successful_trade(
             tag(" ").map(|_| ParsedTraderTraitor::Unknown),
             tag("").map(|_| ParsedTraderTraitor::Neither),
         ))
-            .parse(input)?;
+        .parse(input)?;
         let (input, trader_name) = parse_terminated(" traded their ").parse(input)?;
         // TODO Special-case "traded their nothing"?
         let (input, donated_item_name) = parse_terminated(" for ").parse(input)?;
         let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         // TODO Clean up semicentennial stuff
-        let (input, taken_item_name) =
-            parse_terminated(if is_post_semicentennial {
-                "!"
-            } else {
-                match trader_traitor {
-                    ParsedTraderTraitor::Trader => ".",
-                    ParsedTraderTraitor::Traitor => ".",
-                    ParsedTraderTraitor::Unknown => ".",
-                    ParsedTraderTraitor::Neither => "!",
-                }
-            })
-                .parse(input)?;
+        let (input, taken_item_name) = parse_terminated(if is_post_semicentennial {
+            "!"
+        } else {
+            match trader_traitor {
+                ParsedTraderTraitor::Trader => ".",
+                ParsedTraderTraitor::Traitor => ".",
+                ParsedTraderTraitor::Unknown => ".",
+                ParsedTraderTraitor::Neither => "!",
+            }
+        })
+        .parse(input)?;
 
         Ok((
             input,
@@ -4179,7 +4229,8 @@ pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserRes
                 // BlackHoleBlackHole must appear before BlackHole, because the
                 // latter is a prefix of the former. (I'm putting it first to
                 // make it very certain that it's before the other.)
-                tag(Weather::BlackHoleBlackHole.to_str(season, day)).map(|_| Weather::BlackHoleBlackHole),
+                tag(Weather::BlackHoleBlackHole.to_str(season, day))
+                    .map(|_| Weather::BlackHoleBlackHole),
                 tag(Weather::Void.to_str(season, day)).map(|_| Weather::Void),
                 tag(Weather::Sun2.to_str(season, day)).map(|_| Weather::Sun2),
                 tag(Weather::Overcast.to_str(season, day)).map(|_| Weather::Overcast),
@@ -4208,17 +4259,21 @@ pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserRes
                 tag(Weather::Sun90.to_str(season, day)).map(|_| Weather::Sun90),
                 tag(Weather::SunPoint1.to_str(season, day)).map(|_| Weather::SunPoint1),
                 tag(Weather::SumSun.to_str(season, day)).map(|_| Weather::SumSun),
-                tag(Weather::SupernovaEclipse.to_str(season, day)).map(|_| Weather::SupernovaEclipse),
+                tag(Weather::SupernovaEclipse.to_str(season, day))
+                    .map(|_| Weather::SupernovaEclipse),
                 tag(Weather::Jazz.to_str(season, day)).map(|_| Weather::Jazz),
                 tag(Weather::Night.to_str(season, day)).map(|_| Weather::Night),
                 tag(Weather::Night.to_str(season, day)).map(|_| Weather::Night),
             )),
         ))
-            .parse(input)
+        .parse(input)
     }
 }
 
-pub(crate) fn parse_riff_opened(season: i64, day: i64) -> impl Fn(&str) -> ParserResult<(Vec<RiffElement>, Weather)> {
+pub(crate) fn parse_riff_opened(
+    season: i64,
+    day: i64,
+) -> impl Fn(&str) -> ParserResult<(Vec<RiffElement>, Weather)> {
     move |input| {
         let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
         // Needs a nested alt() because alt has a max of 21 sub-parsers
@@ -4256,7 +4311,7 @@ pub(crate) fn parse_riff_opened(season: i64, day: i64) -> impl Fn(&str) -> Parse
                 )),
             )),
         )
-            .parse(input)?;
+        .parse(input)?;
         let (input, _) = tag(" ").parse(input)?;
         let (input, weather) = parse_weather(season, day).parse(input)?;
         let (input, _) = tag(" 🎵").parse(input)?;
@@ -4275,9 +4330,7 @@ pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
 pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<Vec<&str>> {
     let (input, names) = parse_terminated(" are stronger together.").parse(input)?;
 
-    let mut names: Vec<_> = names
-        .split(", ")
-        .collect();
+    let mut names: Vec<_> = names.split(", ").collect();
 
     if let Some(last) = names.last_mut() {
         // Strip an "and"
@@ -4321,7 +4374,8 @@ pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<ParsedSunSunPr
     alt((
         tag("Sun(Sun) Recharged.").map(|_| ParsedSunSunPressure::Recharged),
         tag("Sun(Sun)'s Pressure built...").map(|_| ParsedSunSunPressure::PressureBuilt),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_stabled(input: &str) -> ParserResult<&str> {
@@ -4347,11 +4401,13 @@ pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<(&str, bool)>
     alt((
         parse_terminated(" left the Vault.").map(|n| (n, false)),
         parse_terminated(" Super Roamed out of the Vault.").map(|n| (n, true)),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(&str, &str)> {
-    let (input, player_name) = parse_terminated(" left Instability in their wake. ").parse(input)?;
+    let (input, player_name) =
+        parse_terminated(" left Instability in their wake. ").parse(input)?;
     // This is "location name" because it can also be the vault
     let (input, location_name) = parse_terminated(" became Unstable!").parse(input)?;
 
@@ -4366,7 +4422,9 @@ pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult
     Ok((input, (team_nickname, nullified_mod_name)))
 }
 
-pub(crate) fn parse_black_hole_nullified_stadium_mod(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_black_hole_nullified_stadium_mod(
+    input: &str,
+) -> ParserResult<(&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
@@ -4389,11 +4447,14 @@ pub(crate) enum ParsedBlackHoleNullifiedNoChildren<'a> {
     OnMap(&'a str),
 }
 
-pub(crate) fn parse_black_hole_nullified_no_children(input: &str) -> ParserResult<ParsedBlackHoleNullifiedNoChildren> {
+pub(crate) fn parse_black_hole_nullified_no_children(
+    input: &str,
+) -> ParserResult<ParsedBlackHoleNullifiedNoChildren> {
     alt((
         parse_black_hole_nullified_team_in_game.map(ParsedBlackHoleNullifiedNoChildren::InGame),
         parse_black_hole_nullified_team_on_map.map(ParsedBlackHoleNullifiedNoChildren::OnMap),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResult<&str> {
@@ -4414,14 +4475,16 @@ pub(crate) fn parse_black_hole_nullified_team_on_map(input: &str) -> ParserResul
 
 pub(crate) enum ParsedCoinHit<'a> {
     Scattered(&'a str),
-    Incinerated(&'a str)
+    Incinerated(&'a str),
 }
 
 pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<ParsedCoinHit> {
     alt((
-        preceded(tag("The "), parse_terminated(" Scattered the Coin!")).map(|n| ParsedCoinHit::Scattered(n)),
+        preceded(tag("The "), parse_terminated(" Scattered the Coin!"))
+            .map(|n| ParsedCoinHit::Scattered(n)),
         parse_terminated(" Teams Incinerated the Coin").map(|n| ParsedCoinHit::Incinerated(n)),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 pub(crate) fn parse_team_exited_hall_of_flame(input: &str) -> ParserResult<&str> {

@@ -1,21 +1,22 @@
 use std::fmt::Write;
 
+use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, RoamConnectedEvents, Shame};
 use crate::format_utils::Possessive;
 use crate::{
     Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType,
-    PlayerSubEvent, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
+    EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
     HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired,
     KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent,
     ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent,
     PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId,
-    PlayerSentElsewhere, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus,
-    StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject,
+    PlayerSentElsewhere, PlayerSubEvent, Scattered, ScoreSummary, Scores, ScoringPlayer,
+    SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange,
+    TeamModChangeSubject,
 };
 use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
 use uuid::Uuid;
-use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, RoamConnectedEvents, Shame};
 
 pub struct EventBuilder {
     event: EventuallyEvent,
@@ -95,7 +96,10 @@ impl EventBuilder {
         if let Some(firewalker) = firewalker {
             let mut instability_eb = self.connected_event(firewalker.instability_sub_event);
             instability_eb.set_category(EventCategory::Changes);
-            instability_eb.set_description(format!("{player_name} left Instability in their wake. {} became Unstable!", firewalker.previous_location_name));
+            instability_eb.set_description(format!(
+                "{player_name} left Instability in their wake. {} became Unstable!",
+                firewalker.previous_location_name
+            ));
             if let Some(previous_team_id) = previous_team_id {
                 instability_eb.push_team_tag(previous_team_id);
                 // The Vault isn't capable of gaining a mod, so this metadata
@@ -112,7 +116,10 @@ impl EventBuilder {
             for player_gained_unstable in &firewalker.players_gained_unstable {
                 let mut gained_unstable_eb = self.connected_event(player_gained_unstable.sub_event);
                 gained_unstable_eb.set_category(EventCategory::Changes);
-                gained_unstable_eb.set_description(format!("{} gained the Unstable mod.", player_gained_unstable.player_name));
+                gained_unstable_eb.set_description(format!(
+                    "{} gained the Unstable mod.",
+                    player_gained_unstable.player_name
+                ));
                 gained_unstable_eb.push_team_tag(player_gained_unstable.team_id);
                 gained_unstable_eb.push_player_tag(player_gained_unstable.player_id);
                 gained_unstable_eb.push_metadata_str("mod", "MARKED");
@@ -449,7 +456,7 @@ impl EventBuilder {
             self.push_metadata_null(key)
         }
     }
-    
+
     pub fn push_metadata_bool(&mut self, key: impl Into<String>, val: bool) {
         self.metadata_mut().insert(key.into(), Value::Bool(val));
     }
@@ -1085,7 +1092,12 @@ impl EventBuilder {
         }
     }
 
-    pub fn push_home_run_shame_from_source(&mut self, shame: &HomeRunShame, if_from_source: HomeRunShameSource, home_team_id: Uuid) {
+    pub fn push_home_run_shame_from_source(
+        &mut self,
+        shame: &HomeRunShame,
+        if_from_source: HomeRunShameSource,
+        home_team_id: Uuid,
+    ) {
         match shame {
             HomeRunShame::Unknown => {}
             HomeRunShame::No => {}
@@ -1208,7 +1220,7 @@ impl EventBuilder {
                 // Postseason underbracket and regular season. You win by winning.
                 (vec!["Non-Loss: 1".to_string()], 1)
             } else {
-                // TODO Explain why 
+                // TODO Explain why
                 (Vec::new(), 1)
             };
             if win.turntables {

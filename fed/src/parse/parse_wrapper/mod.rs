@@ -10,7 +10,7 @@ use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use nom::bytes::complete::tag;
 use nom::combinator::opt;
 use nom::{Finish, Parser};
-use nom_language::error::{convert_error, VerboseError};
+use nom_language::error::{VerboseError, convert_error};
 use std::fmt::Display;
 use uuid::Uuid;
 
@@ -738,8 +738,8 @@ impl<'e> EventParseWrapper<'e> {
             String,
             Option<Option<String>>,
             bool,
-            Option<Option<String>>)
-        >,
+            Option<Option<String>>,
+        )>,
         attractions: Vec<(Uuid, String, String)>,
         is_fc: bool,
     ) -> Result<Vec<ScoringPlayer>, FeedParseError> {
@@ -983,12 +983,7 @@ impl<'e> EventParseWrapper<'e> {
     // This is only for parsing standalone attractions. Attractions usually
     // get parsed as part of parse_scoring_players. As of this writing, this
     // is only used in fielder's choices
-    pub fn parse_attractions(
-        &mut self,
-    ) -> Result<
-        Vec<(Uuid, String, String)>,
-        FeedParseError,
-    > {
+    pub fn parse_attractions(&mut self) -> Result<Vec<(Uuid, String, String)>, FeedParseError> {
         self.next_parse(parse_attractions)?
             .into_iter()
             .map(|attraction| {
@@ -1169,12 +1164,15 @@ impl<'e> EventParseWrapper<'e> {
                 // the charge blood text was in the event but the child event
                 // was not present
                 let child = self.next_child_opt(EventType::AddedModFromOtherMod)?;
-                ParseOk(child
-                    .map(|mut child| ParseOk(ModChangeSubEvent {
-                        sub_event: child.as_sub_event(),
-                        team_id: child.next_team_id()?,
-                    }))
-                    .transpose()?
+                ParseOk(
+                    child
+                        .map(|mut child| {
+                            ParseOk(ModChangeSubEvent {
+                                sub_event: child.as_sub_event(),
+                                team_id: child.next_team_id()?,
+                            })
+                        })
+                        .transpose()?,
                 )
             })
             .transpose()
@@ -1314,9 +1312,12 @@ impl<'e> EventParseWrapper<'e> {
         })
     }
 
-    fn parse_shame_from_parser(&mut self, parser: impl Parser<&'e str, Output=Option<&'e str>, Error=VerboseError<&'e str>>) -> Result<Shame, FeedParseError> {
+    fn parse_shame_from_parser(
+        &mut self,
+        parser: impl Parser<&'e str, Output = Option<&'e str>, Error = VerboseError<&'e str>>,
+    ) -> Result<Shame, FeedParseError> {
         if self.season < 17 {
-            return Ok(Shame::Unknown)
+            return Ok(Shame::Unknown);
         }
         match self.next_parse(opt(parser))? {
             None => Ok(Shame::No),
