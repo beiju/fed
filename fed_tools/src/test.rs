@@ -203,31 +203,6 @@ fn run_test_on_season(
             return Ok(());
         }
 
-        // Some temp logging
-        if let FedEventData::StrikeoutSwinging { score_summary, .. } = &parsed_event.data {
-            // TODO Let chain
-            if let Some(score_summary) = score_summary {
-                // TODO Let chain
-                if let fed::Ledger::V2(ledger) = &score_summary.ledger {
-                    // TODO Let chain
-                    if ledger
-                        .modifiers
-                        .iter()
-                        .any(|r#mod| r#mod.is_pure_negating())
-                        && ledger
-                            .modifiers
-                            .iter()
-                            .any(|r#mod| !r#mod.is_pure_negating())
-                    {
-                        progress.println(format!(
-                            "\"{}\" is a triple threat with complex modifiers",
-                            parsed_event.id
-                        ));
-                    }
-                }
-            }
-        }
-
         let Some(ref sample_path) = args.sample_outputs else {
             continue;
         };

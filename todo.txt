@@ -4,3 +4,7 @@
 - Consume and produce tags, children, and pieces of description one by one
 
 https://discord.com/channels/738107179294523402/834940656211591178/879495741779902495
+
+- Remove uses of deprecated event builder
+- Inspect json outputs and change serde annotations to make it idiomatic
+- Address TODOs
