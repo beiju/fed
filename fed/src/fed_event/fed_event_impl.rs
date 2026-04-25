@@ -620,29 +620,6 @@ impl FedEvent {
                     })
                 }
                 eb.build(EventType::IncinerationBlocked)
-                // let child = EventBuilderChild::new(mod_add_event)
-                //     .update(EventBuilderUpdate {
-                //         r#type: EventType::AddedMod,
-                //         category: EventCategory::Changes,
-                //         description: format!("{player_name} ate some flame.", ),
-                //         team_tags: vec![team_id],
-                //         player_tags: vec![player_id],
-                //         ..Default::default()
-                //     })
-                //     .metadata(json!({
-                //         "mod": "MAGMATIC",
-                //         "type": 0, // ?
-                //     }));
-                // event_builder.for_game(game)
-                //     .fill(EventBuilderUpdate {
-                //         r#type: EventType::IncinerationBlocked,
-                //         category: EventCategory::Special,
-                //         description: format!("Rogue Umpire tried to incinerate {player_name}, but {player_name} ate the flame! They became Magmatic!"),
-                //         player_tags: vec![player_id],
-                //         ..Default::default()
-                //     })
-                //     .child(child)
-                //     .build()
             }
             FedEventData::SpecialBlooddrain { game, sipper_id, sipper_name, sipped_id, sipped_team_id, sipped_name, sipped_category, action, sipped_event, rating_before, rating_after, maintenance_mode } => {
                 eb.set_game(game);
@@ -736,52 +713,35 @@ impl FedEvent {
                 return events;
             }
             FedEventData::BirdsCircle { game } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BirdsCircle,
-                        category: EventCategory::Special,
-                        description: "The Birds circle ... but they don't find what they're looking for.".to_string(),
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Birds circle ... but they don't find what they're looking for.");
+                eb.build(EventType::BirdsCircle)
             }
-            FedEventData::AmbushedByCrows { ref game, batter_id, ref batter_name, friend_of_crows: ref pitcher } => {
-                let prefix = if let Some(PitcherNameId { pitcher_name, .. }) = pitcher {
-                    format!("{pitcher_name} calls upon their Friends!\n")
-                } else {
-                    String::new()
-                };
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::AmbushedByCrows,
-                        category: EventCategory::Special,
-                        description: format!("{prefix}A murder of Crows ambush {batter_name}!\nThey run to safety, resulting in an out."),
-                        player_tags: if let Some(PitcherNameId { pitcher_id, .. }) = pitcher { vec![*pitcher_id, batter_id] } else { vec![batter_id] },
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::AmbushedByCrows { game, batter_id, batter_name, friend_of_crows } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                if let Some(PitcherNameId { pitcher_name, pitcher_id }) = friend_of_crows {
+                    eb.push_description(format!("{pitcher_name} calls upon their Friends!"));
+                    eb.push_player_tag(pitcher_id);
+                }
+                eb.push_description(format!("A murder of Crows ambush {batter_name}!"));
+                eb.push_description("They run to safety, resulting in an out.");
+                eb.push_player_tag(batter_id);
+
+                eb.build(EventType::AmbushedByCrows)
             }
             FedEventData::Sun2SetWin { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::Sun2SetWin,
-                        category: EventCategory::Outcomes,
-                        description: format!("Sun 2 set a Win upon the {team_nickname}."),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(format!("Sun 2 set a Win upon the {team_nickname}."));
+                eb.push_team_tag(team_id);
+                eb.build(EventType::Sun2SetWin)
             }
             FedEventData::BlackHoleSwallowedWin { team_id, team_nickname } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::BlackHoleSwallowedWin,
-                        category: EventCategory::Outcomes,
-                        description: format!("The Black Hole swallowed a Win from the {team_nickname}!"),
-                        team_tags: vec![team_id],
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(format!("The Black Hole swallowed a Win from the {team_nickname}!"));
+                eb.push_team_tag(team_id);
+                eb.build(EventType::BlackHoleSwallowedWin)
             }
             FedEventData::Sun2 { game, scoring_team_nickname, caught_some_rays, win_event } => {
                 eb.set_game(game);
@@ -939,34 +899,20 @@ impl FedEvent {
                 eb.build(EventType::BlackHole)
             }
             FedEventData::TeamDidShame { shaming_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::TeamDidShame,
-                        category: EventCategory::Outcomes,
-                        description: format!("The {shaming_team_nickname} shamed the {shamed_team_nickname}."),
-                        team_tags: vec![shaming_team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "totalShames": total_shames,
-                        "totalShamings": total_shamings,
-                    }))
-                    .build()
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(format!("The {shaming_team_nickname} shamed the {shamed_team_nickname}."));
+                eb.push_team_tag(shaming_team_id);
+                eb.push_metadata_i64("totalShames", total_shames);
+                eb.push_metadata_i64("totalShamings", total_shamings);
+                eb.build(EventType::TeamDidShame)
             }
             FedEventData::TeamWasShamed { shamed_team_id, shaming_team_nickname, shamed_team_nickname, total_shames, total_shamings } => {
-                event_builder
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::TeamWasShamed,
-                        category: EventCategory::Outcomes,
-                        description: format!("The {shamed_team_nickname} were shamed by the {shaming_team_nickname}."),
-                        team_tags: vec![shamed_team_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "totalShames": total_shames,
-                        "totalShamings": total_shamings,
-                    }))
-                    .build()
+                eb.set_category(EventCategory::Outcomes);
+                eb.push_description(format!("The {shamed_team_nickname} were shamed by the {shaming_team_nickname}."));
+                eb.push_team_tag(shamed_team_id);
+                eb.push_metadata_i64("totalShames", total_shames);
+                eb.push_metadata_i64("totalShamings", total_shamings);
+                eb.build(EventType::TeamWasShamed)
             }
             FedEventData::CharmWalk { game, pitch, batter_name, batter_id, pitcher_name, batter_item_damage, pitcher_item_damage, scores } => {
                 let home_team_id = game.home_team;
@@ -982,31 +928,26 @@ impl FedEvent {
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.build(EventType::Walk)
             }
-            FedEventData::GainFreeRefill { ref game, player_id, ref player_name, ref roast, ref ingredient1, ref ingredient2, ref sub_event, team_id } => {
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: EventType::AddedMod,
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} got a Free Refill."),
-                        team_tags: team_id.into_iter().collect(),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": "COFFEE_RALLY",
-                        "type": 0, // ?
-                    }));
+            FedEventData::GainFreeRefill { game, player_id, player_name, roast, ingredient1, ingredient2, sub_event, team_id } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                let child_description = format!("{player_name} got a Free Refill.");
+                eb.push_description(format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!"));
+                eb.push_description(&child_description);
+                eb.push_player_tag(player_id);
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::GainFreeRefill,
-                        category: EventCategory::Special,
-                        description: format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!\n{player_name} got a Free Refill."),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .children(vec![child])
-                    .build()
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(child_description);
+                    child_eb.push_player_tag(player_id);
+                    if let Some(team_id) = team_id {
+                        child_eb.push_team_tag(team_id);
+                    }
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
+                    child_eb.push_metadata_str("mod", "COFFEE_RALLY");
+                    child_eb.build(EventType::AddedMod)
+                });
+
+                eb.build(EventType::GainFreeRefill)
             }
             FedEventData::AllergicReaction { game, team_id, player_id, player_name, sub_event, rating_before, rating_after, weather_event } => {
                 eb.set_game(game);
@@ -1058,17 +999,15 @@ impl FedEvent {
 
                 eb.build(EventType::SuperallergicReaction)
             }
-            FedEventData::MildPitchWalk { ref game, pitcher_id, ref pitcher_name, batter_id, ref batter_name, ref scores } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::MildPitch,
-                        category: EventCategory::Special,
-                        description: format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."),
-                        player_tags: vec![pitcher_id, batter_id],
-                        ..Default::default()
-                    })
-                    .scores(scores, " scores!")
-                    .build()
+            FedEventData::MildPitchWalk { game, pitcher_id, pitcher_name, batter_id, batter_name, scores } => {
+                let home_team_id = game.home_team;
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("{pitcher_name} throws a Mild pitch!\n{batter_name} draws a walk."));
+                eb.push_player_tag(pitcher_id);
+                eb.push_player_tag(batter_id);
+                eb.push_scores(&scores, home_team_id, "scores!", false, true);
+                eb.build(EventType::MildPitch)
             }
             FedEventData::PerkUp { ref game, ref players } => {
                 let children = players.iter()
