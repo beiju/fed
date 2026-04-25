@@ -24,3 +24,4 @@ thiserror = "2.0.17"
 either = { version = "1.15.0", features = ["serde"] }
 uuid = { version = "1.2.2", features = ["serde"] }
 with_structure = { path = "../with_structure", features = ["either"] }
+stacker = "0.1"

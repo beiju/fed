@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 // the second one is a macro
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
 use uuid::{Uuid, uuid};
-
 use crate::fed_event::*;
 use crate::format_utils::Possessive;
 use crate::parse::error::FeedParseError;
@@ -359,6 +358,19 @@ impl ModsFromAnotherModRemoved {
 pub fn parse_next_event(
     event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
     state: &InterEventState,
+) -> Result<Option<FedEvent>, FeedParseError> {
+    // Wrap the actual function in a stack size protector because it has a huge stack
+    // frame, because every branch of this massive match statement allocates non-overlapping
+    // stack space for its local variables.
+    stacker::maybe_grow(1024 * 1024, 4096 * 1024, || {
+        parse_next_event_r(event_iter, state, 0)
+    })
+}
+
+pub fn parse_next_event_r(
+    event_iter: &mut PeekableWithLogging<impl Iterator<Item = EventuallyEvent>>,
+    state: &InterEventState,
+    depth: usize,
 ) -> Result<Option<FedEvent>, FeedParseError> {
     let Some(event) = event_iter.next() else {
         return Ok(None);
@@ -4656,6 +4668,7 @@ pub fn parse_next_event(
             todo!()
         }
         EventType::RemovedModsFromAnotherMod => {
+            let event_id = event.id;
             // What the hell did I just write
             let player_or_team_id = Ok(event.next_player_id_opt())
                 .transpose()
@@ -4677,7 +4690,12 @@ pub fn parse_next_event(
             }
 
             // Recurse to process the next event without returning control to the calling loop
-            return parse_next_event(event_iter, state);
+            // Needs to be wrapped in a stack protector because this function has a huge stack
+            // frame, because every branch of this massive match statement allocates non-overlapping
+            // stack space for its local variables.
+            return stacker::maybe_grow(1024 * 1024, 4096 * 1024, || {
+                parse_next_event_r(event_iter, state, depth + 1)
+            });
         }
         EventType::Psychoacoustics => {
             // Same probably-bug as on HalfInning events
