@@ -19,7 +19,7 @@ use uuid::Uuid;
 pub(crate) type ParserError<'a> = nom_language::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out> = IResult<&'a str, Out, ParserError<'a>>;
 
-pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<&str> {
+pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<'_, &str> {
     move |input| {
         if cond {
             tag("\n").parse(input)
@@ -29,7 +29,7 @@ pub(crate) fn parse_newline_if(cond: bool) -> impl Fn(&str) -> ParserResult<&str
     }
 }
 
-pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResult<'_, &str> + '_ {
     move |input| {
         let (input, parsed_value) = if tag_content == "." {
             alt((
@@ -53,7 +53,7 @@ pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResu
 // This is for use in place of parse_terminated when the only remaining text in the string is ".",
 // and so you can't use parse_terminated because that would improperly cut off names with periods
 // like "Kaj Statter Jr."
-pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<'_, &str> {
     let (input, replacement_name_with_dot) = is_not("\n").parse(input)?;
     let replacement_name = replacement_name_with_dot
         .strip_suffix(".")
@@ -62,7 +62,7 @@ pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<&str> {
     Ok((input, replacement_name))
 }
 
-pub(crate) fn parse_game_start(input: &str) -> ParserResult<Option<(&str, &str)>> {
+pub(crate) fn parse_game_start(input: &str) -> ParserResult<'_, Option<(&str, &str)>> {
     alt((
         tag("Let's Go!").map(|_| None),
         pair(parse_terminated(" vs. "), rest).map(|tup| Some(tup)),
@@ -70,7 +70,7 @@ pub(crate) fn parse_game_start(input: &str) -> ParserResult<Option<(&str, &str)>
     .parse(input)
 }
 
-pub(crate) fn parse_half_inning(input: &str) -> ParserResult<(bool, i64, &str)> {
+pub(crate) fn parse_half_inning(input: &str) -> ParserResult<'_, (bool, i64, &str)> {
     let (input, top_of_inning) =
         alt((tag("Top").map(|_| true), tag("Bottom").map(|_| false))).parse(input)?;
 
@@ -83,17 +83,17 @@ pub(crate) fn parse_half_inning(input: &str) -> ParserResult<(bool, i64, &str)> 
     Ok((input, (top_of_inning, inning, team_name)))
 }
 
-pub(crate) fn parse_whole_number(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_whole_number(input: &str) -> ParserResult<'_, i64> {
     map_res(digit1, str::parse).parse(input)
 }
 
-pub(crate) fn parse_integer(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_integer(input: &str) -> ParserResult<'_, i64> {
     map_res(recognize(pair(opt(tag("-")), digit1)), str::parse).parse(input)
 }
 
 pub(crate) fn parse_batter_up(
     input: &str,
-) -> ParserResult<(&str, Option<&str>, &str, Option<&str>, bool, bool)> {
+) -> ParserResult<'_, (&str, Option<&str>, &str, Option<&str>, bool, bool)> {
     let (input, repeating) = opt(parse_terminated("is Repeating!\n")).parse(input)?;
     let (input, (batter_name, inhabiting_name, is_skipping)) = alt((
         // NOTE order matters here. inhabiting must be first
@@ -125,7 +125,7 @@ pub(crate) fn parse_batter_up(
     ))
 }
 
-pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Option<&str>, bool)> {
+pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<'_, (&str, Option<&str>, bool)> {
     let (input, batter_name) = parse_terminated(" is Inhabiting ").parse(input)?;
     let (input, inhabiting_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
@@ -138,7 +138,7 @@ pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<(&str, Opt
     Ok((input, (batter_name, Some(inhabiting_name), skipping)))
 }
 
-pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag(", wielding ").parse(input)?;
     // can't use parse_terminated because the terminator would be "." and "the Iffey Jr." exists
     if let Some((idx, end)) = input.rmatch_indices('.').next() {
@@ -150,7 +150,7 @@ pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<&str> {
     }
 }
 
-pub(crate) fn parse_ball(input: &str) -> ParserResult<(i64, i64)> {
+pub(crate) fn parse_ball(input: &str) -> ParserResult<'_, (i64, i64)> {
     let (input, _) = tag("Ball. ").parse(input)?;
     let (input, count) = parse_count(input)?;
 
@@ -160,7 +160,7 @@ pub(crate) fn parse_ball(input: &str) -> ParserResult<(i64, i64)> {
 pub(crate) fn parse_foul_ball(
     double_strike: bool,
     extra_space_after_offworld: bool,
-) -> impl Fn(&str) -> ParserResult<(i64, i64, bool, bool)> {
+) -> impl Fn(&str) -> ParserResult<'_, (i64, i64, bool, bool)> {
     move |input| {
         let (input, offworld) = opt(tag(if extra_space_after_offworld {
             "Offworld  "
@@ -195,7 +195,7 @@ pub enum StrikeType {
 
 pub(crate) fn parse_strike(
     double_strike: bool,
-) -> impl Fn(&str) -> ParserResult<(StrikeType, i64, i64)> {
+) -> impl Fn(&str) -> ParserResult<'_, (StrikeType, i64, i64)> {
     move |input| {
         let (input, strike_type) = alt((
             tag(if double_strike {
@@ -214,7 +214,7 @@ pub(crate) fn parse_strike(
     }
 }
 
-pub(crate) fn parse_count(input: &str) -> ParserResult<(i64, i64)> {
+pub(crate) fn parse_count(input: &str) -> ParserResult<'_, (i64, i64)> {
     // this should handle double-digit counts because i know how blaseball is
     let (input, balls) = parse_whole_number(input)?;
     let (input, _) = tag("-").parse(input)?;
@@ -223,7 +223,7 @@ pub(crate) fn parse_count(input: &str) -> ParserResult<(i64, i64)> {
     Ok((input, (balls, strikes)))
 }
 
-pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_flyout(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, batter_name) = parse_terminated(" hit a flyout to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
@@ -233,7 +233,7 @@ pub(crate) fn parse_flyout(input: &str) -> ParserResult<(&str, &str)> {
 pub(crate) fn parse_batter_debt<'a>(
     batter_name: &'a str,
     fielder_name: &'a str,
-) -> impl Fn(&str) -> ParserResult<DebtType> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, DebtType> + 'a {
     move |input: &str| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(batter_name).parse(input)?;
@@ -266,7 +266,7 @@ pub(crate) enum ParsedGroundOut<'a> {
     },
 }
 
-pub(crate) fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+pub(crate) fn parse_ground_out(input: &str) -> ParserResult<'_, ParsedGroundOut<'_>> {
     alt((
         // Shelled ground out must be before simple ground out
         parse_shelled_ground_out,
@@ -277,7 +277,7 @@ pub(crate) fn parse_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
     .parse(input)
 }
 
-pub(crate) fn parse_shelled_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+pub(crate) fn parse_shelled_ground_out(input: &str) -> ParserResult<'_, ParsedGroundOut<'_>> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
     let (input, fielder_name) = parse_terminated("'s Shell.").parse(input)?;
 
@@ -289,7 +289,7 @@ pub(crate) fn parse_shelled_ground_out(input: &str) -> ParserResult<ParsedGround
     Ok((input, (parsed)))
 }
 
-pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundOut> {
+pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<'_, ParsedGroundOut<'_>> {
     let (input, batter_name) = parse_terminated(" hit a ground out to ").parse(input)?;
     let (input, fielder_name) = parse_terminated(".").parse(input)?;
 
@@ -301,7 +301,7 @@ pub(crate) fn parse_simple_ground_out(input: &str) -> ParserResult<ParsedGroundO
     Ok((input, (parsed)))
 }
 
-pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut> {
+pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<'_, ParsedGroundOut<'_>> {
     let (input, runner_out_name) = parse_terminated(" out at ").parse(input)?;
     let (input, base) = parse_named_base(input)?;
     let (input, _) = tag(" base.").parse(input)?;
@@ -315,14 +315,14 @@ pub(crate) fn parse_fielders_choice(input: &str) -> ParserResult<ParsedGroundOut
     ))
 }
 
-pub(crate) fn parse_reaches_on_fielders_choice(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_reaches_on_fielders_choice(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, batter_name) = parse_terminated(" reaches on fielder's choice.").parse(input)?;
 
     Ok((input, batter_name))
 }
 
-pub(crate) fn parse_double_play(input: &str) -> ParserResult<ParsedGroundOut> {
+pub(crate) fn parse_double_play(input: &str) -> ParserResult<'_, ParsedGroundOut<'_>> {
     let (input, batter_name) = parse_terminated(" hit into a double play!").parse(input)?;
 
     Ok((input, (ParsedGroundOut::DoublePlay { batter_name })))
@@ -337,7 +337,7 @@ pub(crate) enum ParsedHitType {
 
 pub(crate) fn parse_hit(
     input: &str,
-) -> ParserResult<(
+) -> ParserResult<'_, (
     &str,
     ParsedHitType,
     Option<(&str, Option<bool>)>,
@@ -392,7 +392,7 @@ pub(crate) fn parse_hit(
 }
 
 // The difference between hype suffix and hype prefix is which newline it consumes
-fn parse_hype_prefix(input: &str) -> ParserResult<&str> {
+fn parse_hype_prefix(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Hype Builds in ").parse(input)?;
     let (input, stadium_name) = parse_terminated("!\n").parse(input)?;
 
@@ -400,7 +400,7 @@ fn parse_hype_prefix(input: &str) -> ParserResult<&str> {
 }
 
 // The difference between hype suffix and hype prefix is which newline it consumes
-fn parse_hype_suffix(input: &str) -> ParserResult<&str> {
+fn parse_hype_suffix(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("\nHype Builds in ").parse(input)?;
     let (input, stadium_name) = parse_terminated("!").parse(input)?;
 
@@ -410,7 +410,7 @@ fn parse_hype_suffix(input: &str) -> ParserResult<&str> {
 // The difference between shame suffix and hype prefix is which newline it consumes
 // If this parser doesn't fail, it was a shame. The Optional in the return value
 // is whether it was hype
-pub(crate) fn parse_shame_prefix(input: &str) -> ParserResult<Option<&str>> {
+pub(crate) fn parse_shame_prefix(input: &str) -> ParserResult<'_, Option<&str>> {
     let (input, _) = tag("Shame!\n").parse(input)?;
     let (input, hype) = opt(parse_hype_prefix).parse(input)?;
 
@@ -420,7 +420,7 @@ pub(crate) fn parse_shame_prefix(input: &str) -> ParserResult<Option<&str>> {
 // The difference between shame suffix and hype prefix is which newline it consumes
 // If this parser doesn't fail, it was a shame. The Optional in the return value
 // is whether it was hype
-pub(crate) fn parse_shame_suffix(input: &str) -> ParserResult<Option<&str>> {
+pub(crate) fn parse_shame_suffix(input: &str) -> ParserResult<'_, Option<&str>> {
     let (input, _) = tag("\nShame!").parse(input)?;
     let (input, hype) = opt(parse_hype_suffix).parse(input)?;
 
@@ -436,7 +436,7 @@ pub(crate) enum ParsedSpicyStatus {
 
 pub(crate) fn parse_spicy_status(
     batter_name: &str,
-) -> impl FnMut(&str) -> ParserResult<ParsedSpicyStatus> + '_ {
+) -> impl FnMut(&str) -> ParserResult<'_, ParsedSpicyStatus> + '_ {
     move |input: &str| {
         let (input, heating_up) = opt(alt((
             terminated(
@@ -455,7 +455,7 @@ pub(crate) fn parse_spicy_status(
     }
 }
 
-pub(crate) fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserResult<bool> + '_ {
+pub(crate) fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserResult<'_, bool> + '_ {
     move |input: &str| {
         let (input, cooled_off) = opt(terminated(
             terminated(char('\n'), tag(batter_name)),
@@ -466,7 +466,7 @@ pub(crate) fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserR
     }
 }
 
-pub(crate) fn parse_free_refill(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_free_refill(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, name) = parse_terminated(" used their Free Refill.\n").parse(input)?;
     let (input, _) = tag(name).parse(input)?;
@@ -494,7 +494,7 @@ pub(crate) fn parse_scores<'a>(
     score_label: &'static str,
     extra_space: bool,
     hype_before_score: bool,
-) -> impl FnMut(&'a str) -> ParserResult<(Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
+) -> impl FnMut(&'a str) -> ParserResult<'_, (Vec<ParsedScore<'a>>, Vec<ParsedAttraction<'a>>)> {
     move |input| {
         let (input, mut scorers) = many0(parse_score(
             score_label,
@@ -524,9 +524,9 @@ pub(crate) fn parse_scores_fc<'a>(
     score_label: &'static str,
     extra_space: bool,
     hype_before_score: bool,
-) -> impl FnMut(&'a str) -> ParserResult<Vec<ParsedScore<'a>>> {
+) -> impl FnMut(&'a str) -> ParserResult<'_, Vec<ParsedScore<'a>>> {
     move |input| {
-        let (input, mut scorers) = many0(parse_score(
+        let (input, scorers) = many0(parse_score(
             score_label,
             extra_space,
             true,
@@ -541,7 +541,7 @@ pub(crate) fn parse_scores_fc<'a>(
 pub(crate) fn parse_balloons(
     runs_scored: i64,
     before_s20d81: bool,
-) -> impl Fn(&str) -> ParserResult<&str> {
+) -> impl Fn(&str) -> ParserResult<'_, &str> {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         // They changed from "inflates" to "inflated" on s20d72
@@ -561,7 +561,7 @@ pub(crate) fn parse_balloons(
 
 pub(crate) fn parse_unknown_number_of_balloons(
     before_s20d81: bool,
-) -> impl Fn(&str) -> ParserResult<(&str, i64)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, i64)> {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         // They changed from "inflates" to "inflated" on s20d72
@@ -583,7 +583,7 @@ pub(crate) fn parse_score(
     extra_space: bool,
     is_fc: bool,
     shame_before_score: bool,
-) -> impl Fn(&str) -> ParserResult<ParsedScore> {
+) -> impl Fn(&str) -> ParserResult<'_, ParsedScore> {
     move |input| {
         // Prior to s22, hype was listed before the score and scorer name
         let (input, shame) = if shame_before_score {
@@ -642,7 +642,7 @@ pub(crate) fn parse_score(
     }
 }
 
-pub(crate) fn parse_slippery(player_name: &str) -> impl Fn(&str) -> ParserResult<()> {
+pub(crate) fn parse_slippery(player_name: &str) -> impl Fn(&str) -> ParserResult<'_, ()> {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
@@ -652,7 +652,7 @@ pub(crate) fn parse_slippery(player_name: &str) -> impl Fn(&str) -> ParserResult
     }
 }
 
-pub(crate) fn parse_attraction(input: &str) -> ParserResult<ParsedAttraction> {
+pub(crate) fn parse_attraction(input: &str) -> ParserResult<'_, ParsedAttraction<'_>> {
     let (input, _) = tag("\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
     let (input, player_name) = parse_terminated("!").parse(input)?;
@@ -666,13 +666,13 @@ pub(crate) fn parse_attraction(input: &str) -> ParserResult<ParsedAttraction> {
     ))
 }
 
-pub(crate) fn parse_attractions(input: &str) -> ParserResult<Vec<ParsedAttraction>> {
+pub(crate) fn parse_attractions(input: &str) -> ParserResult<'_, Vec<ParsedAttraction<'_>>> {
     many0(parse_attraction).parse(input)
 }
 
 pub(crate) fn parse_hotel_motel_party_with_name(
     player_name: &str,
-) -> impl Fn(&str) -> ParserResult<Option<&str>> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, Option<&str>> + '_ {
     move |input: &str| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
@@ -688,11 +688,11 @@ pub(crate) fn parse_hotel_motel_party_with_name(
     }
 }
 
-pub(crate) fn parse_magmatic(input: &str) -> ParserResult<Option<&str>> {
+pub(crate) fn parse_magmatic(input: &str) -> ParserResult<'_, Option<&str>> {
     opt(parse_terminated(" is Magmatic!\n")).parse(input)
 }
 
-pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
+pub(crate) fn parse_hr(input: &str) -> ParserResult<'_, (&str, HomeRunType)> {
     let (input, batter_name) = parse_terminated(" hits a ").parse(input)?;
     let (input, home_run_type) = alt((
         tag("solo home run!").map(|_| HomeRunType::Solo),
@@ -706,11 +706,11 @@ pub(crate) fn parse_hr(input: &str) -> ParserResult<(&str, HomeRunType)> {
     Ok((input, (batter_name, home_run_type)))
 }
 
-pub(crate) fn parse_attract_player(input: &str) -> ParserResult<Option<(&str, &str)>> {
+pub(crate) fn parse_attract_player(input: &str) -> ParserResult<'_, Option<(&str, &str)>> {
     opt(parse_attract_player_inner).parse(input)
 }
 
-pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" Attract ").parse(input)?;
     let (input, player_name) = parse_terminated("!").parse(input)?;
@@ -718,7 +718,7 @@ pub(crate) fn parse_attract_player_inner(input: &str) -> ParserResult<(&str, &st
     Ok((input, (team_nickname, player_name)))
 }
 
-pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
+pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<'_, bool> {
     let (input, big_buckets) = opt(tag(
         "\nThe ball lands in a Big Bucket. An extra Run scores!",
     ))
@@ -726,7 +726,7 @@ pub(crate) fn parse_big_bucket(input: &str) -> ParserResult<bool> {
     Ok((input, big_buckets.is_some()))
 }
 
-pub(crate) fn parse_hoops(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_hoops(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, oop) = alt((
         parse_terminated(" went up for the alley oop...\n...but they can't connect.")
@@ -740,7 +740,7 @@ pub(crate) fn parse_hoops(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, oop))
 }
 
-pub(crate) fn parse_free_refills(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_free_refills(input: &str) -> ParserResult<'_, Vec<&str>> {
     many0(parse_free_refill).parse(input)
 }
 
@@ -758,7 +758,7 @@ pub(crate) enum ParsedStolenBase<'a> {
     },
 }
 
-pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
+pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<'_, ParsedStolenBase<'_>> {
     alt((
         parse_normal_stolen_base.map(
             |(runner_name, base_stolen, is_successful, blaserunning, free_refiller, shame)| {
@@ -779,7 +779,7 @@ pub(crate) fn parse_stolen_base(input: &str) -> ParserResult<ParsedStolenBase> {
 
 pub(crate) fn parse_normal_stolen_base(
     input: &str,
-) -> ParserResult<(&str, Base, bool, bool, Option<&str>, Option<Option<&str>>)> {
+) -> ParserResult<'_, (&str, Base, bool, bool, Option<&str>, Option<Option<&str>>)> {
     let (input, (runner_name, is_successful)) = alt((
         parse_terminated(" steals ").map(|n| (n, true)),
         parse_terminated(" gets caught stealing ").map(|n| (n, false)),
@@ -813,7 +813,7 @@ pub(crate) fn parse_normal_stolen_base(
     ))
 }
 
-pub(crate) fn parse_stolen_fifth_base(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_stolen_fifth_base(input: &str) -> ParserResult<'_, &str> {
     let (input, runner_name) =
         parse_terminated(" placed and stole to The Fifth Base!").parse(input)?;
 
@@ -822,7 +822,7 @@ pub(crate) fn parse_stolen_fifth_base(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_placed_fifth_base_in_stadium(
     player_name: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + '_ {
     move |input| {
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = tag(" placed The Fifth Base in ").parse(input)?;
@@ -830,7 +830,7 @@ pub(crate) fn parse_placed_fifth_base_in_stadium(
     }
 }
 
-pub(crate) fn parse_named_base(input: &str) -> ParserResult<Base> {
+pub(crate) fn parse_named_base(input: &str) -> ParserResult<'_, Base> {
     alt((
         tag("first").map(|_| Base::First),
         tag("second").map(|_| Base::Second),
@@ -857,7 +857,7 @@ pub(crate) enum ParsedStrikeout<'a> {
     },
 }
 
-pub(crate) fn parse_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+pub(crate) fn parse_strikeout(input: &str) -> ParserResult<'_, ParsedStrikeout<'_>> {
     alt((
         parse_normal_strikeout,
         parse_charm_strikeout,
@@ -866,7 +866,7 @@ pub(crate) fn parse_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
     .parse(input)
 }
 
-pub(crate) fn parse_normal_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+pub(crate) fn parse_normal_strikeout(input: &str) -> ParserResult<'_, ParsedStrikeout<'_>> {
     let (input, batter_name) = parse_terminated(" strikes out ").parse(input)?;
     let (input, is_swinging) = alt((
         tag("swinging.").map(|_| true),
@@ -884,7 +884,7 @@ pub(crate) fn parse_normal_strikeout(input: &str) -> ParserResult<ParsedStrikeou
     ))
 }
 
-pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout> {
+pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<'_, ParsedStrikeout<'_>> {
     let (input, charmer_name) = parse_terminated(" charmed ").parse(input)?;
     let (input, charmed_name) = parse_terminated("!\n").parse(input)?;
     let (input, charmed_name2) = parse_terminated(" swings ").parse(input)?;
@@ -906,7 +906,7 @@ pub(crate) fn parse_charm_strikeout(input: &str) -> ParserResult<ParsedStrikeout
 
 pub(crate) fn parse_strikeout_type_mind_trick_strikeout(
     input: &str,
-) -> ParserResult<ParsedStrikeout> {
+) -> ParserResult<'_, ParsedStrikeout<'_>> {
     let (input, pitcher_name) = parse_terminated(" uses a Mind Trick!\n").parse(input)?;
     let (input, batter_name) = parse_terminated(" strikes out thinking.").parse(input)?;
 
@@ -934,7 +934,7 @@ pub(crate) enum ParsedWalk<'s> {
     IntentionalWalk((&'s str, &'s str)),
 }
 
-pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
+pub(crate) fn parse_walk(input: &str) -> ParserResult<'_, ParsedWalk<'_>> {
     alt((
         // mind trick strikeout must be before walk, because walk is a prefix of it
         parse_walk_type_mind_trick_strikeout.map(|res| ParsedWalk::MindTrickWalkIntoStrikeout(res)),
@@ -947,7 +947,7 @@ pub(crate) fn parse_walk(input: &str) -> ParserResult<ParsedWalk> {
     .parse(input)
 }
 
-pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<Base> {
+pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<'_, Base> {
     let (input, _) = tag("\nBase Instincts take them directly to ").parse(input)?;
     let (input, which) = alt((
         tag("second").map(|_| Base::Second),
@@ -960,7 +960,7 @@ pub(crate) fn parse_base_instincts(input: &str) -> ParserResult<Base> {
     Ok((input, which))
 }
 
-pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<Base>)> {
+pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<'_, (&str, Option<Base>)> {
     let (input, batter_name) = parse_terminated(" draws a walk.").parse(input)?;
 
     let (input, base_instincts) = opt(parse_base_instincts).parse(input)?;
@@ -968,7 +968,7 @@ pub(crate) fn parse_ordinary_walk(input: &str) -> ParserResult<(&str, Option<Bas
     Ok((input, (batter_name, base_instincts)))
 }
 
-pub(crate) fn parse_intentional_walk(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_intentional_walk(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, pitcher_name) = parse_terminated(" senses foul play.\n").parse(input)?;
     let (input, batter_name) = parse_terminated(" is intentionally walked.").parse(input)?;
 
@@ -977,7 +977,7 @@ pub(crate) fn parse_intentional_walk(input: &str) -> ParserResult<(&str, &str)> 
 
 pub(crate) fn parse_charm_walk(
     input: &str,
-) -> ParserResult<(Option<(ActivePositionType, &str, Option<bool>)>, &str, &str)> {
+) -> ParserResult<'_, (Option<(ActivePositionType, &str, Option<bool>)>, &str, &str)> {
     // This will need to be updated if anyone charms in a run
     // Resim data makes me think that maybe the pitcher's item could be damaged twice (once as the
     // pitcher and once as the charmer) but I'm not going to worry about that right now
@@ -1020,7 +1020,7 @@ pub(crate) fn parse_charm_walk(
     Ok((input, (broken_item, batter_name, pitcher_name)))
 }
 
-pub(crate) fn parse_charmed_mind_trick_walk(input: &str) -> ParserResult<(&str, &str, i64)> {
+pub(crate) fn parse_charmed_mind_trick_walk(input: &str) -> ParserResult<'_, (&str, &str, i64)> {
     let (input, charmer_name) = parse_terminated(" charmed ").parse(input)?;
     let (input, charmed_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(charmed_name).parse(input)?;
@@ -1034,7 +1034,7 @@ pub(crate) fn parse_charmed_mind_trick_walk(input: &str) -> ParserResult<(&str, 
     Ok((input, (charmer_name, charmed_name, num_swings)))
 }
 
-pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<(&str, StrikeoutType)> {
+pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<'_, (&str, StrikeoutType)> {
     // I'm gonna need to incorporate items in this at some point
     let (input, batter_name) = parse_terminated(" strikes out ").parse(input)?;
     let (input, strikeout_type) = alt((
@@ -1051,7 +1051,7 @@ pub(crate) fn parse_mind_trick_walk(input: &str) -> ParserResult<(&str, Strikeou
     Ok((input, (batter_name, strikeout_type)))
 }
 
-pub(crate) fn parse_walk_type_mind_trick_strikeout(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_walk_type_mind_trick_strikeout(input: &str) -> ParserResult<'_, (&str, &str)> {
     // I'm gonna need to incorporate items in this at some point
     let (input, batter_name) = parse_terminated(" draws a walk.\n").parse(input)?;
     let (input, pitcher_name) = parse_terminated(" uses a Mind Trick!\n").parse(input)?;
@@ -1061,7 +1061,7 @@ pub(crate) fn parse_walk_type_mind_trick_strikeout(input: &str) -> ParserResult<
     Ok((input, (batter_name, pitcher_name)))
 }
 
-pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i64, Vec<&str>)> {
+pub(crate) fn parse_inning_end(input: &str) -> ParserResult<'_, (i64, Vec<&str>)> {
     let (input, _) = tag("Inning ").parse(input)?;
     let (input, inning_num) = parse_whole_number(input)?;
     let (input, _) = tag(" is now an Outing.").parse(input)?;
@@ -1074,11 +1074,11 @@ pub(crate) fn parse_inning_end(input: &str) -> ParserResult<(i64, Vec<&str>)> {
     Ok((input, (inning_num, lost_triple_threat)))
 }
 
-pub(crate) fn parse_stopped_inhabiting(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_stopped_inhabiting(input: &str) -> ParserResult<'_, &str> {
     parse_terminated(" stopped Inhabiting.").parse(input)
 }
 
-pub(crate) fn parse_game_end(input: &str) -> ParserResult<((&str, f32), (&str, f32))> {
+pub(crate) fn parse_game_end(input: &str) -> ParserResult<'_, ((&str, f32), (&str, f32))> {
     // This is a bit tricky because it's a string of arbitrary words (a team name) followed by an
     // arbitrary number (score)
     let (input, winning_team_name) = take_till(AsChar::is_dec_digit).parse(input)?;
@@ -1118,7 +1118,7 @@ pub(crate) enum MildPitchType<'a> {
     Walk(&'a str),
 }
 
-pub(crate) fn parse_mild_pitch_ball(input: &str) -> ParserResult<MildPitchType> {
+pub(crate) fn parse_mild_pitch_ball(input: &str) -> ParserResult<'_, MildPitchType<'_>> {
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
     let (input, _) = tag("Ball, ").parse(input)?;
     let (input, count) = parse_count(input)?;
@@ -1127,7 +1127,7 @@ pub(crate) fn parse_mild_pitch_ball(input: &str) -> ParserResult<MildPitchType> 
     Ok((input, MildPitchType::Ball(count)))
 }
 
-pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType)> {
+pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<'_, (&str, MildPitchType<'_>)> {
     let (input, pitcher_name) = parse_terminated(" throws a Mild pitch!\n").parse(input)?;
 
     // Fun fact: Can't reuse the ball parser because it looks for a comma but this has a period
@@ -1140,13 +1140,13 @@ pub(crate) fn parse_mild_pitch(input: &str) -> ParserResult<(&str, MildPitchType
     Ok((input, (pitcher_name, pitch_type)))
 }
 
-pub(crate) fn parse_runners_advance_on_mild_pitch(input: &str) -> ParserResult<bool> {
+pub(crate) fn parse_runners_advance_on_mild_pitch(input: &str) -> ParserResult<'_, bool> {
     let (input, runners_advance) =
         opt(tag("\nRunners advance on the pathetic play!")).parse(input)?;
     Ok((input, runners_advance.is_some()))
 }
 
-pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, bool, bool)> {
+pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<'_, (&str, &str, &str, bool, bool)> {
     let (input, player_name) = parse_terminated(" is Beaned by a ").parse(input)?;
     let (input, roast) = parse_terminated(" roast with ").parse(input)?;
     let (input, notes) = parse_terminated(".\n").parse(input)?;
@@ -1163,7 +1163,7 @@ pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<(&str, &str, &str, 
     Ok((input, (player_name2, roast, notes, wired, gained)))
 }
 
-pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<(&str, &str, &str, &str)> {
+pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<'_, (&str, &str, &str, &str)> {
     let (input, player_name) = parse_terminated(" is Poured Over with a ").parse(input)?;
     let (input, roast) = parse_terminated(" roast blending ").parse(input)?;
     let (input, ingredient1) = parse_terminated(" and ").parse(input)?;
@@ -1182,7 +1182,7 @@ pub(crate) enum IncinerationBlockedReason {
 
 pub(crate) fn parse_incineration_blocked(
     input: &str,
-) -> ParserResult<(bool, &str, IncinerationBlockedReason)> {
+) -> ParserResult<'_, (bool, &str, IncinerationBlockedReason)> {
     let (input, player_name_unstable) = opt(parse_terminated(" is Unstable!\n")).parse(input)?;
     let (input, _) = tag("Rogue Umpire tried to incinerate ").parse(input)?;
     let (input, player_name) = if let Some(name) = player_name_unstable {
@@ -1208,7 +1208,7 @@ pub(crate) fn parse_incineration_blocked(
     ))
 }
 
-pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<'_, (&str, ModDuration)> {
     // This message treats possessives of names ending in s correctly
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, duration) = alt((
@@ -1221,11 +1221,11 @@ pub(crate) fn parse_player_mod_expires(input: &str) -> ParserResult<(&str, ModDu
     Ok((input, (player_name, duration)))
 }
 
-fn parse_terminated_by_possessive(input: &str) -> ParserResult<&str> {
+fn parse_terminated_by_possessive(input: &str) -> ParserResult<'_, &str> {
     alt((parse_terminated("'s "), parse_terminated("' "))).parse(input)
 }
 
-pub(crate) fn parse_team_mod_expires(input: &str) -> ParserResult<(&str, ModDuration)> {
+pub(crate) fn parse_team_mod_expires(input: &str) -> ParserResult<'_, (&str, ModDuration)> {
     let (input, _) = tag("The ").parse(input)?;
     // This message treats possessives of names ending in s correctly
     let (input, player_name) =
@@ -1252,7 +1252,7 @@ pub(crate) enum ParsedBlooddrainAction<'s> {
 
 pub(crate) fn parse_blooddrain_action(
     drinker_name: &str,
-) -> impl Fn(&str) -> ParserResult<ParsedBlooddrainAction> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, ParsedBlooddrainAction> + '_ {
     move |input: &str| {
         let (input, _) = tag(drinker_name).parse(input)?;
         let (input, action) = alt((
@@ -1278,7 +1278,7 @@ pub(crate) fn parse_blooddrain_action(
 pub(crate) fn parse_blooddrain_ability<'a>(
     drinker_name: &'a str,
     category: &'a str,
-) -> impl Fn(&str) -> ParserResult<()> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, ()> + 'a {
     move |input: &str| {
         let (input, _) = tag(drinker_name).parse(input)?;
         let (input, _) = tag(" increased their ").parse(input)?;
@@ -1291,7 +1291,7 @@ pub(crate) fn parse_blooddrain_ability<'a>(
 
 pub(crate) fn parse_blooddrain_siphon(
     input: &str,
-) -> ParserResult<(&str, &str, AttrCategory, Option<ParsedBlooddrainAction>)> {
+) -> ParserResult<'_, (&str, &str, AttrCategory, Option<ParsedBlooddrainAction<'_>>)> {
     let (input, _) = tag("The Blooddrain gurgled!\n").parse(input)?;
     let (input, drinker_name) = parse_terminated("'s Siphon activates!\n").parse(input)?;
     let (input, _) = tag(drinker_name).parse(input)?;
@@ -1308,7 +1308,7 @@ pub(crate) fn parse_blooddrain_siphon(
     Ok((input, (drinker_name, drunk_name, category, action)))
 }
 
-pub(crate) fn parse_category(input: &str) -> ParserResult<AttrCategory> {
+pub(crate) fn parse_category(input: &str) -> ParserResult<'_, AttrCategory> {
     alt((
         tag("hitting").map(|_| AttrCategory::Batting),
         tag("baserunning").map(|_| AttrCategory::Baserunning),
@@ -1318,7 +1318,7 @@ pub(crate) fn parse_category(input: &str) -> ParserResult<AttrCategory> {
     .parse(input)
 }
 
-pub(crate) fn parse_friend_of_crows(input: &str) -> ParserResult<(Option<&str>, &str)> {
+pub(crate) fn parse_friend_of_crows(input: &str) -> ParserResult<'_, (Option<&str>, &str)> {
     let (input, pitcher_name) =
         opt(parse_terminated(" calls upon their Friends!\n")).parse(input)?;
     let (input, _) = tag("A murder of Crows ambush ").parse(input)?;
@@ -1328,21 +1328,21 @@ pub(crate) fn parse_friend_of_crows(input: &str) -> ParserResult<(Option<&str>, 
     Ok((input, (pitcher_name, batter_name)))
 }
 
-pub(crate) fn parse_black_hole_swallowed_win(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_black_hole_swallowed_win(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The Black Hole swallowed a Win from the ").parse(input)?;
     let (input, team_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_sun2_set_win(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_sun2_set_win(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Sun 2 set a Win upon the ").parse(input)?;
     let (input, team_name) = parse_terminated(".").parse(input)?;
 
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_sun2(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_sun2(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, (scoring_team, smiled)) = alt((
         // This is before Sun(Sun)
@@ -1366,16 +1366,16 @@ pub(crate) fn parse_sun2(input: &str) -> ParserResult<&str> {
     Ok((input, scoring_team))
 }
 
-pub(crate) fn parse_catches_rays(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_catches_rays(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, rays_player) = parse_terminated(" catches some rays.").parse(input)?;
     Ok((input, rays_player))
 }
 
-pub(crate) fn parse_black_hole(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_black_hole(input: &str) -> ParserResult<'_, (&str, &str)> {
     alt((parse_basic_black_hole, parse_black_hole_after_sunsun)).parse(input)
 }
-pub(crate) fn parse_basic_black_hole(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_basic_black_hole(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, scoring_team) =
         parse_terminated(" collect 10!\nThe Black Hole swallows the Runs and a ").parse(input)?;
@@ -1384,7 +1384,7 @@ pub(crate) fn parse_basic_black_hole(input: &str) -> ParserResult<(&str, &str)> 
     Ok((input, (scoring_team, victim_team)))
 }
 
-pub(crate) fn parse_black_hole_after_sunsun(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_black_hole_after_sunsun(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, scoring_team) =
         parse_terminated(" collect 10!\nThe Black Hole swallowed the Runs and burped at the ")
@@ -1394,7 +1394,7 @@ pub(crate) fn parse_black_hole_after_sunsun(input: &str) -> ParserResult<(&str, 
     Ok((input, (scoring_team, victim_team)))
 }
 
-pub(crate) fn parse_team_did_shame(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_team_did_shame(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, shaming_team) = parse_terminated(" shamed the ").parse(input)?;
     let (input, shamed_team) = parse_terminated(".").parse(input)?;
@@ -1402,7 +1402,7 @@ pub(crate) fn parse_team_did_shame(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (shaming_team, shamed_team)))
 }
 
-pub(crate) fn parse_team_was_shamed(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_team_was_shamed(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, shamed_team) = parse_terminated(" were shamed by the ").parse(input)?;
     let (input, shaming_team) = parse_terminated(".").parse(input)?;
@@ -1410,14 +1410,14 @@ pub(crate) fn parse_team_was_shamed(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (shaming_team, shamed_team)))
 }
 
-pub(crate) fn parse_allergic_reaction(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_allergic_reaction(input: &str) -> ParserResult<'_, &str> {
     let (input, player_name) =
         parse_terminated(" swallowed a stray peanut and had an allergic reaction!").parse(input)?;
 
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_superallergic_reaction(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_superallergic_reaction(input: &str) -> ParserResult<'_, &str> {
     let (input, player_name) =
         parse_terminated(" swallowed a stray peanut and had a Superallergic reaction!")
             .parse(input)?;
@@ -1427,7 +1427,7 @@ pub(crate) fn parse_superallergic_reaction(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_feedback(
     input: &str,
-) -> ParserResult<(&str, &str, Option<&str>, ActivePositionType)> {
+) -> ParserResult<'_, (&str, &str, Option<&str>, ActivePositionType)> {
     let (input, _) = tag("Reality flickers. Things look different ...\n").parse(input)?;
     let (input, player1_name) = parse_terminated(" and ").parse(input)?;
     let (input, player2_name) =
@@ -1453,13 +1453,13 @@ pub(crate) fn parse_feedback(
     ))
 }
 
-pub(crate) fn parse_perk_up(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_perk_up(input: &str) -> ParserResult<'_, Vec<&str>> {
     let (input, names) = separated_list1(tag("\n"), parse_terminated(" Perks up.")).parse(input)?;
 
     Ok((input, names))
 }
 
-pub(crate) fn parse_superyummy(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_superyummy(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, result) = alt((
         parse_terminated(" loves Peanuts.").map(|n| (n, true)),
         parse_terminated(" misses Peanuts.").map(|n| (n, false)),
@@ -1469,7 +1469,7 @@ pub(crate) fn parse_superyummy(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_bestow_reverberating(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_bestow_reverberating(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Reverberations are at dangerous levels!\n").parse(input)?;
     let (input, player_name) = parse_terminated(" is now Reverberating wildly!").parse(input)?;
 
@@ -1485,7 +1485,7 @@ pub(crate) enum ParsedReverbType {
 
 pub(crate) fn parse_roster_shuffle(
     season: i64,
-) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, ParsedReverbType, Vec<&str>)> {
     // This takes a season because in season 20 the text was slightly changed,
     // from "Reverberations are at..." to "Reverberations hit..."
     move |input| {
@@ -1500,7 +1500,7 @@ pub(crate) fn parse_roster_shuffle(
 
 pub(crate) fn parse_roster_shuffle_high(
     season: i64,
-) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, ParsedReverbType, Vec<&str>)> {
     move |input| {
         let (input, _) = if season < 19 {
             tag("Reverberations are at high levels!\nThe ")
@@ -1526,7 +1526,7 @@ pub(crate) fn parse_roster_shuffle_high(
 
 pub(crate) fn parse_roster_shuffle_unsafe(
     season: i64,
-) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, ParsedReverbType, Vec<&str>)> {
     move |input| {
         let (input, _) = if season < 19 {
             tag("Reverberations are at unsafe levels!\nThe ")
@@ -1554,7 +1554,7 @@ pub(crate) fn parse_roster_shuffle_unsafe(
 
 pub(crate) fn parse_roster_shuffle_dangerous(
     season: i64,
-) -> impl Fn(&str) -> ParserResult<(&str, ParsedReverbType, Vec<&str>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, ParsedReverbType, Vec<&str>)> {
     move |input| {
         let (input, _) = if season < 19 {
             tag("Reverberations are at dangerous levels!\nThe ")
@@ -1574,7 +1574,7 @@ pub(crate) fn parse_roster_shuffle_dangerous(
     }
 }
 
-pub(crate) fn parse_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_become_triple_threat(input: &str) -> ParserResult<'_, Vec<&str>> {
     let (input, names) = alt((
         parse_double_become_triple_threat,
         parse_single_become_triple_threat,
@@ -1584,7 +1584,7 @@ pub(crate) fn parse_become_triple_threat(input: &str) -> ParserResult<Vec<&str>>
     Ok((input, names))
 }
 
-pub(crate) fn parse_double_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_double_become_triple_threat(input: &str) -> ParserResult<'_, Vec<&str>> {
     let (input, pitcher1_name) = parse_terminated(" and ").parse(input)?;
     let (input, pitcher2_name) =
         parse_terminated(" chug a Third Wave of Coffee!\nThey are now Triple Threats!")
@@ -1593,7 +1593,7 @@ pub(crate) fn parse_double_become_triple_threat(input: &str) -> ParserResult<Vec
     Ok((input, vec![pitcher1_name, pitcher2_name]))
 }
 
-pub(crate) fn parse_single_become_triple_threat(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_single_become_triple_threat(input: &str) -> ParserResult<'_, Vec<&str>> {
     let (input, pitcher1_name) =
         parse_terminated(" chugs a Third Wave of Coffee!\nThey are now a Triple Threat!")
             .parse(input)?;
@@ -1603,7 +1603,7 @@ pub(crate) fn parse_single_become_triple_threat(input: &str) -> ParserResult<Vec
 
 pub(crate) fn parse_under_over_over_under(
     mod_text: &str,
-) -> impl Fn(&str) -> ParserResult<(&str, bool)> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, bool)> + '_ {
     move |input: &str| {
         // complier told me to do the thing with `x` to make the lifetimes work
         let x = alt((
@@ -1615,7 +1615,7 @@ pub(crate) fn parse_under_over_over_under(
     }
 }
 
-pub(crate) fn parse_taste_the_infinite(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_taste_the_infinite(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, sheller_name) = parse_terminated(" tastes the infinite!\n").parse(input)?;
     let (input, shellee_name) = parse_terminated(" is Shelled!").parse(input)?;
 
@@ -1627,7 +1627,7 @@ pub(crate) enum ParsedBatterSkippedReason {
     Elsewhere,
 }
 
-pub(crate) fn parse_batter_skipped(input: &str) -> ParserResult<(&str, ParsedBatterSkippedReason)> {
+pub(crate) fn parse_batter_skipped(input: &str) -> ParserResult<'_, (&str, ParsedBatterSkippedReason)> {
     let (input, result) = alt((
         parse_terminated(" is Shelled and cannot escape!")
             .map(|n| (n, ParsedBatterSkippedReason::Shelled)),
@@ -1638,7 +1638,7 @@ pub(crate) fn parse_batter_skipped(input: &str) -> ParserResult<(&str, ParsedBat
     Ok((input, result))
 }
 
-pub(crate) fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_feedback_blocked(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("Reality begins to flicker ...\nBut ").parse(input)?;
     let (input, player1_name) = parse_terminated(" resists!\n").parse(input)?;
     let (input, player2_name) = parse_terminated(" is tangled in the flicker!").parse(input)?;
@@ -1646,7 +1646,7 @@ pub(crate) fn parse_feedback_blocked(input: &str) -> ParserResult<(&str, &str)> 
     Ok((input, (player1_name, player2_name)))
 }
 
-pub(crate) fn parse_flag_planted(input: &str) -> ParserResult<(&str, &str, &str, bool)> {
+pub(crate) fn parse_flag_planted(input: &str) -> ParserResult<'_, (&str, &str, &str, bool)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" break ground on ").parse(input)?;
     let (input, park_name) = parse_terminated(", selecting to build the ").parse(input)?;
@@ -1673,7 +1673,7 @@ pub(crate) enum ParsedTeamDivisionMove<'a> {
     },
 }
 
-pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<ParsedTeamDivisionMove> {
+pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<'_, ParsedTeamDivisionMove<'_>> {
     alt((
         parse_team_joined_ilb.map(|(team_nickname, division_name)| {
             ParsedTeamDivisionMove::TeamJoinedILB {
@@ -1692,7 +1692,7 @@ pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<ParsedTeamDi
     .parse(input)
 }
 
-pub(crate) fn parse_team_joined_ilb(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_team_joined_ilb(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) =
         parse_terminated(" have joined the ILB!\nThey will play in the ").parse(input)?;
@@ -1701,7 +1701,7 @@ pub(crate) fn parse_team_joined_ilb(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (team_nickname, division_name)))
 }
 
-pub(crate) fn parse_team_shifted_division(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_team_shifted_division(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" Shifted from the ").parse(input)?;
     let (input, from_division_name) = parse_terminated(" to the ").parse(input)?;
@@ -1715,7 +1715,7 @@ pub(crate) enum ParsedPlayerDivisionMove<'a> {
     PulledThroughRift(&'a str),
 }
 
-pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<ParsedPlayerDivisionMove> {
+pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<'_, ParsedPlayerDivisionMove<'_>> {
     let (input, result) = alt((
         parse_terminated(" has joined the ILB.").map(|n| ParsedPlayerDivisionMove::JoinedIlb(n)),
         parse_terminated(" was pulled through the Rift.")
@@ -1740,7 +1740,7 @@ pub(crate) enum ParsedFloodingEffect<'a> {
 
 pub(crate) fn parse_flooding_swept(
     input: &str,
-) -> ParserResult<(Vec<ParsedFloodingEffect>, bool, bool, bool)> {
+) -> ParserResult<'_, (Vec<ParsedFloodingEffect<'_>>, bool, bool, bool)> {
     let (input, _) =
         tag("A surge of Immateria rushes up from Under!\nBaserunners are swept from play!")
             .parse(input)?;
@@ -1773,7 +1773,7 @@ pub(crate) fn parse_flooding_swept(
     ))
 }
 
-pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFloodingEffect> {
+pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<'_, ParsedFloodingEffect<'_>> {
     alt((
         parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
         parse_flippers_score
@@ -1788,7 +1788,7 @@ pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<ParsedFlo
     .parse(input)
 }
 
-pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<'_, (&str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, swept_name) = alt((
         // In season 19 it changed from "is" to "was"
@@ -1802,7 +1802,7 @@ pub(crate) fn parse_swept_elsewhere(input: &str) -> ParserResult<(&str, Option<&
     Ok((input, (swept_name, flipped_negative)))
 }
 
-pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<(&str, Option<Option<&str>>)> {
+pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<'_, (&str, Option<Option<&str>>)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, scorer_name) =
         parse_terminated(" uses their Flippers to slingshot home!").parse(input)?;
@@ -1813,7 +1813,7 @@ pub(crate) fn parse_flippers_score(input: &str) -> ParserResult<(&str, Option<Op
 
 pub(crate) fn parse_flipped_negative(
     swept_player_name: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + '_ {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, flipper_name) = parse_terminated(" dove in after ").parse(input)?;
@@ -1836,11 +1836,11 @@ pub(crate) enum ParsedReturnFromElsewhere<'a> {
 
 pub(crate) fn parse_returns_from_elsewhere(
     input: &str,
-) -> ParserResult<Vec<ParsedReturnFromElsewhere>> {
+) -> ParserResult<'_, Vec<ParsedReturnFromElsewhere<'_>>> {
     separated_list1(tag("\n"), parse_return_from_elsewhere).parse(input)
 }
 
-pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedReturnFromElsewhere> {
+pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<'_, ParsedReturnFromElsewhere<'_>> {
     alt((
         parse_terminated(" has returned from Elsewhere!")
             .map(|n| ParsedReturnFromElsewhere::Short((n, false))),
@@ -1859,7 +1859,7 @@ pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<ParsedRet
 
 pub(crate) fn parse_normal_return_from_elsewhere(
     input: &str,
-) -> ParserResult<(&str, TimeElsewhere, bool)> {
+) -> ParserResult<'_, (&str, TimeElsewhere, bool)> {
     // They took out the "has" in s19
     let (input, (player_name, is_peanut)) = alt((
         parse_terminated(" has returned ").map(|n| (n, false)),
@@ -1874,7 +1874,7 @@ pub(crate) fn parse_normal_return_from_elsewhere(
     Ok((input, (player_name, time_elsewhere, is_peanut)))
 }
 
-fn parse_time_elsewhere(input: &str) -> ParserResult<TimeElsewhere> {
+fn parse_time_elsewhere(input: &str) -> ParserResult<'_, TimeElsewhere> {
     alt((
         tag("one season!").map(|_| TimeElsewhere::Seasons(1)),
         terminated(parse_whole_number, tag(" seasons!")).map(|n| TimeElsewhere::Seasons(n)),
@@ -1886,7 +1886,7 @@ fn parse_time_elsewhere(input: &str) -> ParserResult<TimeElsewhere> {
 
 pub(crate) fn parse_normal_seeker_return_from_elsewhere(
     input: &str,
-) -> ParserResult<(&str, &str, TimeElsewhere)> {
+) -> ParserResult<'_, (&str, &str, TimeElsewhere)> {
     let (input, (seeker_name, sought_name)) =
         parse_common_seeker_return_from_elsewhere.parse(input)?;
     let (input, _) = tag(" was pulled back from Elsewhere after ").parse(input)?;
@@ -1895,7 +1895,7 @@ pub(crate) fn parse_normal_seeker_return_from_elsewhere(
     Ok((input, (seeker_name, sought_name, time_elsewhere)))
 }
 
-fn parse_common_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str)> {
+fn parse_common_seeker_return_from_elsewhere(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, seeker_name) = parse_terminated(" sought out Elsewhere teammate ").parse(input)?;
     let (input, sought_name) = parse_terminated("...\n").parse(input)?;
     let (input, _) = tag(sought_name).parse(input)?;
@@ -1903,7 +1903,7 @@ fn parse_common_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str,
     Ok((input, (seeker_name, sought_name)))
 }
 
-pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, (seeker_name, sought_name)) =
         parse_common_seeker_return_from_elsewhere.parse(input)?;
     let (input, _) = tag(" was pulled back from Elsewhere.").parse(input)?;
@@ -1931,7 +1931,7 @@ pub(crate) enum ParsedIncineration<'a> {
     ),
 }
 
-pub(crate) fn parse_incineration(input: &str) -> ParserResult<ParsedIncineration> {
+pub(crate) fn parse_incineration(input: &str) -> ParserResult<'_, ParsedIncineration<'_>> {
     alt((
         parse_player_incineration.map(ParsedIncineration::Player),
         parse_team_incineration.map(ParsedIncineration::Team),
@@ -1941,7 +1941,7 @@ pub(crate) fn parse_incineration(input: &str) -> ParserResult<ParsedIncineration
 
 pub(crate) fn parse_player_incineration(
     input: &str,
-) -> ParserResult<(&str, &str, Option<&str>, Option<(&str, &str)>, Option<&str>)> {
+) -> ParserResult<'_, (&str, &str, Option<&str>, Option<(&str, &str)>, Option<&str>)> {
     alt((
         parse_incineration_normal.map(|(v, r, a, m)| (v, r, None, a, m)),
         // You can ambush on Unstable but I haven't implemented it yet, that's the last None
@@ -1952,7 +1952,7 @@ pub(crate) fn parse_player_incineration(
 
 pub(crate) fn parse_incineration_normal(
     input: &str,
-) -> ParserResult<(&str, &str, Option<(&str, &str)>, Option<&str>)> {
+) -> ParserResult<'_, (&str, &str, Option<(&str, &str)>, Option<&str>)> {
     let (input, _) = tag("Rogue Umpire incinerated ").parse(input)?;
     let (input, victim_name) = parse_terminated("!\n").parse(input)?;
     let (input, heat_magnet) = opt(parse_heat_magnet).parse(input)?;
@@ -1966,7 +1966,7 @@ pub(crate) fn parse_incineration_normal(
     Ok((input, (victim_name, replacement_name, ambush, heat_magnet)))
 }
 
-pub(crate) fn parse_heat_magnet(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_heat_magnet(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The Heat Magnet catches. The Thermal Converter hums.\n").parse(input)?;
     let (input, _) = tag("5 Runs generated for the ").parse(input)?;
     let (input, team_nickname) = parse_terminated("!\n").parse(input)?;
@@ -1974,7 +1974,7 @@ pub(crate) fn parse_heat_magnet(input: &str) -> ParserResult<&str> {
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_ambush(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_ambush(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, incinerated) = parse_terminated(".\nAn Ambush.\n").parse(input)?;
     let (input, ambushed_player) = parse_terminated(" enters the ").parse(input)?;
     let (input, ambush_team) = parse_terminated("' shadows.").parse(input)?;
@@ -1982,7 +1982,7 @@ pub(crate) fn parse_ambush(input: &str) -> ParserResult<(&str, &str, &str)> {
     Ok((input, (incinerated, ambushed_player, ambush_team)))
 }
 
-pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, victim_name) =
         parse_terminated(" is Unstable!\nA Debt was collected.\nRogue Umpire incinerated ")
             .parse(input)?;
@@ -1996,7 +1996,7 @@ pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<(&str, &s
     Ok((input, (victim_name, replacement_name, chained_to_name)))
 }
 
-pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<(&str, Vec<&str>)> {
+pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<'_, (&str, Vec<&str>)> {
     // TODO Support arbitrary number of surviving players
     let (input, surviving_player_1) = parse_terminated(" and ").parse(input)?;
     let (input, surviving_player_2) = parse_terminated(" joined the ").parse(input)?;
@@ -2011,14 +2011,14 @@ pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<(&s
     ))
 }
 
-pub(crate) fn parse_team_unstable_incineration_preamble(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_unstable_incineration_preamble(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     parse_terminated(" are Unstable!\nA Debt was collected.\n").parse(input)
 }
 
 pub(crate) fn parse_team_incineration(
     input: &str,
-) -> ParserResult<(&str, &str, Option<(&str, Vec<&str>)>, Option<(&str, &str)>)> {
+) -> ParserResult<'_, (&str, &str, Option<(&str, Vec<&str>)>, Option<(&str, &str)>)> {
     let (input, unstable_preamble) = opt(parse_team_unstable_incineration_preamble).parse(input)?;
 
     let (input, _) = tag("A Rogue Umpire incinerated the ").parse(input)?;
@@ -2050,14 +2050,14 @@ pub(crate) fn parse_team_incineration(
     ))
 }
 
-pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_pitcher_change(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, victim_name) = parse_terminated(" is now pitching for the ").parse(input)?;
     let (input, team_name) = parse_until_period_eof(input)?;
 
     Ok((input, (victim_name, team_name)))
 }
 
-pub(crate) fn parse_party(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_party(input: &str) -> ParserResult<'_, (&str, Option<&str>)> {
     let (input, player_name) = parse_terminated(" is Partying!").parse(input)?;
 
     let (input, attracted_birds) = opt(preceded(
@@ -2075,7 +2075,7 @@ pub(crate) enum ParsedRoamBoost<'a> {
     GoodRiddanceParty(&'a str, Option<&'a str>),
 }
 
-pub(crate) fn parse_roam_boost(input: &str) -> ParserResult<ParsedRoamBoost> {
+pub(crate) fn parse_roam_boost(input: &str) -> ParserResult<'_, ParsedRoamBoost<'_>> {
     alt((
         parse_terminated(" entered the Shadows.").map(|n| ParsedRoamBoost::ShadowBoost(n)),
         parse_terminated(" was boosted.").map(|n| ParsedRoamBoost::Odyssey(n)),
@@ -2084,7 +2084,7 @@ pub(crate) fn parse_roam_boost(input: &str) -> ParserResult<ParsedRoamBoost> {
     .parse(input)
 }
 
-pub(crate) fn parse_player_hatched(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_player_hatched(input: &str) -> ParserResult<'_, &str> {
     let (input, player_name) =
         parse_terminated(" has been hatched from the field of eggs.").parse(input)?;
 
@@ -2101,7 +2101,7 @@ pub(crate) enum ParsedPlayerAddedToTeam<'a> {
     },
 }
 
-pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<ParsedPlayerAddedToTeam> {
+pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
     let (input, team_nickname) = alt((
         preceded(tag("The "), parse_terminated(" earn a Postseason Birth!"))
             .map(|s| ParsedPlayerAddedToTeam::PostseasonBirth(s)),
@@ -2114,7 +2114,7 @@ pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<ParsedPlay
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_player_localized_to_team(input: &str) -> ParserResult<ParsedPlayerAddedToTeam> {
+pub(crate) fn parse_player_localized_to_team(input: &str) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
     let (input, player_name) = parse_terminated(" Localized into the ").parse(input)?;
     // Handle proper posessive of team names ending in s
     let (input, team_nickname) =
@@ -2132,7 +2132,7 @@ pub(crate) fn parse_player_localized_to_team(input: &str) -> ParserResult<Parsed
     ))
 }
 
-pub(crate) fn parse_final_standings(input: &str) -> ParserResult<(&str, i64, &str)> {
+pub(crate) fn parse_final_standings(input: &str) -> ParserResult<'_, (&str, i64, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" finished ").parse(input)?;
     let (input, place) = parse_whole_number(input)?;
@@ -2157,7 +2157,7 @@ pub(crate) enum ParsedRemovedMod<'s> {
     TeamStoppedGoingRogue(&'s str),
 }
 
-pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<ParsedRemovedMod> {
+pub(crate) fn parse_removed_mod(input: &str) -> ParserResult<'_, ParsedRemovedMod<'_>> {
     let (input, result) = alt((
         preceded(
             tag("The "),
@@ -2193,7 +2193,7 @@ pub(crate) enum ParsedAddedMod<'a> {
     TeamEntangled(&'a str),
 }
 
-pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
+pub(crate) fn parse_added_mod(input: &str) -> ParserResult<'_, ParsedAddedMod<'_>> {
     let (input, result) = alt((
         preceded(tag("The "), parse_terminated(" have entered Party Time!"))
             .map(|n| ParsedAddedMod::EnteredPartyTime(n)),
@@ -2216,7 +2216,7 @@ pub(crate) fn parse_added_mod(input: &str) -> ParserResult<ParsedAddedMod> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_postseason_advance(input: &str) -> ParserResult<(&str, Option<i64>, i64)> {
+pub(crate) fn parse_postseason_advance(input: &str) -> ParserResult<'_, (&str, Option<i64>, i64)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" advanced to ").parse(input)?;
 
@@ -2232,7 +2232,7 @@ pub(crate) fn parse_postseason_advance(input: &str) -> ParserResult<(&str, Optio
     Ok((input, (team_nickname, round_num, season_num)))
 }
 
-pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<(&str, i64)> {
+pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<'_, (&str, i64)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" earned a spot in the Season ").parse(input)?;
     let (input, season_num) = parse_whole_number(input)?;
@@ -2250,7 +2250,7 @@ pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<(&str, i
     Ok((input, (team_nickname, season_num)))
 }
 
-pub(crate) fn parse_postseason_eliminated(input: &str) -> ParserResult<(&str, i64, Option<bool>)> {
+pub(crate) fn parse_postseason_eliminated(input: &str) -> ParserResult<'_, (&str, i64, Option<bool>)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) =
         parse_terminated(" have been eliminated from the Season ").parse(input)?;
@@ -2272,7 +2272,7 @@ pub(crate) enum ParsedPlayerStatIncrease<'a> {
     BottomDwellers(&'a str),
 }
 
-pub(crate) fn parse_player_stat_increase(input: &str) -> ParserResult<ParsedPlayerStatIncrease> {
+pub(crate) fn parse_player_stat_increase(input: &str) -> ParserResult<'_, ParsedPlayerStatIncrease<'_>> {
     alt((
         parse_terminated(" was boosted.").map(|name| ParsedPlayerStatIncrease::PlayerBoosted(name)),
         parse_bottom_dweller.map(|name| ParsedPlayerStatIncrease::BottomDwellers(name)),
@@ -2280,7 +2280,7 @@ pub(crate) fn parse_player_stat_increase(input: &str) -> ParserResult<ParsedPlay
     .parse(input)
 }
 
-pub(crate) fn parse_bottom_dweller(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_bottom_dweller(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated(" are Bottom Dwellers.").parse(input)?;
 
@@ -2289,7 +2289,7 @@ pub(crate) fn parse_bottom_dweller(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_team_won_internet_series(
     displayed_season_num: i64,
-) -> impl Fn(&str) -> ParserResult<(&str, Option<BracketType>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, Option<BracketType>)> {
     move |input| {
         let displayed_season_num_str = format!("{displayed_season_num}");
         let (input, _) = tag("The ").parse(input)?;
@@ -2317,7 +2317,7 @@ pub(crate) fn parse_team_won_internet_series(
     }
 }
 
-pub(crate) fn parse_will_received(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_will_received(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Will Received: ").parse(input)?;
     // This should take the rest because there shouldn't be any newlines
     let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
@@ -2330,7 +2330,7 @@ pub(crate) enum ParsedBlessingOrGift<'a> {
     Gift(&'a str),
 }
 
-pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<ParsedBlessingOrGift> {
+pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<'_, ParsedBlessingOrGift<'_>> {
     alt((
         parse_blessing_won.map(|n| ParsedBlessingOrGift::Blessing(n)),
         parse_gift_received.map(|n| ParsedBlessingOrGift::Gift(n)),
@@ -2338,7 +2338,7 @@ pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<ParsedBlessing
     .parse(input)
 }
 
-pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Blessing Won: ").parse(input)?;
 
     // There are blessing names with newlines. Just take the entire rest of the
@@ -2346,7 +2346,7 @@ pub(crate) fn parse_blessing_won(input: &str) -> ParserResult<&str> {
     Ok(("", input))
 }
 
-pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_gift_received(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Gift Received: ").parse(input)?;
     // This should take the rest because there shouldn't be any newlines
     let (input, blessing_title) = take_till1(|c| c == '\n').parse(input)?;
@@ -2354,7 +2354,7 @@ pub(crate) fn parse_gift_received(input: &str) -> ParserResult<&str> {
     Ok((input, blessing_title))
 }
 
-pub(crate) fn parse_decree_passed(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_decree_passed(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Decree Passed: ").parse(input)?;
     // This should take the rest because there shouldn't be any newlines
     let (input, decree_title) = take_till1(|c| c == '\n').parse(input)?;
@@ -2362,7 +2362,7 @@ pub(crate) fn parse_decree_passed(input: &str) -> ParserResult<&str> {
     Ok((input, decree_title))
 }
 
-pub(crate) fn parse_blooddrain(input: &str) -> ParserResult<(&str, &str, AttrCategory)> {
+pub(crate) fn parse_blooddrain(input: &str) -> ParserResult<'_, (&str, &str, AttrCategory)> {
     let (input, _) = tag("The Blooddrain gurgled!\n").parse(input)?;
     let (input, drinker_name) = parse_terminated(" siphoned some of ").parse(input)?;
     let (input, drunk_name) = parse_terminated("'s ").parse(input)?;
@@ -2373,7 +2373,7 @@ pub(crate) fn parse_blooddrain(input: &str) -> ParserResult<(&str, &str, AttrCat
     Ok((input, (drinker_name, drunk_name, category)))
 }
 
-pub(crate) fn parse_undersea(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_undersea(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) =
         parse_terminated(" go Undersea. They're now Overperforming!").parse(input)?;
@@ -2381,7 +2381,7 @@ pub(crate) fn parse_undersea(input: &str) -> ParserResult<&str> {
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_peanut_mister(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_peanut_mister(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("The Peanut Mister activates!\n").parse(input)?;
     let (input, result) = alt((
         parse_terminated(" has been cured of their peanut allergy!").map(|n| (n, false)),
@@ -2392,14 +2392,14 @@ pub(crate) fn parse_peanut_mister(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_birds_unshell(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_birds_unshell(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The Birds circle...\nThe Birds pecked ").parse(input)?;
     let (input, player_name) = parse_terminated(" free!").parse(input)?;
 
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_player_replaces_returned(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_player_replaces_returned(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) =
         parse_terminated(" cut a player and promoted another from the shadows.").parse(input)?;
@@ -2407,7 +2407,7 @@ pub(crate) fn parse_player_replaces_returned(input: &str) -> ParserResult<&str> 
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_high_pressure(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_high_pressure(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("The pressure is ").parse(input)?;
     let (input, is_on) =
         alt((tag("on!").map(|_| true), tag("off.").map(|_| false))).parse(input)?;
@@ -2421,14 +2421,14 @@ pub(crate) fn parse_high_pressure(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, (team_nickname, is_on)))
 }
 
-pub(crate) fn parse_echo(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_echo(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, echoer_name) = parse_terminated(" Echoed ").parse(input)?;
     let (input, echoee_name) = parse_terminated("!").parse(input)?;
 
     Ok((input, (echoer_name, echoee_name)))
 }
 
-pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("ECHO ").parse(input)?;
     let (input, echoer_name) = parse_terminated(" STATIC\nECHO ").parse(input)?;
     let (input, echoee_name) = parse_terminated(" STATIC").parse(input)?;
@@ -2436,7 +2436,7 @@ pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<(&str, &str)> 
     Ok((input, (echoer_name, echoee_name)))
 }
 
-pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<'_, (&str, &str, &str)> {
     move |input: &str| {
         let (input, stadium_name) =
             parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input)?;
@@ -2459,7 +2459,7 @@ pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<(
     }
 }
 
-pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_echo_receiver(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("ECHO ").parse(input)?;
     let (input, echoer_name) = parse_terminated(" ECHO ").parse(input)?;
     let (input, echoee_name) = parse_terminated(" ECHO").parse(input)?;
@@ -2474,7 +2474,7 @@ pub(crate) enum ParsedConsumerAttack<'a> {
     ConsumerCountered((&'a str, &'a str)),
 }
 
-pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerAttack> {
+pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<'_, ParsedConsumerAttack<'_>> {
     alt((
         // countered must be above normal, because normal has a false positive on countered
         parse_consumer_countered.map(|val| ParsedConsumerAttack::ConsumerCountered(val)),
@@ -2487,7 +2487,7 @@ pub(crate) fn parse_consumer_attack(input: &str) -> ParserResult<ParsedConsumerA
 
 pub(crate) fn parse_consumer_attack_normal(
     input: &str,
-) -> ParserResult<(&str, Option<(&str, Option<bool>)>, bool)> {
+) -> ParserResult<'_, (&str, Option<(&str, Option<bool>)>, bool)> {
     let (input, _) = tag("CONSUMERS ATTACK\n").parse(input)?;
     let (input, scattered) = opt(tag("SCATTERED\n")).parse(input)?;
     let (input, (victim_name, defended)) = alt((
@@ -2506,7 +2506,7 @@ pub(crate) fn parse_consumer_attack_normal(
     Ok((input, (victim_name, item_breaks, scattered.is_some())))
 }
 
-pub(crate) fn parse_consumer_countered(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_consumer_countered(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("CONSUMERS ATTACK\nSTEELED ").parse(input)?;
     // The item name is the very last thing in the event, so it takes the place of input
     // and this parser always returns a remaining-input of ""
@@ -2515,14 +2515,14 @@ pub(crate) fn parse_consumer_countered(input: &str) -> ParserResult<(&str, &str)
     Ok(("", (victim_name, item_name)))
 }
 
-pub(crate) fn parse_consumer_countered_child(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_consumer_countered_child(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) = parse_terminated(" damaged their ").parse(input)?;
     let (input, item_name) = parse_terminated(" on a Consumer.").parse(input)?;
 
     Ok((input, (player_name, item_name)))
 }
 
-pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<(&str, Option<bool>)> {
+pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<'_, (&str, Option<bool>)> {
     let (input, _) = tag("\n\n").parse(input)?;
 
     alt((
@@ -2533,7 +2533,7 @@ pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<(&st
     .parse(input)
 }
 
-pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, exclamation) = parse_terminated("!").parse(input)?;
 
     let (input, _) = tag("\n").parse(input)?;
@@ -2565,14 +2565,14 @@ pub(crate) fn parse_consumer_defended(input: &str) -> ParserResult<(&str, &str, 
     Ok((input, (player_name, exclamation, verb)))
 }
 
-pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<()> {
+pub(crate) fn parse_consumer_expelled(input: &str) -> ParserResult<'_, ()> {
     let (input, _) = tag("SALMON CANNONS FIRE\nCONSUMER EXPELLED").parse(input)?;
     Ok((input, ()))
 }
 
 pub(crate) fn parse_repeat_mvp(
     allow_exclamation_point: bool,
-) -> impl Fn(&str) -> ParserResult<(&str, i64)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, i64)> {
     move |input| {
         let (input, player_name) = parse_terminated(" is named a ").parse(input)?;
         let (input, n_times) = parse_whole_number(input)?;
@@ -2586,11 +2586,11 @@ pub(crate) fn parse_repeat_mvp(
     }
 }
 
-pub(crate) fn parse_homebody(input: &str) -> ParserResult<Vec<(&str, bool)>> {
+pub(crate) fn parse_homebody(input: &str) -> ParserResult<'_, Vec<(&str, bool)>> {
     separated_list1(tag("\n"), parse_single_homebody).parse(input)
 }
 
-pub(crate) fn parse_single_homebody(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_single_homebody(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, result) = alt((
         parse_terminated(" is homesick.").map(|n| (n, false)),
         parse_terminated(" is happy to be home.").map(|n| (n, true)),
@@ -2611,7 +2611,7 @@ pub(crate) enum ParsedSalmonRunsLost<'a> {
     BothTeams((ParsedTeamRunsLost<'a>, ParsedTeamRunsLost<'a>)),
 }
 
-pub(crate) fn parse_salmon(input: &str) -> ParserResult<(i64, ParsedSalmonRunsLost)> {
+pub(crate) fn parse_salmon(input: &str) -> ParserResult<'_, (i64, ParsedSalmonRunsLost<'_>)> {
     let (input, _) = tag("The Salmon swim upstream!\nInning ").parse(input)?;
     let (input, inning_num) = parse_whole_number(input)?;
     let (input, _) = tag(" begins again.").parse(input)?;
@@ -2627,7 +2627,7 @@ pub(crate) fn parse_salmon(input: &str) -> ParserResult<(i64, ParsedSalmonRunsLo
     Ok((input, (inning_num, runs_lost)))
 }
 
-pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLost> {
+pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<'_, ParsedTeamRunsLost<'_>> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, runs) = float.parse(input)?;
     let (input, _) = tag(" of the ").parse(input)?;
@@ -2641,7 +2641,7 @@ pub(crate) fn parse_team_runs_lost(input: &str) -> ParserResult<ParsedTeamRunsLo
     Ok((input, ParsedTeamRunsLost { runs, name }))
 }
 
-pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str, DebtType)> {
+pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<'_, (&str, &str, DebtType)> {
     let (input, pitcher_name) = parse_terminated(" hits ").parse(input)?;
     let (input, batter_name) = parse_terminated(" with a pitch!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
@@ -2654,7 +2654,7 @@ pub(crate) fn parse_hit_by_pitch(input: &str) -> ParserResult<(&str, &str, DebtT
     Ok((input, (pitcher_name, batter_name, debt_type)))
 }
 
-pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
+pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<'_, (f32, &str)> {
     let (input, _) = tag("The Solar Panels absorb Sun 2's energy!\n").parse(input)?;
     let (input, num_runs) = float.parse(input)?;
     let (input, _) = tag(" Runs are collected and saved for the ").parse(input)?;
@@ -2663,7 +2663,7 @@ pub(crate) fn parse_solar_panels(input: &str) -> ParserResult<(f32, &str)> {
     Ok((input, (num_runs, team_nickname)))
 }
 
-pub(crate) fn parse_event_horizon(input: &str) -> ParserResult<(f32, &str)> {
+pub(crate) fn parse_event_horizon(input: &str) -> ParserResult<'_, (f32, &str)> {
     let (input, _) = tag("The Event Horizon activates!\nIt generates ").parse(input)?;
     let (input, num_runs) = float.parse(input)?;
     let (input, _) = tag(" Unruns for the ").parse(input)?;
@@ -2672,7 +2672,7 @@ pub(crate) fn parse_event_horizon(input: &str) -> ParserResult<(f32, &str)> {
     Ok((input, (num_runs, team_nickname)))
 }
 
-pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bool, bool)> {
+pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<'_, (&str, f64, bool, bool)> {
     let (input, _) = tag("Runs are Overflowing!\n").parse(input)?;
     let (input, (team_nickname, gained)) = alt((
         parse_terminated(" gain ").map(|n| (n, true)),
@@ -2690,20 +2690,7 @@ pub(crate) fn parse_runs_overflowing(input: &str) -> ParserResult<(&str, f64, bo
     Ok((input, (team_nickname, num_runs, unruns, gained)))
 }
 
-pub(crate) enum ParsedMiddling<'a> {
-    Team((&'a str, bool)),
-    Player((&'a str, bool)),
-}
-
-pub(crate) fn parse_player_middling(input: &str) -> ParserResult<(&str, bool)> {
-    alt((
-        parse_terminated(" is Middling.").map(|m| (m, true)),
-        parse_terminated(" is no longer Middling.").map(|m| (m, false)),
-    ))
-    .parse(input)
-}
-
-pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_enter_crime_scene(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) = parse_terminated(" enters the Crime Scene at ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" to Investigate...").parse(input)?;
 
@@ -2716,7 +2703,7 @@ pub(crate) enum ParsedPlayerMoved<'a> {
     SuperRoamin(&'a str),
 }
 
-pub(crate) fn parse_player_moved(input: &str) -> ParserResult<ParsedPlayerMoved> {
+pub(crate) fn parse_player_moved(input: &str) -> ParserResult<'_, ParsedPlayerMoved<'_>> {
     alt((
         parse_return_from_investigation.map(|r| ParsedPlayerMoved::ReturnFromInvestigation(r)),
         // Super roam must be before roam or it won't match
@@ -2728,7 +2715,7 @@ pub(crate) fn parse_player_moved(input: &str) -> ParserResult<ParsedPlayerMoved>
     .parse(input)
 }
 
-pub(crate) fn parse_return_from_investigation(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_return_from_investigation(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, player_name) = parse_terminated(" returns from the Investigation").parse(input)?;
     let (input, emptyhanded) =
         alt((tag(" emptyhanded.").map(|_| true), tag(".").map(|_| false))).parse(input)?;
@@ -2744,7 +2731,7 @@ pub(crate) enum ParsedGrindRailSuccess<'a> {
 
 pub(crate) fn parse_grind_rail(
     input: &str,
-) -> ParserResult<(&str, ParsedGrindRailTrick, ParsedGrindRailSuccess)> {
+) -> ParserResult<'_, (&str, ParsedGrindRailTrick<'_>, ParsedGrindRailSuccess<'_>)> {
     let (input, player_name) =
         parse_terminated(" hops on the Grind Rail toward third base.\nThey do a ").parse(input)?;
     let (input, first_trick) = parse_grind_rail_trick.parse(input)?;
@@ -2772,7 +2759,7 @@ pub(crate) struct ParsedGrindRailTrick<'a> {
     pub(crate) score: i64,
 }
 
-pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<ParsedGrindRailTrick> {
+pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<'_, ParsedGrindRailTrick<'_>> {
     // Currently assumes a trick name can't have a "(". I would like to remove this limitation but
     // I couldn't easily figure it out with Nom
     let (input, name) = parse_terminated(" (").parse(input)?;
@@ -2782,7 +2769,7 @@ pub(crate) fn parse_grind_rail_trick(input: &str) -> ParserResult<ParsedGrindRai
     Ok((input, ParsedGrindRailTrick { name, score }))
 }
 
-pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamberModAdded)> {
+pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<'_, (&str, EchoChamberModAdded)> {
     let (input, _) = tag("The Echo Chamber traps a wave.\n").parse(input)?;
     let (input, player_name) = parse_terminated(" is temporarily ").parse(input)?;
     let (input, mod_) = alt((
@@ -2797,7 +2784,7 @@ pub(crate) fn parse_echo_chamber(input: &str) -> ParserResult<(&str, EchoChamber
 pub(crate) fn parse_item_damage_unknown_name<'a>(
     extra_space: bool,
     newline_before: bool,
-) -> impl FnMut(&'a str) -> ParserResult<(&'a str, Option<bool>, &'a str)> {
+) -> impl FnMut(&'a str) -> ParserResult<'_, (&'a str, Option<bool>, &'a str)> {
     move |input| {
         let (input, _) = if newline_before {
             tag("\n").parse(input)?
@@ -2830,7 +2817,7 @@ pub(crate) fn parse_item_damage_unknown_name<'a>(
 pub(crate) fn parse_item_damage<'a>(
     player_name: &str,
     extra_space: bool,
-) -> impl FnMut(&'a str) -> ParserResult<(&'a str, Option<bool>)> + '_ {
+) -> impl FnMut(&'a str) -> ParserResult<'_, (&'a str, Option<bool>)> + '_ {
     move |input| {
         let (input, _) = if extra_space { tag("\n ") } else { tag("\n") }.parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
@@ -2846,7 +2833,7 @@ pub(crate) fn parse_item_damage<'a>(
     }
 }
 
-pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<(&str, bool)>)> {
+pub(crate) fn parse_glitter(input: &str) -> ParserResult<'_, (&str, &str, Option<(&str, bool)>)> {
     let (input, _) = tag("A shimmering Crate descends.\n").parse(input)?;
     let (input, player_name) = parse_terminated(" gained ").parse(input)?;
     // Ditched is when the item is broken, dropped is when it isn't.
@@ -2866,7 +2853,7 @@ pub(crate) fn parse_glitter(input: &str) -> ParserResult<(&str, &str, Option<(&s
     Ok((input, (player_name, gained, lost)))
 }
 
-pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str, bool)> {
+pub(crate) fn parse_item_restored(input: &str) -> ParserResult<'_, (&str, &str, bool)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, (item_name, restored)) = alt((
@@ -2880,7 +2867,7 @@ pub(crate) fn parse_item_restored(input: &str) -> ParserResult<(&str, &str, bool
     Ok((input, (player_name, item_name, restored)))
 }
 
-pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str, bool)> {
+pub(crate) fn parse_carcinization(input: &str) -> ParserResult<'_, (&str, &str, bool)> {
     let (input, _) = tag("\nThe ").parse(input)?;
     let (input, team_name) = parse_terminated(" steal ").parse(input)?;
     let (input, player_name) = parse_terminated(" for the remainder of the game.").parse(input)?;
@@ -2893,7 +2880,7 @@ pub(crate) fn parse_carcinization(input: &str) -> ParserResult<(&str, &str, bool
 
 pub(crate) fn parse_steal_failed<'a>(
     player_name: &'a str,
-) -> impl Fn(&str) -> ParserResult<()> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, ()> + 'a {
     move |input| {
         let (input, _) = tag("\nSteal failed.\n").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
@@ -2902,7 +2889,7 @@ pub(crate) fn parse_steal_failed<'a>(
         Ok((input, ()))
     }
 }
-pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_compressed_by_gamma(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("\nThe Black Hole burps!\n").parse(input)?;
     let (input, player_name) = parse_terminated(" is compressed by gamma!").parse(input)?;
 
@@ -2914,7 +2901,7 @@ pub(crate) enum ParsedName<'a> {
     Team(&'a str),
 }
 
-pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(ParsedName, &str)> {
+pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (ParsedName<'_>, &str)> {
     alt((
         parse_player_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Player(n), m)),
         parse_team_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Team(n), m)),
@@ -2922,7 +2909,7 @@ pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<(Pa
     .parse(input)
 }
 
-pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (&str, &str)> {
     // This does possessives correctly, apparently
     let (input, player_name) = alt((
         parse_terminated("'s mods caused by "),
@@ -2934,7 +2921,7 @@ pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserRes
     Ok((input, (player_name, mod_name)))
 }
 
-pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated("' mods caused by ").parse(input)?;
     let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
@@ -2944,7 +2931,7 @@ pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResul
 
 pub(crate) fn parse_team_subseasonal_mod_changes(
     input: &str,
-) -> ParserResult<Vec<(Option<&str>, SubseasonalMod, bool)>> {
+) -> ParserResult<'_, Vec<(Option<&str>, SubseasonalMod, bool)>> {
     let (input, results) =
         separated_list0(tag("\n"), parse_team_subseasonal_mod_change).parse(input)?;
     Ok((input, results))
@@ -2952,7 +2939,7 @@ pub(crate) fn parse_team_subseasonal_mod_changes(
 
 pub(crate) fn parse_team_subseasonal_mod_change(
     input: &str,
-) -> ParserResult<(Option<&str>, SubseasonalMod, bool)> {
+) -> ParserResult<'_, (Option<&str>, SubseasonalMod, bool)> {
     alt((
         // For this event, `name` is None iff the mod was removed. I don't assume that's true in general.
         parse_team_earlbird.map(|name| (name, SubseasonalMod::Earlbirds, name.is_some())),
@@ -2968,7 +2955,7 @@ pub(crate) fn parse_team_subseasonal_mod_change(
     .parse(input)
 }
 
-pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<Option<&str>> {
+pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<'_, Option<&str>> {
     let (input, _) = tag("Happy Earlseason!\n").parse(input)?;
     let (input, result) = alt((
         preceded(tag("The "), parse_terminated(" are Earlbirds!")).map(|n| Some(n)),
@@ -2979,7 +2966,7 @@ pub(crate) fn parse_team_earlbird(input: &str) -> ParserResult<Option<&str>> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_team_late_to_the_party(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_team_late_to_the_party(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("Late to the Party!\n").parse(input)?;
 
     let (input, result) = alt((
@@ -2995,7 +2982,7 @@ pub(crate) fn parse_team_late_to_the_party(input: &str) -> ParserResult<(&str, b
     Ok((input, result))
 }
 
-pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_team_middling(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("Happy Midseason!\n").parse(input)?;
 
     let (input, result) = alt((
@@ -3010,7 +2997,7 @@ pub(crate) fn parse_team_middling(input: &str) -> ParserResult<(&str, bool)> {
 
 pub(crate) fn parse_simple_team_subseasonal_mod_change(
     input: &str,
-) -> ParserResult<(&str, SubseasonalMod, bool)> {
+) -> ParserResult<'_, (&str, SubseasonalMod, bool)> {
     let (input, (team_name, active)) = alt((
         preceded(tag("The "), parse_terminated(" are ")).map(|n| (n, true)),
         // When the mod deactivates you don't get the "The" apparently
@@ -3032,7 +3019,7 @@ pub(crate) fn parse_simple_team_subseasonal_mod_change(
 
 pub(crate) fn parse_player_subseasonal_mod_change(
     which_mod: SubseasonalMod,
-) -> impl Fn(&str) -> ParserResult<(&str, bool)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, bool)> {
     move |input| {
         match which_mod {
             SubseasonalMod::Ambitious => {
@@ -3070,7 +3057,7 @@ pub(crate) fn parse_player_subseasonal_mod_change(
     }
 }
 
-pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<'_, (&str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, caught_player_name) = parse_terminated(" is caught in the bind!").parse(input)?;
 
@@ -3082,7 +3069,7 @@ pub(crate) fn parse_caught_in_the_bind(input: &str) -> ParserResult<(&str, Optio
 pub(crate) fn parse_charge_blood<'a>(
     batter_name: &'a str,
     a: &'a str,
-) -> impl Fn(&str) -> ParserResult<()> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, ()> + 'a {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(batter_name).parse(input)?;
@@ -3094,12 +3081,12 @@ pub(crate) fn parse_charge_blood<'a>(
     }
 }
 
-pub(crate) fn parse_birds(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_birds(input: &str) -> ParserResult<'_, i64> {
     let (input, _) = tag("\nA new Bird finds a Birdhouse. ").parse(input)?;
     parse_integer.parse(input)
 }
 
-pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(bool, &str, &str)> {
+pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<'_, (bool, &str, &str)> {
     let (input, _) = tag("The Blooddrain gurgled!\n").parse(input)?;
     let (input, siphon) = opt(parse_terminated("'s Siphon activates!\n")).parse(input)?;
     let (input, sipper_name) = if let Some(siphon_name) = siphon {
@@ -3113,7 +3100,7 @@ pub(crate) fn parse_blooddrain_blocked(input: &str) -> ParserResult<(bool, &str,
     Ok((input, (siphon.is_some(), sipper_name, sippee_name)))
 }
 
-pub(crate) fn parse_parasite(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_parasite(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, sipper_name) = parse_terminated(" parasitically drained some of ").parse(input)?;
     let (input, sippee_name) = parse_terminated_by_possessive.parse(input)?;
@@ -3133,7 +3120,7 @@ pub(crate) enum ParsedPlayerGainedItem<'a> {
 
 pub(crate) fn parse_player_gained_item<'p, 'i>(
     pending_prize_matches: &'p [&'p PendingPrizeMatch],
-) -> impl Fn(&'i str) -> ParserResult<ParsedPlayerGainedItem<'i>> + 'p {
+) -> impl Fn(&'i str) -> ParserResult<'_, ParsedPlayerGainedItem<'i>> + 'p {
     move |input: &str| {
         alt((
             parse_community_chest.map(|v| ParsedPlayerGainedItem::CommunityChest(v)),
@@ -3146,7 +3133,7 @@ pub(crate) fn parse_player_gained_item<'p, 'i>(
     }
 }
 
-pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_community_chest(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The Community Chest Opens! ").parse(input)?;
     let (input, player_name) = parse_terminated(" gained ").parse(input)?;
     let (input, item_name) = parse_terminated(".").parse(input)?;
@@ -3154,7 +3141,7 @@ pub(crate) fn parse_community_chest(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (player_name, item_name)))
 }
 
-pub(crate) fn parse_won_prize_match_explicit(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_won_prize_match_explicit(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" won the Prize Match!").parse(input)?;
 
@@ -3163,7 +3150,7 @@ pub(crate) fn parse_won_prize_match_explicit(input: &str) -> ParserResult<&str> 
 
 pub(crate) fn parse_won_prize_match_implicit<'p, 'i>(
     pending_prize_matches: &'p [&'p PendingPrizeMatch],
-) -> impl Fn(&'i str) -> ParserResult<(&'i str, Uuid)> + 'p {
+) -> impl Fn(&'i str) -> ParserResult<'_, (&'i str, Uuid)> + 'p {
     move |input: &str| {
         for pending_prize_match in pending_prize_matches {
             if let Ok((input, player_name)) =
@@ -3183,7 +3170,7 @@ pub(crate) fn parse_won_prize_match_implicit<'p, 'i>(
 
 pub(crate) fn parse_won_prize_match_implicit_with_prize<'p, 'i>(
     prize_item_name: &'p str,
-) -> impl Fn(&'i str) -> ParserResult<&'i str> + 'p {
+) -> impl Fn(&'i str) -> ParserResult<'_, &'i str> + 'p {
     move |input: &str| {
         let (input, player_name) = parse_terminated(" gained the Prized ").parse(input)?;
         let (input, _) = tag(prize_item_name).parse(input)?;
@@ -3193,7 +3180,7 @@ pub(crate) fn parse_won_prize_match_implicit_with_prize<'p, 'i>(
     }
 }
 
-pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) = parse_terminated(" dropped ").parse(input)?;
     let (input, item_name) = parse_terminated(".").parse(input)?;
 
@@ -3202,7 +3189,7 @@ pub(crate) fn parse_player_dropped_item(input: &str) -> ParserResult<(&str, &str
 
 pub(crate) fn parse_community_chest_ingame(
     input: &str,
-) -> ParserResult<[(&str, &str, Option<&str>); 2]> {
+) -> ParserResult<'_, [(&str, &str, Option<&str>); 2]> {
     let (input, _) = tag("The Community Chest Opens!").parse(input)?;
 
     let (input, first) = parse_community_chest_ingame_for_player.parse(input)?;
@@ -3213,7 +3200,7 @@ pub(crate) fn parse_community_chest_ingame(
 
 pub(crate) fn parse_community_chest_ingame_for_player(
     input: &str,
-) -> ParserResult<(&str, &str, Option<&str>)> {
+) -> ParserResult<'_, (&str, &str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
     let (input, player_name) = parse_terminated(" gained ").parse(input)?;
     let (input, (item_name, dropped_item_name)) = alt((
@@ -3225,7 +3212,7 @@ pub(crate) fn parse_community_chest_ingame_for_player(
     Ok((input, (player_name, item_name, dropped_item_name)))
 }
 
-pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("10 Runs collected.\nIncoming Shadow Fax...\n").parse(input)?;
     let (input, exiting_pitcher_name) = parse_terminated(" is replaced by ").parse(input)?;
     let (input, entering_pitcher_name) = parse_terminated(".").parse(input)?;
@@ -3233,18 +3220,7 @@ pub(crate) fn parse_fax_machine(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (exiting_pitcher_name, entering_pitcher_name)))
 }
 
-pub(crate) fn parse_ambitious(input: &str) -> ParserResult<Vec<(&str, bool)>> {
-    separated_list1(
-        tag("\n"),
-        alt((
-            parse_terminated(" is feeling Ambitious...").map(|n| (n, true)),
-            parse_terminated(" loses their Ambition.").map(|n| (n, false)),
-        )),
-    )
-    .parse(input)
-}
-
-pub(crate) fn parse_smithy(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_smithy(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("Smithy beckons to ").parse(input)?;
     let (input, player_name) = parse_terminated(".\n").parse(input)?;
     let (input, item_name) = parse_terminated(" is repaired!").parse(input)?;
@@ -3252,7 +3228,7 @@ pub(crate) fn parse_smithy(input: &str) -> ParserResult<(&str, &str)> {
     Ok((input, (player_name, item_name)))
 }
 
-pub(crate) fn parse_holiday_inning(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_holiday_inning(input: &str) -> ParserResult<'_, i64> {
     let (input, _) = tag("Hotel Motel\nInning ").parse(input)?;
     let (input, inning) = parse_whole_number.parse(input)?;
     let (input, _) = tag(" is a Holiday Inning!").parse(input)?;
@@ -3260,14 +3236,14 @@ pub(crate) fn parse_holiday_inning(input: &str) -> ParserResult<i64> {
     Ok((input, inning))
 }
 
-pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" apply Home Field advantage!").parse(input)?;
 
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_prize_match(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Prize Match!\nThe Winner gets ").parse(input)?;
     let (input, item_name) = if input.contains('\n') {
         todo!("Figure out how to fail with the correct type")
@@ -3278,18 +3254,10 @@ pub(crate) fn parse_prize_match(input: &str) -> ParserResult<&str> {
     Ok((input, item_name))
 }
 
-pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<(&str, Option<&str>)> {
+pub(crate) fn parse_hotel_motel_party(input: &str) -> ParserResult<'_, (&str, Option<&str>)> {
     let (input, _) = tag("\n").parse(input)?;
 
     parse_party.parse(input)
-}
-
-pub(crate) fn parse_coasting(input: &str) -> ParserResult<(bool, Vec<&str>)> {
-    alt((
-        separated_list1(tag("\n"), parse_terminated(" is Coasting.")).map(|v| (true, v)),
-        separated_list1(tag("\n"), parse_terminated(" stops Coasting.")).map(|v| (false, v)),
-    ))
-    .parse(input)
 }
 
 pub(crate) enum ParsedPlayerRemovedFromTeam<'a> {
@@ -3299,7 +3267,7 @@ pub(crate) enum ParsedPlayerRemovedFromTeam<'a> {
 
 pub(crate) fn parse_top_level_player_removed_from_team(
     input: &str,
-) -> ParserResult<ParsedPlayerRemovedFromTeam> {
+) -> ParserResult<'_, ParsedPlayerRemovedFromTeam<'_>> {
     alt((
         parse_player_dusted.map(ParsedPlayerRemovedFromTeam::FadedAwayFromTeam),
         parse_player_was_pulled.map(ParsedPlayerRemovedFromTeam::PulledFromIncineratedTeam),
@@ -3307,20 +3275,20 @@ pub(crate) fn parse_top_level_player_removed_from_team(
     .parse(input)
 }
 
-pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_player_dusted(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) = parse_terminated(" faded away from the ").parse(input)?;
     let (input, team_nickname) = parse_terminated(".").parse(input)?;
     Ok((input, (player_name, team_nickname)))
 }
 
-pub(crate) fn parse_player_was_pulled(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_player_was_pulled(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) =
         parse_terminated(" was pulled from the incinerated ").parse(input)?;
     let (input, team_nickname) = parse_terminated(".").parse(input)?;
     Ok((input, (player_name, team_nickname)))
 }
 
-pub(crate) fn parse_a_blood(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_a_blood(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" have A Blood Type.").parse(input)?;
     Ok((input, team_nickname))
@@ -3331,7 +3299,7 @@ pub(crate) enum ParsedPolarity {
     BandBeginsToPlay,
 }
 
-pub(crate) fn parse_polarity(input: &str) -> ParserResult<ParsedPolarity> {
+pub(crate) fn parse_polarity(input: &str) -> ParserResult<'_, ParsedPolarity> {
     alt((
         parse_polarity_numbers_go.map(|n| ParsedPolarity::NumbersGo(n)),
         tag("The Polarity shifted!\nThe Band began to play.")
@@ -3340,7 +3308,7 @@ pub(crate) fn parse_polarity(input: &str) -> ParserResult<ParsedPolarity> {
     .parse(input)
 }
 
-pub(crate) fn parse_polarity_numbers_go(input: &str) -> ParserResult<NumbersGo> {
+pub(crate) fn parse_polarity_numbers_go(input: &str) -> ParserResult<'_, NumbersGo> {
     let (input, _) = tag("The Polarity shifted!\nNumbers go ").parse(input)?;
     let (input, numbers_go) = alt((
         tag("up.").map(|_| NumbersGo::Up),
@@ -3351,7 +3319,7 @@ pub(crate) fn parse_polarity_numbers_go(input: &str) -> ParserResult<NumbersGo> 
     Ok((input, numbers_go))
 }
 
-pub(crate) fn parse_exit_secret_base(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_exit_secret_base(input: &str) -> ParserResult<'_, (&str, bool)> {
     alt((
         parse_terminated(" exits the Secret Base to Second Base!").map(|n| (n, false)),
         parse_terminated(" exits the Secret Base to the Fifth Base!").map(|n| (n, true)),
@@ -3359,7 +3327,7 @@ pub(crate) fn parse_exit_secret_base(input: &str) -> ParserResult<(&str, bool)> 
     .parse(input)
 }
 
-pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<(&str, f64)> {
+pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<'_, (&str, f64)> {
     let (input, _) = tag("Shame Donations are granted!\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" receive ").parse(input)?;
     let (input, unruns) = double.parse(input)?;
@@ -3368,14 +3336,14 @@ pub(crate) fn parse_donated_shame(input: &str) -> ParserResult<(&str, f64)> {
     Ok((input, (team_nickname, unruns)))
 }
 
-pub(crate) fn parse_team_scored(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_scored(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" scored!").parse(input)?;
 
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
+pub(crate) fn parse_score_update(input: &str) -> ParserResult<'_, f64> {
     let (input, runs) = double.parse(input)?;
     let (input, negator) = alt((
         tag(" Runs").map(|_| 1.0),
@@ -3389,7 +3357,7 @@ pub(crate) fn parse_score_update(input: &str) -> ParserResult<f64> {
     Ok((input, runs * negator))
 }
 
-pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, result) = alt((
         parse_terminated(" collected a Win.").map(|n| (n, false)),
@@ -3400,7 +3368,7 @@ pub(crate) fn parse_team_earned_win(input: &str) -> ParserResult<(&str, bool)> {
     Ok((input, result))
 }
 
-pub(crate) fn parse_moderation(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_moderation(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" practice Moderation.").parse(input)?;
 
@@ -3463,7 +3431,7 @@ pub(crate) enum ParsedLedgerV2Modifier<'a> {
 
 pub(crate) fn parse_score_ledger_v1(
     input: &str,
-) -> ParserResult<Option<(f64, Vec<ParsedLedgerLineV1>)>> {
+) -> ParserResult<'_, Option<(f64, Vec<ParsedLedgerLineV1<'_>>)>> {
     alt((
         eof.map(|_| None),
         parse_score_ledger_v1_nonempty.map(|v| Some(v)),
@@ -3473,7 +3441,7 @@ pub(crate) fn parse_score_ledger_v1(
 
 pub(crate) fn parse_score_ledger_v1_nonempty(
     input: &str,
-) -> ParserResult<(f64, Vec<ParsedLedgerLineV1>)> {
+) -> ParserResult<'_, (f64, Vec<ParsedLedgerLineV1<'_>>)> {
     let (input, _) = tag("(").parse(input)?;
     let (input, base_runs) = double.parse(input)?;
     let (input, unrun_multiplier) = alt((
@@ -3497,7 +3465,7 @@ pub(crate) fn parse_score_ledger_v1_nonempty(
     Ok((input, (base_runs * unrun_multiplier, ledger_lines)))
 }
 
-pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<ParsedLedgerLineV1> {
+pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<'_, ParsedLedgerLineV1<'_>> {
     alt((
         tag("Negative Polarity (x-1)").map(|_| ParsedLedgerLineV1::NegativePolarity),
         tag("Underachiever (x-1)").map(|_| ParsedLedgerLineV1::Underachiever),
@@ -3511,7 +3479,7 @@ pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<ParsedLedgerLine
     .parse(input)
 }
 
-pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> ParserResult<bool> + '_ {
+pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> ParserResult<'_, bool> + '_ {
     move |input| {
         let (input, run) = opt(terminated(
             pair(tag(ledger_label), tag(": 1 Run")),
@@ -3524,7 +3492,7 @@ pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> Parser
 
 pub(crate) fn parse_ledger_v2_modifier(
     input: &str,
-) -> ParserResult<Option<ParsedLedgerV2Modifier>> {
+) -> ParserResult<'_, Option<ParsedLedgerV2Modifier<'_>>> {
     // TODO: Always parse leading "\n", then I can get rid of a bunch of `opt(tag("\n")).parse()`,
     //   especially in ledger_parser.rs
     opt(terminated(
@@ -3595,7 +3563,7 @@ pub(crate) fn parse_ledger_v2_modifier(
 
 pub(crate) fn parse_ledger_player_magnified(
     input: &str,
-) -> ParserResult<(ActivePositionType, f64, f64)> {
+) -> ParserResult<'_, (ActivePositionType, f64, f64)> {
     let (input, position) = alt((
         tag("\tBatter Magnified 2x: ").map(|_| ActivePositionType::Lineup),
         tag("\tPitcher Magnified 2x: ").map(|_| ActivePositionType::Rotation),
@@ -3607,7 +3575,7 @@ pub(crate) fn parse_ledger_player_magnified(
     Ok((input, (position, runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_team_magnified(input: &str) -> ParserResult<(f64, f64)> {
+pub(crate) fn parse_ledger_team_magnified(input: &str) -> ParserResult<'_, (f64, f64)> {
     let (input, _) = tag("\tTeam Magnified 2x: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;
     let (input, _) = tag(" * 2 = ").parse(input)?;
@@ -3618,7 +3586,7 @@ pub(crate) fn parse_ledger_team_magnified(input: &str) -> ParserResult<(f64, f64
 // Covers any negating mod: underhanded, subtractor, etc
 pub(crate) fn parse_ledger_negating(
     mod_name: &str,
-) -> impl Fn(&str) -> ParserResult<(f64, f64)> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, (f64, f64)> + '_ {
     move |input| {
         let (input, _) = tag("\t").parse(input)?;
         let (input, _) = tag(mod_name).parse(input)?;
@@ -3630,7 +3598,7 @@ pub(crate) fn parse_ledger_negating(
     }
 }
 
-pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f64)> {
+pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<'_, (f64, f64, f64)> {
     let (input, _) = tag("\tSun .1: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;
     let (input, _) = tag(" + ").parse(input)?;
@@ -3640,11 +3608,11 @@ pub(crate) fn parse_ledger_sun_point1(input: &str) -> ParserResult<(f64, f64, f6
     Ok((input, (value, runs_before, runs_after)))
 }
 
-pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<Option<i64>> {
+pub(crate) fn parse_ledger_sum_sun(input: &str) -> ParserResult<'_, Option<i64>> {
     opt(parse_ledger_sum_sun_non_opt).parse(input)
 }
 
-pub(crate) fn parse_ledger_sum_sun_non_opt(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_ledger_sum_sun_non_opt(input: &str) -> ParserResult<'_, i64> {
     let (input, _) = tag("Sum Sun: ").parse(input)?;
     let (input, value) = parse_whole_number.parse(input)?;
     // Unlike most ledger parsers, I can always parse a newline here, because sum sun is always
@@ -3653,11 +3621,11 @@ pub(crate) fn parse_ledger_sum_sun_non_opt(input: &str) -> ParserResult<i64> {
     Ok((input, value))
 }
 
-pub(crate) fn parse_ledger_equal_sun(input: &str) -> ParserResult<Option<f64>> {
+pub(crate) fn parse_ledger_equal_sun(input: &str) -> ParserResult<'_, Option<f64>> {
     opt(parse_ledger_equal_sun_non_opt).parse(input)
 }
 
-pub(crate) fn parse_ledger_equal_sun_non_opt(input: &str) -> ParserResult<f64> {
+pub(crate) fn parse_ledger_equal_sun_non_opt(input: &str) -> ParserResult<'_, f64> {
     let (input, _) = tag("Equal Sun: ").parse(input)?;
     let (input, value) = double.parse(input)?;
     // Unlike most ledger parsers, I can always parse a newline here, because equal sun is always
@@ -3666,11 +3634,11 @@ pub(crate) fn parse_ledger_equal_sun_non_opt(input: &str) -> ParserResult<f64> {
     Ok((input, value))
 }
 
-pub(crate) fn parse_ledger_maximum_sun(input: &str) -> ParserResult<Option<f64>> {
+pub(crate) fn parse_ledger_maximum_sun(input: &str) -> ParserResult<'_, Option<f64>> {
     opt(parse_ledger_maximum_sun_non_opt).parse(input)
 }
 
-pub(crate) fn parse_ledger_maximum_sun_non_opt(input: &str) -> ParserResult<f64> {
+pub(crate) fn parse_ledger_maximum_sun_non_opt(input: &str) -> ParserResult<'_, f64> {
     let (input, _) = tag("Maximum Sun: ").parse(input)?;
     let (input, value) = double.parse(input)?;
     // Unlike most ledger parsers, I can always parse a newline here, because maximum sun is always
@@ -3687,7 +3655,7 @@ pub(crate) fn parse_ledger_maximum_sun_non_opt(input: &str) -> ParserResult<f64>
     Ok((input, value))
 }
 
-pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)> {
+pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<'_, (f64, f64)> {
     let (input, _) = tag("\tAcidic Pitch: ").parse(input)?;
     let (input, runs_before) = double.parse(input)?;
     let (input, _) = tag(" + -0.1 = ").parse(input)?;
@@ -3698,7 +3666,7 @@ pub(crate) fn parse_ledger_acidic_pitch(input: &str) -> ParserResult<(f64, f64)>
 pub(crate) fn parse_ledger_ired<'a>(
     label: &'a str,
     plus_minus: &'a str,
-) -> impl Fn(&str) -> ParserResult<(&str, f64, f64)> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, f64, f64)> + 'a {
     move |input| {
         let (input, _) = tag("\t").parse(input)?;
         let (input, player_name) = parse_terminated(&format!(" is {label}: ")).parse(input)?;
@@ -3710,14 +3678,14 @@ pub(crate) fn parse_ledger_ired<'a>(
     }
 }
 
-pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<f64> {
+pub(crate) fn parse_ledger_moderation(input: &str) -> ParserResult<'_, f64> {
     let (input, _) = tag("Moderation: ").parse(input)?;
     let (input, runs) = double.parse(input)?;
     let (input, _) = tag(" Unruns").parse(input)?;
     Ok((input, runs))
 }
 
-pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<TripleThreats> {
+pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<'_, TripleThreats> {
     let (input, threats) = alt((
         tag("Triple Threat: 0.3 Unrun").map(|_| TripleThreats::One),
         tag("Triple Threat: 0.6 Unrun").map(|_| TripleThreats::Two),
@@ -3728,7 +3696,7 @@ pub(crate) fn parse_ledger_triple_threat(input: &str) -> ParserResult<TripleThre
     Ok((input, threats))
 }
 
-pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<bool> {
+pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<'_, bool> {
     let (input, blaserunning) = opt(tag("Blaserunning: 0.2 Run")).parse(input)?;
     // Like other modifiers, the text is pluralized iff there are modifiers. The easiest way to
     // handle this is to consume the s separately. It would probably be fine to do it independently
@@ -3745,14 +3713,14 @@ pub(crate) fn parse_ledger_blaserunning(input: &str) -> ParserResult<bool> {
     Ok((input, blaserunning.is_some()))
 }
 
-pub(crate) fn parse_ledger_steal_home(input: &str) -> ParserResult<bool> {
+pub(crate) fn parse_ledger_steal_home(input: &str) -> ParserResult<'_, bool> {
     let (input, stole_home) = parse_ledger_v2_run("Steal Home").parse(input)?;
     let (input, _) = opt(tag("\n")).parse(input)?;
 
     Ok((input, stole_home))
 }
 
-pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i64> {
+pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<'_, i64> {
     let (input, _) = tag("Overflow: ").parse(input)?;
     let (input, num_runs) = parse_whole_number.parse(input)?;
     let (input, mul) = alt((
@@ -3770,7 +3738,7 @@ pub(crate) fn parse_ledger_overflow(input: &str) -> ParserResult<i64> {
     Ok((input, num_runs * mul))
 }
 
-pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_light_switch_flipped(input: &str) -> ParserResult<'_, (&str, bool)> {
     let (input, stadium_name) = parse_terminated("'s Light Switch is now ").parse(input)?;
     let (input, is_on) =
         alt((tag("OFF.").map(|_| false), tag("ON.").map(|_| true))).parse(input)?;
@@ -3817,7 +3785,7 @@ pub(crate) enum ParsedTeamTunnels<'a> {
     },
 }
 
-pub(crate) fn parse_tunnels(input: &str) -> ParserResult<ParsedTunnels> {
+pub(crate) fn parse_tunnels(input: &str) -> ParserResult<'_, ParsedTunnels<'_>> {
     alt((
         parse_player_tunnels.map(|(player_name, tunnels_effect)| ParsedTunnels::Player {
             player_name,
@@ -3828,7 +3796,7 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<ParsedTunnels> {
     .parse(input)
 }
 
-pub(crate) fn parse_player_tunnels(input: &str) -> ParserResult<(&str, ParsedPlayerTunnels)> {
+pub(crate) fn parse_player_tunnels(input: &str) -> ParserResult<'_, (&str, ParsedPlayerTunnels<'_>)> {
     let (input, thief_name) = parse_terminated(" entered the Tunnels...\n").parse(input)?;
     let (input, tunnels) = alt((
         parse_tunnels_stole_run(thief_name).map(|victim_team_nickname| {
@@ -3856,7 +3824,7 @@ pub(crate) fn parse_player_tunnels(input: &str) -> ParserResult<(&str, ParsedPla
     Ok((input, (thief_name, tunnels)))
 }
 
-pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<ParsedTeamTunnels> {
+pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<'_, ParsedTeamTunnels<'_>> {
     alt((
         parse_team_tunnels_begins
             .map(|team_nickname| ParsedTeamTunnels::HeistBegins { team_nickname }),
@@ -3873,28 +3841,28 @@ pub(crate) fn parse_team_tunnels(input: &str) -> ParserResult<ParsedTeamTunnels>
     .parse(input)
 }
 
-pub(crate) fn parse_team_tunnels_begins(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_tunnels_begins(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" attempted a Heist...").parse(input)?;
 
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_team_tunnels_continues(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_tunnels_continues(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("...They approached ").parse(input)?;
     let (input, player_name) = parse_until_period_eof.parse(input)?;
 
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_team_tunnels_failed(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_tunnels_failed(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("But ").parse(input)?;
     let (input, player_name) = parse_terminated(" evaded them!").parse(input)?;
 
     Ok((input, player_name))
 }
 
-pub(crate) fn parse_team_tunnels_succeeded(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_team_tunnels_succeeded(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected ").parse(input)?;
     let (input, player_name) = parse_terminated("!\n").parse(input)?;
@@ -3906,7 +3874,7 @@ pub(crate) fn parse_team_tunnels_succeeded(input: &str) -> ParserResult<(&str, &
 
 pub(crate) fn parse_failed_team_tunnels_steal_outcome(
     thieving_team_nickname: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + use<'_> {
     move |input| {
         let (input, _) = tag("The ").parse(input)?;
         let (input, _) = tag(thieving_team_nickname).parse(input)?;
@@ -3919,7 +3887,7 @@ pub(crate) fn parse_failed_team_tunnels_steal_outcome(
 
 pub(crate) fn parse_successful_team_tunnels_steal_outcome(
     thieving_team_nickname: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + use<'_> {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + use<'_> {
     move |input| {
         let (input, _) = tag("The ").parse(input)?;
         let (input, _) = tag(thieving_team_nickname).parse(input)?;
@@ -3932,7 +3900,7 @@ pub(crate) fn parse_successful_team_tunnels_steal_outcome(
 
 pub(crate) fn parse_tunnels_stole_run(
     thief_name: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + '_ {
     move |input| {
         let (input, _) = tag(thief_name).parse(input)?;
         let (input, _) = tag(" stole a Run from the ").parse(input)?;
@@ -3944,7 +3912,7 @@ pub(crate) fn parse_tunnels_stole_run(
 
 pub(crate) fn parse_tunnels_caught_stealing_item(
     thief_name: &str,
-) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, &str)> + '_ {
     move |input| {
         let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         let (input, item_name) =
@@ -3958,7 +3926,7 @@ pub(crate) fn parse_tunnels_caught_stealing_item(
 
 pub(crate) fn parse_tunnels_stole_item(
     thief_name: &str,
-) -> impl Fn(&str) -> ParserResult<(&str, &str)> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, &str)> + '_ {
     move |input| {
         let (input, victim_name) = parse_terminated_by_possessive.parse(input)?;
         let (input, item_name) = parse_terminated(" caught their eye...\n").parse(input)?;
@@ -3973,7 +3941,7 @@ pub(crate) fn parse_tunnels_stole_item(
 
 pub(crate) fn parse_balloon_inflated_from_win(
     before_s20d81: bool,
-) -> impl Fn(&str) -> ParserResult<&str> {
+) -> impl Fn(&str) -> ParserResult<'_, &str> {
     move |input| {
         let (input, stadium_name) = parse_terminated(if before_s20d81 {
             " inflated "
@@ -3989,7 +3957,7 @@ pub(crate) fn parse_balloon_inflated_from_win(
 
 pub(crate) fn parse_sun30(
     before_s20d81: bool,
-) -> impl Fn(&str) -> ParserResult<(&str, &str, Option<&str>)> {
+) -> impl Fn(&str) -> ParserResult<'_, (&str, &str, Option<&str>)> {
     move |input| {
         let (input, balloon) = opt(parse_balloon_inflated_from_win(before_s20d81)).parse(input)?;
         let (input, _) = parse_newline_if(balloon.is_some()).parse(input)?;
@@ -4002,7 +3970,7 @@ pub(crate) fn parse_sun30(
     }
 }
 
-pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<(&str, i64)> {
+pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<'_, (&str, i64)> {
     let (input, _) = tag("\nOne of ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, _) = tag("Balloons was struck and popped!\n").parse(input)?;
@@ -4011,7 +3979,7 @@ pub(crate) fn parse_balloons_popped(input: &str) -> ParserResult<(&str, i64)> {
     Ok((input, (stadium_name, num_birds_scared)))
 }
 
-pub(crate) fn parse_flooding_balloons_popped(input: &str) -> ParserResult<(&str, i64)> {
+pub(crate) fn parse_flooding_balloons_popped(input: &str) -> ParserResult<'_, (&str, i64)> {
     let (input, _) = tag("\nOne of ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
     let (input, _) = tag("Flooding Balloons was struck and popped!\n").parse(input)?;
@@ -4020,7 +3988,7 @@ pub(crate) fn parse_flooding_balloons_popped(input: &str) -> ParserResult<(&str,
     Ok((input, (stadium_name, num_birds_scared)))
 }
 
-pub(crate) fn parse_sun_30_win(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_sun_30_win(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Sun 30 granted the ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" a Win.").parse(input)?;
     Ok((input, team_nickname))
@@ -4028,7 +3996,7 @@ pub(crate) fn parse_sun_30_win(input: &str) -> ParserResult<&str> {
 
 pub(crate) fn parse_player_took_the_fifth_base(
     player_name: &str,
-) -> impl Fn(&str) -> ParserResult<()> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, ()> + '_ {
     move |input| {
         let (input, _) = tag("\n").parse(input)?;
         let (input, _) = tag(player_name).parse(input)?;
@@ -4039,7 +4007,7 @@ pub(crate) fn parse_player_took_the_fifth_base(
 
 pub(crate) fn parse_player_took_the_fifth_base_from_stadium(
     player_name: &str,
-) -> impl Fn(&str) -> ParserResult<&str> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, &str> + '_ {
     move |input| {
         let (input, _) = tag(player_name).parse(input)?;
         let (input, _) = tag(" took The Fifth Base from ").parse(input)?;
@@ -4048,7 +4016,7 @@ pub(crate) fn parse_player_took_the_fifth_base_from_stadium(
     }
 }
 
-pub(crate) fn parse_voicemail(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_voicemail(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("Home Team Shutout.\nIncoming Voicemail...\n").parse(input)?;
     let (input, replaced_player_nme) = parse_terminated(" is replaced by ").parse(input)?;
     let (input, replacement_player_name) = parse_terminated(".").parse(input)?;
@@ -4059,7 +4027,7 @@ pub(crate) fn parse_voicemail(input: &str) -> ParserResult<(&str, &str)> {
 pub(crate) fn parse_yolk_message<'a>(
     first_player_name: &'a str,
     descriptor: &'a str,
-) -> impl Fn(&str) -> ParserResult<Vec<&str>> + 'a {
+) -> impl Fn(&str) -> ParserResult<'_, Vec<&str>> + 'a {
     move |input| {
         let (input, _) = tag(first_player_name).parse(input)?;
         let (input, _) = opt(tag(" and ")).parse(input)?;
@@ -4110,7 +4078,7 @@ pub(crate) enum ParsedTrade<'a> {
 
 pub(crate) fn parse_trade(
     is_post_semicentennial: bool,
-) -> impl Fn(&str) -> ParserResult<ParsedTrade> {
+) -> impl Fn(&str) -> ParserResult<'_, ParsedTrade> {
     move |input| {
         alt((
             parse_terminated(" sought out a trade, but nothing caught their eye.")
@@ -4139,7 +4107,7 @@ pub(crate) fn parse_trade(
 
 pub(crate) fn parse_successful_trade(
     is_post_semicentennial: bool,
-) -> impl Fn(&str) -> ParserResult<(ParsedTraderTraitor, &str, &str, &str, &str)> {
+) -> impl Fn(&str) -> ParserResult<'_, (ParsedTraderTraitor, &str, &str, &str, &str)> {
     move |input| {
         // See the TraderTraitor enum for justification of these cases. Note that Unknown and Neither
         // must not be reordered.
@@ -4180,18 +4148,18 @@ pub(crate) fn parse_successful_trade(
     }
 }
 
-pub(crate) fn parse_trade_nothing_to_offer(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_trade_nothing_to_offer(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, trader_name) = parse_terminated(" tried to trade with ").parse(input)?;
     let (input, victim_name) = parse_terminated(" but they had nothing to offer.").parse(input)?;
 
     Ok((input, (trader_name, victim_name)))
 }
 
-pub(crate) fn parse_thieves_guild_convened(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_thieves_guild_convened(input: &str) -> ParserResult<'_, &str> {
     parse_terminated(" Thieves' Guild convened.\n").parse(input)
 }
 
-pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("They stole ").parse(input)?;
     let (input, victim_team_nickname) = parse_terminated_by_possessive.parse(input)?;
     let (input, _) = tag("Shadows player ").parse(input)?;
@@ -4202,7 +4170,7 @@ pub(crate) fn parse_thieves_guild_stole_player(input: &str) -> ParserResult<(&st
 
 pub(crate) fn parse_thieves_guild_stole_item(
     input: &str,
-) -> ParserResult<(&str, &str, &str, &str)> {
+) -> ParserResult<'_, (&str, &str, &str, &str)> {
     let (input, _) = tag("They stole ").parse(input)?;
     let (input, item_name) = parse_terminated(" from ").parse(input)?;
     let (input, victim_team_nickname) = parse_terminated_by_possessive.parse(input)?;
@@ -4221,7 +4189,7 @@ pub(crate) fn parse_thieves_guild_stole_item(
     ))
 }
 
-pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserResult<Weather> {
+pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserResult<'_, Weather> {
     move |input| {
         // This has to be split up because alt only supports tuples up to 21 elements
         alt((
@@ -4273,7 +4241,7 @@ pub(crate) fn parse_weather(season: i64, day: i64) -> impl Fn(&str) -> ParserRes
 pub(crate) fn parse_riff_opened(
     season: i64,
     day: i64,
-) -> impl Fn(&str) -> ParserResult<(Vec<RiffElement>, Weather)> {
+) -> impl Fn(&str) -> ParserResult<'_, (Vec<RiffElement>, Weather)> {
     move |input| {
         let (input, _) = tag("A Riff Opened.\n🎵 ").parse(input)?;
         // Needs a nested alt() because alt has a max of 21 sub-parsers
@@ -4320,14 +4288,14 @@ pub(crate) fn parse_riff_opened(
     }
 }
 
-pub(crate) fn parse_team_formed(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_formed(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated(" formed.").parse(input)?;
 
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<Vec<&str>> {
+pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<'_, Vec<&str>> {
     let (input, names) = parse_terminated(" are stronger together.").parse(input)?;
 
     let mut names: Vec<_> = names.split(", ").collect();
@@ -4342,7 +4310,7 @@ pub(crate) fn parse_togetherness_mod(input: &str) -> ParserResult<Vec<&str>> {
 
 pub(crate) fn parse_weather_report(
     weather_flavor: &str,
-) -> impl Fn(&str) -> ParserResult<(i64, &str)> + '_ {
+) -> impl Fn(&str) -> ParserResult<'_, (i64, &str)> + '_ {
     move |input| {
         let (input, _) = tag("A new Weather Report arrived from History.\nSEASON ").parse(input)?;
         let (input, season_num) = parse_whole_number(input)?;
@@ -4354,7 +4322,7 @@ pub(crate) fn parse_weather_report(
     }
 }
 
-pub(crate) fn parse_pitcher_cycles_out(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_pitcher_cycles_out(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, team_nickname) = parse_terminated("' pitcher ").parse(input)?;
     let (input, outgoing_pitcher_name) = parse_terminated(" Cycles out for ").parse(input)?;
     let (input, incoming_pitcher_name) = parse_terminated("!").parse(input)?;
@@ -4370,7 +4338,7 @@ pub(crate) enum ParsedSunSunPressure {
     PressureBuilt,
 }
 
-pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<ParsedSunSunPressure> {
+pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<'_, ParsedSunSunPressure> {
     alt((
         tag("Sun(Sun) Recharged.").map(|_| ParsedSunSunPressure::Recharged),
         tag("Sun(Sun)'s Pressure built...").map(|_| ParsedSunSunPressure::PressureBuilt),
@@ -4378,11 +4346,11 @@ pub(crate) fn parse_sun_sun_pressure(input: &str) -> ParserResult<ParsedSunSunPr
     .parse(input)
 }
 
-pub(crate) fn parse_stabled(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_stabled(input: &str) -> ParserResult<'_, &str> {
     parse_terminated(" was Stabled in The Vault.").parse(input)
 }
 
-pub(crate) fn parse_horse_power(input: &str) -> ParserResult<[&str; 2]> {
+pub(crate) fn parse_horse_power(input: &str) -> ParserResult<'_, [&str; 2]> {
     let (input, _) = tag("Horse Power Achieved.\nThe ").parse(input)?;
     let (input, name_1) = parse_terminated(" and ").parse(input)?;
     let (input, name_2) = parse_terminated(" were Stabled!").parse(input)?;
@@ -4390,14 +4358,14 @@ pub(crate) fn parse_horse_power(input: &str) -> ParserResult<[&str; 2]> {
     Ok((input, [name_1, name_2]))
 }
 
-pub(crate) fn parse_stables(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_stables(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated(" scored!").parse(input)?;
 
     Ok((input, team_name))
 }
 
-pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<(&str, bool)> {
+pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<'_, (&str, bool)> {
     alt((
         parse_terminated(" left the Vault.").map(|n| (n, false)),
         parse_terminated(" Super Roamed out of the Vault.").map(|n| (n, true)),
@@ -4405,7 +4373,7 @@ pub(crate) fn parse_player_left_vault(input: &str) -> ParserResult<(&str, bool)>
     .parse(input)
 }
 
-pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, player_name) =
         parse_terminated(" left Instability in their wake. ").parse(input)?;
     // This is "location name" because it can also be the vault
@@ -4414,7 +4382,7 @@ pub(crate) fn parse_firewalker_instability_spread(input: &str) -> ParserResult<(
     Ok((input, (player_name, location_name)))
 }
 
-pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult<(&str, &str)> {
+pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, nullified_mod_name) = parse_terminated("!").parse(input)?;
@@ -4424,7 +4392,7 @@ pub(crate) fn parse_black_hole_nullified_league_mod(input: &str) -> ParserResult
 
 pub(crate) fn parse_black_hole_nullified_stadium_mod(
     input: &str,
-) -> ParserResult<(&str, &str, &str)> {
+) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, stadium_name) = parse_terminated_by_possessive.parse(input)?;
@@ -4433,7 +4401,7 @@ pub(crate) fn parse_black_hole_nullified_stadium_mod(
     Ok((input, (team_nickname, stadium_name, nullified_mod_name)))
 }
 
-pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<(&str, &str, &str)> {
+pub(crate) fn parse_black_hole_nullified_item(input: &str) -> ParserResult<'_, (&str, &str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified ").parse(input)?;
     let (input, player_name) = parse_terminated_by_possessive.parse(input)?;
@@ -4449,7 +4417,7 @@ pub(crate) enum ParsedBlackHoleNullifiedNoChildren<'a> {
 
 pub(crate) fn parse_black_hole_nullified_no_children(
     input: &str,
-) -> ParserResult<ParsedBlackHoleNullifiedNoChildren> {
+) -> ParserResult<'_, ParsedBlackHoleNullifiedNoChildren<'_>> {
     alt((
         parse_black_hole_nullified_team_in_game.map(ParsedBlackHoleNullifiedNoChildren::InGame),
         parse_black_hole_nullified_team_on_map.map(ParsedBlackHoleNullifiedNoChildren::OnMap),
@@ -4457,7 +4425,7 @@ pub(crate) fn parse_black_hole_nullified_no_children(
     .parse(input)
 }
 
-pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" collected 10!\nBlack Hole (Black Hole) became Agitated.\nBlack Hole (Black Hole) nullified the ").parse(input)?;
     let (input, _) = tag(team_nickname).parse(input)?;
@@ -4466,7 +4434,7 @@ pub(crate) fn parse_black_hole_nullified_team_in_game(input: &str) -> ParserResu
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_black_hole_nullified_team_on_map(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_black_hole_nullified_team_on_map(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Black Hole (Black Hole) nullified the ").parse(input)?;
     let (input, team_nickname) = parse_terminated("!").parse(input)?;
 
@@ -4478,7 +4446,7 @@ pub(crate) enum ParsedCoinHit<'a> {
     Incinerated(&'a str),
 }
 
-pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<ParsedCoinHit> {
+pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<'_, ParsedCoinHit<'_>> {
     alt((
         preceded(tag("The "), parse_terminated(" Scattered the Coin!"))
             .map(|n| ParsedCoinHit::Scattered(n)),
@@ -4487,12 +4455,12 @@ pub(crate) fn parse_coin_hit(input: &str) -> ParserResult<ParsedCoinHit> {
     .parse(input)
 }
 
-pub(crate) fn parse_team_exited_hall_of_flame(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_team_exited_hall_of_flame(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The ").parse(input)?;
     parse_terminated(" exited the Hall of Flame").parse(input)
 }
 
-pub(crate) fn parse_exited_hall_of_flame(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_exited_hall_of_flame(input: &str) -> ParserResult<'_, &str> {
     parse_terminated(" exited the Hall of Flame").parse(input)
 }
 
@@ -4501,7 +4469,7 @@ pub(crate) enum ParsedAnnouncement {
     HallOfFlameOpened,
 }
 
-pub(crate) fn parse_announcement(input: &str) -> ParserResult<ParsedAnnouncement> {
+pub(crate) fn parse_announcement(input: &str) -> ParserResult<'_, ParsedAnnouncement> {
     alt((
         tag("EMERGENCY ALERT\nRIFFING INTENSIFIES\nSUPERNOVA COLLAPSES\nREALITY TEARS\nSTRANDS BRIDGED\nENDS ZONE")
             .map(|_| ParsedAnnouncement::SupernovaLeagueReassignment),
@@ -4510,7 +4478,7 @@ pub(crate) fn parse_announcement(input: &str) -> ParserResult<ParsedAnnouncement
     )).parse(input)
 }
 
-pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<Option<&str>> {
+pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<'_, Option<&str>> {
     alt((
         parse_game_end_by_single_nullification.map(Some),
         tag("{nullteam} and {nullteam} were both nullified.\nGame canceled.\nNeither Team non-lost.")
@@ -4518,7 +4486,7 @@ pub(crate) fn parse_game_end_by_nullification(input: &str) -> ParserResult<Optio
     )).parse(input)
 }
 
-pub(crate) fn parse_game_end_by_single_nullification(input: &str) -> ParserResult<&str> {
+pub(crate) fn parse_game_end_by_single_nullification(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("The {nullteam} were nullified.\nThe ").parse(input)?;
     let (input, team_nickname) = parse_terminated(" non-lost the game.").parse(input)?;
 

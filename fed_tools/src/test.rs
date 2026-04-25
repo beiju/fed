@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use eventually_api::EventuallyEvent;
 use indicatif::{MultiProgress, ProgressDrawTarget, ProgressStyle};
@@ -6,12 +6,12 @@ use itertools::Itertools;
 use json_structural_diff::JsonDiff;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufReader, prelude::*};
+use std::io::{prelude::*, BufReader};
 use std::sync::{Arc, Mutex, TryLockError};
 use with_structure::WithStructure;
 
 use fed::MakePeekableWithLogging;
-use fed::{FedEvent, FedEventData, InterEventStateSync, parse_next_event};
+use fed::{parse_next_event, FedEvent, InterEventStateSync};
 
 const SEASONS: [(&'static str, i64, i64); 13] = [
     // sim, season number, number of events in that season

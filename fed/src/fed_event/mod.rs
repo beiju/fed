@@ -340,48 +340,6 @@ impl<T: LedgerV2> Scores<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Score {
-    /// Info for the score that happened on this event, if any, otherwise null
-    pub score: Option<ScoringPlayer>,
-
-    /// List of free refills used on this event, if any. This should always be empty if `score` is
-    /// null, but if `scores` is non-null it may contain more than one element.
-    pub free_refills: Vec<FreeRefill>,
-}
-
-impl Score {
-    #[deprecated = "This is part of the old event builder"]
-    pub fn to_description_with_text_between(&self, score_text: &str, text_between: &str) -> String {
-        let mut output = String::new();
-        if let Some(score) = &self.score {
-            write!(output, "\n{}{}", score.player_name, score_text).unwrap();
-        }
-
-        write!(output, "{}", text_between).unwrap();
-
-        for refill in &self.free_refills {
-            write!(
-                output,
-                "\n{} used their Free Refill.\n{} Refills the In!",
-                refill.player_name, refill.player_name
-            )
-            .unwrap();
-        }
-
-        output
-    }
-
-    pub fn scorer_ids(&self) -> Vec<Uuid> {
-        self.score.iter().map(|p| p.player_id).collect()
-    }
-
-    pub fn used_refill(&self) -> bool {
-        !self.free_refills.is_empty()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
@@ -657,7 +615,7 @@ pub enum SpicyStatus {
     RedHot(Option<ModChangeSubEvent>),
 }
 
-trait ModChangeSubject {
+pub trait ModChangeSubject {
     // For this ModChangeSubject, the corresponding struct containing the subject-related info that
     // can only be gotten from the child event
     type Details;
@@ -2112,18 +2070,6 @@ pub struct PlayerBoostSubEventWithTeam {
     pub sub_event: SubEvent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
-pub struct NamedPlayerBoostSubEvent {
-    /// Player's rating before the boost
-    pub rating_before: f64,
-
-    /// Player's rating after the boost
-    pub rating_after: f64,
-
-    /// Metadata for the boost sub-event
-    pub sub_event: SubEvent,
-}
-
 #[derive(
     Debug,
     Clone,
@@ -2522,7 +2468,7 @@ impl LedgerRunModifier {
     pub fn modify_and_write(
         &self,
         run_value_before: f64,
-        mut w: &mut impl Write,
+        w: &mut impl Write,
     ) -> Result<f64, std::fmt::Error> {
         let run_value_after = self.modify(run_value_before);
         match self {
@@ -2627,7 +2573,7 @@ impl LedgerRun {
         &self,
         mut run_value: f64,
         ledger_label: &str,
-        mut w: &mut impl Write,
+        w: &mut impl Write,
     ) -> Result<f64, std::fmt::Error> {
         // The !self.modifiers.is_empty() part seems to be a bug in Blaseball
         write!(
@@ -2659,13 +2605,13 @@ impl LedgerRun {
 
 fn compute_and_write_sum_sun(
     num_runs: i64,
-    mut w: &mut impl Write,
+    w: &mut impl Write,
 ) -> Result<f64, std::fmt::Error> {
     write!(w, "Sum Sun: {}", WholeRuns(num_runs))?;
     Ok(num_runs as f64)
 }
 
-fn write_maximum_sun(num_runs: f64, mut w: &mut impl Write) -> Result<(), std::fmt::Error> {
+fn write_maximum_sun(num_runs: f64, w: &mut impl Write) -> Result<(), std::fmt::Error> {
     write!(w, "Maximum Sun: {}", Runs(num_runs))
 }
 
@@ -2739,7 +2685,7 @@ trait FedIteratorExtensions {
 }
 
 impl<ChildT: Iterator<Item = f64>> FedIteratorExtensions for ChildT {
-    fn with_maximum_sun(self, is_maximum_sun: bool) -> MaximumSunRunValuesIterator<ChildT> {
+    fn with_maximum_sun(self, is_maximum_sun: bool) -> impl Iterator<Item = f64> {
         MaximumSunRunValuesIterator::new(is_maximum_sun, self)
     }
 }

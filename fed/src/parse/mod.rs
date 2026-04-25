@@ -126,7 +126,6 @@ pub struct InterEventState {
     // TODO: After the upcoming changes this should only ever have one (Uuid, String), so it should
     //   be either a vec or option
     pending_mod_removed_from_other_mod: Mutex<HashMap<(Uuid, String), ModsFromAnotherModRemoved>>,
-    pending_hall_roamer_pulled_from_team: Option<SubEvent>,
 }
 
 impl InterEventState {
@@ -505,7 +504,7 @@ pub fn parse_next_event_r(
                                 parse_player_took_the_fifth_base_from_stadium(runner_name),
                             )?;
 
-                            let mut item_dropped_event =
+                            let item_dropped_event =
                                 event.next_child_opt(EventType::PlayerLostItem)?;
                             let mut item_gained_event =
                                 event.next_child(EventType::PlayerGainedItem)?;
@@ -590,7 +589,7 @@ pub fn parse_next_event_r(
                     let mut player_lost_item_event = event.next_child(EventType::PlayerLostItem)?;
                     let stadium_name = player_lost_item_event
                         .next_parse(parse_placed_fifth_base_in_stadium(runner_name))?;
-                    let mut stadium_gained_mod_event = event.next_child(EventType::AddedMod)?;
+                    let stadium_gained_mod_event = event.next_child(EventType::AddedMod)?;
                     FedEventData::PlacedFifthBase {
                         game: event.game(unscatter, attractor_secret_base)?,
                         player_id: player_lost_item_event.next_player_id()?,
@@ -1952,7 +1951,7 @@ pub fn parse_next_event_r(
                     let sipper_id = event.next_player_id()?;
                     let sipped_id = event.next_player_id()?;
 
-                    let mut maintenance_mode_event = event.next_child_opt(EventType::AddedMod)?;
+                    let maintenance_mode_event = event.next_child_opt(EventType::AddedMod)?;
                     FedEventData::SpecialBlooddrain {
                         game: event.game(unscatter, attractor_secret_base)?,
                         sipper_id,
@@ -2008,7 +2007,7 @@ pub fn parse_next_event_r(
                     let mut incin_child = event
                         .next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
                     let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
-                    let mut pressure_built_event =
+                    let pressure_built_event =
                         event.next_child_opt(EventType::SunSunPressure)?;
                     let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
                     let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
@@ -2028,7 +2027,7 @@ pub fn parse_next_event_r(
                     let ambush = ambush.map(|(p, t)| event.parse_ambush(p, t)).transpose()?;
 
                     let pressure_built = pressure_built_event
-                        .map(|mut pressure_built_event| {
+                        .map(|pressure_built_event| {
                             ParseOk(PressureBuilt {
                                 pressure_after: pressure_built_event.metadata_f64("current")?,
                                 sub_event: pressure_built_event.as_sub_event(),
@@ -2846,7 +2845,7 @@ pub fn parse_next_event_r(
                     } => {
                         let mut caught_stealing_item_event =
                             event.next_child(EventType::FailedTunnelsSteal)?;
-                        let mut fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
+                        let fled_elsewhere_event = event.next_child_opt(EventType::AddedMod)?;
 
                         let thief_id = caught_stealing_item_event.next_player_id()?;
                         let victim_id = caught_stealing_item_event.next_player_id()?;
@@ -2871,9 +2870,9 @@ pub fn parse_next_event_r(
                         let mut stole_item_event =
                             event.next_child(EventType::StoleItemFromTunnels)?;
                         let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
-                        let mut item_dropped_event =
+                        let item_dropped_event =
                             event.next_child_opt(EventType::PlayerLostItem)?;
-                        let mut item_gained_event =
+                        let item_gained_event =
                             event.next_child(EventType::PlayerGainedItem)?;
 
                         let thief_id = stole_item_event.next_player_id()?;
@@ -4265,12 +4264,12 @@ pub fn parse_next_event_r(
                                 let former_team_id = removed_from_team_event.metadata_uuid("teamId")?;
                                 let former_team_nickname = removed_from_team_event.metadata_str("teamName")?;
                                 let moved_from_team = if let Some(exit_hall_event) = e.exit_hall {
-                                    let mut exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
+                                    let exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
                                     let added_returned_mod_event = e.added_returned_mod.ok_or_else(|| FeedParseError::MissingEventInGroup {
                                         group_indicator_type: EventType::ExitHallOfFlame,
                                         expected_type: EventType::AddedMod,
                                     })?;
-                                    let mut added_returned_mod_event = EventParseWrapper::new(&added_returned_mod_event)?;
+                                    let added_returned_mod_event = EventParseWrapper::new(&added_returned_mod_event)?;
 
                                     PlayerMovedFrom::IncineratedTeam {
                                         former_team_id,
@@ -4301,7 +4300,7 @@ pub fn parse_next_event_r(
                                     group_indicator_type: EventType::AddedMod,
                                     expected_type: EventType::ExitHallOfFlame,
                                 })?;
-                                let mut exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
+                                let exit_hall_event = EventParseWrapper::new(&exit_hall_event)?;
                                 let moved_from_team = PlayerMovedFrom::HallOfFlame {
                                     former_team_id: added_returned_mod_event.next_team_id_opt(),
                                     exited_hall_sub_event: exit_hall_event.as_sub_event(),
@@ -4502,7 +4501,7 @@ pub fn parse_next_event_r(
             // TODO Save these
             loop {
                 // TODO "is weaker on their own" events are intermingled with these
-                let Some(player_dusts_off) = event_iter.next_if_type(EventType::RemovedMod) else {
+                let Some(_player_dusts_off) = event_iter.next_if_type(EventType::RemovedMod) else {
                     break;
                 };
             }
@@ -4755,7 +4754,6 @@ pub fn parse_next_event_r(
             todo!()
         }
         EventType::RemovedModsFromAnotherMod => {
-            let event_id = event.id;
             // What the hell did I just write
             let player_or_team_id = Ok(event.next_player_id_opt())
                 .transpose()
@@ -5402,7 +5400,7 @@ pub fn parse_next_event_r(
             let replacement_player_id = event.next_player_id()?;
 
             let mut replaced_event = event.next_child(EventType::PlayerSwap)?;
-            let mut replacement_event = event.next_child(EventType::PlayerStatIncrease)?;
+            let replacement_event = event.next_child(EventType::PlayerStatIncrease)?;
 
             FedEventData::Voicemail {
                 game: event.game(unscatter, attractor_secret_base)?,
@@ -5430,7 +5428,7 @@ pub fn parse_next_event_r(
             // Cheating a little here by parsing only the beginning of a sub-event
             let thieving_team_nickname =
                 item_lost_child.next_parse(parse_terminated("Thieves' Guild stole"))?;
-            let mut item_dropped_for_other_item_child =
+            let item_dropped_for_other_item_child =
                 event.next_child_opt(EventType::PlayerLostItem)?;
             let mut item_gained_child = event.next_child(EventType::PlayerGainedItem)?;
 
@@ -6186,7 +6184,7 @@ fn parse_subseasonal_mod_change_event(
     Ok(if is_terminal {
         FedEventData::TeamSubseasonalModsChange {
             game,
-            change: team_changes.into_iter().exactly_one().map_err(|err| {
+            change: team_changes.into_iter().exactly_one().map_err(|_| {
                 FeedParseError::UnexpectedCompoundEvent {
                     event_type: event.event_type,
                 }

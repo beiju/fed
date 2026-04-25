@@ -1379,8 +1379,8 @@ impl<'e> EventParseWrapper<'e> {
     ) -> Result<Option<FlipNegative>, FeedParseError> {
         undertaker_name
             .map(|flipper_name| {
-                let mut undertaker_elsewhere_event = self.next_child(EventType::AddedMod)?;
-                let mut negative_event = self.next_child(EventType::AddedMod)?;
+                let undertaker_elsewhere_event = self.next_child(EventType::AddedMod)?;
+                let negative_event = self.next_child(EventType::AddedMod)?;
 
                 // The player tag on negative_event is for the person who got flipped and the
                 // flipper id is on the parent event. Dunno why.
