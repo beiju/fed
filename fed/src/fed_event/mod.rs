@@ -5,7 +5,6 @@ pub use run_source::RunSource;
 
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use enum_access::EnumDisplay;
 use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
 use itertools::{Either, Itertools};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
@@ -2079,7 +2078,6 @@ pub struct PlayerBoostSubEventWithTeam {
     JsonSchema,
     AsRefStr,
     WithStructure,
-    EnumDisplay,
 )]
 pub enum TeamNicknameOrPlayerName {
     TeamNickname(String),
@@ -2102,7 +2100,6 @@ pub struct MaintenanceMode {
     JsonSchema,
     AsRefStr,
     WithStructure,
-    EnumDisplay,
 )]
 pub enum PostseasonBirthBoostEventOrder {
     // TODO Do all 3 of these actually appear in real data?
@@ -3153,7 +3150,7 @@ pub struct PressureBuilt {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum RenovationBuiltEffect {
     None,
@@ -3203,7 +3200,6 @@ pub struct ModRemovedFromRatification {
     JsonSchema,
     AsRefStr,
     WithStructure,
-    EnumDisplay,
 )]
 #[repr(i64)]
 pub enum BracketType {
@@ -3329,7 +3325,7 @@ pub struct PlayerTogethernessModBlip {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum RunStolenThroughTunnelsDetails {
     /// Neither scoring event was available, so no details are known
@@ -3715,7 +3711,7 @@ pub struct SuccessfulTunnelsTheft {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum BlackHoleBurp {
     /// The Black Hole swallowed a win, and did not burp
@@ -3800,7 +3796,7 @@ pub struct TeamUnstableChain {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum TeamIncinerationReplacementSource {
     /// The replacement team was generated on the spot
@@ -3848,7 +3844,7 @@ pub struct IdentifiedPlayerSubEvent {
     pub sub_event: SubEvent,
 }
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum NightShiftOutcome {
     /// This is the normal outcome of a Night Shift: the players are swapped
@@ -3883,7 +3879,7 @@ pub enum NightShiftOutcome {
     },
 }
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 pub enum EndZone {
     Vault,
@@ -3894,7 +3890,7 @@ pub enum EndZone {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure, EnumDisplay,
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
 #[serde(tag = "type")]
 pub enum FedEventData {
