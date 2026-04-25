@@ -10,6 +10,7 @@ use crate::fed_event::{
     StoppedInhabiting, SubEvent,
 };
 
+#[deprecated(note="Replace with new event builder")]
 pub struct EventBuilderCommon {
     pub id: Uuid,
     pub created: DateTime<Utc>,

@@ -9,3 +9,4 @@ https://discord.com/channels/738107179294523402/834940656211591178/8794957417799
 - Inspect json outputs and change serde annotations to make it idiomatic
 - Address TODOs and todo!()s
 - Audit for events that should be grouped
+- Remove fed/src/parse/builder.rs, rename event_builder_new to event_builder

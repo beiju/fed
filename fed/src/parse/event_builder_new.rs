@@ -2,17 +2,7 @@ use std::fmt::Write;
 
 use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, RoamConnectedEvents, Shame};
 use crate::format_utils::Possessive;
-use crate::{
-    Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType,
-    EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty,
-    HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired,
-    KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent,
-    ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent,
-    PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId,
-    PlayerSentElsewhere, PlayerSubEvent, Scattered, ScoreSummary, Scores, ScoringPlayer,
-    SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange,
-    TeamModChangeSubject,
-};
+use crate::{Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired, KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId, PlayerSentElsewhere, PlayerSubEvent, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject, TogglePerforming};
 use chrono::{DateTime, Utc};
 use eventually_api::{EventCategory, EventMetadata, EventType, EventuallyEvent};
 use serde_json::{Map, Value};
@@ -328,6 +318,38 @@ impl EventBuilder {
         child_builder.event.metadata.sub_play =
             Some(self.event.metadata.children.len() as i64 + self.phantom_children);
         self.event.metadata.children.push(build_func(child_builder))
+    }
+
+    pub fn push_toggle_performing_child(&mut self, toggle: TogglePerforming, description: &str, mod_source: &str) {
+        let mod_name = if toggle.is_overperforming {
+            "OVERPERFORMING"
+        } else {
+            "UNDERPERFORMING"
+        };
+        let opposite_mod_name = if toggle.is_overperforming {
+            "UNDERPERFORMING"
+        } else {
+            "OVERPERFORMING"
+        };
+
+        self.push_child(toggle.sub_event, |mut eb| {
+            eb.push_description(description);
+            eb.push_team_tag(toggle.team_id);
+            eb.push_player_tag(toggle.player_id);
+            eb.push_metadata_i64("type", ModDuration::Permanent);
+            eb.push_metadata_str("source", mod_source);
+            if toggle.is_first_proc {
+                eb.push_metadata_str("mod", mod_name);
+            } else {
+                eb.push_metadata_str("from", opposite_mod_name);
+                eb.push_metadata_str("to", mod_name);
+            }
+            eb.build(if toggle.is_first_proc {
+                EventType::AddedModFromOtherMod
+            } else {
+                EventType::ChangedModFromOtherMod
+            })
+        })
     }
 
     pub fn push_phantom_child(&mut self) {

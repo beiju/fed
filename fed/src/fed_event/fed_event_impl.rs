@@ -10,7 +10,7 @@ use crate::fed_event::{
     PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere,
     ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails,
     StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName,
-    TradeForNothing, TradeForSomething, TraderTraitor, WinSubEventWithNickname,
+    TradeForNothing, TradeForSomething, TraderTraitor,
 };
 use crate::{PlayerMovedFrom, PlayersAddedToTeam};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
@@ -20,60 +20,10 @@ use std::iter;
 
 use crate::format_utils::Possessive;
 use crate::parse::builder::{
-    EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate, possessive,
+    possessive, EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate,
 };
 use crate::parse::event_builder_new::EventBuilder;
 use crate::*;
-
-#[deprecated = "This is part of the old event builder"]
-fn make_switch_performing_child(
-    toggle: &TogglePerforming,
-    description: &str,
-    mod_source: &str,
-) -> EventBuilderChildFull {
-    let mod_name = if toggle.is_overperforming {
-        "OVERPERFORMING"
-    } else {
-        "UNDERPERFORMING"
-    };
-    let opposite_mod_name = if toggle.is_overperforming {
-        "UNDERPERFORMING"
-    } else {
-        "OVERPERFORMING"
-    };
-    if toggle.is_first_proc {
-        EventBuilderChild::new(&toggle.sub_event)
-            .update(EventBuilderUpdate {
-                category: EventCategory::Changes,
-                r#type: EventType::AddedModFromOtherMod,
-                description: description.to_string(),
-                team_tags: vec![toggle.team_id],
-                player_tags: vec![toggle.player_id],
-                ..Default::default()
-            })
-            .metadata(json!({
-                "mod": mod_name,
-                "source": mod_source,
-                "type": 0, // ?
-            }))
-    } else {
-        EventBuilderChild::new(&toggle.sub_event)
-            .update(EventBuilderUpdate {
-                r#type: EventType::ChangedModFromOtherMod,
-                category: EventCategory::Changes,
-                description: description.to_string(),
-                team_tags: vec![toggle.team_id],
-                player_tags: vec![toggle.player_id],
-                ..Default::default()
-            })
-            .metadata(json!({
-                "from": opposite_mod_name,
-                "source": mod_source,
-                "to": mod_name,
-                "type": 0, // ?
-            }))
-    }
-}
 
 impl FedEvent {
     // I would like this to take by reference but it currently needs to call into into_feed_event,
@@ -141,13 +91,9 @@ impl FedEvent {
                 eb.build(EventType::GameStart)
             }
             FedEventData::PlayBall { game } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::PlayBall,
-                        description: "Play ball!".to_string(),
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_game(game);
+                eb.push_description("Play ball!");
+                eb.build(EventType::PlayBall)
             }
             FedEventData::HalfInningStart { game, top_of_inning, inning, batting_team_name, team_subseasonal_mod_changes } => {
                 eb.set_game(game);
@@ -203,19 +149,14 @@ impl FedEvent {
 
                 eb.build(EventType::BatterUp)
             }
-            FedEventData::SuperyummyGameStart { ref game, ref toggle } => {
+            FedEventData::SuperyummyGameStart { game, toggle } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
                 let description = format!("{} {} Peanuts.", toggle.player_name,
                                           if toggle.is_overperforming { "loves" } else { "misses" });
-                let change_event = make_switch_performing_child(toggle, &description, "SUPERYUMMY");
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        category: EventCategory::Special,
-                        r#type: EventType::Superyummy,
-                        description,
-                        ..Default::default()
-                    })
-                    .child(change_event)
-                    .build()
+                eb.push_toggle_performing_child(toggle, &description, "SUPERYUMMY");
+                eb.push_description(description);
+                eb.build(EventType::Superyummy)
             }
             FedEventData::EchoedSuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts } => {
                 event_builder.for_game(game)
@@ -2874,24 +2815,17 @@ impl FedEvent {
                     .build()
             }
             FedEventData::HomebodyGameStart { game, homebodies } => {
-                let (descriptions, children): (Vec<_>, Vec<_>) = homebodies.into_iter()
-                    .map(|toggle| {
-                        let description = format!("{} is {}.", toggle.player_name,
-                                                  if toggle.is_overperforming { "happy to be home" } else { "homesick" });
-                        let change_event = make_switch_performing_child(&toggle, &description, "HOMEBODY");
-                        (description, change_event)
-                    })
-                    .unzip();
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
 
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        category: EventCategory::Special,
-                        r#type: EventType::Homebody,
-                        description: descriptions.into_iter().join("\n"),
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+                for toggle in homebodies {
+                    let description = format!("{} is {}.", toggle.player_name,
+                                              if toggle.is_overperforming { "happy to be home" } else { "homesick" });
+                    eb.push_toggle_performing_child(toggle, &description, "HOMEBODY");
+                    eb.push_description(description);
+                }
+
+                eb.build(EventType::Homebody)
             }
             FedEventData::SalmonSwim { game, inning_num, run_losses, item_repaired: item_restored, player_expelled } => {
                 eb.set_game(game);
