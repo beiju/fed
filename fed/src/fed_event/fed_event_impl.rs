@@ -504,24 +504,16 @@ impl FedEvent {
                 eb.build(EventType::GroundOut)
             }
             FedEventData::StrikeZapped { game } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::StrikeZapped,
-                        category: EventCategory::Special,
-                        description: "The Electricity zaps a strike away!".to_string(),
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description("The Electricity zaps a strike away!");
+                eb.build(EventType::StrikeZapped)
             }
             FedEventData::PeanutFlavorText { game, message } => {
-                event_builder.for_game(&game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::PeanutFlavorText,
-                        category: EventCategory::Special,
-                        description: message,
-                        ..Default::default()
-                    })
-                    .build()
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(message);
+                eb.build(EventType::PeanutFlavorText)
             }
             FedEventData::DoublePlay { game, pitch, batter_name, scores, stopped_inhabiting, cooled_off, pitcher_item_damage, flood_balloon_popped } => {
                 let home_team_id = game.home_team;
@@ -568,55 +560,46 @@ impl FedEvent {
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.build(EventType::MildPitch)
             }
-            FedEventData::CoffeeBean { ref game, player_id, ref player_name, ref roast, ref notes, ref which_mod, gained_mod, ref sub_event, team_id, ref previous } => {
+            FedEventData::CoffeeBean { game, player_id, player_name, roast, notes, which_mod, gained_mod, sub_event, team_id, previous } => {
                 let change_str = match (gained_mod, which_mod) {
                     (true, CoffeeBeanMod::Wired) => { "is Wired!" }
                     (true, CoffeeBeanMod::Tired) => { "is Tired." }
                     (false, CoffeeBeanMod::Wired) => { "is no longer Wired." }
                     (false, CoffeeBeanMod::Tired) => { "is no longer Tired!" }
                 };
-                let mod_id = which_mod.to_str();
-                let child = EventBuilderChild::new(sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: if previous.is_some() {
-                            EventType::ModChange
-                        } else if gained_mod {
-                            EventType::AddedMod
-                        } else {
-                            EventType::RemovedMod
-                        },
-                        category: EventCategory::Changes,
-                        description: format!("{player_name} {change_str}"),
-                        team_tags: team_id.into_iter().collect(),
-                        player_tags: vec![player_id],
-                        ..Default::default()
-                    })
-                    .metadata(
-                        if let Some(prev_mod) = previous {
-                            let prev_mod_id = prev_mod.to_str();
-                            json!({
-                                "from": prev_mod_id,
-                                "to": mod_id,
-                                "type": 3, // ?
-                            })
-                        } else {
-                            json!({
-                                "mod": mod_id,
-                                "type": 3, // ?
-                            })
-                        }
-                    );
 
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::CoffeeBean,
-                        category: EventCategory::Special,
-                        description: format!("{player_name} is Beaned by a {roast} roast with {notes}.\n{player_name} {change_str}"),
-                        player_tags: vec![player_id],
-                        ..Default::default()
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("{player_name} is Beaned by a {roast} roast with {notes}."));
+                let change_description = format!("{player_name} {change_str}");
+                eb.push_description(&change_description);
+                eb.push_player_tag(player_id);
+
+                eb.push_child(sub_event, |mut child_eb| {
+                    child_eb.push_description(change_description);
+                    child_eb.push_player_tag(player_id);
+                    if let Some(team_id) = team_id {
+                        child_eb.push_team_tag(team_id);
+                    }
+
+                    child_eb.push_metadata_i64("type", ModDuration::Game);
+                    if let Some(prev_mod) = previous {
+                        child_eb.push_metadata_str("from", prev_mod.to_str());
+                        child_eb.push_metadata_str("to", which_mod.to_str());
+                    } else {
+                        child_eb.push_metadata_str("mod", which_mod.to_str());
+                    }
+
+                    child_eb.build(if previous.is_some() {
+                        EventType::ModChange
+                    } else if gained_mod {
+                        EventType::AddedMod
+                    } else {
+                        EventType::RemovedMod
                     })
-                    .child(child)
-                    .build()
+                });
+
+                eb.build(EventType::CoffeeBean)
             }
             FedEventData::BecameMagmatic { game, player_id, player_name, is_unstable, magmatic_mod_added } => {
                 eb.set_game(game);

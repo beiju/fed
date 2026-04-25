@@ -424,7 +424,7 @@ pub struct StoppedInhabiting {
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub enum CoffeeBeanMod {
     Wired,
     Tired,
