@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, RoamConnectedEvents, Shame};
+use crate::fed_event::{Firewalker, HomeRunShame, HomeRunShameSource, ModChangeSubEventWithNamedPlayer, RoamConnectedEvents, Shame};
 use crate::format_utils::Possessive;
 use crate::{Attraction, AttractionWithPlayer, Balloons, BalloonsPopped, BatterDebt, BracketType, DebtType, EarnedWin, FlipNegative, FreeRefill, GameEvent, GamePitch, HotelMotelParty, HotelMotelScoringPlayer, Hype, ItemDamaged, ItemDroppedForNewItem, ItemGained, ItemRepaired, KnownPlayerStatChange, LedgerV2, MaintenanceMode, ModChangeSubEvent, ModChangeSubEventWithPlayer, ModDuration, Parasite, PlayerBoostSubEvent, PlayerBoostSubEventWithTeam, PlayerModChangeSubject, PlayerMovedTeams, PlayerNameId, PlayerSentElsewhere, PlayerSubEvent, Scattered, ScoreSummary, Scores, ScoringPlayer, SpicyStatus, StoppedInhabiting, SubEvent, SubseasonalMod, SubseasonalModChange, TeamModChangeSubject, TogglePerforming};
 use chrono::{DateTime, Utc};
@@ -352,6 +352,26 @@ impl EventBuilder {
         })
     }
 
+    pub fn push_mod_change_child<'a>(
+        &mut self,
+        mod_changes: &[ModChangeSubEventWithNamedPlayer],
+        event_type: EventType,
+        message: &str,
+        mod_name: &str,
+    ) {
+        for change in mod_changes {
+            self.push_description(format!("{} {message}", change.player_name));
+            self.push_player_tag(change.player_id);
+            self.push_child(change.sub_event, |mut eb| {
+                eb.push_description(format!("{} {message}", change.player_name));
+                eb.push_player_tag(change.player_id);
+                eb.push_team_tag(change.team_id);
+                eb.push_metadata_i64("type", ModDuration::Permanent);
+                eb.push_metadata_str("mod", mod_name);
+                eb.build(event_type)
+            })
+        }
+    }
     pub fn push_phantom_child(&mut self) {
         self.phantom_children += 1;
     }

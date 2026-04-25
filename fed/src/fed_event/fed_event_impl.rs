@@ -5,7 +5,7 @@ use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::PitcherNameId;
 use crate::fed_event::{
     BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic,
-    EndZone, FloodingSweptEffect, ModChangeSubEventWithNamedPlayer, NightShiftOutcome,
+    EndZone, FloodingSweptEffect, NightShiftOutcome,
     PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType,
     PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere,
     ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails,
@@ -20,7 +20,7 @@ use std::iter;
 
 use crate::format_utils::Possessive;
 use crate::parse::builder::{
-    possessive, EventBuilderChild, EventBuilderChildFull, EventBuilderCommon, EventBuilderUpdate,
+    possessive, EventBuilderChild, EventBuilderCommon, EventBuilderUpdate,
 };
 use crate::parse::event_builder_new::EventBuilder;
 use crate::*;
@@ -158,16 +158,12 @@ impl FedEvent {
                 eb.push_description(description);
                 eb.build(EventType::Superyummy)
             }
-            FedEventData::EchoedSuperyummyGameStart { ref game, ref player_name, peanuts_present: peanuts } => {
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        category: EventCategory::Special,
-                        r#type: EventType::Superyummy,
-                        description: format!("{} {} Peanuts.", player_name,
-                                             if peanuts { "loves" } else { "misses" }),
-                        ..Default::default()
-                    })
-                    .build()
+            FedEventData::EchoedSuperyummyGameStart { game, player_name, peanuts_present } => {
+                eb.set_game(game);
+                eb.set_category(EventCategory::Special);
+                eb.push_description(format!("{} {} Peanuts.", player_name,
+                                            if peanuts_present { "loves" } else { "misses" }));
+                eb.build(EventType::Superyummy)
             }
             FedEventData::Ball { game, pitch, balls, strikes, batter_item_damage } => {
                 eb.set_game(game);
@@ -471,18 +467,11 @@ impl FedEvent {
                 eb.push_named_item_damage(fielder_item_damage.as_ref().map(|(x, y)| (x.as_str(), y)));
                 eb.build(EventType::StolenBase)
             }
-            FedEventData::InningEnd { ref game, inning_num, ref lost_triple_threat } => {
-                let (children, suffix) = self.make_mod_change_sub_events(lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
-
-                event_builder.for_game(game)
-                    .fill(EventBuilderUpdate {
-                        r#type: EventType::InningEnd,
-                        description: format!("Inning {inning_num} is now an Outing.{suffix}"),
-                        player_tags: lost_triple_threat.iter().map(|e| e.player_id).collect(),
-                        ..Default::default()
-                    })
-                    .children(children)
-                    .build()
+            FedEventData::InningEnd { game, inning_num, lost_triple_threat } => {
+                eb.set_game(game);
+                eb.push_description(format!("Inning {inning_num} is now an Outing."));
+                eb.push_mod_change_child(&lost_triple_threat, EventType::RemovedMod, "is no longer a Triple Threat.", "TRIPLE_THREAT");
+                eb.build(EventType::InningEnd)
             }
             FedEventData::CharmStrikeout { game, charmer_id, charmer_name, charmed_id, charmed_name, stopped_inhabiting, num_swings } => {
                 eb.set_game(game);
@@ -5252,40 +5241,5 @@ impl FedEvent {
         };
 
         vec![item]
-    }
-
-    #[deprecated = "This is part of the old event builder"]
-    fn make_mod_change_sub_events<'a>(
-        &self,
-        mod_changes: &[ModChangeSubEventWithNamedPlayer],
-        event_type: EventType,
-        message: &str,
-        mod_name: &str,
-    ) -> (Vec<EventBuilderChildFull>, String) {
-        let suffix = mod_changes
-            .iter()
-            .map(|e| format!("\n{} {message}", e.player_name))
-            .join("");
-
-        let children = mod_changes
-            .iter()
-            .map(|e| {
-                EventBuilderChild::new(&e.sub_event)
-                    .update(EventBuilderUpdate {
-                        r#type: event_type,
-                        category: EventCategory::Changes,
-                        description: format!("{} {message}", e.player_name),
-                        team_tags: vec![e.team_id],
-                        player_tags: vec![e.player_id],
-                        ..Default::default()
-                    })
-                    .metadata(json!({
-                        "mod": mod_name,
-                        "type": 0, // ?
-                    }))
-            })
-            .collect();
-
-        (children, suffix)
     }
 }
