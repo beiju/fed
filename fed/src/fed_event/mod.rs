@@ -2603,10 +2603,7 @@ impl LedgerRun {
     }
 }
 
-fn compute_and_write_sum_sun(
-    num_runs: i64,
-    w: &mut impl Write,
-) -> Result<f64, std::fmt::Error> {
+fn compute_and_write_sum_sun(num_runs: i64, w: &mut impl Write) -> Result<f64, std::fmt::Error> {
     write!(w, "Sum Sun: {}", WholeRuns(num_runs))?;
     Ok(num_runs as f64)
 }

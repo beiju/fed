@@ -5,12 +5,11 @@ use crate::fed_event::HomeRunShameSource;
 use crate::fed_event::PitcherNameId;
 use crate::fed_event::{
     BatterSkippedReason, BlackHoleBurp, CoffeeBeanMod, ConsumerAttackEffect, EchoIntoStatic,
-    EndZone, FloodingSweptEffect, NightShiftOutcome,
-    PlayerMaybeCarcinized, PlayerReverb, PlayerStatChange, PositionType,
-    PostseasonBirthBoostEventOrder, RenovationBuiltEffect, RenovationVotes, ReturnFromElsewhere,
-    ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation, RunStolenThroughTunnelsDetails,
-    StatChangeCategory, TeamIncinerationReplacementSource, TeamNicknameOrPlayerName,
-    TradeForNothing, TradeForSomething, TraderTraitor,
+    EndZone, FloodingSweptEffect, NightShiftOutcome, PlayerMaybeCarcinized, PlayerReverb,
+    PlayerStatChange, PositionType, PostseasonBirthBoostEventOrder, RenovationBuiltEffect,
+    RenovationVotes, ReturnFromElsewhere, ReturnFromElsewhereFlavor, ReverbType, RoamFromLocation,
+    RunStolenThroughTunnelsDetails, StatChangeCategory, TeamIncinerationReplacementSource,
+    TeamNicknameOrPlayerName, TradeForNothing, TradeForSomething, TraderTraitor,
 };
 use crate::{PlayerMovedFrom, PlayersAddedToTeam};
 use eventually_api::{EventCategory, EventType, EventuallyEvent, Weather};
@@ -20,7 +19,7 @@ use std::iter;
 
 use crate::format_utils::Possessive;
 use crate::parse::builder::{
-    possessive, EventBuilderChild, EventBuilderCommon, EventBuilderUpdate,
+    EventBuilderChild, EventBuilderCommon, EventBuilderUpdate, possessive,
 };
 use crate::parse::event_builder_new::EventBuilder;
 use crate::*;

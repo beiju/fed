@@ -125,7 +125,9 @@ pub(crate) fn parse_batter_up(
     ))
 }
 
-pub(crate) fn parse_batter_up_inhabiting(input: &str) -> ParserResult<'_, (&str, Option<&str>, bool)> {
+pub(crate) fn parse_batter_up_inhabiting(
+    input: &str,
+) -> ParserResult<'_, (&str, Option<&str>, bool)> {
     let (input, batter_name) = parse_terminated(" is Inhabiting ").parse(input)?;
     let (input, inhabiting_name) = parse_terminated("!\n").parse(input)?;
     let (input, _) = tag(batter_name).parse(input)?;
@@ -337,12 +339,15 @@ pub(crate) enum ParsedHitType {
 
 pub(crate) fn parse_hit(
     input: &str,
-) -> ParserResult<'_, (
-    &str,
-    ParsedHitType,
-    Option<(&str, Option<bool>)>,
-    Option<(&str, Option<bool>, &str)>,
-)> {
+) -> ParserResult<
+    '_,
+    (
+        &str,
+        ParsedHitType,
+        Option<(&str, Option<bool>)>,
+        Option<(&str, Option<bool>, &str)>,
+    ),
+> {
     let (input, broke) = opt(parse_item_damage_unknown_name(false, false)).parse(input)?;
     let (input, batter_name, batter_item_broke, pitcher_item_broke) =
         if let Some((broken_item_name, broken_item_name_plural, player_name)) = broke {
@@ -455,7 +460,9 @@ pub(crate) fn parse_spicy_status(
     }
 }
 
-pub(crate) fn parse_cooled_off(batter_name: &str) -> impl FnMut(&str) -> ParserResult<'_, bool> + '_ {
+pub(crate) fn parse_cooled_off(
+    batter_name: &str,
+) -> impl FnMut(&str) -> ParserResult<'_, bool> + '_ {
     move |input: &str| {
         let (input, cooled_off) = opt(terminated(
             terminated(char('\n'), tag(batter_name)),
@@ -1627,7 +1634,9 @@ pub(crate) enum ParsedBatterSkippedReason {
     Elsewhere,
 }
 
-pub(crate) fn parse_batter_skipped(input: &str) -> ParserResult<'_, (&str, ParsedBatterSkippedReason)> {
+pub(crate) fn parse_batter_skipped(
+    input: &str,
+) -> ParserResult<'_, (&str, ParsedBatterSkippedReason)> {
     let (input, result) = alt((
         parse_terminated(" is Shelled and cannot escape!")
             .map(|n| (n, ParsedBatterSkippedReason::Shelled)),
@@ -1673,7 +1682,9 @@ pub(crate) enum ParsedTeamDivisionMove<'a> {
     },
 }
 
-pub(crate) fn parse_team_division_move(input: &str) -> ParserResult<'_, ParsedTeamDivisionMove<'_>> {
+pub(crate) fn parse_team_division_move(
+    input: &str,
+) -> ParserResult<'_, ParsedTeamDivisionMove<'_>> {
     alt((
         parse_team_joined_ilb.map(|(team_nickname, division_name)| {
             ParsedTeamDivisionMove::TeamJoinedILB {
@@ -1715,7 +1726,9 @@ pub(crate) enum ParsedPlayerDivisionMove<'a> {
     PulledThroughRift(&'a str),
 }
 
-pub(crate) fn parse_player_division_move(input: &str) -> ParserResult<'_, ParsedPlayerDivisionMove<'_>> {
+pub(crate) fn parse_player_division_move(
+    input: &str,
+) -> ParserResult<'_, ParsedPlayerDivisionMove<'_>> {
     let (input, result) = alt((
         parse_terminated(" has joined the ILB.").map(|n| ParsedPlayerDivisionMove::JoinedIlb(n)),
         parse_terminated(" was pulled through the Rift.")
@@ -1773,7 +1786,9 @@ pub(crate) fn parse_flooding_swept(
     ))
 }
 
-pub(crate) fn parse_flooding_swept_effect(input: &str) -> ParserResult<'_, ParsedFloodingEffect<'_>> {
+pub(crate) fn parse_flooding_swept_effect(
+    input: &str,
+) -> ParserResult<'_, ParsedFloodingEffect<'_>> {
     alt((
         parse_swept_elsewhere.map(|n| ParsedFloodingEffect::Elsewhere(n)),
         parse_flippers_score
@@ -1840,7 +1855,9 @@ pub(crate) fn parse_returns_from_elsewhere(
     separated_list1(tag("\n"), parse_return_from_elsewhere).parse(input)
 }
 
-pub(crate) fn parse_return_from_elsewhere(input: &str) -> ParserResult<'_, ParsedReturnFromElsewhere<'_>> {
+pub(crate) fn parse_return_from_elsewhere(
+    input: &str,
+) -> ParserResult<'_, ParsedReturnFromElsewhere<'_>> {
     alt((
         parse_terminated(" has returned from Elsewhere!")
             .map(|n| ParsedReturnFromElsewhere::Short((n, false))),
@@ -1903,7 +1920,9 @@ fn parse_common_seeker_return_from_elsewhere(input: &str) -> ParserResult<'_, (&
     Ok((input, (seeker_name, sought_name)))
 }
 
-pub(crate) fn parse_short_seeker_return_from_elsewhere(input: &str) -> ParserResult<'_, (&str, &str)> {
+pub(crate) fn parse_short_seeker_return_from_elsewhere(
+    input: &str,
+) -> ParserResult<'_, (&str, &str)> {
     let (input, (seeker_name, sought_name)) =
         parse_common_seeker_return_from_elsewhere.parse(input)?;
     let (input, _) = tag(" was pulled back from Elsewhere.").parse(input)?;
@@ -1996,7 +2015,9 @@ pub(crate) fn parse_incineration_unstable(input: &str) -> ParserResult<'_, (&str
     Ok((input, (victim_name, replacement_name, chained_to_name)))
 }
 
-pub(crate) fn parse_team_incineration_survivors(input: &str) -> ParserResult<'_, (&str, Vec<&str>)> {
+pub(crate) fn parse_team_incineration_survivors(
+    input: &str,
+) -> ParserResult<'_, (&str, Vec<&str>)> {
     // TODO Support arbitrary number of surviving players
     let (input, surviving_player_1) = parse_terminated(" and ").parse(input)?;
     let (input, surviving_player_2) = parse_terminated(" joined the ").parse(input)?;
@@ -2101,7 +2122,9 @@ pub(crate) enum ParsedPlayerAddedToTeam<'a> {
     },
 }
 
-pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
+pub(crate) fn parse_player_added_to_team(
+    input: &str,
+) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
     let (input, team_nickname) = alt((
         preceded(tag("The "), parse_terminated(" earn a Postseason Birth!"))
             .map(|s| ParsedPlayerAddedToTeam::PostseasonBirth(s)),
@@ -2114,7 +2137,9 @@ pub(crate) fn parse_player_added_to_team(input: &str) -> ParserResult<'_, Parsed
     Ok((input, team_nickname))
 }
 
-pub(crate) fn parse_player_localized_to_team(input: &str) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
+pub(crate) fn parse_player_localized_to_team(
+    input: &str,
+) -> ParserResult<'_, ParsedPlayerAddedToTeam<'_>> {
     let (input, player_name) = parse_terminated(" Localized into the ").parse(input)?;
     // Handle proper posessive of team names ending in s
     let (input, team_nickname) =
@@ -2250,7 +2275,9 @@ pub(crate) fn parse_earned_postseason_slot(input: &str) -> ParserResult<'_, (&st
     Ok((input, (team_nickname, season_num)))
 }
 
-pub(crate) fn parse_postseason_eliminated(input: &str) -> ParserResult<'_, (&str, i64, Option<bool>)> {
+pub(crate) fn parse_postseason_eliminated(
+    input: &str,
+) -> ParserResult<'_, (&str, i64, Option<bool>)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_nickname) =
         parse_terminated(" have been eliminated from the Season ").parse(input)?;
@@ -2272,7 +2299,9 @@ pub(crate) enum ParsedPlayerStatIncrease<'a> {
     BottomDwellers(&'a str),
 }
 
-pub(crate) fn parse_player_stat_increase(input: &str) -> ParserResult<'_, ParsedPlayerStatIncrease<'_>> {
+pub(crate) fn parse_player_stat_increase(
+    input: &str,
+) -> ParserResult<'_, ParsedPlayerStatIncrease<'_>> {
     alt((
         parse_terminated(" was boosted.").map(|name| ParsedPlayerStatIncrease::PlayerBoosted(name)),
         parse_bottom_dweller.map(|name| ParsedPlayerStatIncrease::BottomDwellers(name)),
@@ -2436,7 +2465,9 @@ pub(crate) fn parse_echo_into_static(input: &str) -> ParserResult<'_, (&str, &st
     Ok((input, (echoer_name, echoee_name)))
 }
 
-pub(crate) fn parse_psychoacoustics(at: bool) -> impl Fn(&str) -> ParserResult<'_, (&str, &str, &str)> {
+pub(crate) fn parse_psychoacoustics(
+    at: bool,
+) -> impl Fn(&str) -> ParserResult<'_, (&str, &str, &str)> {
     move |input: &str| {
         let (input, stadium_name) =
             parse_terminated(" is Resonating.\nPsychoAcoustics Echo ").parse(input)?;
@@ -2522,7 +2553,9 @@ pub(crate) fn parse_consumer_countered_child(input: &str) -> ParserResult<'_, (&
     Ok((input, (player_name, item_name)))
 }
 
-pub(crate) fn parse_consumer_attack_item_break(input: &str) -> ParserResult<'_, (&str, Option<bool>)> {
+pub(crate) fn parse_consumer_attack_item_break(
+    input: &str,
+) -> ParserResult<'_, (&str, Option<bool>)> {
     let (input, _) = tag("\n\n").parse(input)?;
 
     alt((
@@ -2901,7 +2934,9 @@ pub(crate) enum ParsedName<'a> {
     Team(&'a str),
 }
 
-pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (ParsedName<'_>, &str)> {
+pub(crate) fn parse_mods_from_other_mod_removed(
+    input: &str,
+) -> ParserResult<'_, (ParsedName<'_>, &str)> {
     alt((
         parse_player_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Player(n), m)),
         parse_team_mods_from_other_mod_removed.map(|(n, m)| (ParsedName::Team(n), m)),
@@ -2909,7 +2944,9 @@ pub(crate) fn parse_mods_from_other_mod_removed(input: &str) -> ParserResult<'_,
     .parse(input)
 }
 
-pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (&str, &str)> {
+pub(crate) fn parse_player_mods_from_other_mod_removed(
+    input: &str,
+) -> ParserResult<'_, (&str, &str)> {
     // This does possessives correctly, apparently
     let (input, player_name) = alt((
         parse_terminated("'s mods caused by "),
@@ -2921,7 +2958,9 @@ pub(crate) fn parse_player_mods_from_other_mod_removed(input: &str) -> ParserRes
     Ok((input, (player_name, mod_name)))
 }
 
-pub(crate) fn parse_team_mods_from_other_mod_removed(input: &str) -> ParserResult<'_, (&str, &str)> {
+pub(crate) fn parse_team_mods_from_other_mod_removed(
+    input: &str,
+) -> ParserResult<'_, (&str, &str)> {
     let (input, _) = tag("The ").parse(input)?;
     let (input, team_name) = parse_terminated("' mods caused by ").parse(input)?;
     let (input, mod_name) = parse_terminated(" were removed.").parse(input)?;
@@ -3479,7 +3518,9 @@ pub(crate) fn parse_ledger_line_v1(input: &str) -> ParserResult<'_, ParsedLedger
     .parse(input)
 }
 
-pub(crate) fn parse_ledger_v2_run(ledger_label: &str) -> impl Fn(&str) -> ParserResult<'_, bool> + '_ {
+pub(crate) fn parse_ledger_v2_run(
+    ledger_label: &str,
+) -> impl Fn(&str) -> ParserResult<'_, bool> + '_ {
     move |input| {
         let (input, run) = opt(terminated(
             pair(tag(ledger_label), tag(": 1 Run")),
@@ -3796,7 +3837,9 @@ pub(crate) fn parse_tunnels(input: &str) -> ParserResult<'_, ParsedTunnels<'_>> 
     .parse(input)
 }
 
-pub(crate) fn parse_player_tunnels(input: &str) -> ParserResult<'_, (&str, ParsedPlayerTunnels<'_>)> {
+pub(crate) fn parse_player_tunnels(
+    input: &str,
+) -> ParserResult<'_, (&str, ParsedPlayerTunnels<'_>)> {
     let (input, thief_name) = parse_terminated(" entered the Tunnels...\n").parse(input)?;
     let (input, tunnels) = alt((
         parse_tunnels_stole_run(thief_name).map(|victim_team_nickname| {

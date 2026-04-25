@@ -2007,8 +2007,7 @@ pub fn parse_next_event_r(
                     let mut incin_child = event
                         .next_child_any(&[EventType::WeatherEvent, EventType::Incineration])?;
                     let enter_hall_child = event.next_child(EventType::EnterHallOfFlame)?;
-                    let pressure_built_event =
-                        event.next_child_opt(EventType::SunSunPressure)?;
+                    let pressure_built_event = event.next_child_opt(EventType::SunSunPressure)?;
                     let mut hatch_child = event.next_child(EventType::PlayerHatched)?;
                     let replace_child = event.next_child(EventType::PlayerBornFromIncineration)?;
 
@@ -2870,10 +2869,8 @@ pub fn parse_next_event_r(
                         let mut stole_item_event =
                             event.next_child(EventType::StoleItemFromTunnels)?;
                         let mut item_lost_event = event.next_child(EventType::PlayerLostItem)?;
-                        let item_dropped_event =
-                            event.next_child_opt(EventType::PlayerLostItem)?;
-                        let item_gained_event =
-                            event.next_child(EventType::PlayerGainedItem)?;
+                        let item_dropped_event = event.next_child_opt(EventType::PlayerLostItem)?;
+                        let item_gained_event = event.next_child(EventType::PlayerGainedItem)?;
 
                         let thief_id = stole_item_event.next_player_id()?;
                         let victim_id = stole_item_event.next_player_id()?;
