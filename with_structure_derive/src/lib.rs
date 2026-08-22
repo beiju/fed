@@ -9,10 +9,7 @@ use syn::{Data, DataStruct, DeriveInput, Field, parse_macro_input};
 #[proc_macro_derive(WithStructure, attributes(with_structure))]
 pub fn with_structure_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as _);
-    TokenStream::from(match impl_with_structure(ast) {
-        Ok(it) => it,
-        Err(err) => err.to_compile_error(),
-    })
+    TokenStream::from(impl_with_structure(ast).unwrap_or_else(|err| err.to_compile_error()))
 }
 
 fn impl_with_structure(ast: DeriveInput) -> Result<TokenStream2> {
@@ -76,7 +73,7 @@ fn impl_with_structure_for_struct(
 
     Ok({
         quote! {
-            #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash)]
+            #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash, Debug)]
             #item_vis struct #structure_name #generics #where_clause {
                 #(#definition_fields),*
             }
@@ -202,7 +199,7 @@ fn impl_with_structure_for_enum(
 
     Ok({
         quote! {
-            #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash)]
+            #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash, Debug)]
             #[allow(non_camel_case_types)]
             #item_vis enum #structure_name #generics #where_clause {
                 #(#structure_variants,)*

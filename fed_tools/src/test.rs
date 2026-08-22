@@ -210,12 +210,17 @@ fn run_test_on_season(
         let structure = parsed_event.structure();
 
         if !with_structures.contains(&structure) {
-            with_structures.insert(structure);
-
             std::fs::write(
                 sample_path.join(format!("{}.json", parsed_event.id)),
                 serde_json::to_string_pretty(&parsed_event)?,
             )?;
+
+            std::fs::write(
+                sample_path.join(format!("{}-structure.json", parsed_event.id)),
+                format!("{:?}", structure),
+            )?;
+
+            with_structures.insert(structure);
         }
     }
 

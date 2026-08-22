@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use std::marker::PhantomData;
 use uuid::Uuid;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct MonostateStructure;
 
 macro_rules! trivial_with_structure {
