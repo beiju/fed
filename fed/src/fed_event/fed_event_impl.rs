@@ -1759,7 +1759,6 @@ impl FedEvent {
                 eb.build(EventType::PlayerHatched)
             }
             FedEventData::PostseasonBirth { team_id, team_nickname, player_id, player_name, location } => {
-                let location_int: i64 = location.into();
                 eb.set_category(EventCategory::Changes);
                 eb.set_description(format!("The {team_nickname} {} a Postseason Birth!", if self.season < 19 { "earn" } else { "earned" }));
                 eb.set_player_tags(vec![player_id]);

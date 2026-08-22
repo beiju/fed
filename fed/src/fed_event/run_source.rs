@@ -29,19 +29,16 @@ macro_rules! run_source {
 
 run_source!(Flyout, "Sacrifice");
 run_source!(GroundOut, "Sacrifice");
-run_source!(FieldersChoice, "Base Hit"); // this doesn't seem like the right label but ok
+run_source!(FieldersChoice, "Base Hit");
 run_source!(Hit, "Base Hit");
-run_source!(DoublePlay, "Base Hit"); // I guess this is a base hit too
-run_source!(StealHome, "Steal Home");
-run_source!(Blaserunning, "Blaserunning");
+run_source!(DoublePlay, "Base Hit");
 run_source!(Walk, "Walk");
-run_source!(MildPitch, "Base Hit"); // Now this one has to be a mistake
+run_source!(MildPitch, "Base Hit");
 run_source!(MildPitchWalk, "Mild Pitch Walk");
-run_source!(CharmWalk, "Walk"); // TODO Merge all "walk" sources?
+run_source!(CharmWalk, "Walk");
 run_source!(HomeRun, "Home Run");
 run_source!(HomeRunSlamDunk, "Slam Dunk");
 run_source!(HomeRunBigBucket, "Big Bucket");
-run_source!(MildPitchCharmWalk, "Mild Pitch Charm Walk");
 run_source!(Flippers, "Flippers");
 run_source!(HitByPitch, "Hit By Pitch");
 run_source!(CharmedMindTrickWalk, "Charmed Mind Trick Walk");
