@@ -74,6 +74,7 @@ fn impl_with_structure_for_struct(
     Ok({
         quote! {
             #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash, Debug)]
+            #[derive(::serde::Serialize)]
             #item_vis struct #structure_name #generics #where_clause {
                 #(#definition_fields),*
             }
@@ -200,6 +201,7 @@ fn impl_with_structure_for_enum(
     Ok({
         quote! {
             #[::with_structure::perfect_derive::perfect_derive(Eq, PartialEq, Hash, Debug)]
+            #[derive(::serde::Serialize)]
             #[allow(non_camel_case_types)]
             #item_vis enum #structure_name #generics #where_clause {
                 #(#structure_variants,)*

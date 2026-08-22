@@ -14,13 +14,18 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use std::marker::PhantomData;
-use strum_macros::{AsRefStr, Display as StrumDisplay};
+use strum::IntoEnumIterator;
+use strum_macros::{AsRefStr, Display as StrumDisplay, EnumIter};
 use uuid::Uuid;
 use with_structure::WithStructure;
 
 use crate::FeedParseError;
 use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
 use crate::parse::builder::possessive;
+
+fn is_false(b: &bool) -> bool {
+    *b == false
+}
 
 #[derive(
     Debug,
@@ -45,8 +50,8 @@ pub enum Being {
     Namerifeht = 6,
 }
 
-// TODO Check to see if this is a dupe of an existing struct or if any subfields can be consolidated
-//   into an existing struct
+// TODO Check to see if this is a dupe of an existing struct or if any subfields
+//   can be consolidated into an existing struct
 // TODO After doing the above, document this struct
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +74,7 @@ pub struct TraderTrade {
     pub stolen_item_name: String,
     pub stolen_item_mods: Vec<String>,
 
+    #[serde(skip_serializing_if="Option::is_none")]
     pub exchanged_item_name: Option<String>,
     pub victim_lost_item_sub_event: SubEvent,
     pub trader_gained_item_sub_event: SubEvent,
@@ -87,17 +93,23 @@ pub struct GameEvent {
     /// Away team's uuid
     pub away_team: Uuid,
 
-    /// The play that this event came from. This number is always one lower than the playCount
-    /// field in the corresponding game update.
+    /// The play that this event came from. This number is always one lower than
+    /// the playCount field in the corresponding game update.
     pub play: i64,
 
-    /// If a player got unscattered this tick, contains information about their unscattering.
+    /// If a player got unscattered this tick, contains information about their
+    /// unscattering
+    #[serde(skip_serializing_if="Option::is_none")]
     pub unscatter: Option<ModChangeSubEventWithNamedPlayer>,
 
-    /// If an Attractor entered the Secret Base on this tick, contains information about this player
+    /// If an Attractor entered the Secret Base on this tick, contains
+    /// information about this player
+    #[serde(skip_serializing_if="Option::is_none")]
     pub attractor_secret_base: Option<PlayerNameId>,
 
-    /// If a Trader initiated a Trade on this tick, contains information about the trade
+    /// If a Trader initiated a Trade on this tick, contains information about
+    /// the trade
+    #[serde(skip_serializing_if="Option::is_none")]
     pub trader_trade: Option<TraderTrade>,
 }
 
@@ -105,23 +117,27 @@ pub struct GameEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct GamePitch {
-    /// If a Double Strike was fired, the name of the pitcher who fired it. Otherwise null.
+    /// If a Double Strike was fired, the name of the pitcher who fired it.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub double_strike: Option<String>,
 
-    /// If an Acidic pitch was thrown, the name of the pitcher who threw it. Otherwise null.
+    /// If an Acidic pitch was thrown, the name of the pitcher who threw it.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub acidic_pitch: Option<String>,
 }
 
-// This contains only the event properties that will differ from the parent, including id, created,
-// and nuts; but not properties that will be the same, like day, season, and tournament.
+// This contains only the event properties that will differ from the parent,
+// including id, created, and nuts; but does not contain properties that will be
+// the same, e.g. day, season, and tournament.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct SubEvent {
     /// Uuid of sub-event
     pub id: Uuid,
 
-    /// Date the sub-event was created. This should be very close to the date the parent event was
-    /// created, but will typically not be exactly the same.
+    /// Date the sub-event was created. This should be very close to the date
+    /// the parent event was created, but will typically not be exactly the
+    /// same.
     pub created: DateTime<Utc>,
 
     /// Number of upshells this event has received
@@ -129,7 +145,8 @@ pub struct SubEvent {
 }
 
 impl SubEvent {
-    // For use when you are generating Fed events and don't care about the SubEvent data
+    // For use when you are generating Fed events and don't care about the
+    // SubEvent data
     pub fn nil() -> Self {
         Self {
             id: Uuid::nil(),
@@ -139,8 +156,10 @@ impl SubEvent {
     }
 }
 
-// I am doing this crime because i want to compare measured events to generated events and i don't
-// care about the non-generatable data. i am sure this will bite me in the ass eventually
+// TODO See what happens if I delete this
+// I am doing this crime because i want to compare measured events to generated
+// events and i don't care about the non-generatable data. i am sure this will
+// bite me in the ass eventually
 impl PartialEq for SubEvent {
     fn eq(&self, _: &Self) -> bool {
         true
@@ -159,8 +178,9 @@ pub struct WinSubEvent {
     #[serde(flatten)]
     pub sub_event: SubEvent,
 
-    /// If the stadium inflated some Balloons from this Win, the name of the stadium that inflated
-    /// the Balloons. Otherwise null.
+    /// If the stadium inflated some Balloons from this Win, the name of the
+    /// stadium that inflated the Balloons
+    #[serde(skip_serializing_if="Option::is_none")]
     pub balloons: Option<String>,
 }
 
@@ -179,8 +199,9 @@ pub struct WinSubEventWithNickname {
     #[serde(flatten)]
     pub sub_event: SubEvent,
 
-    /// If the stadium inflated some Balloons from this Win, the name of the stadium that inflated
-    /// the Balloons. Otherwise null.
+    /// If the stadium inflated some Balloons from this Win, the name of the
+    /// stadium that inflated the Balloons
+    #[serde(skip_serializing_if="Option::is_none")]
     pub balloons: Option<String>,
 }
 
@@ -191,15 +212,17 @@ pub struct FreeRefill {
     /// Metadata for the sub-event associated with losing the Free Refill mod
     pub sub_event: SubEvent,
 
-    /// Name of the player who used their Free Refill. This may be the batter, a scoring runner, or
-    /// in rare cases, the pitcher.
+    /// Name of the player who used their Free Refill. This may be the batter,
+    /// a scoring runner, or in rare cases, the pitcher.
     pub player_name: String,
 
     /// Uuid of the player who used their Free Refill
     pub player_id: Uuid,
 
-    /// Uuid of the team of the player who used their Free Refill. This is usually populated, but
-    /// when a ghost who died before player objects stored team ids uses their free refill it's null
+    /// Uuid of the team of the player who used their Free Refill. This usually
+    /// exists, but when a ghost who died before player objects stored team ids
+    /// uses their free refill it does not exist.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub team_id: Option<Uuid>,
 }
 
@@ -213,15 +236,19 @@ pub struct ScoringPlayer {
     pub player_name: String,
 
     /// Item damaged by player scoring, if any
+    #[serde(skip_serializing_if="Option::is_none")]
     pub item_damage: Option<ItemDamaged>,
 
     /// Info about the player attracted by this score, if any
+    #[serde(skip_serializing_if="Option::is_none")]
     pub attraction: Option<Attraction>,
 
     /// Info about the Hotel Motel party on this score, if any
+    #[serde(skip_serializing_if="Option::is_none")]
     pub hotel_motel_party: Option<HotelMotelParty>,
 
-    /// Was this scoring player Slippery?
+    /// `true` if this scoring player was slippery, otherwise omitted
+    #[serde(skip_serializing_if="is_false")]
     pub is_slippery: bool,
 
     /// Info about the Shame on this score, if any
@@ -232,6 +259,7 @@ pub struct ScoringPlayer {
 #[serde(rename_all = "camelCase")]
 pub struct HotelMotelParty {
     /// If Birds were attracted to the stadium, the name of the stadium
+    #[serde(skip_serializing_if="Option::is_none")]
     pub birds: Option<String>,
 
     #[serde(flatten)]
@@ -251,30 +279,39 @@ pub struct HotelMotelScoringPlayer {
     pub party: HotelMotelParty,
 }
 
-// TODO Maybe come up with clearer terminology for scores Other events can happen between the two phases. It may be helpful to represent
-//   that in the type system.
+// TODO Maybe come up with clearer terminology for scores Other events can
+//   happen between the two phases. It may be helpful to represent that in the
+//   type system.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Scores<LedgerRunT: LedgerV2> {
-    /// Info for all the scores that happened on this event
+    /// Info for all the scores that happened on this event, if any
+    #[serde(skip_serializing_if="Vec::is_empty")]
     pub scores: Vec<ScoringPlayer>,
 
-    /// List of free refills used on this event, if any. This should always be empty if `scores` is
-    /// empty, but if `scores` is non-empty it may be larger than `scores`.
+    /// List of free refills used on this event, if any. This should always be
+    /// omitted if `scores` is omitted, but if `scores` is non-empty it may be
+    /// larger than `scores`.
     ///
-    /// It's almost possible to attribute each one to the specific score that caused it, but not
-    /// quite because FlyOut events don't have pitcher and batter uuids.
+    /// It's almost possible to attribute each one to the specific score
+    /// that caused it, but not quite because FlyOut events don't have pitcher
+    /// and batter uuids.
+    #[serde(skip_serializing_if="Vec::is_empty")]
     pub free_refills: Vec<FreeRefill>,
 
-    /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
-    /// attaching effects (such as Balloons) to the score summary. This contains that information.
+    /// Starting in season 20 the sim started outputting score summary events
+    /// (RunsScored) and attaching effects (such as Balloons) to the score
+    /// summary. This contains that information.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub score_summary: Option<ScoreSummary<LedgerRunT>>,
 
-    /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons were
-    /// inflated. Otherwise null.
-    // Note: Balloons get parsed along with score_summary, but they can't be inside score_summary
-    // because scores under HotelMotel don't have summaries but they can have balloons.
-    // This may need to be extended to support number of balloons.
+    /// If this Score inflated Balloons, this is the name of the stadium in
+    /// which the Balloons were inflated. Otherwise omitted.
+    // Note: Balloons get parsed along with score_summary, but they can't be
+    // inside score_summary because scores under HotelMotel don't have summaries
+    // but they can have balloons. This may need to be extended to support
+    // number of balloons.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub balloons: Option<String>,
 }
 
@@ -342,9 +379,10 @@ impl<T: LedgerV2> Scores<T> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct Inhabiting {
-    /// Metadata for the sub-event associated with adding the Inhabiting modifier. If the player
-    /// already has the Inhabiting modifier, this will be null. (That only happens 14 times in all
-    /// of Expansion.)
+    /// Metadata for the sub-event associated with adding the Inhabiting
+    /// modifier. If the player already has the Inhabiting modifier, this will
+    /// be omitted. (That only happens 14 times in the entire Expansion Era.)
+    #[serde(skip_serializing_if="Option::is_none")]
     pub sub_event: Option<SubEvent>,
 
     /// The name of the player who's being inhabited
@@ -358,7 +396,9 @@ pub struct Inhabiting {
 
     /// The last known team uuid of the player who's inhabiting, if known.
     ///
-    /// The game didn't start saving last known team ids until somewhere around the Coffee Cup
+    /// The game didn't start saving last known team ids until somewhere around
+    /// the Coffee Cup
+    #[serde(skip_serializing_if="Option::is_none")]
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
@@ -377,7 +417,9 @@ pub struct StoppedInhabiting {
 
     /// The last known team uuid of the player who's inhabiting, if known.
     ///
-    /// The game didn't start saving last known team ids until somewhere around the Coffee Cup
+    /// The game didn't start saving last known team ids until somewhere around
+    /// the Coffee Cup
+    #[serde(skip_serializing_if="Option::is_none")]
     pub inhabiting_player_team_id: Option<Uuid>,
 }
 
@@ -479,7 +521,8 @@ impl Display for BlooddrainAction {
             BlooddrainAction::AddStrike(Some(player_struck_out_name)) => {
                 write!(
                     f,
-                    "adds a Strike!\n{player_struck_out_name} strikes out looking."
+                    "adds a Strike!\n{} strikes out looking.",
+                    player_struck_out_name,
                 )
             }
             BlooddrainAction::RemoveStrike => {
@@ -535,9 +578,10 @@ impl Display for ModDuration {
     }
 }
 
-// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
-// Which of those it is will come from context. If the id of the player is not present in the
-// containing event, use ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/
+// ModRemoved event. Which of those it is will come from context. If the id of
+// the player is not present in the containing event, use
+// ModChangeSubEventWithPlayer or ModChangeSubEventWithNamedPlayer instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEvent {
@@ -548,9 +592,10 @@ pub struct ModChangeSubEvent {
     pub team_id: Uuid,
 }
 
-// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
-// Which of those it is will come from context. If the name of the player is not present in the
-// containing event, use ModChangeSubEventWithNamedPlayer instead.
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/
+// ModRemoved event. Which of those it is will come from context. If the name of
+// the player is not present in the containing event, use
+// ModChangeSubEventWithNamedPlayer instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithPlayer {
@@ -564,9 +609,10 @@ pub struct ModChangeSubEventWithPlayer {
     pub player_id: Uuid,
 }
 
-// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/ModRemoved event.
-// Which of those it is will come from context. If the name of the player is present in the
-// containing event, use ModChangeSubEventWithPlayer instead.
+// Struct that bundles metadata necessary to reconstruct a ModAdded/ModChanged/
+// ModRemoved event. Which of those it is will come from context. If the name of
+// the player is present in the containing event, use
+// ModChangeSubEventWithPlayer instead.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct ModChangeSubEventWithNamedPlayer {
@@ -592,7 +638,8 @@ pub struct FlipNegative {
     /// Name of the undertaker player (the one who did the flipping)
     pub undertaker_player_name: String,
 
-    /// Metadata for the sub-event associated with sending the undertaker player Elsewhere as well
+    /// Metadata for the sub-event associated with sending the undertaker player
+    /// Elsewhere
     pub undertaker_elsewhere_sub_event: SubEvent,
 
     /// Metadata for the sub-event associated with flipping the player negative
@@ -608,15 +655,19 @@ pub enum SpicyStatus {
     /// The batter is Heating Up
     HeatingUp,
 
-    /// The batter is Red Hot. Sometimes this has a sub-event with metadata about the mod change.
-    /// I haven't determined what causes the difference. If anyone else knows, I would appreciate an
-    /// explanation (ideally with evidence), in the github issues or to beiju#9630 in SIBR.
+    /// The batter is Red Hot.
+    ///
+    /// Sometimes this has a sub-event with metadata about the mod change. I
+    /// haven't determined what causes the difference. If anyone else knows, I
+    /// would appreciate an explanation (ideally with evidence), in the GitHub
+    /// issues or to beiju#9630 in SIBR.
+    // TODO check on the JSON representation
     RedHot(Option<ModChangeSubEvent>),
 }
 
 pub trait ModChangeSubject {
-    // For this ModChangeSubject, the corresponding struct containing the subject-related info that
-    // can only be gotten from the child event
+    // For this ModChangeSubject, the corresponding struct containing the
+    // subject-related info that can only be gotten from the child event
     type Details;
 }
 
@@ -647,10 +698,12 @@ pub struct TeamModChangeSubject {
     /// Uuid of the team whose mod changed
     pub team_id: Uuid,
 
-    /// Nickname of the team whose mod changed. There is (at least?) one instance where the
-    /// team's name was not shown and \[object Object] was in its place. For those events, this
-    /// field will be null (to try to encourage clients to handle this edge case). If you want
-    /// to replicate the displayed event, replace nulls with "\[object Object]".
+    /// Nickname of the team whose mod changed. There are a few instances where
+    /// the team's name was not shown and \[object Object] was in its place. For
+    /// those events, this field will be omitted (to try to encourage clients to
+    /// handle this edge case). If you want to replicate the displayed event,
+    /// replace omitted values with "\[object Object]".
+    #[serde(skip_serializing_if="Option::is_none")]
     pub team_nickname: Option<String>,
 }
 
@@ -718,7 +771,8 @@ impl SubseasonalMod {
             SubseasonalMod::Coasting => "Coasting",
             SubseasonalMod::LateToTheParty => "Late to the Party",
             SubseasonalMod::EarlyToTheParty => "Early to the Party",
-            // The 2/3 ellipsis is a little hack. The "period" after the label will complete it.
+            // The 2/3 ellipsis is a little hack. The "period" after the label
+            // will complete it.
             SubseasonalMod::Ambitious => "feeling Ambitious..",
             SubseasonalMod::Unambitious => "feeling Unambitious..",
         }
@@ -755,14 +809,17 @@ pub struct SubseasonalModChangeDetails<SubjectDetails: WithStructure> {
     /// Details about the subject of this mod change
     pub subject: SubjectDetails,
 
-    /// Metadata for the sub-event associated with the mod change. In Season 13, Late to the Party
-    /// announced itself on every game during lateseason, but it only had a sub-event the first time
-    /// (the game only generates a sub-event if the mod actually changed). For those events, this
-    /// will be null.
+    /// Metadata for the sub-event associated with the mod change. In Season 13,
+    /// Late to the Party announced itself on every game during lateseason, but
+    /// it only had a sub-event the first time (the game only generates a
+    /// sub-event if the mod actually changed). For those events, this will be
+    /// omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub sub_event: Option<SubEvent>,
 
-    /// If this mod change caused a dependent mod to be removed, this is the information about that
-    /// mod removal.
+    /// If this mod change caused a dependent mod to be removed, this is the
+    /// information about that mod removal.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub dependent_mod_change: Option<ModsFromAnotherModRemoved>,
 }
 
@@ -773,8 +830,8 @@ where
     SubjectType: WithStructure + ModChangeSubject,
     for<'a> SubjectType::Details: Serialize + Deserialize<'a> + JsonSchema + WithStructure,
 {
-    /// Mod which caused the addition or removal. Whether over/underperforming was added or removed
-    /// is not stored, but is inferred from this ID.
+    /// Mod which caused the addition or removal. Whether over/underperforming
+    /// was added or removed is not stored, but is inferred from this ID.
     pub source_mod: SubseasonalMod,
 
     /// True if the over/underperforming mod was added, false if it was removed
@@ -783,8 +840,10 @@ where
     /// Team or player whose subseasonal mod (de)activated
     pub subject: SubjectType,
 
-    /// Details about the subseasonal mod change that are extracted from a sub-event. These are
-    /// not available for the few (one) occasion where the sub-event was not added.
+    /// Details about the subseasonal mod change that are extracted from a
+    /// sub-event. These are not available for the few (one) occasion where the
+    /// sub-event was not added.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub details: Option<SubseasonalModChangeDetails<SubjectType::Details>>,
 }
 
@@ -815,8 +874,9 @@ pub struct PlayerStatChange {
     /// Name of player whose stats changed
     pub player_name: String,
 
-    /// Player's rating before the stats changed. The rating category is stored externally. Rating
-    /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
+    /// Player's rating before the stats changed. The rating category is stored
+    /// externally. Rating is equivalent to stars but is on an 0-1 scale rather
+    /// than an 0-5 scale.
     pub rating_before: f64,
 
     /// Player's rating after the stats changed
@@ -826,12 +886,14 @@ pub struct PlayerStatChange {
     pub sub_event: SubEvent,
 }
 
-// Like PlayerStatChange for when the player and team is known from other context. Intended for use in an Option
+// Like PlayerStatChange for when the player and team is known from other
+// context. Intended for use in an Option
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct KnownPlayerStatChange {
-    /// Player's rating before the stats changed. The rating category is stored externally. Rating
-    /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
+    /// Player's rating before the stats changed. The rating category is stored
+    /// externally. Rating is equivalent to stars but is on an 0-1 scale rather
+    /// than an 0-5 scale.
     pub rating_before: f64,
 
     /// Player's rating after the stats changed
@@ -852,6 +914,7 @@ pub struct KnownPlayerStatChange {
     TryFromPrimitive,
     IntoPrimitive,
     WithStructure,
+    EnumIter,
 )]
 #[repr(i64)]
 #[serde(rename_all = "camelCase")]
@@ -926,8 +989,8 @@ pub enum ShadowPositionType {
 pub enum PositionType {
     Lineup = 0,
     Rotation = 1,
-    // At some point bench and bullpen got merged into "shadows", which got the ID that bench had
-    // previously been using
+    // At some point bench and bullpen got merged into "shadows", which got the
+    // ID that bench had previously been using
     BenchOrShadows = 2,
     Bullpen = 3,
 }
@@ -938,7 +1001,8 @@ impl PositionType {
             PositionType::Lineup => "Lineup",
             PositionType::Rotation => "Rotation",
             PositionType::BenchOrShadows => "Shadows",
-            // This should never be used, but if it were the most correct value is "Shadows"
+            // This should never be used, but if it were the most correct value
+            // is "Shadows"
             PositionType::Bullpen => "Shadows",
         }
     }
@@ -947,7 +1011,9 @@ impl PositionType {
 impl From<TryFromPrimitiveError<ActivePositionType>> for FeedParseError {
     fn from(value: TryFromPrimitiveError<ActivePositionType>) -> Self {
         FeedParseError::InvalidLocation {
-            expected: &[1, 2],
+            expected: ActivePositionType::iter()
+                .map(|apt| apt as i64)
+                .collect(),
             actual: value.number,
         }
     }
@@ -967,8 +1033,9 @@ pub struct FeedbackPlayerData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum PlayerReverb {
-    /// There is a repeated Uuid in playerTags at this position. This is the only indication that,
-    /// presumably, the sim rolled to swap a player with themselves.
+    /// There is a repeated Uuid in playerTags at this position. This is the
+    /// only indication that, presumably, the sim rolled to swap a player with
+    /// themselves.
     RepeatId(Uuid),
 
     /// Normal reverb effect, two players are swapped
@@ -979,8 +1046,9 @@ pub enum PlayerReverb {
         /// Name of the first player involved in this reverb
         first_player_name: String,
 
-        /// New location (lineup or rotation) of the first player involved in this reverb. Also the
-        /// previous location of the second player in the reverb.
+        /// New location (lineup or rotation) of the first player involved in
+        /// this reverb. Also the previous location of the second player
+        /// involved in the reverb.
         first_player_new_location: ActivePositionType,
 
         /// Uuid of the second player involved in this reverb
@@ -989,8 +1057,9 @@ pub enum PlayerReverb {
         /// Name of the second player involved in this reverb
         second_player_name: String,
 
-        /// New location (lineup or rotation) of the second player involved in this reverb. Also the
-        /// previous location of the second player in the reverb.
+        /// New location (lineup or rotation) of the second player involved in
+        /// this reverb. Also the previous location of the first player involved
+        /// in the reverb.
         second_player_new_location: ActivePositionType,
 
         /// Metadata associated with the player swap sub-event
@@ -1016,7 +1085,8 @@ pub enum BatterSkippedReason {
 
     /// Batter is Elsewhere
     ///
-    /// For whatever reason, this has a player_id while the Shelled variant does not
+    /// For whatever reason, this has a player_id while the Shelled variant does
+    /// not
     Elsewhere(Uuid),
 }
 
@@ -1053,7 +1123,8 @@ pub struct KnownPlayerRemovedFromTeam {
     pub sub_event: SubEvent,
 }
 
-// This is identical to PlayerInfo except for field names. It's used for JSON schema reasons
+// This is identical to PlayerInfo except for field names. It's used for JSON
+// schema reasons
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct PitcherNameId {
@@ -1090,6 +1161,7 @@ pub struct PlayerSentElsewhere {
     pub sub_event: SubEvent,
 
     /// If the player was flipped negative, this is information about that
+    #[serde(skip_serializing_if="Option::is_none")]
     pub flipped_negative: Option<FlipNegative>,
 }
 
@@ -1105,9 +1177,11 @@ pub enum FloodingSweptEffect {
         player_name: String,
 
         /// Info about the Hotel Motel party on this score, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         hotel_motel_party: Option<HotelMotelParty>,
 
-        /// If this event caused Shame, the metadata about the Shame, including any associated Hype
+        /// If this event caused Shame, the metadata about the Shame, including
+        /// any associated Hype
         shame: Shame,
     },
     Ego(PlayerNameId),
@@ -1136,7 +1210,8 @@ pub enum RenovationVotes {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct MultipleModsAddedOrRemoved {
-    /// Vector of mods that were added/removed. Each mod is represented by its internal ID.
+    /// Vector of mods that were added/removed. Each mod is represented by its
+    /// internal ID.
     pub mods: Vec<ModDesc>,
 
     /// Metadata for the event associated with adding or removing these mods
@@ -1156,6 +1231,7 @@ pub struct Echo {
     pub receiver_name: String,
 
     /// Mods that Faded as a result of this Echo, if any
+    #[serde(skip_serializing_if="Option::is_none")]
     pub mods_removed: Option<MultipleModsAddedOrRemoved>,
 
     /// Mods that were added as a result of this Echo
@@ -1180,7 +1256,8 @@ pub struct EchoIntoStatic {
     /// Metadata for the event associated with removing the player from the team
     pub removed_from_team_sub_event: SubEvent,
 
-    /// Metadata for the event associated with changing the Echo mod to the Static mod
+    /// Metadata for the event associated with changing the Echo mod to the
+    /// Static mod
     pub mod_changed_sub_event: SubEvent,
 }
 
@@ -1237,8 +1314,10 @@ pub enum ReturnFromElsewhereFlavor {
         /// Uuid of player who returned from Elsewhere
         player_id: Uuid,
 
-        /// True if the player is trapped in a giant peanut shell, false otherwise
+        /// True if the player is trapped in a giant peanut shell, omitted
+        /// otherwise
         // TODO: Move this outside the enum?
+        #[serde(skip_serializing_if="is_false")]
         is_peanut: bool,
 
         /// Metadata for sub-event associated with removing the Elsewhere mod
@@ -1247,15 +1326,18 @@ pub enum ReturnFromElsewhereFlavor {
         /// Number of days or seasons the player was Elsewhere
         time_elsewhere: TimeElsewhere,
 
-        /// Scattered sub-event, if the player was scattered, or null otherwise
+        /// Scattered sub-event, if the player was scattered, omitted otherwise
+        #[serde(skip_serializing_if="Option::is_none")]
         scattered: Option<Scattered>,
 
-        /// "Re-congealed differently" sub-event, if player re-congealed differently, or null
-        /// otherwise
+        /// "Re-congealed differently" sub-event, if player re-congealed
+        /// differently, omitted otherwise
+        #[serde(skip_serializing_if="Option::is_none")]
         recongealed_differently: Option<PlayerStatChange>,
     },
-    /// The short one that happens when the player went Elsewhere via salmon cannons or fleeing a
-    /// failed heist. Players can't get Scattered on this one.
+    /// The short one that happens when the player went Elsewhere via salmon
+    /// cannons or fleeing a failed heist. Players can't get Scattered on this
+    /// one.
     #[serde(rename_all = "camelCase")]
     Short {
         /// Team uuid of player who returned from Elsewhere
@@ -1264,22 +1346,28 @@ pub enum ReturnFromElsewhereFlavor {
         /// Uuid of player who returned from Elsewhere
         player_id: Uuid,
 
-        /// True if the player is trapped in a giant peanut shell, false otherwise
+        /// True if the player is trapped in a giant peanut shell, omitted
+        /// otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_peanut: bool,
 
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
     },
-    /// Fake returns from elsewhere. As far as I know this only happens when a Receiver returns from
-    /// Elsewhere after being sent there by Receiving Elsewhere from an Echo. There's no metadata
-    /// on a false return from elsewhere.
+    /// Fake returns from elsewhere. As far as I know this only happens when a
+    /// Receiver returns from Elsewhere after being sent there by Receiving
+    /// Elsewhere from an Echo. There's no metadata on a false return from
+    /// elsewhere.
     False {
-        /// True if the player is trapped in a giant peanut shell, false otherwise
+        /// True if the player is trapped in a giant peanut shell, omitted
+        /// otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_peanut: bool,
     },
     /// Player was pulled back from elsewhere by a Seeker
     PulledBack {
-        /// Team uuid of player who returned from Elsewhere (also the team of the Seeker)
+        /// Team uuid of player who returned from Elsewhere (also the team of
+        /// the Seeker)
         team_id: Uuid,
 
         /// Uuid of player who returned from Elsewhere
@@ -1291,14 +1379,17 @@ pub enum ReturnFromElsewhereFlavor {
         /// Name of Seeker player who pulled the other player back
         seeker_player_name: String,
 
-        /// Scattered sub-event, if the player was scattered, or null otherwise
+        /// Scattered sub-event, if the player was scattered, omitted otherwise
+        #[serde(skip_serializing_if="Option::is_none")]
         scattered: Option<Scattered>,
 
         /// Metadata for sub-event associated with removing the Elsewhere mod
         sub_event: SubEvent,
 
-        /// Number of days or seasons the player was Elsewhere, if present. Not all elsewhere
-        /// returns say the amount of time the player was Elsewhere.
+        /// Number of days or seasons the player was Elsewhere, if present. Not
+        /// all elsewhere returns include the amount of time the player was
+        /// Elsewhere.
+        #[serde(skip_serializing_if="Option::is_none")]
         time_elsewhere: Option<TimeElsewhere>,
     },
 }
@@ -1354,7 +1445,8 @@ impl TryFrom<SerdeRunLossesFromSalmon> for RunLossesFromSalmon {
             2 => Self::BothTeams(value.0.into_iter().collect_tuple().unwrap()),
             n => {
                 return Err(format!(
-                    "RunLossesFromSalmon must have 0, 1, or 2 elements but got {} elements",
+                    "RunLossesFromSalmon must have 0, 1, or 2 elements but got \
+                    {} elements",
                     n
                 ));
             }
@@ -1429,7 +1521,8 @@ pub enum DebtType {
 
 impl DebtType {
     pub fn mod_id(&self) -> &'static str {
-        // I think it's just a coincidence that neither of these mods' ids match their display names
+        // I think it's just a coincidence that neither of these mods' ids match
+        // their display names
         match self {
             DebtType::Unstable => "MARKED",
             DebtType::Observed => "COFFEE_PERIL",
@@ -1440,20 +1533,21 @@ impl DebtType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
 pub struct BatterDebt {
-    /// Batter Uuid. For some reason this is only added to the event when Debt procs, even though
-    /// the batter and fielder are always part of the event.
+    /// Batter Uuid. For some reason this is only added to the event when Debt
+    /// procs, even though the batter and fielder are always part of the event.
     pub batter_id: Uuid,
 
-    /// Fielder Uuid. For some reason this is only added to the event when Debt procs, even though
-    /// the batter and fielder are always part of the event.
+    /// Fielder Uuid. For some reason this is only added to the event when Debt
+    /// procs, even though the batter and fielder are always part of the event.
     pub fielder_id: Uuid,
 
-    /// Metadata for the sub-event associated with adding the Observed/Unstable/etc. mod. If the
-    /// player already had the mod, this will be null.
+    /// Metadata for the sub-event associated with adding the Observed/Unstable/
+    /// etc. mod. If the player already had the mod, this will be omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub sub_event: Option<ModChangeSubEvent>,
 
-    /// Which type of Debt this was, the kind that makes victims Unstable or the kind that makes
-    /// them Observed
+    /// Which type of Debt this was, the kind that makes victims Unstable or the
+    /// kind that makes them Observed
     pub debt_type: DebtType,
 }
 
@@ -1472,11 +1566,13 @@ pub struct TogglePerforming {
     /// Whether player is now Overperforming (true) or Underperforming (false)
     pub is_overperforming: bool,
 
-    /// Whether this is the first this toggle has procced. This is necessary for accurate
-    /// reconstruction of the game event.
+    /// `true1 if this is the first this toggle has procced, otherise omitted.
+    /// This is necessary for accurate reconstruction of the game event.
+    #[serde(skip_serializing_if="is_false")]
     pub is_first_proc: bool,
 
-    /// Metadata for the event that adds or replaces the Overperforming or Underperforming mod
+    /// Metadata for the event that adds or replaces the Overperforming or
+    /// Underperforming mod
     pub sub_event: SubEvent,
 }
 
@@ -1568,11 +1664,14 @@ pub struct ItemDamaged {
     /// Name of item that was damaged
     pub item_name: String,
 
-    /// Whether the item name is plural, if known. This is extracted from the message text and not
-    /// all messages are phrased in a way that indicate the item's plurality.
+    /// Whether the item name is plural, if known. This is extracted from the
+    /// message text and not all messages are phrased in a way that indicate the
+    /// item's plurality. If not known, this is omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub item_name_plural: Option<bool>,
 
-    /// Mods bestowed by item that was damaged
+    /// Mods bestowed by item that was damaged, if any
+    #[serde(skip_serializing_if="Vec::is_empty")]
     pub item_mods: Vec<String>,
 
     /// Durability of item. This is its max health.
@@ -1581,13 +1680,23 @@ pub struct ItemDamaged {
     /// Current health of item
     pub health: i64,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before being damaged. This is null sometimes and I don't know why.
+    /// The increase or decrease that all the wielding player's items caused to
+    /// their star rating before being damaged, if available
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
     // TODO Clarify damage vs. breaking)
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_before: Option<f64>,
 
-    /// The increase or decrease that all the wielding player's remaining items cause to their star
-    /// rating. This is null sometimes and I don't know why.
+    /// The increase or decrease that all the wielding player's remaining items
+    /// cause to their star rating, if available
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
@@ -1626,11 +1735,17 @@ pub struct ItemGained {
     /// Mods bestowed by item that was gained
     pub item_mods: Vec<String>,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before gaining this item
+    /// The increase or decrease that all the wielding player's items caused to
+    /// their star rating before gaining this item
     pub player_item_rating_before: f64,
 
-    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    /// The increase or decrease that all the wielding player's items now cause
+    /// to their star rating, if available
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
@@ -1645,25 +1760,30 @@ pub struct ItemGained {
     /// Metadata for the event associated with gaining/losing the item
     pub sub_event: SubEvent,
 
-    /// If the player dropped an item as a result of gaining this item, contains information about
-    /// the dropped item. Otherwise null.
+    /// If the player dropped an item as a result of gaining this item, contains
+    /// information about the dropped item. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ItemLost {
-    /// Mods removed as a result of this item being deleted, according to the event. Note that
-    /// this is apparently not always accurate: See event ac968608-2620-48ce-870e-2858b71baeeb,
-    /// where Rush Valenzuela's Chorby's Uncertain Soul was taken, causing Valenzuela to lose the
-    /// Uncertain mod (Chronicler data confirms that it was lost). However, the Uncertian mod is
-    /// not listed in the event.
+    /// Mods removed as a result of this item being deleted, according to the
+    /// event
+    ///
+    /// This is apparently not always accurate: See event
+    /// ac968608-2620-48ce-870e-2858b71baeeb, where Rush Valenzuela's Chorby's
+    /// Uncertain Soul was taken, causing Valenzuela to lose the Uncertain mod
+    /// (Chronicler data confirms that it was lost). However, the Uncertian mod
+    /// is not listed in the event.
     pub item_mods: Vec<String>,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before losing this item
+    /// The increase or decrease that all the wielding player's items caused to
+    /// their star rating before losing this item
     pub player_item_rating_before: f64,
 
-    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    /// The increase or decrease that all the wielding player's items now cause
+    /// to their star rating
     pub player_item_rating_after: f64,
 
     /// The player's star rating. TODO: Is this with or without items?
@@ -1687,22 +1807,35 @@ pub struct ItemRepaired {
     /// Durability of item. This is its max health.
     pub durability: i64,
 
-    /// Health of item before being repaired. This cannot be calculated, apparently, since salmon
-    /// cannons sometimes restores by one and sometimes restores to full. This may be a change that
-    /// took effect in s17, or maybe s17 just happened to be the first time it restored to full.
+    /// Health of item before being repaired
+    ///
+    /// This cannot be calculated, apparently, since salmon cannons sometimes
+    /// restores by one and sometimes restores to full. This may be a change
+    /// that took effect in s17, or maybe s17 just happened to be the first time
+    /// it restored to full.
     pub health_before: i64,
 
     /// Health of item after being repaired
     pub health_after: i64,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before being repaired (TODO Clarify damage vs. breaking)
-    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    /// The increase or decrease that all the wielding player's items caused to
+    /// their star rating before being repaired, if available
+    ///
+    /// TODO Clarify damage vs. breaking
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_before: Option<f64>,
 
-    /// The increase or decrease that all the wielding player's items now cause to their star
-    /// rating.
-    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    /// The increase or decrease that all the wielding player's items now cause
+    /// to their star rating, if available
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_after: Option<f64>,
 
     /// The player's star rating. TODO: Is this with or without items?
@@ -1714,8 +1847,8 @@ pub struct ItemRepaired {
     /// Uuid of player whose item broke
     pub player_id: Uuid,
 
-    // TODO: Move this out if it turns out there are other restoring events with the name stored
-    //   outside the ItemRepaired struct
+    // TODO: Move this out if it turns out there are other restoring events with
+    //   the name stored outside the ItemRepaired struct
     /// Name of player whose item broke
     pub player_name: String,
 
@@ -1734,12 +1867,17 @@ pub struct ItemDroppedForNewItem {
     /// Mods bestowed by item that was dropped
     pub item_mods: Vec<String>,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before dropping this item
-    /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+    /// The increase or decrease that all the wielding player's items caused to
+    /// their star rating before dropping this item, if available
+    ///
+    /// If not available, this is omitted. Conditions that determine whether
+    /// this is available are not known. If you know, please tell me in the
+    /// GitHub issues or to beiju#9630 in SIBR.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_item_rating_before: Option<f64>,
 
-    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    /// The increase or decrease that all the wielding player's items now cause
+    /// to their star rating
     pub player_item_rating_after: f64,
 
     /// True if the item was broken, otherwise false
@@ -1788,8 +1926,9 @@ pub struct PlayerGrippedByForce {
     pub sub_event: SubEvent,
 }
 
-// I would love to be able to tag this with `"success": true/false`, but the PR to allow that was
-// rejected for developer bandwidth reasons: https://github.com/serde-rs/serde/pull/2056
+// I would love to be able to tag this with `"success": true/false`, but the PR
+// to allow that was rejected for developer bandwidth reasons:
+// https://github.com/serde-rs/serde/pull/2056
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(tag = "success")]
 pub enum PlayerMaybeCarcinized {
@@ -1805,12 +1944,14 @@ pub enum PlayerMaybeCarcinized {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Carcinization {
+    /// This usually contains the information about the player moving. 
+    /// 
+    /// However, for unknown reasons (possibly the unpassed decree Force Fields 
+    /// triggering when it shouldn't) the steal failed exactly one (1) time in 
+    /// Blaseball history. The child event's description still implied that the
+    /// player was moved, but it was a different event type, the Stolen mod was
+    /// not added, and the player was not moved.
     #[serde(flatten)]
-
-    /// This usually contains the information about the player moving. However, for unknown reasons
-    /// (possibly the unpassed decree Force Fields triggering when it shouldn't) the steal failed
-    /// once. The child event's description still implied that the player was moved, but it was a
-    /// different event type and the Stolen mod was not added.
     pub player_moved: PlayerMaybeCarcinized,
 
     /// Full name of player's new team
@@ -1834,8 +1975,9 @@ pub struct AttractionWithPlayer {
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
 
-    /// After season 17, players started getting (visible) shadow boosts when being Attracted. This
-    /// contains that information.
+    /// After season 17, players started getting (visible) shadow boosts when 
+    /// being Attracted. This contains that information, if it exists.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub boost: Option<PlayerBoostSubEvent>,
 }
 
@@ -1851,8 +1993,9 @@ pub struct Attraction {
     /// Metadata about the player being added to the team
     pub sub_event: SubEvent,
 
-    /// After season 17, players started getting (visible) shadow boosts when being Attracted. This
-    /// contains that information.
+    /// After season 17, players started getting (visible) shadow boosts when 
+    /// being Attracted. This contains that information, if it exists.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub boost: Option<PlayerBoostSubEvent>,
 }
 
@@ -1946,7 +2089,9 @@ pub enum HomeRunType {
     Solo,
     TwoRun,
     ThreeRun,
-    FourRun, // Only applies with The Fifth Base, otherwise a 4-run HR is a Grand Slam
+    // Only applies with The Fifth Base, otherwise a 4-run HR would be a Grand 
+    // Slam
+    FourRun, 
     GrandSlam,
 }
 
@@ -2019,7 +2164,9 @@ pub struct Parasite {
     /// Drained attribute numeric ID. Should agree with attribute_name.
     pub attribute_id: i64,
 
-    /// Metadata for the sub-event associated with activating Maintenance Mode, if applicable
+    /// If Maintenance Mode activated, this is the sub-event associated with the
+    /// activation. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub maintenance_mode: Option<MaintenanceMode>,
 
     /// Sipped player's rating before the stats changed
@@ -2041,7 +2188,8 @@ pub struct Parasite {
     pub pitcher_sub_event: SubEvent,
 }
 
-// TODO A bunch of places this is inlined should be replaced with PlayerBoostSubEvent and  #[serde(flatten)]
+// TODO A bunch of places this is inlined should be replaced with 
+//   PlayerBoostSubEvent and #[serde(flatten)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerBoostSubEvent {
     /// Player's rating before the boost
@@ -2069,6 +2217,7 @@ pub struct PlayerBoostSubEventWithTeam {
     pub sub_event: SubEvent,
 }
 
+// TODO This should probably be tagged
 #[derive(
     Debug,
     Clone,
@@ -2110,11 +2259,13 @@ pub enum PostseasonBirthBoostEventOrder {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ModsFromAnotherModRemoved {
-    /// List of mods that were removed
+    /// List of mods that were removed, if any
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mods_removed: Vec<ModDesc>,
 
-    /// Name of the mod that had originally added the removed mods. It's implied that this mod
-    /// was just removed, which caused these others to be removed as well.
+    /// Name of the mod that had originally added the removed mods. It's 
+    /// implied that this mod was just removed, which caused these others to be
+    /// removed as well.
     pub source_mod_name: String,
 
     /// Metadata for the mod-added/removed-from-other-mod event
@@ -2126,11 +2277,13 @@ pub struct ModsFromAnotherModRemovedWithName {
     /// Name of the player or team who lost the mod(s)
     pub name: TeamNicknameOrPlayerName,
 
-    /// List of mods that were removed
+    /// List of mods that were removed, if any
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mods_removed: Vec<ModDesc>,
 
-    /// Name of the mod that had originally added the removed mods. It's implied that this mod
-    /// was just removed, which caused these others to be removed as well.
+    /// Name of the mod that had originally added the removed mods. It's implied
+    /// that this mod was just removed, which caused these others to be removed
+    /// as well.
     pub source_mod_name: String,
 
     /// Metadata for the mod-added/removed-from-other-mod event
@@ -2142,8 +2295,9 @@ pub struct ModRemoval {
     /// Internal ID of the mod that was removed
     pub mod_id: String,
 
-    /// If this mod change caused a dependent mod to be removed, this is the information about that
-    /// mod removal.
+    /// If this mod change caused a dependent mod to be removed, this is the 
+    /// information about that mod removal
+    #[serde(skip_serializing_if="Option::is_none")]
     pub dependent_mod_removal: Option<ModsFromAnotherModRemoved>,
 }
 
@@ -2182,10 +2336,10 @@ pub struct Hype {
     pub sub_event: SubEvent,
 }
 
+// TODO manage serde serialization, including omitting when appropriate
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 // TODO Document variants
 pub enum Shame {
-    // TODO Return this for games pre-s18
     Unknown,
     No,
     Yes { hype: Option<Hype> },
@@ -2204,7 +2358,7 @@ pub enum HomeRunShameSource {
 // TODO Document variants
 pub enum HomeRunShame {
     // TODO Return this for games pre-s18
-    // TODO Serialize this as `null`
+    // TODO Serialize this as omitted
     Unknown,
     // TODO Serialize this as `true`
     No,
@@ -2213,8 +2367,7 @@ pub enum HomeRunShame {
         source: HomeRunShameSource,
 
         /// If this Shame caused Hype to build, metadata about the Hype building
-        ///
-        /// All Shame from the Fee
+        #[serde(skip_serializing_if="Option::is_none")]
         hype: Option<Hype>,
     },
 }
@@ -2240,12 +2393,13 @@ impl Display for NumbersGo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Ambush {
-    /// Uuid of ambushing team. Note that this is not necessarily the team whose player was
-    /// incinerated, it can also be the other team in the same game
+    /// Uuid of ambushing team. Note that this is not necessarily the team whose
+    /// player was incinerated, it can also be the other team in the same game
     pub team_id: Uuid,
 
-    /// Nickname of ambushing team. Note that this is not necessarily the team whose player was
-    /// incinerated, it can also be the other team in the same game
+    /// Nickname of ambushing team. Note that this is not necessarily the team
+    /// whose player was incinerated, it can also be the other team in the same 
+    /// game
     pub team_nickname: String,
 
     /// Uuid of ambushed player
@@ -2254,9 +2408,10 @@ pub struct Ambush {
     /// Name of ambushed player
     pub player_name: String,
 
-    /// If this player was formerly on a team (which can only happen if their whole team was
-    /// Incinerated), this is the info about that team and the removed-from-team event. Otherwise
-    /// null.
+    /// If this player was formerly on a team (which can only happen if their 
+    /// whole team was Incinerated), this is the info about that team and the
+    /// removed-from-team event. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub former_team: Option<KnownPlayerRemovedFromTeam>,
 
     /// Metadata for the exit-hall-of-flame event
@@ -2265,8 +2420,8 @@ pub struct Ambush {
     /// Metadata for the player-added-to-team event
     pub added_to_team_event: SubEvent,
 
-    /// Metadata for the player's shadow boost event. Ambush was added after shadow boosts, so this
-    /// sub-event always exists.
+    /// Metadata for the player's shadow boost event. Ambush was added after 
+    /// shadow boosts, so this sub-event always exists.
     pub shadow_boost_event: SubEvent,
 
     /// Ambushed player's rating before the shadow boost
@@ -2292,29 +2447,34 @@ pub struct Firewalker {
     pub instability_sub_event: SubEvent,
 
     /// Metadata for the successor events associated with the Hall players
-    /// getting the Unstable mod
+    /// getting the Unstable mod, if any
     ///
     /// These are not child events. They're separate events that appear
     /// after the PlayerLeftVault event, but it's likely they were intended
     /// to be a child event.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub players_gained_unstable: Vec<ModChangeSubEventWithNamedPlayer>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct RoamConnectedEvents {
     /// If the player has the Firewalker mod, contains info about the
-    /// Instability spreading in their wake
+    /// Instability spreading in their wake. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub firewalker: Option<Firewalker>,
 
     /// If the player has the On an Odyssey mod, contains info about the
-    /// roam boost they received
+    /// roam boost they received. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub odyssey_boost: Option<PlayerBoostSubEvent>,
 
     /// If the player roamed to the Shadows, contains info about the shadow
-    /// boost they received
+    /// boost they received. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub shadow_boost: Option<PlayerBoostSubEvent>,
 
-    /// Parties as a result of the Good Riddance mod
+    /// Parties as a result of the Good Riddance mod, if any. Otherwise omitted.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub good_riddance_parties: Vec<GoodRiddanceParty>,
 }
 
@@ -2344,6 +2504,8 @@ pub enum RoamFromLocation {
         /// Metadata for the player-left-hall-of-flame sub-event
         sub_event: SubEvent,
 
+        #[serde(flatten)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         from_team: Option<PlayerPulledFromIncineratedTeam>,
     },
     Vault {
@@ -2352,6 +2514,7 @@ pub enum RoamFromLocation {
     },
 }
 
+// TODO add tag
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
 pub enum GameStartAnnouncement {
     LetsGo,
@@ -2414,9 +2577,10 @@ pub enum LedgerRunModifier {
     },
     Underhanded,
     SunPoint1 {
-        // The value of a Sun .1 run can theoretically only be a natural number multiple of .1, so
-        // it could be stored as a fixed point value, but I decided not to do that because blaseball
-        // is blaseball and javascript is javascript
+        // The value of a Sun .1 run can theoretically only be a natural number 
+        // multiple of .1, so it could be stored as a fixed point value, but I
+        // decided not to do that because Blaseball is Blaseball and JavaScript
+        // is JavaScript
         value: f64,
     },
     Subtractor,
@@ -2620,6 +2784,7 @@ pub trait LedgerV2: WithStructure {
     fn write(&self, season: i64, day: i64, w: &mut impl Write) -> std::fmt::Result;
 }
 
+// TODO Document this
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct SimpleLedgerV2<RunSourceT: WithStructure> {
     pub runs: Vec<LedgerRun>,
@@ -2639,7 +2804,9 @@ impl<RunSourceT: WithStructure> SimpleLedgerV2<RunSourceT> {
     }
 }
 
-// A bookkeeping type to make it easier to output the additional ledger item for maximum sun runs
+// A bookkeeping type to make it easier to output the additional ledger item for
+// maximum sun runs
+// TODO Document this
 struct MaximumSunRunValuesIterator<T: Iterator<Item = f64>> {
     is_maximum_sun: bool,
     child: T,
@@ -2685,7 +2852,8 @@ impl<ChildT: Iterator<Item = f64>> FedIteratorExtensions for ChildT {
 }
 
 impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourceT> {
-    // TODO I can't remember why I have this indirection and it might not be necessary
+    // TODO I can't remember why I have this indirection and it might not be 
+    //   necessary
     fn label() -> &'static str {
         RunSourceT::label()
     }
@@ -2760,8 +2928,9 @@ impl LedgerV2 for HomeRunLedger {
     }
 
     fn run_values(&self) -> impl Iterator<Item = f64> {
-        // The Either crate very conveniently does the work to consolidate 2 iterators of
-        // different concrete types but with the same Item type into a single Iterator type
+        // The Either crate very conveniently does the work to consolidate 2 
+        // iterators of different concrete types but with the same Item type 
+        // into a single Iterator type
         self.home_run
             .run_values()
             .chain(if let Some(oop) = &self.big_bucket {
@@ -2811,8 +2980,8 @@ impl LedgerV2 for HomeRunLedger {
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct ModerationLedger {
-    // Will always be negative, indicating Unruns, except for that one time it was bugged and gave
-    // the talkers runs instead
+    // Will always be negative, indicating Unruns, except for that one time it 
+    // was bugged and gave the talkers runs instead
     pub num_runs: f64,
 }
 
@@ -2852,8 +3021,8 @@ pub enum TripleThreats {
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
 pub struct TripleThreatLedger {
-    /// Triple threat has 3 conditions under which it can give 0.3 unruns, and they can stack. This
-    /// indicates how many of them are active  
+    /// Triple threat has 3 conditions under which it can give 0.3 unruns, and 
+    /// they can stack. This indicates how many of them are active  
     pub threats: TripleThreats,
     pub modifiers: Vec<LedgerRunModifier>,
 }
@@ -2887,12 +3056,12 @@ impl LedgerV2 for TripleThreatLedger {
         iter::once(self.value())
     }
 
-    // TODO: This used to use season and day but it turns out that was the wrong signal. If this was
-    //   the only use, remove them from the signature
+    // TODO: This used to use season and day but it turns out that was the wrong
+    //   signal. If this was the only use, remove them from the signature
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
         let mut value = self.base_value();
-        // Yes, whether this is pluralized depends entirely on whether there are any modifiers. I
-        // was surprised too.
+        // Yes, whether this is pluralized depends entirely on whether there are
+        // any modifiers. I was surprised too.
         write!(
             w,
             "Triple Threat: {}",
@@ -2968,7 +3137,8 @@ impl LedgerV2 for OverflowLedger {
     }
 
     fn write(&self, _: i64, _: i64, w: &mut impl Write) -> std::fmt::Result {
-        // Like with triple threat, this only gets pluralized if there are no modifiers.
+        // Like with triple threat, this only gets pluralized if there are no 
+        // modifiers.
         write!(
             w,
             "Overflow: {}",
@@ -3101,7 +3271,8 @@ impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
             Ledger::V2(ledger) => {
                 ledger.write(season, day, w)?;
 
-                // A summary line is printed iff there was more than 1 instance of runs being scored
+                // A summary line is printed iff there was more than 1 instance
+                // of runs being scored
                 if ledger.len() > 1 {
                     let mut runs_total_value = 0.0;
                     let mut is_first = true;
@@ -3155,8 +3326,8 @@ pub struct PressureBuilt {
 pub enum RenovationBuiltEffect {
     None,
     ModAdded {
-        /// Description for the AddedMod sub-event. This description is not currently parsed but
-        /// contributions are welcome.
+        /// Description for the AddedMod sub-event. This description is not 
+        /// currently parsed but contributions are welcome.
         description: String,
 
         /// Internal ID of the mod that was added
@@ -3179,8 +3350,10 @@ pub enum RenovationBuiltEffect {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct ModRemovedFromRatification {
-    /// Description of the mod being removed from the stadium. Usually contains the stadium name and
-    /// team nickname, but in an inconsistent format so we don't parse it.
+    /// Description of the mod being removed from the stadium. 
+    /// 
+    /// Usually contains the stadium name and team nickname, but in an 
+    /// inconsistent format so we don't parse it.
     pub description: String,
 
     /// Uuid of the team whose stadium this is
@@ -3221,14 +3394,17 @@ pub struct EarnedWin {
     /// Metadata for the team-earned-win sub-event
     pub sub_event: SubEvent,
 
-    /// If this is a postseason event, whether it's an overbracket or underbracket game. Otherwise
-    /// null
+    /// If this is a postseason event, whether it's an overbracket or 
+    /// underbracket game. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub bracket_type: Option<BracketType>,
 
-    /// Indicates whether Turntables is active
+    /// Indicates whether Turntables is active. `true` or omitted
+    #[serde(skip_serializing_if="is_false")]
     pub turntables: bool,
 
-    /// Indicates whether Sun(Sun) is active
+    /// Indicates whether Sun(Sun) is active. `true` or omitted
+    #[serde(skip_serializing_if="is_false")]
     pub sun_sun: bool,
 }
 
@@ -3261,14 +3437,16 @@ pub struct TookTheFifthBase {
     /// Uuid of the team whose player just took The Fifth Base
     pub team_id: Uuid,
 
-    /// Metadata for the sub-event associated with the stadium losing the The Fifth Base mod
+    /// Metadata for the sub-event associated with the stadium losing the 
+    /// The Fifth Base mod
     pub remove_mod_from_stadium_sub_event: SubEvent,
 
-    /// The increase or decrease that all the wielding player's items caused to their star rating
-    /// before taking The Fifth Base
+    /// The increase or decrease that all the wielding player's items caused to 
+    /// their star rating before taking The Fifth Base
     pub player_item_rating_before: f64,
 
-    /// The increase or decrease that all the wielding player's items now cause to their star rating
+    /// The increase or decrease that all the wielding player's items now cause 
+    /// to their star rating
     pub player_item_rating_after: f64,
 
     /// The player's star rating. TODO: Is this with or without items?
@@ -3277,8 +3455,9 @@ pub struct TookTheFifthBase {
     /// Metadata for the event associated with gaining the The Fifth Base item
     pub player_gained_item_sub_event: SubEvent,
 
-    /// If the player dropped an item as a result of taking The Fifth bAse, contains information
-    /// about the dropped item. Otherwise null.
+    /// If the player dropped an item as a result of taking The Fifth base, 
+    /// contains information about the dropped item. Otherwise omitted.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub dropped_item: Option<ItemDroppedForNewItem>,
 }
 
@@ -3307,20 +3486,24 @@ pub struct PlayerMultiTogethernessModChange {
     pub sub_event: SubEvent,
 }
 
-/// Sometimes player togetherness "blips" (gets removed and then re-added) when a player is moved
-/// around a team, because it's technically them being removed and then re-added to the team. This
-/// contains metadata about that happening.
+/// Sometimes player togetherness "blips" (gets removed and then re-added) when
+/// a player is moved around a team, because it's technically them being removed
+/// and then re-added to the team. This contains metadata about that happening.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct PlayerTogethernessModBlip {
-    /// Metadata for the sub-event about (temporarily) removing the player's Togetherness mod
+    /// Metadata for the sub-event about (temporarily) removing the player's 
+    /// Togetherness mod
     pub removal: PlayerTogethernessModChange,
 
-    /// Metadata for the sub-event about re-adding the players Togetherness mod
+    /// Metadata for the sub-event about re-adding the players Togetherness mod,
+    /// if it exists
     ///
-    /// This does not always exist, and my best theory for that is that it happens when the player
-    /// should have lost their Togetherness mod already but didn't due to a bug. This is unconfirmed
-    /// and it might just be that my understanding of Togetherness is incorrect (e.g. maybe players
-    /// in the shadows don't count?)
+    /// This does not always exist, and my best theory for that is that it 
+    /// happens when the player should have lost their Togetherness mod already
+    /// but didn't due to a bug. This is unconfirmed, and it might just be that
+    /// my understanding of Togetherness is incorrect (e.g. maybe players in the
+    /// shadows don't count?)
+    #[serde(skip_serializing_if="Option::is_none")]
     pub addition: Option<PlayerTogethernessModChange>,
 }
 
@@ -3331,7 +3514,8 @@ pub enum RunStolenThroughTunnelsDetails {
     /// Neither scoring event was available, so no details are known
     NeitherKnown,
 
-    /// Only the victim team's scoring event was available, so only its details are known
+    /// Only the victim team's scoring event was available, so only its details
+    /// are known
     VictimKnown {
         /// Uuid of the team who had their run stolen
         victim_team_id: Uuid,
@@ -3346,7 +3530,8 @@ pub enum RunStolenThroughTunnelsDetails {
         run_lost_sub_event: SubEvent,
     },
 
-    /// Only the thieving team's scoring event was available, so only its details are known
+    /// Only the thieving team's scoring event was available, so only its 
+    /// details are known
     ThiefKnown {
         /// Name of the team whose player stole the run
         thieving_team_nickname: String,
@@ -3387,8 +3572,9 @@ pub enum RunStolenThroughTunnelsDetails {
         /// Metadata for the RunsScored event for the team who lost a run
         run_lost_sub_event: SubEvent,
 
-        /// I can't figure out what determines which team's sub-event goes first, so I have to store
-        /// it. If you can see the pattern please let me know.
+        /// I can't figure out what determines which team's sub-event goes 
+        /// first, so I have to store it. If you can see the pattern please let
+        /// me know.
         // TODO Try to deduce this from data
         victim_event_first: bool,
     },
@@ -3489,19 +3675,20 @@ pub enum TraderTraitor {
     /// The player is described as a Traitor
     Traitor(TradeForSomething),
 
-    /// The player is not described as either a Traitor or Trader, but formatting implies they would
-    /// be called one of the two.
+    /// The player is not described as either a Traitor or Trader, but 
+    /// formatting implies they would be called one of the two.
     ///
-    /// Specifically, there is an extra space before their name, which I assume is the space that
-    /// would be between the word "Traitor"/"Trader" and their name.
+    /// Specifically, there is an extra space before their name, which I assume
+    /// is the space that would be between the word "Traitor"/"Trader" and their
+    /// name.
     Unknown(TradeForSomething),
 
-    /// The player is not described as either a Traitor or Trader, and formatting implies they would
-    /// not be called either.
+    /// The player is not described as either a Traitor or Trader, and 
+    /// formatting implies they would not be called either.
     ///
-    /// This does not have the extra space that Unknown has. It appears exactly once, during the
-    /// Semi-Centennial, when New Megan Ito traded their nothing for Dunlap Figueroa's The Fifth
-    /// Base.
+    /// This does not have the extra space that Unknown has. It appears exactly 
+    /// once, during the Semi-Centennial, when New Megan Ito traded their 
+    /// nothing for Dunlap Figueroa's The Fifth Base.
     Neither(TradeForNothing),
 }
 
@@ -3537,12 +3724,12 @@ impl TraderTraitor {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 pub struct Balloons {
-    /// The name of the stadium in which these balloons were inflated. This will always be the
-    /// home stadium.
+    /// The name of the stadium in which these balloons were inflated. This will
+    /// always be the home stadium.
     pub stadium_name: String,
 
-    /// Number of balloons inflated. This is usually 1 but can be higher because of things like
-    /// Sum Sun
+    /// Number of balloons inflated. This is usually 1 but can be higher because
+    /// of things like Sum Sun.
     pub num_balloons: i64,
 }
 
@@ -3589,6 +3776,7 @@ pub enum PlayerMovedFrom {
         /// Uuid of the team the player was pulled from, if there was one
         ///
         /// Incinerated players do not necessarily have a team ID
+        #[serde(skip_serializing_if="Option::is_none")]
         former_team_id: Option<Uuid>,
 
         /// Metadata associated with the player exiting the Hall of Flame
@@ -3615,10 +3803,12 @@ pub struct PlayerAddedToTeam {
     ///
     /// Note that Dusted Replicas apparently reside in the Vault, as evidenced
     /// by their lack of this event
+    #[serde(skip_serializing_if="Option::is_none")]
     pub player_visited_vault: Option<SubEvent>,
 
     /// If the player is On an Odyssey, this is the boost resulting from them
     /// joining a new team
+    #[serde(skip_serializing_if="Option::is_none")]
     pub odyssey_boost: Option<PlayerBoostSubEvent>,
 
     /// If the player received a shadow boost, this contains the information
@@ -3629,6 +3819,7 @@ pub struct PlayerAddedToTeam {
     /// of information. Indices are not necessarily consecutive. The index may
     /// be interleaved with indices from `replica_dusted_off` and
     /// `yolked_removed`.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub shadow_boost: Option<(PlayerBoostSubEvent, usize)>,
 
     /// If the player is a Replica which dusted off (had their Dusted mod
@@ -3639,6 +3830,7 @@ pub struct PlayerAddedToTeam {
     /// emitted, which appears to be independent of any other observable piece
     /// of information. Indices are not necessarily consecutive. The index may
     /// be interleaved  with indices from `shadow_boost` and `yolked_removed`.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub replica_dusted_off: Option<(SubEvent, usize)>,
 
     /// If the player was formerly Yolked, and became no longer Yolked as a
@@ -3650,6 +3842,7 @@ pub struct PlayerAddedToTeam {
     /// of information. Indices are not necessarily consecutive. The index may
     /// be interleaved  with indices from `shadow_boost` and
     /// `replica_dusted_off`.
+    #[serde(skip_serializing_if="Option::is_none")]
     pub yolked_removed: Option<(SubEvent, usize)>,
 }
 
@@ -3658,8 +3851,9 @@ pub struct PlayersAddedToTeam {
     /// Players added to team
     pub players: Vec<PlayerAddedToTeam>,
 
-    /// If these players being added to this team caused any of them to activate a togetherness mod,
-    /// this is the metadata about that mod activating
+    /// If these players being added to this team caused any of them to activate
+    /// a togetherness mod, this is the metadata about that mod activating
+    #[serde(skip_serializing_if="Option::is_none")]
     pub stronger_together: Option<PlayerMultiTogethernessModChange>,
 
     /// Sub-event associated with adding these players to the team
@@ -3706,10 +3900,12 @@ pub struct SuccessfulTunnelsTheft {
     /// Sub-event associated with the stolen player gaining LEGENDARY
     pub artificially_forged_sub_event: SubEvent,
 
-    /// Information about any Stronger Together changes on this event
+    /// Information about any Stronger Together changes on this event, if any
+    #[serde(skip_serializing_if="Option::is_none")]
     pub stronger_together: Option<UncorrelatedTogethernessChanges>,
 }
 
+// TODO serde-tag this
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
@@ -3804,18 +4000,23 @@ pub enum TeamIncinerationReplacementSource {
         /// Sub-event associated with the new team being generated
         team_formed_sub_event: SubEvent,
 
-        /// List of players who were born onto the new team
+        /// List of players who were born onto the new team, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         new_players: Vec<TeamIncinerationReplacement>,
     },
     /// The replacement team was taken from the Hall of Flame
     Squiddish {
-        /// Sub-event associated with the replacement team gaining the Squiddish mod
+        /// Sub-event associated with the replacement team gaining the Squiddish
+        /// mod
         gained_squiddish_sub_event: SubEvent,
 
-        /// Sub-event associated with the replacement team exiting the Hall of Flame
+        /// Sub-event associated with the replacement team exiting the Hall of
+        /// Flame
         exited_hall_sub_event: SubEvent,
 
-        /// List of players on the replacement team who were resurrected by Squiddish
+        /// List of players on the replacement team who were resurrected by
+        /// Squiddish
+        #[serde(skip_serializing_if="Vec::is_empty")]
         resurrected_players: Vec<TeamIncinerationSquiddishResurrection>,
     },
 }
@@ -3852,11 +4053,12 @@ pub enum NightShiftOutcome {
         /// Nickname of the team who had the Night Shift
         team_nickname: String,
 
-        /// The position that the outgoing player used to occupy, and the incoming player now
-        /// occupies.
+        /// The position that the outgoing player used to occupy, and the 
+        /// incoming player now occupies.
         ///
-        /// This may only be lineup or rotation. The other location is not stored, because it's
-        /// always the shadows (and Night Shift was added after bench and bullpen were merged)
+        /// This may only be lineup or rotation. The other location is not 
+        /// stored, because it's always the shadows (and Night Shift was added 
+        /// after bench and bullpen were merged)
         active_location: ActivePositionType,
 
         /// Metadata for the sub-event for the clocked-in player being swapped
@@ -3889,6 +4091,30 @@ pub enum EndZone {
     TODOWhereDoesForceComeFrom,
 }
 
+
+// Check the following:
+// - Option<...> fields are annotated with `#[serde(skip_serializing_if="Option::is_none")]`,
+//   or a comment indicating that we've determined not to do so
+// - Vec<...> fields are annotated with `#[serde(skip_serializing_if="Vec::is_empty")]`,
+//   or a comment indicating that we've determined not to do so
+// - bool fields are annotated with `#[serde(skip_serializing_if="is_false")]`,
+//   or a comment indicating that we've determined not to do so
+// - Comments on all fields that may be omitted describe the circumstances under
+//   which they were omitted. "If any" should be taken to imply that the field 
+//   is omitted othwerise.
+// - Comments on fields that may be json-serialized to `null` are described as 
+//   such in the doc comments
+// - The above covers all field types that exist in this data structure which 
+//   might be empty
+// - If a comment, including a doc comment, is one sentence, it has no period
+// - If a comment, including a doc comment, is multiple paragraphs, and the 
+//   first paragraph is one sentence, the first has no trailing period but the 
+//   rest do.
+// - Otherwise, each sentence in a comment, including a doc comment, has a 
+//   trailing period.
+// - Doc comments are accurate
+// - Comments, especially doc comments, on fields of the same name in different
+//   variants are identical
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
@@ -3915,10 +4141,12 @@ pub enum FedEventData {
         weather: Weather,
 
         /// Uuid of the stadium this game is being played in, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         stadium_id: Option<Uuid>,
 
-        /// What the event type announces. Before season 20 it always announced "Let's Go!", but
-        /// starting in season 20 it started announcing the team names.
+        /// What the event type announces. Before season 20 it always announced
+        /// "Let's Go!", but starting in season 20 it started announcing the
+        /// names.
         announcement: GameStartAnnouncement,
     },
 
@@ -3935,7 +4163,8 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Whether this is the top of the inning (true) or bottom of the inning (false)
+        /// Whether this is the top of the inning (true) or bottom of the inning
+        /// (false)
         top_of_inning: bool,
 
         /// Zero-indexed inning number
@@ -3944,17 +4173,23 @@ pub enum FedEventData {
         /// Full name of the team at bat
         batting_team_name: String,
 
-        /// List of subseasonal mods that came into effect this game. All of these mods add either
-        /// Overperforming or Underperforming for the subseason.
+        /// List of subseasonal mods that came into effect this game, if any
+        /// 
+        /// All of these mods add either Overperforming or Underperforming for 
+        /// the subseason.
         ///
-        /// This array is only populated on the first HalfInning event of a game on the first game a
-        /// team plays in a given subseason (Earlseason, Midseason, Lateseason, or Postseason). Most
-        /// of the time this is the first day of the subseason, but the wildcard rounds in the
-        /// Postseason mean that some teams don't have their first game on the first day.
+        /// This array is only populated on the first HalfInning event of a game
+        /// on the first game a team plays in a given subseason (Earlseason, 
+        /// Midseason, Lateseason, or Postseason). Most of the time this is the
+        /// first day of the subseason, but the wildcard rounds in the 
+        /// Postseason mean that some teams don't have their first game on the
+        /// first day.
         ///
-        /// This is an apparent bug that only started in season 16. Player mod changes get their own
-        /// events, and team event changes get reported on the player mod change event, HalfInning
-        /// event, or Psycoachoustics event. This list may not be exhaustive.
+        /// This is an apparent bug that only started in season 16. Player mod 
+        /// changes get their own events, and team event changes get reported on
+        /// the player mod change event, HalfInning event, or Psycoachoustics 
+        /// event. This list may not be exhaustive.
+        #[serde(skip_serializing_if="Vec::is_empty")]
         team_subseasonal_mod_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
     },
 
@@ -3970,22 +4205,27 @@ pub enum FedEventData {
         /// Batter's team's nickname
         team_nickname: String,
 
-        /// The name of the player's legacy (pre-s15 election) item, if any, otherwise null. This
-        /// should always be null from season 16 onward.
+        /// The name of the player's legacy (pre-s15 election) item, if any, 
+        /// otherwise omitted. This should always be omitted from season 16 
+        /// onward.
+        #[serde(skip_serializing_if="Option::is_none")]
         wielding_item: Option<String>,
 
-        /// Details of the inhabiting player, if any, otherwise null
+        /// Details of the inhabiting player, if any, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         inhabiting: Option<Inhabiting>,
 
-        /// True if the player is Repeating
+        /// True if the player is Repeating, otherwise omitted
+        #[serde(skip_serializing_if="is_false")]
         is_repeating: bool,
 
-        /// True if the player is Skipping
+        /// True if the player is Skipping, otherwise omitted
+        #[serde(skip_serializing_if="is_false")]
         is_skipping: bool,
     },
 
-    /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
-    /// of the game
+    /// The event that announces when a Superyummy player loves or misses 
+    /// peanuts at the beginning of the game
     #[serde(rename_all = "camelCase")]
     SuperyummyGameStart {
         #[serde(flatten)]
@@ -3995,8 +4235,11 @@ pub enum FedEventData {
         toggle: TogglePerforming,
     },
 
-    /// The event that announces when a Superyummy player loves or misses peanuts at the beginning
-    /// of the game. This event has different metadata when Superyummy is Echoed.
+    /// The event that announces when a player who has Echoed Superyummy loves 
+    /// or misses peanuts at the beginning of the game. 
+    /// 
+    /// This event has different metadata than a player who is naturally 
+    /// Superyummy.
     #[serde(rename_all = "camelCase")]
     EchoedSuperyummyGameStart {
         #[serde(flatten)]
@@ -4005,8 +4248,8 @@ pub enum FedEventData {
         /// Name of the Superyummy player
         player_name: String,
 
-        /// Whether peanuts are present. Determines whether the player "loves" (true) or "misses"
-        /// (false) peanuts.
+        /// Whether peanuts are present. Determines whether the player "loves" 
+        /// (true) or "misses" (false) peanuts.
         peanuts_present: bool,
     },
 
@@ -4025,7 +4268,9 @@ pub enum FedEventData {
         /// Number of strikes in the count
         strikes: i64,
 
-        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        /// Meta about the batter's item breaking, if it broke, otherwise 
+        /// omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<(String, ItemDamaged)>,
     },
 
@@ -4044,18 +4289,25 @@ pub enum FedEventData {
         /// Number of strikes in the count
         strikes: i64,
 
-        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        /// Meta about the batter's item breaking, if it broke, otherwise 
+        /// omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<(String, ItemDamaged)>,
 
-        /// If a new Bird found a Birdhouse, this is the total number of birds in this stadium.
-        /// Otherwise null (null does not indicate there are no birds, just that there was no
-        /// Birdhouse event on this foul ball). Note there can be negative birds.
+        /// If a new Bird found a Birdhouse, this is the total number of birds 
+        /// in this stadium. Otherwise omitted (omission does not indicate there
+        /// are no birds, just that there was no Birdhouse event on this foul 
+        /// ball). Note there can be negative birds.
+        #[serde(skip_serializing_if="Option::is_none")]
         birds: Option<i64>,
 
-        /// True if this was a Very foul ball (or balls), false otherwise.
+        /// True if this was a Very foul ball (or balls), omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         very_foul: bool,
 
-        /// True if this was an Offworld foul ball (or balls), false otherwise.
+        /// True if this was an Offworld foul ball (or balls), omitted 
+        /// otherwise
+        #[serde(skip_serializing_if="is_false")]
         offworld: bool,
     },
 
@@ -4074,7 +4326,9 @@ pub enum FedEventData {
         /// Number of strikes in the count
         strikes: i64,
 
-        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        /// If the pitcher's item was damaged, information about the damage. 
+        /// Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
@@ -4093,7 +4347,9 @@ pub enum FedEventData {
         /// Number of strikes in the count
         strikes: i64,
 
-        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        /// If the pitcher's item was damaged, information about the damage. 
+        /// Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
@@ -4109,11 +4365,13 @@ pub enum FedEventData {
         /// Number of balls in the count
         balls: i64,
 
-        /// Number of strikes in the count. Should always be 0, but still present in the data for
-        /// forward-compatibility and convenience.
+        /// Number of strikes in the count. Should always be 0, but still 
+        /// present in the data for forward-compatibility and convenience.
         strikes: i64,
 
-        /// If the pitcher's item was damaged, information about the damage. Otherwise null
+        /// If the pitcher's item was damaged, information about the damage. 
+        /// Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
     },
 
@@ -4135,41 +4393,59 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::Flyout>>,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null. Note that scoring players losing Inhabiting is inside `scores`.
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted
+        /// 
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
-        /// Hot mod, otherwise null.
+        /// If the batter was Red Hot and cooled off, contains metadata about 
+        /// them losing the Red Hot mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        /// 
+        /// Usually this can be inferred from other fields. However, the early
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// If the batter has Debt and hit the fielder with the ball, this contains the information
-        /// about adding Unstable/Observed/whatever. Otherwise it will be null.
+        /// If the batter has Debt and hit the fielder with the ball, this 
+        /// contains the information about adding Unstable/Observed/whatever. 
+        /// Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_debt: Option<BatterDebt>,
 
         /// Damage that the batter's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<ItemDamaged>,
 
         /// Damage that the fielder's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         fielder_item_damage: Option<ItemDamaged>,
 
-        /// Damage that any non-batter and non-fielder player's item took, if any. It's not possible
-        /// to know the role of the other player (pitcher, runner?) from the event alone.
+        /// Damage that any non-batter and non-fielder player's item took, if 
+        /// any. 
+        /// 
+        /// It's not possible to know the role of the other player (pitcher, 
+        /// runner?) from the event alone.
+        #[serde(skip_serializing_if="Option::is_none")]
         other_player_item_damage: Option<(String, ItemDamaged)>,
 
-        /// If there was a parasite blooddrain on this strikeout, contains information about it.
-        /// Otherwise null.
+        /// If there was a parasite blooddrain on this strikeout, contains 
+        /// information about it. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         parasite: Option<Parasite>,
     },
 
-    /// A simple ground out. This includes sacrifices but does not include fielder's choices or
-    /// double plays.
+    /// A simple ground out. This includes sacrifices but does not include 
+    /// fielder's choices or double plays.
     #[serde(rename_all = "camelCase")]
     GroundOut {
         #[serde(flatten)]
@@ -4190,41 +4466,60 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::GroundOut>>,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
-        /// Hot mod, otherwise null.
+        /// If the batter was Red Hot and cooled off, contains metadata about 
+        /// them losing the Red Hot mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        /// 
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// If the batter has Debt and hit the fielder with the ball, this contains the information
-        /// about adding Unstable/Observed/whatever. Otherwise it will be null.
+        /// If the batter has Debt and hit the fielder with the ball, this 
+        /// contains the information about adding Unstable/Observed/whatever. 
+        /// Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_debt: Option<BatterDebt>,
 
         /// Damage that the batter's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<ItemDamaged>,
 
         /// Damage that the pitcher's item took from catching the out, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage_from_out: Option<(String, ItemDamaged)>,
 
-        /// Damage that the pitcher's item took from the runner advancing, if any
+        /// Damage that the pitcher's item took from the runner advancing, if 
+        /// any
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage_from_advance: Option<(String, ItemDamaged)>,
 
         /// Damage that the fielder's item took from catching the out, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         fielder_item_damage_from_out: Option<ItemDamaged>,
 
-        /// Damage that the fielder's item took from the runner advancing, if any
+        /// Damage that the fielder's item took from the runner advancing, if 
+        /// any
+        #[serde(skip_serializing_if="Option::is_none")]
         fielder_item_damage_from_advance: Option<ItemDamaged>,
 
-        /// If this ground out popped a Flooding Balloon, contains the stadium name and birds scared
-        /// away. Otherwise null.
+        /// If this ground out popped a Flooding Balloon, contains the stadium 
+        /// name and birds scared away. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         flood_balloon_popped: Option<BalloonsPopped>,
     },
 
@@ -4249,22 +4544,34 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::FieldersChoice>>,
 
-        /// If the runner was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null. Scoring players losing the Inhabiting mod is included in `scores`.
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
-        /// Hot mod, otherwise null.
+        /// If the batter was Red Hot and cooled off, contains metadata about 
+        /// them losing the Red Hot mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        ///
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// Items that were damaged, if any. Like home runs there isn't enough information to
-        /// properly attribute the damage to pitchers, batters, fielders, and runners.
+        /// Items that were damaged, if any 
+        /// 
+        /// Like home runs there isn't enough information to properly attribute 
+        /// the damage to pitchers, batters, fielders, and runners.
+        #[serde(skip_serializing_if="Vec::is_empty")]
         damaged_items: Vec<(String, ItemDamaged)>,
     },
 
@@ -4282,21 +4589,28 @@ pub enum FedEventData {
 
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::DoublePlay>>,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
-        /// Hot mod, otherwise null.
+        /// If the batter was Red Hot and cooled off, contains metadata about 
+        /// them losing the Red Hot mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// If the pitcher's item was damage, includes the pitcher's name and details about the item
-        /// being damaged
+        /// If the pitcher's item was damage, includes the pitcher's name and 
+        /// details about the item being damaged
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
 
-        /// If this ground out popped a Flooding Balloon, contains the stadium name and birds scared
-        /// away. Otherwise null.
+        /// If this ground out popped a Flooding Balloon, contains the stadium 
+        /// name and birds scared away. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         flood_balloon_popped: Option<BalloonsPopped>,
     },
 
@@ -4324,30 +4638,49 @@ pub enum FedEventData {
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
 
-        /// If the batter was Red Hot and cooled off, contains metadata about them losing the Red
-        /// Hot mod, otherwise null. The batter is not supposed to cool off when getting a hit, but
-        /// on at least one occasion (a16405db-107a-473c-acbf-2834d71834e0) it happened (and on the
-        /// same event as they became spicy), presumably because of a bug.
-        cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
-        /// Otherwise null.
+        /// If the batter was Red Hot and cooled off, contains metadata about 
+        /// them losing the Red Hot mod, otherwise omitted
+        /// 
+        /// The batter is not supposed to cool off when getting a hit, but on at
+        /// least one occasion (a16405db-107a-473c-acbf-2834d71834e0) it 
+        /// happened (and on the same event as they became spicy), presumably 
+        /// because of a bug.
+        #[serde(skip_serializing_if="Option::is_none")]
+        cooled_off: Option<ModChangeSubEventWithPlayer>,
+        
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+
+        /// `true` if the event was a Special type, otherwise omitted 
+        ///
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
         /// Damage that the pitcher's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
 
         /// Damage that the batter's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<ItemDamaged>,
 
-        /// Damage that any non-batter player's item took, if any. It's not possible to know the
-        /// role of the other player (pitcher, fielder, runner?) from the event alone.
+        /// Damage that any non-batter player's item took, if any. 
+        /// 
+        /// It's not possible to know the role of the other player (pitcher, 
+        /// fielder, runner?) from the event alone.
+        #[serde(skip_serializing_if="Option::is_none")]
         other_player_item_damage: Option<(String, ItemDamaged)>,
     },
 
@@ -4360,8 +4693,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         pitch: GamePitch,
 
-        /// If this is a Magmatic home run, the metadata for the event where the batter loses the
-        /// Magmatic mod, otherwise null
+        /// If this is a Magmatic home run, the metadata for the event where 
+        /// the batter loses the Magmatic mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         magmatic: Option<ModChangeSubEvent>,
 
         /// Name of the batter who hit the home run
@@ -4372,57 +4706,79 @@ pub enum FedEventData {
 
         /// Type of home run
         home_run_type: HomeRunType,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// List of players who used a Free Refill
+        /// List of players who used a Free Refill, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         free_refills: Vec<FreeRefill>,
 
         /// The Spicy status of the batter
         spicy_status: SpicyStatus,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        ///
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// True if the ball landed in a Big Bucket and scored an extra Run, false otherwise
+        /// True if the ball landed in a Big Bucket and scored an extra Run, 
+        /// omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         big_bucket: bool,
 
-        /// Info about an Attractor being Attracted, if any. Otherwise null.
+        /// Info about an Attractor being Attracted, if any. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         attraction: Option<AttractionWithPlayer>,
 
-        /// Info about player items that were damaged, if any.
+        /// Info about player items that were damaged, if any
         ///
-        /// Home Run events don't really give enough information to attribute these damages to
-        /// anybody. We could compare the name to the batter name, but since batters can also be
-        /// on base that doesn't really give us any certain information.
+        /// Home Run events don't really give enough information to attribute 
+        /// these damages to anybody. We could compare the name to the batter 
+        /// name, but since batters can also be on base that doesn't really give
+        /// us any certain information.
+        #[serde(skip_serializing_if="Vec::is_empty")]
         damaged_items: Vec<(String, ItemDamaged)>,
 
         /// If this was a Holiday Inning, contains the Hotel Motel parties
+        #[serde(skip_serializing_if="Vec::is_empty")]
         hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
 
         /// If the home run caused Shame, the metadata about the hype event
         shame: HomeRunShame,
 
-        /// TODO Describe alley oops
+        /// If a player went for an alley oop, the player's name and whether 
+        /// they succeeded. Otherwise omitted. 
+        #[serde(skip_serializing_if="Option::is_none")]
         alley_oop: Option<(String, bool)>,
 
-        /// Starting in s20 there's a separate RunsScored sub-event. This contains that information,
-        /// if applicable. There are also effects attached to scoring in general, rather than each
-        /// individual Run scored, and those also appear here.
+        /// Starting in s20 there's a separate RunsScored sub-event. This 
+        /// contains that information, if applicable. 
+        /// 
+        /// There are also effects attached to scoring in general, rather than 
+        /// each individual Run scored, and those also appear here.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<HomeRunLedger>>,
 
-        /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons
-        /// were inflated. Otherwise null.
-        // This may need to be extended to support number of balloons.
+        /// If this Score inflated Balloons, this is the name of the stadium in
+        /// which the Balloons were inflated. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons_inflated: Option<String>,
 
-        /// If this home run popped some Balloons, this contains the name of the stadium whose
-        /// balloons were popped and the number of birds that were scared away.
+        /// If this home run popped some Balloons, this contains the name of 
+        /// the stadium whose balloons were popped and the number of birds that 
+        /// were scared away. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons_popped: Option<BalloonsPopped>,
     },
 
@@ -4444,34 +4800,48 @@ pub enum FedEventData {
         /// Whether this player scored with Blaserunning
         blaserunning: bool,
 
-        /// Free Refill data if one was used, otherwise null
+        /// Free Refill data if one was used, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         free_refill: Option<FreeRefill>,
 
-        /// Baserunner item damage if any, otherwise null
+        /// Baserunner item damage if any, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         runner_item_damage: Option<ItemDamaged>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        ///
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// If this event caused Shame, the metadata about the Shame, including any associated Hype
+        /// If this event caused Shame, the metadata about the Shame, including
+        /// any associated Hype
         shame: Shame,
 
-        /// Score summary effects, if applicable. This will be populated if the season is 20 or
-        /// later and either the base stolen was home or if blaserunning is true, otherwise null.
+        /// Score summary effects, if applicable
+        /// 
+        /// This will be populated if the season is 20 or later and either the 
+        /// base stolen was home or if blaserunning is true, otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<StolenBaseLedger>>,
 
-        /// If this Score inflated Balloons, this is the name of the stadium in which the Balloons
-        /// were inflated. Otherwise null.
+        /// If this Score inflated Balloons, this is the name of the stadium in
+        /// which the Balloons were inflated. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<String>,
 
         /// Info about the Hotel Motel party on this score, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         hotel_motel_party: Option<HotelMotelParty>,
 
-        /// If the player took The Fifth Base, contains info about the stadium losing the mod, the
-        /// player gaining the item, and the player possibly dropping their previous item
+        /// If the player took The Fifth Base, contains info about the stadium 
+        /// losing the mod, the player gaining the item, and the player possibly
+        /// dropping their previous item. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         took_the_fifth_base: Option<TookTheFifthBase>,
     },
 
@@ -4487,10 +4857,12 @@ pub enum FedEventData {
         /// Which base they tried to steal
         base_stolen: Base,
 
-        /// Runner item damage if any, otherwise null
+        /// Runner item damage if any, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         runner_item_damage: Option<ItemDamaged>,
 
-        /// Fielder item damage if any, otherwise null
+        /// Fielder item damage if any, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         // TODO do this in a way that serializes nicely
         fielder_item_damage: Option<(String, ItemDamaged)>,
     },
@@ -4506,31 +4878,46 @@ pub enum FedEventData {
 
         /// Name of batter who struck out swinging
         batter_name: String,
-
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        
+        /// If the batter was Inhabiting, contains metadata about the player 
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring 
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// Information about the pitcher's item being damaged, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
 
-        /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
-        /// thanks to Triple Threat.
+        /// Free Refill data if one was used, otherwise omitted 
+        /// 
+        /// Free refills can happen on strikeouts thanks to Triple Threat
+        #[serde(skip_serializing_if="Option::is_none")]
         free_refill: Option<FreeRefill>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players got Unrun strikeouts the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted 
+        ///
+        /// Usually this can be inferred from other fields. However, the early 
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that 
+        /// there are other circumstances that cause an otherwise-undetectable 
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// If there was a parasite blooddrain on this strikeout, contains information about it.
-        /// Otherwise null.
+        /// If there was a parasite blooddrain on this strikeout, contains
+        /// information about it. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         parasite: Option<Parasite>,
 
-        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
-        /// attaching effects (such as Balloons) to the score summary. This contains that
-        /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
+        /// Starting in season 20 the sim started outputting score summary
+        /// events (RunsScored) and attaching effects (such as Balloons) to the
+        /// score summary. This contains that information.
+        ///
+        /// Runs can be scored on Strikeout events thanks to Triple Threat.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<TripleThreatLedger>>,
     },
 
@@ -4546,34 +4933,47 @@ pub enum FedEventData {
         /// Name of batter who struck out looking
         batter_name: String,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        /// If the batter was Inhabiting, contains metadata about the player
+        /// losing the Inhabiting mod, otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
         /// Information about the pitcher's item being damaged, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
 
-        /// Free Refill data if one was used, otherwise null. Free refills can happen on strikeouts
-        /// thanks to Triple Threat.
+        /// Free Refill data if one was used, otherwise omitted
+        ///
+        /// Free refills can happen on strikeouts thanks to Triple Threat
+        #[serde(skip_serializing_if="Option::is_none")]
         free_refill: Option<FreeRefill>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players got Unrun strikeouts the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+        /// `true` if the event was a Special type, otherwise omitted
+        ///
+        /// Usually this can be inferred from other fields. However, the early
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that
+        /// there are other circumstances that cause an otherwise-undetectable
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
-        /// If there was a parasite blooddrain on this strikeout, contains information about it.
-        /// Otherwise null.
+        /// If there was a parasite blooddrain on this strikeout, contains
+        /// information about it. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         parasite: Option<Parasite>,
 
-        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
-        /// attaching effects (such as Balloons) to the score summary. This contains that
-        /// information. Runs can be scored on Strikeout events thanks to Triple Threat.
+        /// Starting in season 20 the sim started outputting score summary
+        /// events (RunsScored) and attaching effects (such as Balloons) to the
+        /// score summary. This contains that information.
+        ///
+        /// Runs can be scored on Strikeout events thanks to Triple Threat.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<TripleThreatLedger>>,
 
-        /// If Balloons were inflated as a result of this Strikeout (via Triple Threat), this is the
-        /// name of the  Stadium. Otherwise `null`.
+        /// If this Score inflated Balloons, this is the name of the stadium in
+        /// which the Balloons were inflated. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<String>,
     },
 
@@ -4595,27 +4995,41 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::Walk>>,
 
-        /// If the batter went to a later base with Base Instincts, this is the base they went to.
-        /// Otherwise null.
+        /// If the batter went to a later base with Base Instincts, this is the
+        /// base they went to. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         base_instincts: Option<Base>,
 
         /// Damage that the batter's item took, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<ItemDamaged>,
 
-        /// Damage that the pitcher's item took, if any, and the assumed pitcher's name
+        /// Damage that the pitcher's item took, if any, and the assumed
+        /// pitcher's name
         ///
-        /// The pitcher's name is not known outside of this case, so we assume that any item damage
-        /// for a player other than the batter is for the pitcher
+        /// The pitcher's name is not known outside of this case, so we assume
+        /// that any item damage for a player other than the batter is for the
+        /// pitcher
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<(String, ItemDamaged)>,
 
-        /// If the batter was Haunting, this contains metadata about removing the Inhabiting mod.
-        /// Otherwise null.
+        /// If the batter was Inhabiting, contains metadata about the player
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// If the event was a Special type. Usually this can be inferred from other fields.
-        /// However, the early Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that there are other
-        /// circumstances that cause an otherwise-undetectable Special event.)
+
+        /// `true` if the event was a Special type, otherwise omitted
+        ///
+        /// Usually this can be inferred from other fields. However, the early
+        /// Expansion Era, when players scored with Tired or Wired the event was
+        /// Special but that was the only way of knowing. (It's possible that
+        /// there are other circumstances that cause an otherwise-undetectable
+        /// Special event.)
+        #[serde(skip_serializing_if="is_false")]
         is_special: bool,
     },
 
@@ -4628,7 +5042,10 @@ pub enum FedEventData {
         /// Which inning just ended (one-indexed)
         inning_num: i64,
 
-        /// List of pitchers who lost Triple Threat. Should be at most two players.
+        /// List of pitchers who lost Triple Threat, if any
+        ///
+        /// This will be omitted, 1 player, or 2 players
+        #[serde(skip_serializing_if="Vec::is_empty")]
         lost_triple_threat: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
@@ -4650,12 +5067,17 @@ pub enum FedEventData {
         /// Name of the player who was charmed
         charmed_name: String,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+
+        /// If the batter was Inhabiting, contains metadata about the player
+        /// losing the Inhabiting mod, otherwise omitted.
+        ///
+        /// Note that this only reports batters losing Inhabiting. Scoring
+        /// players losing Inhabiting is inside `scores`.
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-        /// Number of swings the player was charmed into making. Should be 3 ordinarily and 4 for
-        /// players with The Fourth Strike.
+        /// Number of swings the player was charmed into making. Should be 3
+        /// ordinarily and 4 for players with The Fourth Strike.
         num_swings: i64,
     },
 
@@ -4696,10 +5118,12 @@ pub enum FedEventData {
         /// Score of the team who lost
         losing_team_score: f32,
 
-        /// Information about a temp stolen player being returned at the end of the game, if
-        /// applicable. Otherwise null.
+        /// Information about a temp stolen player being returned at the end of
+        /// the game, if applicable. Otherwise omitted.
         ///
-        /// Sometimes this information is on the GameOver event instead (TODO: when?)
+        /// Sometimes this information is on the GameOver event instead
+        /// TODO: when?
+        #[serde(skip_serializing_if="Option::is_none")]
         temp_stolen_player_returned: Option<PlayerMovedTeams>,
     },
 
@@ -4721,8 +5145,10 @@ pub enum FedEventData {
         /// Number of strikes in the count
         strikes: i64,
 
-        /// Whether runners advance on the pathetic play (I believe runners always advance if there
-        /// are any runners at all)
+        /// Whether runners advance on the pathetic play
+        ///
+        /// TODO Check the following:
+        /// I believe runners always advance if there are any runners at all
         runners_advance: bool,
 
         #[serde(flatten)]
@@ -4775,14 +5201,22 @@ pub enum FedEventData {
         /// True if the player gained the mod, false if they lost it
         gained_mod: bool,
 
-        /// Metadata of the sub-event associated with adding or removing the Tired/Wired mod
+        /// Metadata of the sub-event associated with adding or removing the
+        /// Tired/Wired mod
         sub_event: SubEvent,
 
-        /// Uuid for the team whose player was Beaned. Sometimes this is null and I don't know why
+        /// Uuid for the team whose player was Beaned, if available
+        ///
+        /// Sometimes this is omittead for unknown reasons. If you know, please
+        /// tell me in the GitHub issues or to beiju#9630 in SIBR.
+        #[serde(skip_serializing_if="Option::is_none")]
         team_id: Option<Uuid>,
 
-        /// The mod this player previously had, if any. This isn't visible in the text of the event
-        /// but it is in the metadata.
+        /// The mod this player previously had, if any.
+        ///
+        /// This isn't visible in the text of the event, but it is in the
+        /// metadata
+        #[serde(skip_serializing_if="Option::is_none")]
         previous: Option<CoffeeBeanMod>,
     },
 
@@ -4798,22 +5232,27 @@ pub enum FedEventData {
         /// Name of player who became magmatic
         player_name: String,
 
-        /// True if the player is Unstable, false otherwise
+        /// True if the player is Unstable, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_unstable: bool,
 
-        /// Information about the player getting the Magmatic mod, if applicable. If the player was
-        /// already Magmatic, this will be null
+        /// Information about the player getting the Magmatic mod, if applicable
+        ///
+        /// If the player was already Magmatic, this will be omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         magmatic_mod_added: Option<ModChangeSubEvent>,
     },
 
-    /// Blooddrain event that results in player gaining the stolen blood (as opposed to using it to
-    /// add/remove an out, strike. etc.), whether siphon or not
+    /// Blooddrain event that results in player gaining the stolen blood (as
+    /// opposed to using it to add/remove an out, strike. etc.), whether siphon
+    /// or not
     #[serde(rename_all = "camelCase")]
     Blooddrain {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Whether this was the result of a Siphon
+        /// `true` if this was the result of a Siphon, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_siphon: bool,
 
         /// Attribute category that was sipped
@@ -4822,15 +5261,18 @@ pub enum FedEventData {
         /// Player who did the sippy
         sipper: PlayerStatChange,
 
-        /// Metadata for the sub-event associated with activating Maintenance Mode, if applicable
+        /// Metadata for the sub-event associated with activating Maintenance
+        /// Mode, if it activated
         // TODO: Should this be on PlayerStatChange?
+        #[serde(skip_serializing_if="Option::is_none")]
         maintenance_mode: Option<MaintenanceMode>,
 
         /// Player who was sipped
         sipped: PlayerStatChange,
     },
 
-    /// Blooddrain event that results in a special action (add/remove an out, strike, etc.)
+    /// Blooddrain event that results in a special action (add/remove an out,
+    /// strike, etc.)
     #[serde(rename_all = "camelCase")]
     SpecialBlooddrain {
         #[serde(flatten)]
@@ -4858,17 +5300,21 @@ pub enum FedEventData {
         #[serde(flatten)]
         action: BlooddrainAction,
 
-        /// Metadata for the sub-event associated with the player stat change event
+        /// Metadata for the sub-event associated with the player stat change
+        /// event
         sipped_event: SubEvent,
 
-        /// Player's rating before the stats changed. The rating category is stored externally. Rating
-        /// is equivalent to stars but is on an 0-1 scale rather than an 0-5 scale.
+        /// Player's rating before the stats changed
+        ///
+        /// The rating category is stored externally. Rating is equivalent to
+        /// stars but is on an 0-1 scale rather than an 0-5 scale.
         rating_before: f64,
 
         /// Player's rating after the stats changed
         rating_after: f64,
 
-        /// If maintenance mode activated, contains metadata about that event. Otherwise null.
+        /// If maintenance mode activated, contains metadata about that event
+        #[serde(skip_serializing_if="Option::is_none")]
         maintenance_mode: Option<SubEvent>,
     },
 
@@ -4884,7 +5330,8 @@ pub enum FedEventData {
         /// Name of the player whose mod(s) expired
         player_name: String,
 
-        /// The mod(s) that were removed
+        /// The mod(s) that were removed, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         mods: Vec<ModRemoval>,
 
         /// Duration after which the mod(s) were removed (game, week, or season)
@@ -4900,14 +5347,17 @@ pub enum FedEventData {
         /// Nickname the team whose mod(s) expired
         team_nickname: String,
 
-        /// The mod(s) that were removed
+        /// The mod(s) that were removed, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         mods: Vec<ModRemoval>,
 
         /// Duration after which the mod(s) were removed (game, week, or season)
         mod_duration: ModDuration,
     },
 
-    /// Birds Circle event. This event always has the same text ("The Birds circle ... but they
+    /// Birds Circle event
+    ///
+    /// This event always has the same text ("The Birds circle ... but they
     /// don't find what they're looking for") and almost no metadata
     #[serde(rename_all = "camelCase")]
     BirdsCircle {
@@ -4915,8 +5365,9 @@ pub enum FedEventData {
         game: GameEvent,
     },
 
-    /// Batter is ambushed by crows, leading to an out. This can happen randomly or as a result of
-    /// the Friend of Crows mod
+    /// Batter is ambushed by crows, leading to an out
+    ///
+    /// This can happen randomly or as a result of the Friend of Crows mod
     #[serde(rename_all = "camelCase")]
     AmbushedByCrows {
         #[serde(flatten)]
@@ -4928,13 +5379,16 @@ pub enum FedEventData {
         /// Name of batter who was ambushed
         batter_name: String,
 
-        /// If this is a Friends of Crows proc, the uuid and name of the pitcher who called upon
-        /// their friends
+        /// If this is a Friends of Crows proc, the uuid and name of the pitcher
+        /// who called upon their friends. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         friend_of_crows: Option<PitcherNameId>,
     },
 
-    /// Sun2 set a Win. This version of the event shows up in the Outcomes section and is separate
-    /// from the version that shows up in the game log.
+    /// Sun2 set a Win
+    ///
+    /// This version of the event shows up in the Outcomes section and is
+    /// separate from the version that shows up in the game log
     #[serde(rename_all = "camelCase")]
     Sun2SetWin {
         /// Uuid of team who earned the Win
@@ -4944,8 +5398,10 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
-    /// Black hole swallowed a win. This version of the event shows up in the Outcomes section and
-    /// is separate from the version that shows up in the game log.
+    /// Black hole swallowed a Win
+    ///
+    /// This version of the event shows up in the Outcomes section and is
+    /// separate from the version that shows up in the game log
     #[serde(rename_all = "camelCase")]
     BlackHoleSwallowedWin {
         /// Uuid of team whose Win was swallowed
@@ -4955,8 +5411,10 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
-    /// Sun2 set a Win. This version of the event shows up in the game log and is separate from the
-    /// version that shows up in the Outcomes section.
+    /// Sun2 set a Win
+    ///
+    /// This version of the event shows up in the game log and is separate from
+    /// the version that shows up in the Outcomes section
     // TODO Unify the two sun2 events?
     #[serde(rename_all = "camelCase")]
     Sun2 {
@@ -4966,16 +5424,21 @@ pub enum FedEventData {
         /// Nickname of team who earned the Win
         scoring_team_nickname: String,
 
-        /// If a player caught some rays, info about the player's attribute increase, otherwise null
+        /// If a player caught some rays, info about the player's attribute
+        /// increase, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         caught_some_rays: Option<PlayerStatChange>,
 
-        /// Starting in s20, wins had a SubEvent associated with them. This is the metadata for that
-        /// sub
+        /// Starting in s20, wins had a SubEvent associated with them. This is
+        /// the metadata for that event. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         win_event: Option<WinSubEvent>,
     },
 
-    /// Black hole swallowed a win. This version of the event shows up in the game log and is
-    /// separate from the version that shows up in the Outcomes section.
+    /// Black hole swallowed a win
+    ///
+    /// This version of the event shows up in the game log and is separate from
+    /// the version that shows up in the Outcomes section
     #[serde(rename_all = "camelCase")]
     BlackHole {
         #[serde(flatten)]
@@ -4987,12 +5450,14 @@ pub enum FedEventData {
         /// Nickname of the team whose Win was swallowed
         victim_team_nickname: String,
 
-        /// If a player was Carcinized on this event, contains details about the carcinization.
-        /// Otherwise null.
+        /// If a player was Carcinized on this event, contains details about the
+        /// carcinization. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         carcinization: Option<Carcinization>,
 
-        /// If a player was compressed by gamma on this event, contains details about the stat
-        /// change. Otherwise null.
+        /// If a player was compressed by gamma on this event, contains details
+        /// about the stat change. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         compressed_by_gamma: Option<PlayerStatChange>,
 
         /// In s20, the Black Hole started burping out Wins, which have a Win
@@ -5058,10 +5523,14 @@ pub enum FedEventData {
         /// Name of the pitcher that was charmed
         pitcher_name: String,
 
-        /// Meta about the pitcher's item breaking, if it broke, otherwise null.
+        /// Meta about the pitcher's item breaking, if it broke. Otherwise
+        /// omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         pitcher_item_damage: Option<ItemDamaged>,
 
-        /// Meta about the batter's item breaking, if it broke, otherwise null.
+        /// Meta about the batter's item breaking, if it broke. Otherwise
+        /// omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         batter_item_damage: Option<ItemDamaged>,
 
         #[serde(flatten)]
@@ -5074,9 +5543,12 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the team of the player who gained the Free Refill. This will be null if the
-        /// player is Inhabiting a Haunted player and they died before team ids were stored in the
-        /// player object (i.e. during Discipline)
+        /// Uuid of the team of the player who gained the Free Refill
+        ///
+        /// This will be omitted if the player is Inhabiting a Haunted player
+        /// and they died before team ids were stored in the player object (i.e.
+        /// during Discipline)
+        #[serde(skip_serializing_if="Option::is_none")]
         team_id: Option<Uuid>,
 
         /// Uuid of player who gained the Free Refill
@@ -5093,12 +5565,15 @@ pub enum FedEventData {
         /// This will always be a length-2 array
         ingredients: [String; 2],
 
-        /// Metadata for the sub-event associated with the Free Refill mod-added event
+        /// Metadata for the sub-event associated with the Free Refill mod-added
+        /// event
         sub_event: SubEvent,
     },
 
-    /// Player suffered an allergic reaction (note: yummy reactions and the Feed never coexisted,
-    /// so all peanut reactions in the Feed were allergic)
+    /// Player suffered an allergic reaction
+    ///
+    /// Note: yummy reactions and the Feed never coexisted, so all peanut
+    /// reactions in the Feed were allergic
     #[serde(rename_all = "camelCase")]
     AllergicReaction {
         #[serde(flatten)]
@@ -5113,7 +5588,8 @@ pub enum FedEventData {
         /// Name of the player who suffered the allergic reaction
         player_name: String,
 
-        /// Metadata for the sub-event associated with the player stat change event
+        /// Metadata for the sub-event associated with the player stat change
+        /// event
         sub_event: SubEvent,
 
         /// Player rating before the stat change
@@ -5122,8 +5598,9 @@ pub enum FedEventData {
         /// Player rating after the stat change
         rating_after: f64,
 
-        /// Starting in s20, there's an additional child event for the weather proc. This is the
-        /// information in that event, if applicable.
+        /// Starting in s20, there's an additional child event for the weather
+        /// proc. This is the information in that event, if applicable.
+        #[serde(skip_serializing_if="Option::is_none")]
         weather_event: Option<SubEvent>,
     },
 
@@ -5142,7 +5619,8 @@ pub enum FedEventData {
         /// Name of the player who suffered the allergic reaction
         player_name: String,
 
-        /// Metadata for the sub-event associated with the player stat change event
+        /// Metadata for the sub-event associated with the player stat change
+        /// event
         sub_event: SubEvent,
 
         /// Player rating before the stat change
@@ -5168,12 +5646,15 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// The two players involved in the feedback. I believe the first is always the initiator,
-        /// as indicated by Flickering, but I'm not sure.
-        players: (FeedbackPlayerData, FeedbackPlayerData),
+        /// The two players involved in the feedback. I believe the first is
+        /// always the initiator, as indicated by Flickering, but I'm not sure.
+        players: [FeedbackPlayerData; 2],
 
-        /// If LCD soundsystem was in effect, the boost events for the players. This is in the same
-        /// order as `players`.
+        /// If LCD soundsystem was in effect, the boost events for the players,
+        /// otherwise omitted
+        ///
+        /// If it exists, this is in the same order as `players`
+        #[serde(skip_serializing_if="Option::is_none")]
         lcd_soundsystem: Option<(PlayerBoostSubEvent, PlayerBoostSubEvent)>,
 
         /// The position of the players that were swapped
@@ -5182,8 +5663,9 @@ pub enum FedEventData {
         /// Metadata for the `PlayerTraded` sub-event
         sub_event: SubEvent,
 
-        /// Starting in s20, there's an additional child event for the weather proc. This is the
-        /// information in that event, if applicable.
+        /// Starting in s20, there's an additional child event for the weather
+        /// proc. This is the information in that event, if applicable.
+        #[serde(skip_serializing_if="Option::is_none")]
         weather_event: Option<SubEvent>,
     },
 
@@ -5218,16 +5700,17 @@ pub enum FedEventData {
         /// Nickname of team who got reverbed
         team_nickname: String,
 
-        /// Type of reverb that happened, with metadata for the associated `ReverbRosterShuffle`
-        /// sub-event
+        /// Type of reverb that happened, with metadata for the associated
+        /// `ReverbRosterShuffle` sub-event
         #[serde(flatten)]
         reverb_type: ReverbType,
 
         /// Players who were kept in place with Gravity
         gravity_players: Vec<PlayerNameId>,
 
-        /// Starting in s20, there's an additional child event for the weather proc. This is the
-        /// information in that event, if applicable.
+        /// Starting in s20, there's an additional child event for the weather
+        /// proc. This is the information in that event, if applicable.
+        #[serde(skip_serializing_if="Option::is_none")]
         weather_event: Option<SubEvent>,
     },
 
@@ -5237,24 +5720,30 @@ pub enum FedEventData {
         /// Tarot reading description
         description: String,
 
-        /// Metadata associated with the tarot reading. This is vague on purpose to be generic.
+        /// Metadata associated with the tarot reading. This is vague on
+        /// purpose to be generic.
         #[with_structure(ignore)]
         metadata: serde_json::Value,
 
-        /// Uuids of players involved in this tarot reading. This is vague on purpose to be generic.
+        /// Uuids of players involved in this tarot reading. This is vague on
+        /// purpose to be generic.
         player_tags: Vec<Uuid>,
 
-        /// Uuids of teams involved in this tarot reading. This is vague on purpose to be generic.
+        /// Uuids of teams involved in this tarot reading. This is vague on
+        /// purpose to be generic.
         team_tags: Vec<Uuid>,
     },
 
     /// Added or removed a mod as a result of a Tarot reading
     #[serde(rename_all = "camelCase")]
     TarotReadingAddedOrRemovedMod {
-        /// Uuid of team who gained/lost the mod or team of player who gained/lost the mod
+        /// Uuid of team who gained/lost the mod or team of player who gained/
+        /// lost the mod
         team_id: Uuid,
 
-        /// Uuid of player who gained/lost the mod, if it was a player. Null if it was a team.
+        /// Uuid of player who gained/lost the mod, if it was a player. Omitted
+        /// if it was a team.
+        #[serde(skip_serializing_if="Option::is_none")]
         player_id: Option<Uuid>,
 
         /// Description of the event that added/removed the mod
@@ -5269,7 +5758,9 @@ pub enum FedEventData {
         /// True if the mod was lost, false if it was gained
         mod_removed: bool,
 
-        /// If this mod removal caused other mods to be removed, this is that
+        /// If this mod removal caused other mods to be removed, this is that.
+        /// Otherwise null.
+        #[serde(skip_serializing_if="Option::is_none")]
         mods_removed_from_other_mod: Option<ModsFromAnotherModRemovedWithName>,
     },
 
@@ -5289,8 +5780,8 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Add mod events for the players who became Triple Threat. This array will be either 1 or
-        /// 2 entries.
+        /// Add mod events for the players who became Triple Threat.
+        /// This array will be either 1 or 2 entries.
         pitchers: Vec<ModChangeSubEventWithNamedPlayer>,
     },
 
@@ -5312,7 +5803,8 @@ pub enum FedEventData {
         /// Whether Over Under turned on or off
         on: bool,
 
-        /// Metadata for the sub-event associated with adding or removing Overperforming
+        /// Metadata for the sub-event associated with adding or removing
+        /// Overperforming
         sub_event: SubEvent,
     },
 
@@ -5334,7 +5826,8 @@ pub enum FedEventData {
         /// Whether Over Under turned on or off
         on: bool,
 
-        /// Metadata for the sub-event associated with adding or removing Underperforming
+        /// Metadata for the sub-event associated with adding or removing
+        /// Underperforming
         sub_event: SubEvent,
     },
 
@@ -5428,8 +5921,10 @@ pub enum FedEventData {
         /// Number of votes team spent on the ballpark
         votes: i64,
 
-        /// Whether this was the first ballpark. There was a slightly different message for the
-        /// first one.
+        /// `true` if this was the first ballpark, otherwise omitted
+        ///
+        /// There was a slightly different message for the first one.
+        #[serde(skip_serializing_if="is_false")]
         is_first: bool,
     },
 
@@ -5468,25 +5963,33 @@ pub enum FedEventData {
         /// List of effects in the order in which they occurred
         effects: Vec<FloodingSweptEffect>,
 
-        /// List of players who used a Free Refill
+        /// List of players who used a Free Refill, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         free_refills: Vec<FreeRefill>,
 
-        /// Whether the Flood Pumps activated
+        /// `true` if the Flood Pumps activated, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         flood_pumps: bool,
 
-        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
-        /// attaching effects (such as Balloons) to the score summary. This contains that
-        /// information. Runs can be scored on Flooding events thanks to Flippers.
+        /// Starting in season 20 the sim started outputting score summary
+        /// events (RunsScored) and attaching effects (such as Balloons) to the
+        /// score summary. This contains that information, if applicable
+        ///
+        /// Runs can be scored on Flooding events thanks to Flippers
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::Flippers>>>,
 
-        /// If Balloons were inflated as a result of this Flooding score, this is the name of the
-        /// Stadium. Otherwise `null`.
+        /// If Balloons were inflated as a result of this Flooding score, this
+        /// is the name of the Stadium. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<String>,
 
-        /// Whether a flood balloon was filled
+        /// `true` if a flood balloon was filled, otherwise omitted
+        #[serde(skip_serializing_if="is_false")]
         flood_balloon: bool,
 
-        /// Whether the Anti Flood Pumps activated
+        /// `true` if the Anti Flood Pumps activated, otherwise omitted
+        #[serde(skip_serializing_if="is_false")]
         anti_flood_pumps: bool,
     },
 
@@ -5496,9 +5999,13 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        // List of returns from elsewhere. This is almost always a length-1 array, but it is
-        // possible for multiple players to return on the same event, and it has happened at least
-        // once (Basilos Mason and Fig, Season 18 Day 33). The array should never be empty.
+        /// Returns from elsewhere
+        ///
+        /// This is almost always a length-1 array, but it is possible for
+        /// multiple players to return on the same event, and it has happened
+        /// at least once (Basilos Mason and Fig, Season 18 Day 33).
+        ///
+        /// This array should never be empty.
         // TODO: Make this a Nonempty<>? Compile time non-emptiness guarantee.
         returns: Vec<ReturnFromElsewhere>,
     },
@@ -5530,28 +6037,48 @@ pub enum FedEventData {
         /// Location of incinerated and replacement player
         location: ActivePositionType,
 
-        /// If the player was unstable, the player that the instability chained to. Otherwise null.
-        /// Use the null-ness of this property to tell whether this was an Unstable incineration.
+        /// If the player was unstable, the player that the instability chained
+        /// to. Otherwise omitted.
+        ///
+        /// Use the presence of this property to tell whether this was an
+        /// Unstable incineration.
+        #[serde(skip_serializing_if="Option::is_none")]
         unstable_chain: Option<ModChangeSubEventWithNamedPlayer>,
 
-        /// Metadata for the incineration sub-event, the enters-hall sub-event, the hatch sub-event,
-        /// and the replacement sub-event, in that order
-        sub_events: (SubEvent, SubEvent, SubEvent, SubEvent),
+        /// Metadata for the incineration sub-event
+        incineration_sub_event: SubEvent,
 
-        /// If a player was Ambushed, information about the ambush. Otherwise null.
+        /// Metadata for the enters-hall sub-event
+        enters_hall_sub_event: SubEvent,
+
+        /// Metadata for the hatch sub-event
+        hatch_sub_event: SubEvent,
+
+        /// Metadata for the replacement sub-event
+        replacement_sub_event: SubEvent,
+
+        /// If a player was Ambushed, information about the ambush. Otherwise
+        /// omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         ambush: Option<Ambush>,
 
-        /// In season 20, incinerations started building Sun(Sun)'s Pressure. This holds the
-        /// metadata for the pressure building sub-event, if applicable
+        /// In season 20, incinerations started building Sun(Sun)'s Pressure.
+        /// This holds the metadata for the pressure building sub-event, if
+        /// applicable.
+        #[serde(skip_serializing_if="Option::is_none")]
         pressure_built: Option<PressureBuilt>,
 
-        /// If the Heat Magnet activated on this Incineration, contains the score summary for the
-        /// resulting score and, if applicable, the stadium in which Balloons were inflated.
-        /// Otherwise `null`.
+        // TODO Check the json on this, it's probably bad
+        /// If the Heat Magnet activated on this Incineration, contains the
+        /// score summary for the resulting score and, if applicable, the
+        /// stadium in which Balloons were inflated. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         heat_magnet: Option<(ScoreSummary<HeatMagnetLedger>, Option<String>)>,
     },
 
-    /// Pitcher change event. This happens automatically when something incapacitates the active
+    /// Pitcher change event.
+    ///
+    /// This happens automatically when something incapacitates the active
     /// pitcher (e.g. the player is shelled by Taste the Infinite)
     #[serde(rename_all = "camelCase")]
     PitcherChange {
@@ -5594,8 +6121,9 @@ pub enum FedEventData {
         /// Player's rating after the party
         rating_after: f64,
 
-        /// If this Party attracted birds, the name of the stadium the birds were attracted to.
-        /// Otherwise null
+        /// If this Party attracted birds, the name of the stadium the birds
+        /// were attracted to. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         attracted_birds: Option<String>,
     },
 
@@ -5610,7 +6138,9 @@ pub enum FedEventData {
         player_name: String,
     },
 
-    /// Team received a postseason birth. I believe this is always preceded by a PlayerHatched event
+    /// Team received a postseason birth
+    ///
+    /// This appears to be always preceded by a PlayerHatched event
     #[serde(rename_all = "camelCase")]
     PostseasonBirth {
         /// Uuid of team who received the birth
@@ -5645,7 +6175,8 @@ pub enum FedEventData {
         division_name: String,
     },
 
-    /// Event indicating when a team leaves Party Time because it's been drafted into the postseason
+    /// Event indicating when a team leaves Party Time because it's been
+    /// pulled into the postseason
     #[serde(rename_all = "camelCase")]
     TeamLeftPartyTimeForPostseason {
         /// Uuid of team who left Party Time
@@ -5681,11 +6212,16 @@ pub enum FedEventData {
 
         /// Metadata for the postseason birth's shadow boost, if applicable
         /// (shadow boosts began in Season 18 [TODO: fact check])
+        #[serde(skip_serializing_if="Option::is_none")]
         shadow_boost: Option<(KnownPlayerStatChange, PostseasonBirthBoostEventOrder)>,
 
-        /// Metadata for the postseason birth's added-to-team event. This is *almost* always
-        /// present, but for unknown reason the Lovers' postseason birth in season 19 was missing
-        /// this event. In that case, this will be null.
+        /// Metadata for the postseason birth's added-to-team event, if it
+        /// exists
+        ///
+        /// This is *almost* always present, but for unknown reason the Lovers'
+        /// postseason birth in season 19 was missing this event. In that case,
+        /// this will be omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         postseason_birth_event_metadata: Option<SubEvent>,
     },
 
@@ -5698,7 +6234,8 @@ pub enum FedEventData {
         /// Nickname of team who advanced in the postseason
         team_nickname: String,
 
-        /// Round to which the team advanced, or null for the Internet Series
+        /// Round to which the team advanced, or omitted for the Internet Series
+        #[serde(skip_serializing_if="Option::is_none")]
         round: Option<i64>,
 
         /// One-indexed season number
@@ -5717,8 +6254,9 @@ pub enum FedEventData {
         /// One-indexed season number
         displayed_season: i64,
 
-        /// In seasons with an overbracket and underbracket, indicates which bracket this event came
-        /// from. Otherwise null.
+        /// In seasons with an overbracket and underbracket, indicates which
+        /// bracket this event came from. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         bracket: Option<BracketType>,
     },
 
@@ -5750,16 +6288,18 @@ pub enum FedEventData {
         /// Name of team who won the series
         team_nickname: String,
 
-        /// Indicates whether this win was for the Overbracket or Underbracket, or if it was earned
-        /// before there was a distinction (indicated by a null value, and equivalent to an
-        /// Overbracket win).
+        /// Indicates whether this win was for the Overbracket or Underbracket,
+        /// or if it was earned before there was a distinction (in which case
+        /// this field is omitted, and it should be interpreted as an
+        /// overbracket win).
+        #[serde(skip_serializing_if="Option::is_none")]
         bracket_type: Option<BracketType>,
 
         /// Number of championships the team now has
         championships: i64,
     },
 
-    /// Bottom Dwellers team mod procs
+    /// Bottom Dwellers team mod proccs
     #[serde(rename_all = "camelCase")]
     BottomDwellers {
         /// Uuid of team whose bottom dwellers procced
@@ -5775,15 +6315,18 @@ pub enum FedEventData {
         rating_after: f64,
     },
 
-    /// Team received a Will. This event is currently minimally parsed, with metadata simply
-    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
-    /// useful please let us know in the SIBR discord.
+    /// Team received a Will
+    ///
+    /// This event is currently minimally parsed, with metadata simply included
+    /// as-is. If you have a use-case where thoroughly parsing this event type
+    /// would be useful please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
     WillReceived {
         /// Uuid of team who received the Will
         team_id: Uuid,
 
-        /// Title of Will that was earned. This may be redundant with the title in `metadata`
+        /// Title of Will that was earned. This may be redundant with the title
+        /// in `metadata`
         will_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
@@ -5791,17 +6334,22 @@ pub enum FedEventData {
         metadata: EventMetadata,
     },
 
-    /// Team won a Blessing. This event is currently minimally parsed, with metadata simply
-    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
-    /// useful please let us know in the SIBR discord.
+    /// Team won a Blessing
+    ///
+    /// This event is currently minimally parsed, with metadata simply included
+    /// as-is. If you have a use-case where thoroughly parsing this event type
+    /// would be useful please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
     BlessingWon {
-        /// Team tags of the Blessing event. This is often the Uuid of the team who won the
-        /// blessing, but not always. For example, the Pitching Flotation Bubble has the Uuids of
+        /// Team tags of the Blessing event
+        ///
+        /// This is often the Uuid of the team who won the blessing, but not
+        /// always. For example, the Pitching Flotation Bubble has the Uuids of
         /// all affected teams.
         team_tags: Vec<Uuid>,
 
-        /// Title of Blessing that was won. This may be redundant with the title in `metadata`
+        /// Title of Blessing that was won. This may be redundant with the title
+        /// in `metadata`
         blessing_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
@@ -5811,9 +6359,10 @@ pub enum FedEventData {
 
     /// Subseasonal mods are added or removed from a single team.
     ///
-    /// Not all subseasonal mod changes cause this event. Due to what seems to be a bug, in Season
-    /// 16 team mod changes stopped being their own event and started being attached to the next
-    /// event. This could be a PlayerSubseasonalModsChange event, a HalfInningStart event, a
+    /// Not all subseasonal mod changes cause this event. Due to what seems to
+    /// be a bug, in Season 16 team mod changes stopped being their own event
+    /// and started being attached to the next event. This could be a
+    /// PlayerSubseasonalModsChange event, a HalfInningStart event, a
     /// Psychoacoustics event, and possibly others.
     #[serde(rename_all = "camelCase")]
     TeamSubseasonalModsChange {
@@ -5825,30 +6374,36 @@ pub enum FedEventData {
         change: SubseasonalModChange<TeamModChangeSubject>,
     },
 
-    /// Subseasonal mods are added or removed from a single player (and, due to an apparent bug,
-    /// possibly multiple teams).
+    /// Subseasonal mods are added or removed from a single player (and, due to
+    /// an apparent bug, possibly multiple teams)
     ///
-    /// See the description of TeamSubseasonalModsChange
+    /// See the description of `TeamSubseasonalModsChange` for more
     #[serde(rename_all = "camelCase")]
     PlayerSubseasonalModsChange {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Changes to the team subseasonal mods. Due to what I assume is a bug, multiple of these
-        /// may get collected in front of a single player mod change. If there is no player mod
-        /// change, the team mod changes will instead get collected on the HalfInning event
+        /// Changes to the team subseasonal mods
+        ///
+        /// Due to what I assume is a bug, multiple of these may get collected
+        /// in front of a single player mod change. If there is no player mod
+        /// change, the team mod changes will instead get collected on the
+        /// HalfInning event.
         team_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
 
         /// The player subseasonal mod change that triggered this event
         player_change: SubseasonalModChange<PlayerModChangeSubject>,
     },
 
-    /// Decree passed. This event is currently minimally parsed, with metadata simply included
-    /// as-is. If you have a use-case where thoroughly parsing this event type would be useful
-    /// please let us know in the SIBR discord.
+    /// Decree passed
+    //     ///
+    //     /// This event is currently minimally parsed, with metadata simply included
+    //     /// as-is. If you have a use-case where thoroughly parsing this event type
+    //     /// would be useful please let us know in the SIBR discord.
     #[serde(rename_all = "camelCase")]
     DecreePassed {
-        /// Title of Decree that passed. This may be redundant with the title in `metadata`
+        /// Title of Decree that passed. This may be redundant with the title in
+        /// `metadata`
         decree_title: String,
 
         /// Event metadata exactly as it appears in the Feed event
@@ -5866,8 +6421,8 @@ pub enum FedEventData {
         player_name: String,
     },
 
-    /// A Returned player was permitted to stay (not called back to the Hall at the end of the
-    /// season)
+    /// A Returned player was permitted to stay (not called back to the Hall at
+    /// the end of the season)
     #[serde(rename_all = "camelCase")]
     PlayerPermittedToStay {
         /// Uuid of player who was permitted to stay
@@ -5883,30 +6438,33 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of fireproof player
+        /// Uuid of Fireproof player
         player_id: Uuid,
 
-        /// Name of fireproof player
+        /// Name of Fireproof player
         player_name: String,
 
-        /// Whether the fireproof player was Unstable
+        /// True if the Fireproof player is Unstable, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_unstable: bool,
     },
 
     /// Umpire tried to incinerate the player, but the player was Shelled
-    // TODO Combine ShelledIncineration, FireproofIncineration, and BecameMagmatic
+    // TODO Combine ShelledIncineration, FireproofIncineration, and
+    //   BecameMagmatic
     #[serde(rename_all = "camelCase")]
     ShelledIncineration {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of fireproof player
+        /// Uuid of Shelled player
         player_id: Uuid,
 
-        /// Name of fireproof player
+        /// Name of Shelled player
         player_name: String,
 
-        /// Whether the fireproof player was Unstable
+        /// True if the Shelled player is Unstable, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_unstable: bool,
     },
 
@@ -5953,8 +6511,9 @@ pub enum FedEventData {
 
         /// Number of votes cast for this renovation
         ///
-        /// This is ordinarily an int, but for the three renovations that were added manually to
-        /// undo the reno fraud of season 14 it is a string.
+        /// This is ordinarily an int, but for the three renovations that were
+        /// added manually to undo the renovation fraud of season 14, it is a
+        /// string.
         // TODO Verify that this serializes without any intermediate structure
         votes: RenovationVotes,
 
@@ -5974,8 +6533,10 @@ pub enum FedEventData {
         /// Name of player who got Misted
         player_name: String,
 
-        /// If the mister cured a Superallergy, this will be metadata about the event associated
-        /// with losing the Superallergic mod. For a normal allergy this will be null.
+        /// If the mister cured a Superallergy, this will be metadata about the
+        /// event associated with losing the Superallergic mod. For a normal
+        /// allergy this will be omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         superallergy: Option<ModChangeSubEvent>,
     },
 
@@ -5991,8 +6552,8 @@ pub enum FedEventData {
         /// Name of player who was named an MVP
         player_name: String,
 
-        /// Which level of MVP this player attained. The associated ego mod will be EGO{level}. This
-        /// is 1-indexed.
+        /// Which level of MVP this player attained. The associated ego mod will
+        /// be EGO{level}. This is 1-indexed.
         level: i64,
     },
 
@@ -6018,8 +6579,8 @@ pub enum FedEventData {
         superallergy_event: SubEvent,
     },
 
-    /// A Returned player on this Team was called back to the Hall and replaced by a newly-promoted
-    /// player from the Shadows
+    /// A Returned player on this Team was called back to the Hall and replaced
+    /// by a newly-promoted player from the Shadows
     #[serde(rename_all = "camelCase")]
     ReplaceReturnedPlayerFromShadows {
         /// Uuid of team whose players were moved around
@@ -6098,7 +6659,9 @@ pub enum FedEventData {
         mod_name: String,
     },
 
-    /// Investigation progress. This could be parsed further, contributions welcome.
+    /// Investigation progress
+    ///
+    /// This could be parsed further. Contributions are welcome.
     #[serde(rename_all = "camelCase")]
     InvestigationMessage {
         /// Uuid of player doing the investigating
@@ -6108,8 +6671,9 @@ pub enum FedEventData {
         message: String,
     },
 
-    /// High Pressure status messages from Season 14. They were removed in the following season,
-    /// presumably for occurring too often and cluttering up the Feed.
+    /// High Pressure status messages from Season 14. They were removed in the
+    /// following season, presumably for occurring too often and cluttering up
+    /// the Feed.
     #[serde(rename_all = "camelCase")]
     HighPressure {
         #[serde(flatten)]
@@ -6128,8 +6692,8 @@ pub enum FedEventData {
         sub_event: SubEvent,
     },
 
-    /// Player was "pulled through the Rift". This was used in the Second Wyatt Masoning and nowhere
-    /// else.
+    /// Player was "pulled through the Rift". This was used in the Second Wyatt
+    /// Masoning and nowhere else.
     #[serde(rename_all = "camelCase")]
     PlayerPulledThroughRift {
         /// Uuid of newly added player
@@ -6139,7 +6703,8 @@ pub enum FedEventData {
         player_name: String,
     },
 
-    /// Player Localized on to a team. This occurred as part of the Second Wyatt Masoning.
+    /// Player Localized on to a team. This occurred as part of the Second Wyatt
+    /// Masoning.
     #[serde(rename_all = "camelCase")]
     PlayerLocalized {
         /// Uuid of team the player localized onto
@@ -6225,8 +6790,11 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with adding the mod
         sub_event: SubEvent,
 
-        /// List of team subseasonal mods that changed on this Psychoacoustics event.
+        /// List of team subseasonal mods that changed on this Psychoacoustics
+        /// event, if any
+        ///
         /// See HalfInningStart.subseasonal_mod_changes for details.
+        #[serde(skip_serializing_if="Vec::is_empty")]
         team_subseasonal_mod_changes: Vec<SubseasonalModChange<TeamModChangeSubject>>,
     },
 
@@ -6274,9 +6842,12 @@ pub enum FedEventData {
         /// Detective activity, if any
         ///
         /// Player information in this is related to the detective
+        #[serde(skip_serializing_if="Option::is_none")]
         sensed_something_fishy: Option<PlayerSubEvent>,
 
-        /// Whether the player who was attacked was Scattered
+        /// `true` if the player who was attacked was Scattered, otherwise
+        /// omitted
+        #[serde(skip_serializing_if="is_false")]
         scattered: bool,
     },
 
@@ -6290,9 +6861,11 @@ pub enum FedEventData {
         team_nickname: String,
     },
 
-    /// Tidings section of Election results. This event is currently minimally parsed, with metadata
-    /// simply included as-is. If you have a use-case where thoroughly parsing this event type would
-    /// be useful please let us know in the SIBR discord.
+    /// Tidings section of Election results.
+    ///
+    /// This event is currently minimally parsed, with metadata simply included
+    /// as-is. If you have a use-case where thoroughly parsing this event type
+    /// would be useful please let us know in the SIBR discord.
     Tidings {
         /// Tidings message
         message: String,
@@ -6305,8 +6878,8 @@ pub enum FedEventData {
         player_tags: Vec<Uuid>,
     },
 
-    /// The event that announces when a Homebody is happy to be home or misses home at the beginning
-    /// of the game
+    /// The event that announces when a Homebody is happy to be home or misses
+    /// home at the beginning of the game
     #[serde(rename_all = "camelCase")]
     HomebodyGameStart {
         #[serde(flatten)]
@@ -6335,7 +6908,8 @@ pub enum FedEventData {
         player_expelled: Option<PlayerSentElsewhere>,
     },
 
-    /// Pitcher hit batter with a pitch, batter is now Observed (will add Unstable support later)
+    /// Pitcher hit batter with a pitch, and marked them with some kind of
+    /// debt-related mod
     #[serde(rename_all = "camelCase")]
     HitByPitch {
         #[serde(flatten)]
@@ -6365,13 +6939,14 @@ pub enum FedEventData {
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::HitByPitch>>,
 
-        /// If the batter was Inhabiting, contains metadata about the player losing the Inhabiting
-        /// mod, otherwise null.
+        /// If the batter was Inhabiting, contains metadata about the player
+        /// losing the Inhabiting mod, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
     },
 
-    /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save them for the activating
-    /// team's next game
+    /// Solar Panels activate, stop Sun 2 from swallowing the runs, and save
+    /// them for the activating team's next game
     #[serde(rename_all = "camelCase")]
     SolarPanelsActivate {
         #[serde(flatten)]
@@ -6380,11 +6955,12 @@ pub enum FedEventData {
         /// Number of runs saved for the team's next game
         num_runs: f32,
 
-        /// Nickname of the team who activted Solar Panels
+        /// Nickname of the team who activated Solar Panels
         team_nickname: String,
     },
 
-    /// (Un)runs are Overflowing from a previous Solar Panels or Event Horizon activation
+    /// (Un)runs are Overflowing from a previous Solar Panels or Event Horizon
+    /// activation
     #[serde(rename_all = "camelCase")]
     RunsOverflowing {
         #[serde(flatten)]
@@ -6393,24 +6969,31 @@ pub enum FedEventData {
         /// Nickname of team who gained or lost the (Un)runs
         team_nickname: String,
 
-        /// Number of Runs or Unruns gained/lost. This can be negative or positive independently of
-        /// whether they are runs or unruns, and also of whether they are gained or lost. This means
-        /// there can be a triple negative.
+        /// Number of Runs or Unruns gained/lost
+        ///
+        /// This can be negative or positive independently of whether they are
+        /// runs or unruns, and also of whether they are gained or lost. This
+        /// means there can be a triple negative.
         num_runs: f64,
 
-        /// True if the run objects gained/lost were Unruns, false if they were Runs
+        /// True if the run objects gained/lost were Unruns, false if they were
+        /// Runs
         unruns: bool,
 
-        /// True if the run objects were gained, flase if they were lost
+        /// True if the run objects were gained, false if they were lost
         gained: bool,
 
-        /// Starting in season 20 the sim started outputting score summary events (RunsScored) and
-        /// attaching effects (such as Balloons) to the score summary. This contains that
-        /// information.
+
+        /// Starting in season 20 the sim started outputting score summary
+        /// events (RunsScored) and attaching effects (such as Balloons) to the
+        /// score summary. This contains that information.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<OverflowLedger>>,
 
-        /// If Balloons were inflated as a result of these runs, this is the name of the Stadium.
-        /// Otherwise `null`.
+
+        /// If these runs inflated Balloons, this is the name of the stadium in
+        /// which the Balloons were inflated. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<String>,
     },
 
@@ -6492,8 +7075,10 @@ pub enum FedEventData {
         /// Name of the player who entered the Secret Base
         player_name: String,
 
-        /// When detectives enter the Secret Base (TODO: Every time?) they sense a Deep Darkness.
-        /// This is the metadata for that sub-event, if it exists. Otherwise null.
+        /// When detectives enter the Secret Base (TODO: Every time?) they sense
+        /// a Deep Darkness. This is the metadata for that sub-event, if it
+        /// exists. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         deep_darkness: Option<SubEvent>,
     },
 
@@ -6509,9 +7094,11 @@ pub enum FedEventData {
         /// Name of the player who exited the Secret Base
         player_name: String,
 
-        /// Whether the player exited directly to The Fifth Base. This is only possible if the
-        /// stadium currently has The Fifth Base. If this is false, the player exited to second
-        /// base.
+        /// Whether the player exited directly to The Fifth Base
+        ///
+        /// This is only possible if the stadium currently has The Fifth Base.
+        /// If this is omitted, the player exited to second base.
+        #[serde(skip_serializing_if="is_false")]
         to_fifth: bool,
     },
 
@@ -6521,8 +7108,10 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Team uuid of the player who was made Repeating. If the player was a ghost who died
-        /// before team ids were stored in the player object, this will be null.
+        /// Team uuid of the player who was made Repeating. If the player was a
+        /// ghost who died before team ids were stored in the player object,
+        /// this will be omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         team_id: Option<Uuid>,
 
         /// Uuid of the player who was made Repeating
@@ -6534,7 +7123,8 @@ pub enum FedEventData {
         /// Whether the player was made Repeating or Reverberating
         which_mod: EchoChamberModAdded,
 
-        /// Metadata for the event associated with adding the Repeating or Reverberating mod
+        /// Metadata for the event associated with adding the Repeating or
+        /// Reverberating mod
         sub_event: SubEvent,
     },
 
@@ -6550,8 +7140,10 @@ pub enum FedEventData {
         /// Name of player who roamed
         player_name: String,
 
-        /// Location of player on the new team. If the player roamed from the team, this is also
-        /// the location on their old team
+        /// Location of player on the new team
+        ///
+        /// If the player roamed from the team, this is also the location on
+        /// their old team.
         location: PositionType,
 
         /// Uuid of player's new team
@@ -6560,7 +7152,7 @@ pub enum FedEventData {
         /// Nickname of player's new team
         new_team_nickname: String,
 
-        /// Where the player roamed from, either another team or the Hall of Flame
+        /// Where the player roamed from
         roam_from: RoamFromLocation,
 
         #[serde(flatten)]
@@ -6582,7 +7174,8 @@ pub enum FedEventData {
     },
 
     /// A player's mods created from another mod were removed
-    // TODO Try to combine each of these with the event that removed the source mod
+    // TODO Try to combine each of these with the event that removed the source
+    //   mod
     #[serde(rename_all = "camelCase")]
     ModsFromAnotherModRemoved {
         /// Uuid of the team who lost the mod(s)
@@ -6594,11 +7187,14 @@ pub enum FedEventData {
         /// Name of the player who lost the mod(s)
         player_name: String,
 
-        /// List of mods that were removed
+        /// List of mods that were removed, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         mods_removed: Vec<ModDesc>,
 
-        /// Name of the mod that had originally added the removed mods. It's implied that this mod
-        /// was just removed, which caused these others to be removed as well.
+        /// Name of the mod that had originally added the removed mods
+        ///
+        /// It's implied that this mod was just removed, which caused these
+        /// others to be removed as well
         source_mod_name: String,
 
         /// Internal name of the mod that had originally added the removed mods
@@ -6676,17 +7272,11 @@ pub enum FedEventData {
         /// Name of the batter that did the mind trick
         batter_name: String,
 
-        /// If the batter went to a later base with Base Instincts, this is the base they went to.
-        /// Otherwise null.
+        /// If the batter went to a later base with Base Instincts, this is the
+        /// base they went to. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         base_instincts: Option<Base>,
 
-        // /// Meta about the pitcher's item breaking, if it broke, otherwise null.
-        // TODO is this needed?
-        // pitcher_item_damage: Option<ItemDamaged>,
-        //
-        // /// Meta about the batter's item breaking, if it broke, otherwise null.
-        // TODO is this needed?
-        // batter_item_damage: Option<ItemDamaged>,
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::Walk>>,
     },
@@ -6712,15 +7302,18 @@ pub enum FedEventData {
         /// Name of the batter that did the mind trick
         batter_name: String,
 
-        // Item damages would go here but I haven't encountered one yet so I haven't put it in
+        // Item damages would go here but I haven't encountered one yet so I
+        // haven't put it in
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::CharmedMindTrickWalk>>,
     },
 
-    /// Strikeout as a result of a Mind Trick ("strikes out thinking"). From the introduction of
-    /// Mind Tricks until s18d43, mind trick strikeouts were under the Walk event type. From s18d94
-    /// onward, they were under the Strikeout event type. (There were no mind trick strikeouts
-    /// between those two game days.)
+    /// Strikeout as a result of a Mind Trick ("strikes out thinking").
+    ///
+    /// From the introduction of Mind Tricks until s18d43, mind trick strikeouts
+    /// were under the Walk event type. From s18d94 onward, they were under the
+    /// Strikeout event type. (There were no mind trick strikeouts between those
+    /// two game days.)
     #[serde(rename_all = "camelCase")]
     MindTrickStrikeout {
         #[serde(flatten)]
@@ -6745,7 +7338,8 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// True if the attempted sipper was a Siphon, false otherwise
+        /// `true` if the attempted sipper was a siphon, omitted otherwise
+        #[serde(skip_serializing_if="is_false")]
         is_siphon: bool,
 
         /// Uuid of the player that attempted to blooddrain the Sealed player
@@ -6805,15 +7399,22 @@ pub enum FedEventData {
         /// Name of item that was gained
         item_name: String,
 
-        /// Mods bestowed by item that was gained
+        /// Mods bestowed by item that was gained, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         item_mods: Vec<String>,
 
-        /// The increase or decrease that all the wielding player's items caused to their star rating
-        /// before gaining this item. Sometimes this is null for no reason I can discern.
+        /// The increase or decrease that all the wielding player's items caused
+        /// to their star rating before gaining this item, if avaialable
+        ///
+        /// Sometimes this is unavailable for no reason I can discern
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_before: Option<f64>,
 
-        /// The increase or decrease that all the wielding player's items now cause to their star
-        /// rating. Sometimes this is null for no reason I can discern.
+        /// The increase or decrease that all the wielding player's items now
+        /// cause to their star rating, if available
+        ///
+        /// Sometimes this is unavailable for no reason I can discern
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
@@ -6829,8 +7430,10 @@ pub enum FedEventData {
         player_id: Uuid,
     },
 
-    /// Top-level "player lost item" event. I'm only aware of this happening as a result of the
-    /// player getting a new item from the Community Chest, but it may happen from other sources.
+    /// Top-level "player lost item" event
+    ///
+    /// I'm only aware of this happening as a result of the player getting a new
+    /// item from the Community Chest, but it may happen from other sources.
     #[serde(rename_all = "camelCase")]
     PlayerDropsItem {
         /// Uuid of item that was gained
@@ -6839,16 +7442,22 @@ pub enum FedEventData {
         /// Name of item that was gained
         item_name: String,
 
-        /// Mods bestowed by item that was gained
+        /// Mods bestowed by item that was gained, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         item_mods: Vec<String>,
 
-        /// The increase or decrease that all the wielding player's items caused to their star rating
-        /// before gaining this item
-        /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+        /// The increase or decrease that all the wielding player's items caused
+        /// to their star rating before gaining this item, if available
+        ///
+        /// Sometimes this is unavailable for no reason I can discern
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_before: Option<f64>,
 
-        /// The increase or decrease that all the wielding player's items now cause to their star rating
-        /// As with many of these ratings, it can be `null` for reasons I don't yet understand.
+        /// The increase or decrease that all the wielding player's items now
+        /// cause to their star rating, if  available
+        ///
+        /// Sometimes this is unavailable for no reason I can discern
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
@@ -6864,25 +7473,29 @@ pub enum FedEventData {
         player_id: Uuid,
     },
 
-    /// The community chest announcement that appears during the game. Because community chests can
-    /// open when some teams aren't playing a game, and the players must still receive their items,
-    /// the events for receiving an item are separate from the event that appears in game.
+    /// The community chest announcement that appears during the game.
     ///
-    /// This event has very minimal data. If you want to process community chests you probably want
-    /// to look for CommunityChestOpens events.
+    /// Because community chests can open when some teams aren't playing a game,
+    /// and the players must still receive their items, the events for receiving
+    /// an item are separate from the event that appears in game.
+    ///
+    /// This event has very minimal data. If you want to process community
+    /// chests you probably want to look for CommunityChestOpens events.
     #[serde(rename_all = "camelCase")]
     CommunityChestGameMessage {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Name of the player who's listed first in the event. TODO: Is this in consistent order
-        /// w/r/t home and away team?
+        /// Name of the player who's listed first in the event.
+        // TODO: Is this in consistent order  w/r/t home and away team?
         first_player_name: String,
 
         /// Name of the item that the first player received
         first_player_item_name: String,
 
-        /// Name of the item that the first player dropped, if any. Otherwise null.
+        /// Name of the item that the first player dropped, if any. Otherwise
+        /// omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         first_player_dropped_item: Option<String>,
 
         /// Name of the player who's listed second in the event
@@ -6891,7 +7504,9 @@ pub enum FedEventData {
         /// Name of the item that the second player received
         second_player_item_name: String,
 
-        /// Name of the item that the second player dropped, if any. Otherwise null.
+        /// Name of the item that the second player dropped, if any. Otherwise
+        /// omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         second_player_dropped_item: Option<String>,
     },
 
@@ -6919,9 +7534,9 @@ pub enum FedEventData {
         /// Name of pitcher who faxed in
         entering_pitcher_name: String,
 
-        /// Before [todo: whichever season merged the shadows], which section of the shadows the
-        /// player exited/entered.
-        // TODO: Make None after shadows were merged?
+        /// TODO: Before whichever season merged the shadows, which section of
+        ///   the shadows the player exited/entered.
+        //    TODO: Make None after shadows were merged?
         shadows_location: ShadowPositionType,
 
         /// Exiting pitcher's rating before the shadow boost
@@ -6936,23 +7551,25 @@ pub enum FedEventData {
         /// Metadata for the sub-event associated with the shadow boost
         enter_shadows_sub_event: SubEvent,
 
-        /// If this player has the Yolked mod from being on a team with another Hard Boiled player,
-        /// it is momentarily lost and then (usually) regained. This is metadata about that
-        /// happening, if applicable
+        /// If this player has the Yolked mod from being on a team with another
+        /// Hard Boiled player, it is momentarily lost and then (usually)
+        /// regained. This is metadata about that happening, if applicable.
+        #[serde(skip_serializing_if="Option::is_none")]
         yolked_blip: Option<PlayerTogethernessModBlip>,
     },
 
     /// A Redacted event
     #[serde(rename_all = "camelCase")]
     Redacted {
-        /// Event description, which seems to contain only "|" characters and spaces
+        /// Event description, which seems to contain only "|" characters and
+        /// spaces
         description: String,
 
         /// Number of upscales. This is like nuts but for Redacted events
         scales: i64,
     },
 
-    /// Smithy procs and repairs a player's item
+    /// Smithy proccs and repairs a player's item
     #[serde(rename_all = "camelCase")]
     Smithy {
         #[serde(flatten)]
@@ -6978,7 +7595,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Nickname of team who applied Home Field advantage (this will always be the home team)
+        /// Nickname of team who applied Home Field advantage
+        ///
+        /// This will always be the home team
         team_nickname: String,
     },
 
@@ -6995,15 +7614,19 @@ pub enum FedEventData {
     /// Team won a Prize Match
     #[serde(rename_all = "camelCase")]
     WonPrizeMatch {
-        /// There are two formats for this event. In the first format, the nickname of team who won
-        /// the Prize Match is mentioned, but not the player name. In the second, it's the reverse.
+        /// Which of two formats were used for this event
+        ///
+        /// In the first format, the nickname of team who won the Prize Match is
+        /// mentioned, but not the player name. In the second, it's the reverse.
         // TODO: Serialize this as either team_nickname or player_name
         team_nickname_or_player_name: TeamNicknameOrPlayerName,
 
         /// Uuid of team who won the Prize Match
         team_id: Uuid,
 
-        /// Uuid of player who got the Prize. Oddly, the player's name is not mentioned.
+        /// Uuid of player who got the Prize
+        ///
+        /// Oddly, the player's name is not mentioned
         player_id: Uuid,
 
         /// Uuid of the Item that the winner got
@@ -7012,15 +7635,19 @@ pub enum FedEventData {
         /// Name of the Item that the winner got
         item_name: String,
 
-        /// Mods that the Item bestows, as a list of internal IDs
+        /// Mods that the Item bestows, as a list of internal IDs, if applicable
+        #[serde(skip_serializing_if="Vec::is_empty")]
         item_mods: Vec<String>,
 
-        /// The increase/decrease that all the wielding player's items caused to their star rating
-        /// before gaining the item
+        /// The increase/decrease that all the wielding player's items caused to
+        /// their star rating before gaining the item
         player_item_rating_before: f64,
 
-        /// The increase/decrease that all the wielding player's items now cause to their star
-        /// rating. This is sometimes null for reasons which are unknown to me.
+        /// The increase/decrease that all the wielding player's items now cause
+        /// to their star rating.
+        ///
+        /// This is sometimes omitted for reasons which are unknown to me.
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_after: Option<f64>,
 
         /// The player's star rating. TODO: Is this with or without items?
@@ -7030,8 +7657,8 @@ pub enum FedEventData {
     /// Team wins gifts from the Gift Shop.
     #[serde(rename_all = "camelCase")]
     TeamReceivedGifts {
-        // TODO: Document these fields. I suppose I should verify that they do what they obviously
-        //   are meant to do.
+        // TODO: Document these fields. I suppose I should verify that they do
+        //   what they obviously are meant to do.
         recipient: Uuid,
         top_3_benefactor_coins: [i64; 3],
         top_3_benefactors: [Uuid; 3],
@@ -7039,19 +7666,24 @@ pub enum FedEventData {
         total_gifts: i64,
     },
 
-    /// Team received a Gift. This event is currently minimally parsed, with metadata simply
-    /// included as-is. If you have a use-case where thoroughly parsing this event type would be
-    /// useful please let us know in the SIBR discord.
-    // TODO: Now that I decided to open the "combining events" can of worms, should this be
-    //   combined with TeamReceivedGifts?
+    /// Team received a Gift.
+    ///
+    /// This event is currently minimally parsed, with metadata simply included
+    /// as-is. If you have a use-case where thoroughly parsing this event type
+    /// would be useful please let us know in the SIBR discord.
+    // TODO: Now that I decided to open the "combining events" can of worms,
+    //   should this be combined with TeamReceivedGifts?
     #[serde(rename_all = "camelCase")]
     GiftReceived {
         /// Uuid of the team that received the gift
         team_id: Uuid,
 
-        /// Title of Gift that was received along with the name of who received it. If you have a
-        /// use case where having these separate would be useful, let us know. This may be redundant
-        /// with the title and team name in `metadata`
+        /// Title of Gift that was received along with the name of who received
+        /// it
+        ///
+        /// If you have a use case where having these separate would be useful,
+        /// let us know. This may be redundant with the title and team name in
+        /// `metadata`.
         title_and_recipient: String,
 
         /// Event metadata exactly as it appears in the Feed event
@@ -7080,8 +7712,10 @@ pub enum FedEventData {
         /// Metadata for the associated ModAdded event for adding the Dust mod
         mod_added_event: SubEvent,
 
-        /// If a replica of a Hard Boiled player fades to dust while Yolked, they'll lose the Yolked
-        /// mod. This is metadata for that event.
+        /// If a replica of a Hard Boiled player fades to dust while Yolked,
+        /// they'll lose the Yolked mod. This is metadata for that event, if it
+        /// exists.
+        #[serde(skip_serializing_if="Option::is_none")]
         weaker_apart_event: Option<PlayerTogethernessModChange>,
     },
 
@@ -7117,59 +7751,72 @@ pub enum FedEventData {
         sub_event: SubEvent,
     },
 
-    /// Donated shame, which the team received by being shamed by a team with Shame Donor, are
-    /// applied at the start of the next game
+    /// Donated shame, which the team received by being shamed by a team with
+    /// Shame Donor, being applied at the start of the next game
     #[serde(rename_all = "camelCase")]
     DonatedShameApplied {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Nickname of team who was shamed and is now receiving the shame unruns
+        /// Nickname of team who was shamed and is now receiving the shame
+        /// unruns
         team_nickname: String,
 
         /// Number of unruns received
         unruns: f64,
 
-        /// If after s20, the associated score summary
+        /// If after s20, the associated score summary. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<SimpleLedgerV2<run_source::DonatedShame>>>,
     },
 
-    /// Game Over event which bestows the Win object on the winning team. This event did not exist
-    /// until s20
+    /// Game Over event which bestows the Win object on the winning team
+    ///
+    /// This event did not exist until s20
     #[serde(rename_all = "camelCase")]
     GameOver {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// The Earned Win event data. After s20 this data always exists somewhere, but it may be
-        /// attached to different events.
+        /// The Earned Win event data, if available
+        ///
+        /// After s20 this data always exists somewhere, but it may be attached
+        /// to different events
+        #[serde(skip_serializing_if="Option::is_none")]
         earned_win: Option<EarnedWin>,
 
-        /// Players who were Carcinized and are now being returned to their original team at the end
-        /// of the game.
+        /// Players who were Carcinized and are now being returned to their
+        /// original team at the end of the game, if any
         ///
-        /// Arguably much of this information is redundant, since there were never any instances
-        /// where a non-Crabs team triggered carcinization, and it only ever moves lineup players.
-        /// I may compress it more in the future.
+        /// Arguably much of this information is redundant, since there were
+        /// never any instances where a non-Crabs team triggered carcinization,
+        /// and it only ever moves lineup players
+        #[serde(skip_serializing_if="Vec::is_empty")]
         temp_stolen_players_returned: Vec<PlayerMovedTeams>,
     },
 
-    /// "<Team> inflated 10 Balloons!" event that occurs when the home team wins a game and their
-    /// stadium has the Balloons modifier.
+    /// "<Team> inflated 10 Balloons!" event that occurs when the home team wins
+    /// a game and their stadium has the Balloons modifier
     #[serde(rename_all = "camelCase")]
     BalloonsCollectedFromWin {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Name of the stadium that inflated the balloons. This will be the winning team's stadium
-        /// and the home team's stadium (this event only occurs when the home team wins).
+        /// Name of the stadium that inflated the balloons
+        ///
+        /// This will be the winning team's stadium and the home team's stadium
+        /// (this event only occurs when the home team wins)
         stadium_name: String,
 
-        /// The Earned Win event data. Before s21d81 this field was always populated on this event.
-        /// It "steals" the value from the following GameOver event. On that day, the value was
-        /// instead on the preceding GameEnd event. TODO: Figure out if this is a change that stuck
-        /// around, or if it only happens in certain circumstances (it may be notable that a
-        /// voicemail happened in the s21d81 game in question)
+        /// The Earned Win event data, if applicable
+        ///
+        /// Before s21d81 this field was always populated on this event. It
+        /// "steals" the value from the following GameOver event. On that day,
+        /// the value was instead on the preceding GameEnd event.
+        /// TODO: Figure out if this is a change that stuck around, or if it
+        ///   only happens in certain circumstances (it may be notable that a
+        ///   voicemail happened in the s21d81 game in question)
+        #[serde(skip_serializing_if="Option::is_none")]
         earned_win: Option<EarnedWin>,
     },
 
@@ -7182,11 +7829,13 @@ pub enum FedEventData {
         /// Nickname of team who practiced Moderation
         team_nickname: String,
 
-        /// Once, due to a bug, Moderation accidentally took too many runs and caused the opposing
-        /// team to win. Since this was at the end of the game it counted as Shame and built Hype.
+        /// Once, due to a bug, Moderation accidentally took too many runs and
+        /// caused the opposing team to win. Since this was at the end of the
+        /// game it counted as Shame and built Hype.
         shame: Shame,
 
-        /// The associated score summary, if applicable.
+        /// The associated score summary, if applicable
+        #[serde(skip_serializing_if="Option::is_none")]
         score_summary: Option<ScoreSummary<ModerationLedger>>,
     },
 
@@ -7208,14 +7857,16 @@ pub enum FedEventData {
         /// Name of stadium the player put The Fifth Base down in
         stadium_name: String,
 
-        /// The increase or decrease that all the wielding player's items caused to their star rating
-        /// before putting down The Fifth Base
+        /// The increase or decrease that all the wielding player's items caused
+        /// to their star rating before putting down The Fifth Base
         player_item_rating_before: f64,
 
-        /// The increase or decrease that all the wielding player's items now cause to their star rating
+        /// The increase or decrease that all the wielding player's items now
+        /// cause to their star rating
         player_item_rating_after: f64,
 
-        /// TODO: Is this the player's rating before or after putting down the Base?
+        /// TODO: Is this the player's rating before or after putting down the
+        ///   Base?
         player_rating: f64,
 
         /// Metadata for the player-lost-item sub-event
@@ -7225,8 +7876,8 @@ pub enum FedEventData {
         stadium_gained_mod_event: SubEvent,
     },
 
-    /// Event Horizon activates, stops the Black Hole from swallowing the runs, and converts them to
-    /// Unruns for the away team's next game
+    /// Event Horizon activates, stops the Black Hole from swallowing the runs,
+    /// and converts them to Unruns for the away team's next game
     #[serde(rename_all = "camelCase")]
     EventHorizonActivates {
         #[serde(flatten)]
@@ -7235,7 +7886,8 @@ pub enum FedEventData {
         /// Number of unruns saved for the victim team's next game
         num_unruns: f32,
 
-        /// Nickname of the team who will receive the unruns (always the away team)
+        /// Nickname of the team who will receive the unruns (always the away
+        /// team)
         away_team_nickname: String,
     },
 
@@ -7245,13 +7897,16 @@ pub enum FedEventData {
         /// Name of the renovation that was Ratified
         renovation_name: String,
 
-        /// Internal ID of the renovation that was ratified. These are in lower snake case.
+        /// Internal ID of the renovation that was ratified. These are in lower
+        /// snake case.
         renovation_id: String,
 
-        /// Internal ID of the mod granted by the renovation that was ratified. These are in upper
-        /// snake case.
+        /// Internal ID of the mod granted by the renovation that was ratified.
+        /// These are in upper snake case.
         mod_id: String,
 
+        /// Stadium mods that were removed as a result of this renovation being
+        /// Ratified
         mod_removals: Vec<ModRemovedFromRatification>,
     },
 
@@ -7270,88 +7925,113 @@ pub enum FedEventData {
         /// Nickname of the team who had their run stolen
         victim_team_nickname: String,
 
-        /// More details about the stolen run, if they exist. These details exist for almost every
-        /// event of this type, but presumably due to a bug there were two occasions where a
-        /// RunStolenThroughTunnels event did not have any children (event ids
-        /// dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and 4338a482-f7eb-448c-9827-e9220f2e86a4), and
-        /// those children are where this info can be found. Also, for event
-        /// ddf2df8a-946d-4785-bb75-84233d01e927, only the victim team's details were found. The
-        /// last combination (thief only) is included for completeness.
+        /// More details about the stolen run
+        ///
+        /// These details exist for almost every event of this type, but
+        /// (presumably due to a bug) there were two occasions where a
+        /// RunStolenThroughTunnels event did not have any children: event ids
+        /// dd244af4-c5d1-4bd0-b2f4-9d7b1e11f2f7 and
+        /// 4338a482-f7eb-448c-9827-e9220f2e86a4. Those children are ordinarily
+        /// where this info can be found. Also, for event
+        /// ddf2df8a-946d-4785-bb75-84233d01e927, only the victim team's details
+        /// were found.
+        ///
+        /// The last combination (thief only) is included for completeness.
         details: RunStolenThroughTunnelsDetails,
 
-        /// If balloons were inflated on this run theft, contains the name of the stadium and
-        /// number of balloons.
+        /// If this run theft inflated Balloons, this contains details about
+        /// the balloon inflations. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<Balloons>,
 
-        /// If this run steal caused Shame, information about the Shame, including Hype. Otherwise
-        /// `null`.
+        /// If this run steal caused Shame, information about the Shame,
+        /// including Hype.
+        // TODO check json representation
         shame: Shame,
 
-        /// Free Refill data if one was used, otherwise null
+        /// Free Refill data if one was used, otherwise omitted
+        #[serde(skip_serializing_if="Option::is_none")]
         free_refill: Option<FreeRefill>,
     },
 
-    /// A player tried to steal an item from an opponent player using the Stadium's Tunnels, but
-    /// was caught and fled Elsewhere.
+    /// A player tried to steal an item from an opponent player using the
+    /// Stadium's Tunnels, but was caught and fled Elsewhere
     #[serde(rename_all = "camelCase")]
     CaughtStealingItemWithTunnels {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the player who was caught stealing and fled Elsewhere. This player is always on
-        /// the home team.
+        /// Uuid of the player who was caught stealing and fled Elsewhere
+        ///
+        /// This player is always on the home team
         thief_id: Uuid,
 
-        /// Name of the player who was caught stealing and fled Elsewhere. This player is always on
-        /// the home team.
+        /// Name of the player who was caught stealing and fled Elsewhere
+        ///
+        /// This player is always on the home team
         thief_name: String,
 
-        /// Uuid of the player whose item the thief wanted to steal. This player is always on the
-        /// away team.
+        /// Uuid of the player whose item the thief wanted to steal
+        ///
+        /// This player is always on the away team
         victim_id: Uuid,
 
-        /// Name of the player whose item the thief wanted to steal. This player is always on the
-        /// away team.
+        /// Name of the player whose item the thief wanted to steal
+        ///
+        /// This player is always on the away team
         victim_name: String,
 
         /// Name of the item the thief wanted to steal
         item_name: String,
 
-        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
-        /// CaughtStealingItemFromTunnels event type
+        /// Metadata for the apparently useless sub-event that repeats the
+        /// parent event but with the CaughtStealingItemFromTunnels event type
         caught_stealing_item_sub_event: SubEvent,
 
-        /// Metadata for the sub-event associated with adding the Elsewhere mod, if applicable.
-        /// Sometimes this didn't exist and I don't know why.
+        /// Metadata for the sub-event associated with adding the Elsewhere mod,
+        /// if applicable. Sometimes this didn't exist and I don't know why.
+        #[serde(skip_serializing_if="Option::is_none")]
         fled_elsewhere_sub_event: Option<SubEvent>,
 
         /// If the player was flipped negative, this is information about that
-        // TODO: This should be inside fled_elsewhere_sub_event, because you can't have this without
-        //   that
+        // TODO: This should be inside fled_elsewhere_sub_event, because you
+        //   can't have this without that
+        #[serde(skip_serializing_if="Option::is_none")]
         flipped_negative: Option<FlipNegative>,
     },
 
-    /// A player stole an item from an opponent player using the Stadium's Tunnels
+    /// A player stole an item from an opponent player using the Stadium's
+    /// Tunnels
     #[serde(rename_all = "camelCase")]
     StoleItemWithTunnels {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the player who stole the item. This player is always on the home team.
+        /// Uuid of the player who stole the item
+        ///
+        /// This player is always on the home team
         thief_id: Uuid,
 
-        /// Name of the player who stole the item. This player is always on the home team.
+        /// Name of the player who stole the item
+        ///
+        /// This player is always on the home team
         thief_name: String,
 
-        /// Uuid of the player whose item was stolen. This player is always on the away team.
+        /// Uuid of the player whose item was stolen
+        ///
+        /// This player is always on the away team
         victim_id: Uuid,
 
-        /// Name of the player whose item was stolen. This player is always on the away team.
+        /// Name of the player whose item was stolen
+        ///
+        /// This player is always on the away team
         victim_name: String,
 
-        /// Uuid of the team whose player's item was stolen. This *should* always be the away team,
-        /// because only the home team can use the Tunnels, but thanks to the linked items bug it
-        /// can be a team that's not even in this game!
+        /// Uuid of the team whose player's item was stolen
+        ///
+        /// This *should* always be the away team, because only the home team
+        /// can use the Tunnels, but thanks to the linked items bug it can be a
+        /// team that's not even in this game!
         ///
         /// The thief's team is always the home team, though.
         victim_team_id: Uuid,
@@ -7362,41 +8042,50 @@ pub enum FedEventData {
         /// Name of the item that was stolen
         item_name: String,
 
-        /// List of mods that this item grants. Each element is the internal id of a mod.
+        /// List of mods that this item grants, if any
+        ///
+        /// Each element is the internal id of a mod
+        #[serde(skip_serializing_if="Vec::is_empty")]
         item_mods: Vec<String>,
 
-        /// The increase/decrease that all the thief's items caused to their star rating before
-        /// gaining this item
+        /// The increase/decrease that all the thief's items caused to their
+        /// star rating before gaining this item
         thief_item_rating_before: f64,
 
-        /// The increase/decrease that all the thief's items now cause to their star rating
+        /// The increase/decrease that all the thief's items now cause to their
+        /// star rating
         thief_item_rating_after: Option<f64>,
 
         /// The thief's star rating. TODO: Is this with or without items?
         thief_rating: f64,
 
-        /// The increase/decrease that all the victim's items caused to their star rating before
-        /// gaining this item
+        /// The increase/decrease that all the victim's items caused to their
+        /// star rating before gaining this item
         ///
-        /// For reasons currently unknown to me, some items (like the Smokey Plant-Based Sunglasses
-        /// of Intelligence) have a `null` for one or more of their `Rating` properties. That causes
-        /// this value to be `null` when the player loses that item.
+        /// For reasons currently unknown to me, some items (like the Smokey
+        /// Plant-Based Sunglasses of Intelligence) have a `null` for one or
+        /// more of their `Rating` properties. That causes this value to be
+        /// omitted when the player loses that item.
+        #[serde(skip_serializing_if="Option::is_none")]
         victim_item_rating_before: Option<f64>,
 
-        /// The increase/decrease that all the victim's items now cause to their star rating
+        /// The increase/decrease that all the victim's items now cause to their
+        /// star rating
         victim_item_rating_after: f64,
 
         /// The victim's star rating. TODO: Is this with or without items?
         victim_rating: f64,
 
-        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
-        /// StoleItemFromTunnels event type
+        /// Metadata for the apparently useless sub-event that repeats the
+        /// parent event but with the StoleItemFromTunnels event type
         stole_item_sub_event: SubEvent,
 
         /// Metadata for the victim losing the item
         item_lost_sub_event: SubEvent,
 
-        /// Metadata for the thief dropping the item they previously had, if applicable
+        /// Metadata for the thief dropping the item they previously had, if
+        /// applicable
+        #[serde(skip_serializing_if="Option::is_none")]
         thief_item_dropped: Option<ItemDroppedForNewItem>,
 
         /// Metadata for the thief gaining the item
@@ -7409,29 +8098,34 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Uuid of the player who stole the item. This player is always on the home team.
+        /// Uuid of the player who stole the item
+        ///
+        /// This player is always on the home team
         thief_id: Uuid,
 
-        /// Name of the player who stole the item. This player is always on the home team.
+        /// Name of the player who stole the item
+        ///
+        /// This player is always on the home team
         thief_name: String,
 
-        /// Metadata for the apparently useless sub-event that repeats the parent event but with the
-        /// FoundNothingInterestingInTunnels event type
+        /// Metadata for the apparently useless sub-event that repeats the
+        /// parent event but with the FoundNothingInterestingInTunnels event
+        /// type
         sub_event: SubEvent,
     },
 
     /// Sun(Sun) recharged at the end of the Season.
     ///
-    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the recharge value is
-    /// always 26244, so those values are not stored.
+    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the
+    /// recharge value is always 26244, so those values are not stored.
     #[serde(rename_all = "camelCase")]
     SunSunRecharged {
         /// The pressure after recharge
         pressure_after: f64,
     },
 
-    /// Sun 30 smiled upon both teams in a game. This happens whenever a game reaches extra innings
-    /// and the Sun 30 rule is active
+    /// Sun 30 smiled upon both teams in a game. This happens whenever a game
+    /// reaches extra innings and the Sun 30 rule is active
     #[serde(rename_all = "camelCase")]
     Sun30Smiles {
         #[serde(flatten)]
@@ -7440,21 +8134,27 @@ pub enum FedEventData {
         /// Metadata for the away team's Win
         away: ShortEarnedWin,
 
-        /// Metadata for the home team's Win, if the corresponding earned-a-Win sub-event exists.
-        /// Otherwise, just the team's nickname.
+        /// Metadata for the home team's Win, if the corresponding earned-a-Win
+        /// sub-event exists. Otherwise, just the team's nickname.
         ///
         /// The earned-a-Win sub-event doesn't always exist (see event
-        /// d7f39a58-f148-4506-a59f-7e14c3680d55) but I don't know why. If you know why, please
-        /// contact beiju in the SIBR discord.
+        /// d7f39a58-f148-4506-a59f-7e14c3680d55) but I don't know why. If you
+        /// know why, please contact beiju in the SIBR discord.
+        // TODO Check the JSON representation
         home: Either<ShortEarnedWin, String>,
 
-        /// If Balloons were inflated as a result of this Win, this is the name of the Stadium.
-        /// Otherwise `null`. The stadium is always the home stadium, and the number of Balloons
+        /// If Balloons were inflated as a result of this Win, this is the name
+        /// of the Stadium. Otherwise omitted.
+        ///
+        /// The stadium is always the home stadium, and the number of Balloons
         /// inflated is always 10.
+        #[serde(skip_serializing_if="Option::is_none")]
         balloons: Option<String>,
     },
 
-    /// Voicemail activates. A player on the home team is swapped with a player in the Shadows
+    /// Voicemail activates
+    ///
+    /// A player on the home team is swapped with a player in the Shadows
     #[serde(rename_all = "camelCase")]
     Voicemail {
         #[serde(flatten)]
@@ -7499,8 +8199,9 @@ pub enum FedEventData {
         team_id: Uuid,
     },
 
-    /// Pitcher intentionally gave batter a walk. Only known cases are detective pitchers walking
-    /// Debted batters.
+    /// Pitcher intentionally gave batter a walk
+    ///
+    /// nly known cases are detective pitchers walking Debted batters.
     #[serde(rename_all = "camelCase")]
     IntentionalWalk {
         #[serde(flatten)]
@@ -7518,11 +8219,13 @@ pub enum FedEventData {
         /// Name of pitcher who intentionally gave up the walk
         pitcher_name: String,
 
-        /// UUid of pitcher who intentionally gave up the walk
+        /// Uuid of pitcher who intentionally gave up the walk
         pitcher_id: Uuid,
 
-        /// Metadata associated with the "sensed foul play" sub-event, if present
+        /// Metadata associated with the "sensed foul play" sub-event, if
+        /// present
         // TODO When is it present? Theory: only the first time
+        #[serde(skip_serializing_if="Option::is_none")]
         sensed_foul_play_sub_event: Option<SubEvent>,
     },
 
@@ -7537,14 +8240,17 @@ pub enum FedEventData {
         /// Uuid of the player who sought out the trade
         trader_id: Uuid,
 
-        /// Uuid of the player who the trader looked at
+        /// Uuid of the player who the trader looked at, if available
         ///
         /// This field was removed in s24 (TODO: Check that it was removed and
-        ///   it's not just a single event that's d03e47a0-cec5-4c8c-9d1c-a47880d9f954)
+        ///   it's not just a single event that's
+        ///   d03e47a0-cec5-4c8c-9d1c-a47880d9f954)
+        #[serde(skip_serializing_if="Option::is_none")]
         victim_id: Option<Uuid>,
 
-        /// Sub-event associated with finding nothing to trade. Not sure why this requires a
-        /// sub-event.
+        /// Sub-event associated with finding nothing to trade
+        ///
+        /// Not sure why this requires a sub-event
         sub_event: SubEvent,
     },
 
@@ -7553,8 +8259,9 @@ pub enum FedEventData {
         #[serde(flatten)]
         game: GameEvent,
 
-        /// Whether the player who made this trade was a Trader (takes items from a member of the
-        /// opponent team) or Traitor (takes items from a member of their own team).
+        /// Whether the player who made this trade was a Trader (takes items
+        /// from a member of the opponent team) or Traitor (takes items from a
+        /// member of their own team).
         #[serde(flatten)] // Is internally tagged with trader_traitor
         trader_traitor: TraderTraitor,
 
@@ -7564,10 +8271,12 @@ pub enum FedEventData {
         /// Uuid of the item that the trader took from the victim
         taken_item_id: Uuid,
 
-        /// Mods the victim lost by switching items
+        /// Mods the victim lost by switching items, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         victim_mods_lost: Vec<String>,
 
-        /// Mods the trader gained by switching items
+        /// Mods the trader gained by switching items, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         trader_mods_gained: Vec<String>,
 
         /// Name of the player who sought out the trade
@@ -7576,14 +8285,18 @@ pub enum FedEventData {
         /// Uuid of the player who sought out the trade
         trader_id: Uuid,
 
-        /// Trader's item rating before the swap
+        /// Trader's item rating before the swap, if available
         ///
-        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        /// Can be omitted under unidentified circumstances (see
+        /// c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        #[serde(skip_serializing_if="Option::is_none")]
         trader_item_rating_before: Option<f64>,
 
-        /// Trader's item rating after the swap
+        /// Trader's item rating after the swap, if available
         ///
-        /// Can be null under unidentified circumstances (see 69b1e333-db49-40e7-bcf6-432814f0c391)
+        /// Can be omitted under unidentified circumstances (see
+        /// 69b1e333-db49-40e7-bcf6-432814f0c391)
+        #[serde(skip_serializing_if="Option::is_none")]
         trader_item_rating_after: Option<f64>,
 
         /// Trader's total rating
@@ -7598,14 +8311,18 @@ pub enum FedEventData {
         /// Uuid of the player whose item the trader took
         victim_id: Uuid,
 
-        /// Victim's item rating before the swap
+        /// Victim's item rating before the swap, if available
         ///
-        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        /// Can be omitted under unidentified circumstances (see
+        /// c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        #[serde(skip_serializing_if="Option::is_none")]
         victim_item_rating_before: Option<f64>,
 
         /// Victim's item rating after the swap
         ///
-        /// Can be null under unidentified circumstances (see c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        /// Can be omitted under unidentified circumstances (see
+        /// c5d43346-7242-4bd9-9b9e-4bcb14c6cca0)
+        #[serde(skip_serializing_if="Option::is_none")]
         victim_item_rating_after: Option<f64>,
 
         /// Victim's total rating
@@ -7615,9 +8332,12 @@ pub enum FedEventData {
         victim_item_change_sub_event: SubEvent,
     },
 
-    /// Player tried to trade with another player, but the other had nothing to offer. This event is
-    /// very similar to NothingToTrade, but has a slightly different message that names the victim.
-    /// I don't know what the difference is, but the two event messages intermingle so it's not just
+    /// Player tried to trade with another player, but the other had nothing to
+    /// offer
+    ///
+    /// This event is very similar to NothingToTrade, but has a slightly
+    /// different message that names the victim. I don't know what the
+    /// difference is, but the two event messages intermingle so it's not just
     /// a case of the message changing.
     NothingToOffer {
         #[serde(flatten)]
@@ -7635,13 +8355,16 @@ pub enum FedEventData {
         /// Uuid of the player who the trader looked at
         victim_id: Uuid,
 
-        /// Sub-event associated with finding nothing to trade. Not sure why this requires a
-        /// sub-event.
+        /// Sub-event associated with finding nothing to trade
+        ///
+        /// Not sure why this requires a sub-event
         sub_event: SubEvent,
     },
 
-    /// Player tried and failed to Roam. The only observed instances of this were Parker MacMillan
-    /// trying to Roam out of the Vault and being blocked by The Force Field
+    /// Player tried and failed to Roam
+    ///
+    /// The only observed instances of this were Parker MacMillan trying to Roam
+    /// out of the Vault and being blocked by The Force Field
     RoamFailed {
         /// Name of the player who tried and failed to Roam
         player_name: String,
@@ -7661,8 +8384,9 @@ pub enum FedEventData {
         /// Nickname of the thieving team.
         thieving_team_nickname: String,
 
-        /// Name of the stadium owned by the thieving team. This is how that team's thieves' guild
-        /// is identified.
+        /// Name of the stadium owned by the thieving team
+        ///
+        /// This is how that team's thieves' guild is identified
         thieving_team_stadium_name: String,
 
         /// Uuid of the team whose player was stolen.
@@ -7684,7 +8408,8 @@ pub enum FedEventData {
         player_shadows_boost: PlayerBoostSubEvent,
     },
 
-    /// A team's Thieves Guild stole an item from a player from their opponents' Shadows
+    /// A team's Thieves Guild stole an item from a player from their opponents'
+    /// Shadows
     ThievesGuildStoleItem {
         #[serde(flatten)]
         game: GameEvent,
@@ -7692,14 +8417,16 @@ pub enum FedEventData {
         /// Nickname of the thieving team.
         thieving_team_nickname: String,
 
-        /// Name of the stadium owned by the thieving team. This is how that team's thieves' guild
-        /// is identified.
+        /// Name of the stadium owned by the thieving team
+        ///
+        /// This is how that team's thieves' guild is identified
         thieving_team_stadium_name: String,
 
         /// Name of player who gained the stolen item
         beneficiary_player_name: String,
 
-        /// Information associated with the thieving team's player gaining the item
+        /// Information associated with the thieving team's player gaining the
+        /// item
         beneficiary_gained_item: ItemGained,
 
         /// Uuid of the team who lost the item
@@ -7724,13 +8451,16 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// The riff that was played
+        ///
+        /// This should never be empty
         riff: Vec<RiffElement>,
 
         /// The weather that Jazz changed to
         new_weather: Weather,
     },
 
-    /// When the Band begins to Play during Polarity weather and changes the weather to Jazz
+    /// When the Band begins to Play during Polarity weather and changes the
+    /// weather to Jazz
     ///
     /// This only happened once ever:
     /// https://reblase.sibr.dev/game/945e65e3-afb4-488b-84d0-613f5c39fa10#1a1471ec-406e-f315-8f57-daa15527fd88
@@ -7782,13 +8512,15 @@ pub enum FedEventData {
         /// Outcome of the night shift
         outcome: NightShiftOutcome,
 
-        /// Metadata for the sub-event for the player recieving their Night Shift boost
+        /// Metadata for the sub-event for the player recieving their Night
+        /// Shift boost
         night_shift_boost_sub_event: PlayerBoostSubEvent,
     },
 
     /// A new Team was formed
     ///
-    /// This happened for the Vault Legends, the Rising Stars, and the Oxford Paws.
+    /// This happened for the Vault Legends, the Rising Stars, and the Oxford
+    /// Paws
     TeamFormed {
         /// The Uuid of the newly formed team
         team_id: Uuid,
@@ -7867,10 +8599,11 @@ pub enum FedEventData {
         sub_event: SubEvent,
 
         /// Information about a successful tunnels theft, if this theft
-        /// will be successful. Otherwise null.
+        /// will be successful. Otherwise omitted.
         ///
         /// Although the game log message associated with this event doesn't
         /// say whether it will succeed, its child events do. Spoilers!
+        #[serde(skip_serializing_if="Option::is_none")]
         player_collected: Option<SuccessfulTunnelsTheft>,
     },
 
@@ -7948,8 +8681,8 @@ pub enum FedEventData {
     ///
     /// Happened during the Semicentennial. TODO: Exclusively?
     ///
-    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the recharge value is
-    /// always 26244, so those values are not stored.
+    /// As far as I'm aware, Sun(Sun)'s maximum pressure is always 99999 and the
+    /// recharge value is always 26244, so those values are not stored
     #[serde(rename_all = "camelCase")]
     SunSunPressureBuilt {
         // TODO Verify that this is after
@@ -8068,6 +8801,7 @@ pub enum FedEventData {
         /// This is not a child event. It's a separate event that appears after
         /// the PlayerLeftVault event, but it was likely intended to be a child
         /// event.
+        #[serde(skip_serializing_if="Option::is_none")]
         shadow_boost: Option<PlayerBoostSubEvent>,
     },
     /// Team was incinerated
@@ -8101,11 +8835,13 @@ pub enum FedEventData {
         division_id: Uuid,
 
         /// List of players who survived the incineration and jumped to the new
-        /// team and the associated metadata
+        /// team and the associated metadata, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         surviving_players: Vec<TeamIncinerationSurvivor>,
 
         /// List of players who did not survive the incineration and the
-        /// associated metadata
+        /// associated metadata, if any
+        #[serde(skip_serializing_if="Vec::is_empty")]
         incinerated_players: Vec<TeamIncinerationVictim>,
 
         /// Metadata for the sub-event associated with the weather triggering
@@ -8125,6 +8861,7 @@ pub enum FedEventData {
 
         /// Metadata for the sub-event associated with the instability chaining
         /// to a new team, if it did so
+        #[serde(skip_serializing_if="Option::is_none")]
         instability_chain: Option<TeamUnstableChain>,
     },
 
@@ -8235,7 +8972,8 @@ pub enum FedEventData {
         item_mods: Vec<String>,
 
         /// The increase or decrease that all the wielding player's items caused
-        /// to their star rating before this item was nullified
+        /// to their star rating before this item was nullified, if any
+        #[serde(skip_serializing_if="Option::is_none")]
         player_item_rating_before: Option<f64>,
 
         /// The increase or decrease that all the wielding player's items now
@@ -8377,7 +9115,8 @@ pub enum FedEventData {
         game: GameEvent,
 
         /// If only one team was nullified, the nickname and win sub-event
-        /// for that team non-losing the game. Otherwise null.
+        /// for that team non-losing the game. Otherwise omitted.
+        #[serde(skip_serializing_if="Option::is_none")]
         non_loser: Option<WinSubEventWithNickname>,
     },
 

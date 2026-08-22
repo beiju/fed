@@ -1,3 +1,4 @@
+use serde::Serialize;
 use schemars::JsonSchema;
 use with_structure::{MonostateStructure, WithStructure};
 
@@ -7,7 +8,7 @@ pub trait RunSource {
 
 macro_rules! run_source {
     ($name:ident, $label:expr_2021) => {
-        #[derive(Debug, Clone, Copy, JsonSchema)]
+        #[derive(Debug, Clone, Copy, JsonSchema, Serialize)]
         pub struct $name;
         impl RunSource for $name {
             fn label() -> &'static str {

@@ -1070,7 +1070,7 @@ impl FedEvent {
 
                 eb.build(if is_siphon { EventType::BlooddrainSiphon } else { EventType::Blooddrain })
             }
-            FedEventData::Feedback { game, players: (player_a, player_b), lcd_soundsystem, position_type, sub_event, weather_event } => {
+            FedEventData::Feedback { game, players: [player_a, player_b], lcd_soundsystem, position_type, sub_event, weather_event } => {
                 let home_team_id = game.home_team;
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
@@ -1675,9 +1675,24 @@ impl FedEvent {
 
                 eb.build(EventType::ReturnFromElsewhere)
             }
-            FedEventData::Incineration { game, team_id, team_nickname, victim_id, victim_name, replacement_id, replacement_name, location, unstable_chain, sub_events, ambush, pressure_built, heat_magnet } => {
-                let (incin_child, enter_hall_child, hatch_child, replace_child) = sub_events;
-
+            FedEventData::Incineration {
+                game,
+                team_id,
+                team_nickname,
+                victim_id,
+                victim_name,
+                replacement_id,
+                replacement_name,
+                location,
+                unstable_chain,
+                incineration_sub_event,
+                enters_hall_sub_event,
+                hatch_sub_event,
+                replacement_sub_event,
+                ambush,
+                pressure_built,
+                heat_magnet,
+            } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 eb.push_player_tag(victim_id);
@@ -1697,7 +1712,7 @@ impl FedEvent {
 
                 eb.push_description(format!("They're replaced by {replacement_name}."));
 
-                eb.push_child(incin_child, |mut child_eb| {
+                eb.push_child(incineration_sub_event, |mut child_eb| {
                     child_eb.push_description(format!("Rogue Umpire incinerated {victim_name}!"));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_team_tag(team_id);
@@ -1711,7 +1726,7 @@ impl FedEvent {
                     }
                 });
 
-                eb.push_child(enter_hall_child, |mut child_eb| {
+                eb.push_child(enters_hall_sub_event, |mut child_eb| {
                     child_eb.push_description(format!("{victim_name} entered the Hall of Flame."));
                     child_eb.push_player_tag(victim_id);
                     child_eb.build(EventType::EnterHallOfFlame)
@@ -1727,14 +1742,14 @@ impl FedEvent {
                     });
                 }
 
-                eb.push_child(hatch_child, |mut child_eb| {
+                eb.push_child(hatch_sub_event, |mut child_eb| {
                     child_eb.push_description(format!("{replacement_name} has been hatched from the field of eggs."));
                     child_eb.push_player_tag(replacement_id);
                     child_eb.push_metadata_uuid("id", replacement_id);
                     child_eb.build(EventType::PlayerHatched)
                 });
 
-                eb.push_child(replace_child, |mut child_eb| {
+                eb.push_child(replacement_sub_event, |mut child_eb| {
                     child_eb.push_description(format!("{replacement_name} replaced the incinerated {victim_name}."));
                     child_eb.push_player_tag(victim_id);
                     child_eb.push_player_tag(replacement_id);

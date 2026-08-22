@@ -1,10 +1,29 @@
+use std::hash::{Hash, Hasher};
 use crate::WithStructure;
 use chrono::{DateTime, Utc};
 use std::marker::PhantomData;
+use serde::Serialize;
 use uuid::Uuid;
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct MonostateStructure;
+
+impl PartialEq for MonostateStructure {
+    fn eq(&self, _other: &Self) -> bool {
+        true // Monostate means any two instances are equal
+    }
+}
+impl Eq for MonostateStructure {}
+impl Hash for MonostateStructure {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Just write some magic value to (probably) distinguish hashes of this
+        // structure from hashes of nothing
+        // This magic value is the biggest prime that fits into an i64
+        // (according to wolfram alpha)
+        state.write(9223372036854775783_i64.to_le_bytes().as_ref());
+    }
+}
 
 macro_rules! trivial_with_structure {
     ($($t:ty),+) => {
@@ -36,7 +55,7 @@ trivial_with_structure!(
     DateTime<Utc>
 );
 
-impl<T> WithStructure for Vec<T> {
+impl<T: Serialize> WithStructure for Vec<T> {
     type Structure = MonostateStructure;
 
     fn structure(&self) -> Self::Structure {
@@ -107,7 +126,7 @@ tuple_impls! { A B C D E F G H I J K L }
 
 macro_rules! array_impls {
     ($n:literal) => {
-        impl<T> WithStructure for [T; $n] {
+        impl<T: Serialize> WithStructure for [T; $n] {
             type Structure = MonostateStructure;
             fn structure(&self) -> Self::Structure {
                 MonostateStructure

@@ -1711,10 +1711,10 @@ pub fn parse_next_event_r(
 
             FedEventData::Feedback {
                 game: event.game(unscatter, attractor_secret_base)?,
-                players: (
+                players: [
                     get_player_data!(sub_event, "a", player1_name),
                     get_player_data!(sub_event, "b", player2_name),
-                ),
+                ],
                 lcd_soundsystem,
                 position_type: position,
                 sub_event: sub_event.as_sub_event(),
@@ -2051,12 +2051,10 @@ pub fn parse_next_event_r(
                         replacement_name: replacement_name.to_string(),
                         location: replace_child.metadata_enum("location")?,
                         unstable_chain,
-                        sub_events: (
-                            incin_child.as_sub_event(),
-                            enter_hall_child.as_sub_event(),
-                            hatch_child.as_sub_event(),
-                            replace_child.as_sub_event(),
-                        ),
+                        incineration_sub_event: incin_child.as_sub_event(),
+                        enters_hall_sub_event: enter_hall_child.as_sub_event(),
+                        hatch_sub_event: hatch_child.as_sub_event(),
+                        replacement_sub_event: replace_child.as_sub_event(),
                         ambush,
                         pressure_built,
                         heat_magnet,

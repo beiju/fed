@@ -11,3 +11,4 @@ chrono = "0.4.44"
 perfect-derive = "0.1.5"
 either = { version = "1.15.0", optional = true }
 with_structure_derive = { path = "../with_structure_derive" }
+serde = { version = "1.0.229", features = ["derive"], optional = true }

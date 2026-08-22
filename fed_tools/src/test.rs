@@ -217,7 +217,7 @@ fn run_test_on_season(
 
             std::fs::write(
                 sample_path.join(format!("{}-structure.json", parsed_event.id)),
-                format!("{:?}", structure),
+                serde_json::to_string_pretty(&structure)?,
             )?;
 
             with_structures.insert(structure);

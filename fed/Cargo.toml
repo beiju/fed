@@ -22,5 +22,6 @@ thiserror = "2.0.18"
 # need this specification for the `serde` feature.
 either = { version = "1.15.0", features = ["serde"] }
 uuid = { version = "1.23.1", features = ["serde"] }
-with_structure = { path = "../with_structure", features = ["either"] }
+with_structure = { path = "../with_structure", features = ["either", "serde"] }
 stacker = "0.1"
+strum = "0.28.0"

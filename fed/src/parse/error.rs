@@ -124,7 +124,7 @@ pub enum FeedParseError {
 
     #[error("Expected location to be one of {expected:?} but it was {actual}")]
     InvalidLocation {
-        expected: &'static [i64],
+        expected: Vec<i64>,
         actual: i64,
     },
 
