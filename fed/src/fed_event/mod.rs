@@ -5088,11 +5088,10 @@ pub enum FedEventData {
         /// Roast of the coffee that bestowed the Free Refill
         roast: String,
 
-        /// First ingredient of the coffee that bestowed the Free Refill
-        ingredient1: String,
-
-        /// Second ingredient of the coffee that bestowed the Free Refill
-        ingredient2: String,
+        /// The two ingredients of the coffee that bestowed the Free Refill
+        ///
+        /// This will always be a length-2 array
+        ingredients: [String; 2],
 
         /// Metadata for the sub-event associated with the Free Refill mod-added event
         sub_event: SubEvent,

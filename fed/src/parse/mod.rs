@@ -1588,7 +1588,7 @@ pub fn parse_next_event_r(
             }
         }
         EventType::GainFreeRefill => {
-            let (player_name, roast, ingredient1, ingredient2) =
+            let (player_name, roast, ingredients) =
                 event.next_parse(parse_gain_free_refill)?;
             let mut sub_event = event.next_child(EventType::AddedMod)?;
             let player_id = event.next_player_id()?;
@@ -1599,8 +1599,7 @@ pub fn parse_next_event_r(
                 player_id,
                 player_name: player_name.to_string(),
                 roast: roast.to_string(),
-                ingredient1: ingredient1.to_string(),
-                ingredient2: ingredient2.to_string(),
+                ingredients: ingredients.map(String::from),
                 sub_event: sub_event.as_sub_event(),
                 team_id: sub_event.next_team_id_opt(),
             }

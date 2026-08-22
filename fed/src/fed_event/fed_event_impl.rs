@@ -927,10 +927,11 @@ impl FedEvent {
                 eb.push_scores(&scores, home_team_id, "scores!", false, self.season < 21);
                 eb.build(EventType::Walk)
             }
-            FedEventData::GainFreeRefill { game, player_id, player_name, roast, ingredient1, ingredient2, sub_event, team_id } => {
+            FedEventData::GainFreeRefill { game, player_id, player_name, roast, ingredients, sub_event, team_id } => {
                 eb.set_game(game);
                 eb.set_category(EventCategory::Special);
                 let child_description = format!("{player_name} got a Free Refill.");
+                let [ingredient1, ingredient2] = ingredients;
                 eb.push_description(format!("{player_name} is Poured Over with a {roast} roast blending {ingredient1} and {ingredient2}!"));
                 eb.push_description(&child_description);
                 eb.push_player_tag(player_id);

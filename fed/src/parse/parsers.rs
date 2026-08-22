@@ -1170,7 +1170,7 @@ pub(crate) fn parse_coffee_bean(input: &str) -> ParserResult<'_, (&str, &str, &s
     Ok((input, (player_name2, roast, notes, wired, gained)))
 }
 
-pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<'_, (&str, &str, &str, &str)> {
+pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<'_, (&str, &str, [&str; 2])> {
     let (input, player_name) = parse_terminated(" is Poured Over with a ").parse(input)?;
     let (input, roast) = parse_terminated(" roast blending ").parse(input)?;
     let (input, ingredient1) = parse_terminated(" and ").parse(input)?;
@@ -1178,7 +1178,7 @@ pub(crate) fn parse_gain_free_refill(input: &str) -> ParserResult<'_, (&str, &st
     let (input, _) = tag(player_name).parse(input)?;
     let (input, _) = tag(" got a Free Refill.").parse(input)?;
 
-    Ok((input, (player_name, roast, ingredient1, ingredient2)))
+    Ok((input, (player_name, roast, [ingredient1, ingredient2])))
 }
 
 pub(crate) enum IncinerationBlockedReason {
