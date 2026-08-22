@@ -21,7 +21,7 @@ use with_structure::WithStructure;
 
 use crate::FeedParseError;
 use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
-use crate::parse::builder::possessive;
+use crate::parse::event_builder_new::possessive;
 
 fn is_false(b: &bool) -> bool {
     *b == false
@@ -5723,7 +5723,7 @@ pub enum FedEventData {
         /// Metadata associated with the tarot reading. This is vague on
         /// purpose to be generic.
         #[with_structure(ignore)]
-        metadata: serde_json::Value,
+        metadata: EventMetadata,
 
         /// Uuids of players involved in this tarot reading. This is vague on
         /// purpose to be generic.

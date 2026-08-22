@@ -3104,7 +3104,7 @@ pub fn parse_next_event_r(
         }
         EventType::TarotReading => FedEventData::TarotReading {
             description: event.description().into(),
-            metadata: event.metadata().clone(),
+            metadata: event.full_metadata().clone(),
             player_tags: event.player_tags()?.into(),
             team_tags: event.team_tags()?.into(),
         },

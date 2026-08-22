@@ -413,6 +413,10 @@ impl EventBuilder {
             .push(player_id)
     }
 
+    pub fn set_player_tags(&mut self, player_tags: Vec<Uuid>) {
+        self.event.player_tags = Some(player_tags);
+    }
+
     pub fn push_team_tag(&mut self, team_id: Uuid) {
         self.event
             .team_tags
@@ -1602,5 +1606,13 @@ impl EventBuilder {
     pub fn build(mut self, event_type: EventType) -> EventuallyEvent {
         self.event.r#type = event_type;
         self.event
+    }
+}
+
+pub(crate) fn possessive(name: String) -> String {
+    if name.chars().last().unwrap() == 's' {
+        name + "'"
+    } else {
+        name + "'s"
     }
 }
