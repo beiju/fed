@@ -1098,6 +1098,8 @@ pub enum StatChangeCategory {
     Baserunning = 2,
     Defense = 3,
     All = 4,
+    // This is conjecture, it shows up in exactly 1 circumstance: Bottom Dwellers
+    Team = 5,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]

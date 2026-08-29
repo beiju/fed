@@ -876,7 +876,7 @@ impl FedEvent {
                         child.push_team_tag(gamma.team_id);
                         child.push_metadata_f64("before", gamma.rating_before);
                         child.push_metadata_f64("after", gamma.rating_after);
-                        child.push_metadata_i64("type", 4);
+                        child.push_metadata_i64("type", StatChangeCategory::All as i64);
                         child.build(EventType::PlayerStatDecrease)
                     })
                 }
@@ -958,7 +958,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{player_name} had an allergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
-                    child_eb.push_metadata_i64("type", 4);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
                     child_eb.build(EventType::PlayerStatDecrease)
@@ -977,7 +977,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{player_name} had a Superallergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
-                    child_eb.push_metadata_i64("type", 4);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
                     child_eb.build(EventType::PlayerStatDecreaseFromSuperallergic)
@@ -1383,7 +1383,7 @@ impl FedEvent {
                     child_eb.push_player_tag(tangled_id);
                     child_eb.push_metadata_f64("before", tangled_rating_before);
                     child_eb.push_metadata_f64("after", tangled_rating_after);
-                    child_eb.push_metadata_i64("type", 4);  // TODO what is type 4?
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.build(EventType::PlayerStatDecrease)
                 });
                 eb.build(EventType::FeedbackBlocked)
@@ -1711,7 +1711,7 @@ impl FedEvent {
                         child_eb.push_team_tag(ambush.team_id);
                         child_eb.push_metadata_f64("after", ambush.player_rating_after);
                         child_eb.push_metadata_f64("before", ambush.player_rating_before);
-                        child_eb.push_metadata_i64("type", 4); // 4 = "all categories"
+                        child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                         child_eb.build(EventType::PlayerStatIncrease)
                     });
                 }
@@ -1739,7 +1739,7 @@ impl FedEvent {
                     child_eb.push_description(&description);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
-                    child_eb.push_metadata_i64("type", 4); // todo: what does 4 mean?
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.push_player_tag(player_id);
                     child_eb.push_team_tag(team_id);
                     child_eb.build(EventType::PlayerStatIncrease)
@@ -1888,7 +1888,7 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.push_metadata_f64("before", rating_before);
                 eb.push_metadata_f64("after", rating_after);
-                eb.push_metadata_i64("type", 4); // todo: what does 4 mean?
+                eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                 eb.build(EventType::PlayerStatIncrease)
             }
             FedEventData::TeamEnteredPartyTime { team_id, team_nickname } => {
@@ -1927,7 +1927,7 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.push_metadata_f64("before", rating_before);
                 eb.push_metadata_f64("after", rating_after);
-                eb.push_metadata_i64("type", 5); // todo: what does 5 mean?
+                eb.push_metadata_i64("type", StatChangeCategory::Team as i64);
                 eb.build(EventType::PlayerStatIncrease)
             }
             FedEventData::WillReceived { team_id, will_title, metadata } => {
@@ -2189,7 +2189,7 @@ impl FedEvent {
                     child_eb.push_team_tag(team_id);
                     child_eb.push_metadata_str("mod", "OVERPERFORMING");
                     child_eb.push_metadata_str("source", "HIGH_PRESSURE");
-                    child_eb.push_metadata_i64("type", 3);
+                    child_eb.push_metadata_i64("type", ModDuration::Game);
                     child_eb.build(if is_on { EventType::AddedModFromOtherMod } else { EventType::RemovedModFromOtherMod })
                 });
                 eb.build(EventType::HighPressure)
@@ -2553,7 +2553,7 @@ impl FedEvent {
                     child_eb.push_player_tag(player_id);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
-                    child_eb.push_metadata_i64("type", 4);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.build(EventType::PlayerStatIncrease)
                 });
                 eb.build(EventType::EnterCrimeScene)
@@ -2965,7 +2965,7 @@ impl FedEvent {
                     }
                     child.push_metadata_f64("after", rating_after);
                     child.push_metadata_f64("before", rating_before);
-                    child.push_metadata_i64("type", 4 /* "all" attribute category */);
+                    child.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child.build(EventType::PlayerStatIncrease)
                 });
 
@@ -3567,7 +3567,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{replaced_player_name} entered the Shadows."));
                     child_eb.push_metadata_f64("before", shadowed_sub_event.rating_before);
                     child_eb.push_metadata_f64("after", shadowed_sub_event.rating_after);
-                    child_eb.push_metadata_i64("type", 4); // what does this mean??
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
                     child_eb.push_player_tag(replaced_player_id);
                     child_eb.push_team_tag(team_id);
 
