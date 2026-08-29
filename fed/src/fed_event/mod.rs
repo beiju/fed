@@ -2735,8 +2735,6 @@ fn write_maximum_sun(num_runs: f64, w: &mut impl Write) -> Result<(), std::fmt::
 }
 
 pub trait LedgerV2: WithStructure {
-    fn label() -> &'static str;
-
     // Returns the number of Run lines in the ledger
     fn len(&self) -> usize;
 
@@ -2813,12 +2811,6 @@ impl<ChildT: Iterator<Item = f64>> FedIteratorExtensions for ChildT {
 }
 
 impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourceT> {
-    // TODO I can't remember why I have this indirection and it might not be 
-    //   necessary
-    fn label() -> &'static str {
-        RunSourceT::label()
-    }
-
     fn len(&self) -> usize {
         self.runs.len()
             + if self.sum_sun.is_some() { 1 } else { 0 }
@@ -2840,7 +2832,7 @@ impl<RunSourceT: RunSource + WithStructure> LedgerV2 for SimpleLedgerV2<RunSourc
 
         for run in &self.runs {
             delimiter.print(w)?;
-            total += run.compute_and_write(Self::label(), w)?;
+            total += run.compute_and_write(RunSourceT::label(), w)?;
         }
 
         if let Some(sum_sun_runs) = self.sum_sun {
@@ -2867,10 +2859,6 @@ pub struct HomeRunLedger {
 }
 
 impl LedgerV2 for HomeRunLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         let mut len = self.home_run.len();
         if let Some(bucket) = &self.big_bucket {
@@ -2953,10 +2941,6 @@ impl ModerationLedger {
 }
 
 impl LedgerV2 for ModerationLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         1
     }
@@ -3005,10 +2989,6 @@ impl TripleThreatLedger {
 }
 
 impl LedgerV2 for TripleThreatLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         1
     }
@@ -3048,10 +3028,6 @@ impl HeatMagnetLedger {
 }
 
 impl LedgerV2 for HeatMagnetLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         1
     }
@@ -3085,10 +3061,6 @@ impl OverflowLedger {
 }
 
 impl LedgerV2 for OverflowLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         1
     }
@@ -3126,10 +3098,6 @@ pub struct StolenBaseLedger {
 }
 
 impl LedgerV2 for StolenBaseLedger {
-    fn label() -> &'static str {
-        todo!()
-    }
-
     fn len(&self) -> usize {
         let mut len = 0;
         if self.steal_home.is_some() {
