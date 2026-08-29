@@ -148,11 +148,15 @@ fn impl_with_structure_for_enum(
                 Fields::Named(fields) => {
                     let destructuring_names: Vec<_> = fields.named.iter()
                         .map(|field| {
-                            // Note: must NOT obey the `ignore` flag here, because this destructures
-                            // the fields of the original object and Rust is unhappy if we don't
-                            // name every field
-                            field.ident.as_ref()
-                                .expect("Fields in a named-field struct must be named")
+                            let opts = WithStructureOpts::from_field(field).unwrap();
+                            let ident = field.ident.as_ref()
+                                .expect("Fields in a named-field struct must be named");
+
+                            if opts.ignore.is_present() {
+                                quote! { #ident: _ }
+                            } else {
+                                quote! { #ident }
+                            }
                         })
                         .collect();
                     let field_initializers: Vec<_> = fields.named.iter()
