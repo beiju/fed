@@ -184,4 +184,22 @@ pub enum FeedParseError {
         tag_type: &'static str,
         tag_value: Uuid,
     },
+
+    #[error(
+        "Modifier runs_before value did not match the previous runs_after. \
+        Expected {expected}, but got {actual}."
+    )]
+    ModifierRunsBeforeDidNotMatch {
+        expected: f64,
+        actual: f64,
+    },
+
+    #[error(
+        "Modifier runs_after value did not match the value computed by applying \
+        the modifier to runs_before. Expected {expected}, but got {actual}."
+    )]
+    ModifierRunsAfterDidNotMatch {
+        expected: f64,
+        actual: f64,
+    },
 }

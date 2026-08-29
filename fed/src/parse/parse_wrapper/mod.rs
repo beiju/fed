@@ -877,6 +877,9 @@ impl<'e> EventParseWrapper<'e> {
             }
         } else {
             let score_ledger = score_child.metadata_str("ledger")?;
+            // The first argument will be the summation line. We don't need to
+            // check that because any mismatch between our summation line and
+            // Blaseball's will be caught by the round-trip checking.
             let (_, ledger) = LedgerT::parse(score_ledger)?;
             Ledger::V2(ledger)
         };

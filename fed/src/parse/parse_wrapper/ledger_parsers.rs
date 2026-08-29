@@ -1,3 +1,4 @@
+use float_cmp::approx_eq;
 use crate::parse::parsers::*;
 use crate::{
     FeedParseError, HeatMagnetLedger, HomeRunLedger, LedgerRun, LedgerRunModifier, LedgerV2,
@@ -16,52 +17,83 @@ pub trait ParseableLedger {
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError>;
 }
 
-fn parse_modifiers(mut ledger: &str) -> Result<(&str, Vec<LedgerRunModifier>), FeedParseError> {
+struct RunCountChecker(f64);
+
+impl RunCountChecker {
+    fn new(value: f64) -> Self { Self(value) }
+
+    fn check_apply<F: Fn(f64) -> f64>(&mut self, runs_before: f64, runs_after: f64, applicator: F) -> Result<(), FeedParseError> {
+        // 2 ulps is the lowest value that doesn't error on the entire Expansion Era
+        if !approx_eq!(f64, self.0, runs_before, ulps = 2)  {
+            return Err(FeedParseError::ModifierRunsBeforeDidNotMatch {
+                expected: self.0,
+                actual: runs_before,
+            });
+        }
+
+        // Always start from runs_before, even if it didn't match
+        let computed = applicator(runs_before);
+        // 2 ulps is the lowest value that doesn't error on the entire Expansion Era
+        if !approx_eq!(f64, computed, runs_after, ulps = 2) {
+            return Err(FeedParseError::ModifierRunsAfterDidNotMatch {
+                expected: computed,
+                actual: runs_after,
+            });
+        }
+
+        // Always set self to runs_after, even if it didn't match
+        self.0 = runs_after;
+        Ok(())
+    }
+}
+
+fn parse_modifiers(mut ledger: &str, base_runs: f64) -> Result<(&str, Vec<LedgerRunModifier>), FeedParseError> {
     let mut modifiers = Vec::new();
+    let mut running_total = RunCountChecker::new(base_runs); // ha ha
     loop {
         let (rest, parsed_modifier) = parse_ledger(parse_ledger_v2_modifier, ledger)?;
         ledger = rest;
 
         match parsed_modifier {
             None => break Ok((ledger, modifiers)),
-            Some(ParsedLedgerV2Modifier::Magnified { position, .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::Magnified { position, runs_before, runs_after, }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x * 2.)?;
                 modifiers.push(LedgerRunModifier::Magnified { position });
             }
-            Some(ParsedLedgerV2Modifier::Underhanded { .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::Underhanded { runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x * -1.)?;
                 modifiers.push(LedgerRunModifier::Underhanded);
             }
-            Some(ParsedLedgerV2Modifier::SunPoint1 { value, .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::SunPoint1 { value, runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x + value)?;
                 modifiers.push(LedgerRunModifier::SunPoint1 { value });
             }
-            Some(ParsedLedgerV2Modifier::Subtractor { .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::Subtractor { runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x * -1.)?;
                 modifiers.push(LedgerRunModifier::Subtractor);
             }
-            Some(ParsedLedgerV2Modifier::AcidicPitch { .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::AcidicPitch { runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x - 0.1)?;
                 modifiers.push(LedgerRunModifier::AcidicPitch);
             }
-            Some(ParsedLedgerV2Modifier::Wired { player_name, .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::Wired { player_name, runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x + 0.5)?;
                 modifiers.push(LedgerRunModifier::Wired {
                     player_name: player_name.to_string(),
                 });
             }
-            Some(ParsedLedgerV2Modifier::Tired { player_name, .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::Tired { player_name, runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x - 0.5)?;
                 modifiers.push(LedgerRunModifier::Tired {
                     player_name: player_name.to_string(),
                 });
             }
-            Some(ParsedLedgerV2Modifier::NegativePolarity { .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::NegativePolarity { runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x * -1.)?;
                 modifiers.push(LedgerRunModifier::NegativePolarity);
             }
-            Some(ParsedLedgerV2Modifier::TeamMagnified { .. }) => {
-                // TODO Verify run numbers are as expected
+            Some(ParsedLedgerV2Modifier::TeamMagnified { runs_before, runs_after }) => {
+                running_total.check_apply(runs_before, runs_after, |x| x * 2.)?;
                 modifiers.push(LedgerRunModifier::TeamMagnified);
             }
         }
@@ -93,7 +125,7 @@ impl<RunSourceT: WithStructure + RunSource> ParseableLedger for SimpleLedgerV2<R
             }
 
             let mut run = LedgerRun::default();
-            (ledger, run.modifiers) = parse_modifiers(ledger)?;
+            (ledger, run.modifiers) = parse_modifiers(ledger, 1.)?;
 
             runs.push(run);
         }
@@ -168,7 +200,7 @@ impl ParseableLedger for TripleThreatLedger {
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, threats) = parse_ledger(parse_ledger_triple_threat, ledger)?;
-        let (ledger, modifiers) = parse_modifiers(ledger)?;
+        let (ledger, modifiers) = parse_modifiers(ledger, -0.3 * (threats as i8) as f64)?;
 
         Ok((ledger, TripleThreatLedger::new(threats, modifiers)))
     }
@@ -189,7 +221,7 @@ impl ParseableLedger for OverflowLedger {
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, num_runs) = parse_ledger(parse_ledger_overflow, ledger)?;
-        let (ledger, modifiers) = parse_modifiers(ledger)?;
+        let (ledger, modifiers) = parse_modifiers(ledger, num_runs as f64)?;
 
         Ok((ledger, OverflowLedger::new(num_runs, modifiers)))
     }
@@ -197,10 +229,11 @@ impl ParseableLedger for OverflowLedger {
 
 fn parse_ledger_run_if(
     ledger: &str,
+    base_runs: f64,
     condition: bool,
 ) -> Result<(&str, Option<LedgerRun>), FeedParseError> {
     Ok(if condition {
-        let (ledger, modifiers) = parse_modifiers(ledger)?;
+        let (ledger, modifiers) = parse_modifiers(ledger, base_runs)?;
         (ledger, Some(LedgerRun::new(modifiers)))
     } else {
         (ledger, None)
@@ -212,10 +245,10 @@ impl ParseableLedger for StolenBaseLedger {
 
     fn parse(ledger: &str) -> Result<(&str, Self::Ledger), FeedParseError> {
         let (ledger, has_steal_home) = parse_ledger(parse_ledger_steal_home, ledger)?;
-        let (ledger, steal_home) = parse_ledger_run_if(ledger, has_steal_home)?;
+        let (ledger, steal_home) = parse_ledger_run_if(ledger, 1., has_steal_home)?;
 
         let (ledger, has_blaserunning) = parse_ledger(parse_ledger_blaserunning, ledger)?;
-        let (ledger, blaserunning) = parse_ledger_run_if(ledger, has_blaserunning)?;
+        let (ledger, blaserunning) = parse_ledger_run_if(ledger, 0.2, has_blaserunning)?;
 
         // Don't need to look for sum sun if neither of the other run types happened, but the code
         // looks prettier if we just always look for it
