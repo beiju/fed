@@ -1353,9 +1353,6 @@ pub fn parse_next_event_r(
                 game: event.game(unscatter, attractor_secret_base)?,
             }
         }
-        EventType::WeatherChange => {
-            todo!()
-        }
         EventType::MildPitch => {
             let (pitcher_name, pitch_type) = event.next_parse(parse_mild_pitch)?;
             let pitcher_id = event.next_player_id()?;
@@ -2351,9 +2348,6 @@ pub fn parse_next_event_r(
                 },
                 effect,
             }
-        }
-        EventType::LightSwitchFlipped => {
-            todo!()
         }
         EventType::DecreePassed => {
             let decree_title = event.next_parse(parse_decree_passed)?;
@@ -3375,9 +3369,6 @@ pub fn parse_next_event_r(
             SubseasonalMod::LateToTheParty,
             event.game(unscatter, attractor_secret_base)?,
         )?,
-        EventType::EarlyToTheParty => {
-            todo!()
-        }
         EventType::ShameDonor => {
             let (team_nickname, unruns) = event.next_parse(parse_donated_shame)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -3612,9 +3603,6 @@ pub fn parse_next_event_r(
                 }
             }
         }
-        EventType::PlayerReplacedByNecromancy => {
-            todo!()
-        }
         EventType::PlayerReplacesReturned => {
             let team_nickname = event.next_parse(parse_player_replaces_returned)?;
 
@@ -3722,12 +3710,6 @@ pub fn parse_next_event_r(
                 }
             }
         }
-        EventType::PlayerTraded => {
-            todo!()
-        }
-        EventType::PlayerSwap => {
-            todo!()
-        }
         EventType::PlayerMoved => match event.next_parse(parse_player_moved)? {
             ParsedPlayerMoved::ReturnFromInvestigation((_player_name, emptyhanded)) => {
                 FedEventData::ReturnFromInvestigation {
@@ -3776,9 +3758,6 @@ pub fn parse_next_event_r(
                 }
             }
         },
-        EventType::PlayerBornFromIncineration => {
-            todo!()
-        }
         EventType::PlayerStatIncrease => match event.next_parse(parse_player_stat_increase)? {
             ParsedPlayerStatIncrease::PlayerBoosted(player_name) => FedEventData::PlayerBoosted {
                 team_id: event.next_team_id()?,
@@ -3797,15 +3776,6 @@ pub fn parse_next_event_r(
                 }
             }
         },
-        EventType::PlayerStatDecrease => {
-            todo!()
-        }
-        EventType::PlayerStatReroll => {
-            todo!()
-        }
-        EventType::PlayerStatDecreaseFromSuperallergic => {
-            todo!()
-        }
         EventType::PlayerMoveFailedForce => {
             // The only top-level instances of this event is Parker trying to Roam
             event.next_parse_tag("Roam failed.\nParker MacMillan was gripped by Force.")?;
@@ -4046,15 +4016,6 @@ pub fn parse_next_event_r(
                     player_id: event.next_player_id()?,
                 }
             }
-        }
-        EventType::ReverbFullShuffle => {
-            todo!()
-        }
-        EventType::ReverbLineupShuffle => {
-            todo!()
-        }
-        EventType::ReverbRotationShuffle => {
-            todo!()
         }
         EventType::PlayerHatched => {
             // Apparently this event type is only top-level during postseason births. I think.
@@ -4509,12 +4470,6 @@ pub fn parse_next_event_r(
                 shadows_players,
             }
         }
-        EventType::PlayerEvolves => {
-            todo!()
-        }
-        EventType::TeamIncinerationReplacement => {
-            todo!()
-        }
         EventType::TeamDivisionMove => match event.next_parse(parse_team_division_move)? {
             ParsedTeamDivisionMove::TeamJoinedILB {
                 team_nickname,
@@ -4619,18 +4574,6 @@ pub fn parse_next_event_r(
                 level,
             }
         }
-        EventType::PlayerAlternated => {
-            todo!()
-        }
-        EventType::AddedModFromOtherMod => {
-            todo!()
-        }
-        EventType::ChangedModFromOtherMod => {
-            todo!()
-        }
-        EventType::NecromancyOrPlunderNarration => {
-            todo!()
-        }
         EventType::PlayerPermittedToStay => {
             let player_name = event.next_parse(parse_terminated(" has been permitted to stay."))?;
 
@@ -4638,15 +4581,6 @@ pub fn parse_next_event_r(
                 player_id: event.next_player_id()?,
                 player_name: player_name.to_string(),
             }
-        }
-        EventType::DecreeNarration => {
-            todo!()
-        }
-        EventType::WillResults => {
-            todo!()
-        }
-        EventType::TeamStatAdjustment => {
-            todo!()
         }
         EventType::TeamWasShamed => {
             // TODO combine with the event for the shaming run?
@@ -4742,9 +4676,6 @@ pub fn parse_next_event_r(
                 echoer: make_echo_into_static(echoer_name, echoer_removed, echoer_mod_change)?,
                 echoee: make_echo_into_static(echoee_name, echoee_removed, echoee_mod_change)?,
             }
-        }
-        EventType::AddedModsFromAnotherMod => {
-            todo!()
         }
         EventType::RemovedModsFromAnotherMod => {
             // What the hell did I just write
@@ -4863,12 +4794,6 @@ pub fn parse_next_event_r(
             SubseasonalMod::Middling,
             event.game(unscatter, attractor_secret_base)?,
         )?,
-        EventType::PlayerAttributeIncrease => {
-            todo!()
-        }
-        EventType::PlayerAttributeDecrease => {
-            todo!()
-        }
         EventType::EnterCrimeScene => {
             let (_player_name, stadium_nickname) = event.next_parse(parse_enter_crime_scene)?;
 
@@ -4911,18 +4836,6 @@ pub fn parse_next_event_r(
             SubseasonalMod::Coasting,
             event.game(unscatter, attractor_secret_base)?,
         )?,
-        EventType::ItemBreaks => {
-            todo!()
-        }
-        EventType::ItemDamaged => {
-            todo!()
-        }
-        EventType::BrokenItemRepaired => {
-            todo!()
-        }
-        EventType::DamagedItemRepaired => {
-            todo!()
-        }
         EventType::CommunityChestOpens => {
             let [first, second] = event.next_parse(parse_community_chest_ingame)?;
 
@@ -4935,9 +4848,6 @@ pub fn parse_next_event_r(
                 second_player_item_name: second.1.to_string(),
                 second_player_dropped_item: second.2.map(str::to_string),
             }
-        }
-        EventType::NoFreeItemSlot => {
-            todo!()
         }
         EventType::FaxMachine => {
             let (_exiting_pitcher_name, _entering_pitcher_name) =
@@ -5047,9 +4957,6 @@ pub fn parse_next_event_r(
                 repair,
             }
         }
-        EventType::PlayerEnteredVault => {
-            todo!()
-        }
         EventType::PlayerLeftVault => {
             let (player_name, is_super_roam) = event.next_parse(parse_player_left_vault)?;
             // TODO This isn't the right signal to decide whether this was a
@@ -5153,9 +5060,6 @@ pub fn parse_next_event_r(
                 sub_event: mod_add_event.as_sub_event(),
             }
         }
-        EventType::PlayerSoulIncrease => {
-            todo!()
-        }
         EventType::Announcement => {
             match event.next_parse(parse_announcement)? {
                 ParsedAnnouncement::SupernovaLeagueReassignment => {
@@ -5227,9 +5131,6 @@ pub fn parse_next_event_r(
         EventType::BadGatewayBroken => FedEventData::BadGatewayBroken {
             team_id: event.next_team_id()?,
         },
-        EventType::HypeBuilds => {
-            todo!()
-        }
         EventType::Moderation => {
             let team_nickname = event.next_parse(parse_moderation)?;
             assert!(is_known_team_nickname(team_nickname));
@@ -5248,15 +5149,6 @@ pub fn parse_next_event_r(
                 score_summary,
             }
         }
-        EventType::RunsScored => {
-            todo!()
-        }
-        EventType::LeagueModificationAdded => {
-            todo!()
-        }
-        EventType::LeagueModificationRemoved => {
-            todo!()
-        }
         EventType::BalloonsInflatedFromWin => {
             let before_s20d81 = (event.season, event.day) < (19, 80);
             let stadium_name = event.next_parse(parse_balloon_inflated_from_win(before_s20d81))?;
@@ -5266,12 +5158,6 @@ pub fn parse_next_event_r(
                 stadium_name: stadium_name.to_string(),
                 earned_win: event.parse_earned_win_opt()?,
             }
-        }
-        EventType::WinCollectedRegular => {
-            todo!()
-        }
-        EventType::WinCollectedPostseason => {
-            todo!()
         }
         EventType::GameOver => {
             let _ = event.next_parse_tag("Game Over.")?;
@@ -5299,24 +5185,6 @@ pub fn parse_next_event_r(
                 pressure_after: event.metadata_f64("current")?,
             },
         },
-        EventType::FoundNothingInterestingInTunnels => {
-            todo!()
-        }
-        EventType::FailedTunnelsSteal => {
-            todo!()
-        }
-        EventType::StoleItemFromTunnels => {
-            todo!()
-        }
-        EventType::TeamWillReturn => {
-            todo!()
-        }
-        EventType::WeatherEvent => {
-            todo!()
-        }
-        EventType::ElementAddedToItem => {
-            todo!()
-        }
         EventType::Sun30Smiles => {
             let (away_team_nickname, home_team_nickname, balloons) =
                 event.next_parse(parse_sun30(false))?;
@@ -5653,12 +5521,6 @@ pub fn parse_next_event_r(
                 }
             }
         }
-        EventType::TradeFailed => {
-            todo!()
-        }
-        EventType::ItemTraded => {
-            todo!()
-        }
         EventType::PitcherCyclesOut => {
             let (team_nickname, outgoing_pitcher_name, incoming_pitcher_name) =
                 event.next_parse(parse_pitcher_cycles_out)?;
@@ -5679,9 +5541,6 @@ pub fn parse_next_event_r(
                 player_id: event.next_player_id()?,
             }
         }
-        EventType::BeingSpeechInTidings => {
-            todo!()
-        }
         EventType::WeatherReport => {
             let weather_change_event = event.next_child(EventType::WeatherChange)?;
             let (season_num, season_tagline_all_caps) =
@@ -5696,9 +5555,6 @@ pub fn parse_next_event_r(
                 weather_after: weather_change_event.metadata_enum("after")?,
                 sub_event: weather_change_event.as_sub_event(),
             }
-        }
-        EventType::PlayersAddedToTeam => {
-            todo!()
         }
         EventType::PlayersCutFromTeam => {
             let team_id = event.next_team_id()?;
@@ -5912,9 +5768,6 @@ pub fn parse_next_event_r(
                 }
             }
         }
-        EventType::TarotCardChanged => {
-            todo!()
-        }
         EventType::PlayerBecameStuck => {
             let player_name = event.next_parse(parse_terminated(" became Stuck!"))?;
             let mut child = event.next_child(EventType::AddedModFromOtherMod)?;
@@ -5970,12 +5823,6 @@ pub fn parse_next_event_r(
                 unruns_sub_event: unruns_event.as_sub_event(),
             }
         }
-        EventType::FromDiagonal => {
-            todo!()
-        }
-        EventType::SupernovaLeagueCreated => {
-            todo!()
-        }
         EventType::CoinHit => match event.next_parse(parse_coin_hit)? {
             ParsedCoinHit::Scattered(attacking_team_name) => FedEventData::CoinScattered {
                 attacking_team_name: attacking_team_name.to_string(),
@@ -5984,12 +5831,6 @@ pub fn parse_next_event_r(
                 attacking_division_name: attacking_division_name.to_string(),
             },
         },
-        EventType::StormWarning => {
-            todo!()
-        }
-        EventType::Snowflakes => {
-            todo!()
-        }
         EventType::Sun2SetWin => {
             let team_name = event.next_parse(parse_sun2_set_win)?;
             assert!(is_known_team_nickname(team_name));
@@ -6006,9 +5847,6 @@ pub fn parse_next_event_r(
                 team_nickname: team_name.to_string(),
             }
         }
-        EventType::RemovedModFromOtherMod => {
-            todo!()
-        }
         EventType::PostseasonAdvance => {
             let (team_nickname, round_num, season_num) =
                 event.next_parse(parse_postseason_advance)?;
@@ -6019,9 +5857,6 @@ pub fn parse_next_event_r(
                 round: round_num,
                 displayed_season: season_num,
             }
-        }
-        EventType::GainBloodType => {
-            todo!()
         }
         EventType::HighPressure => {
             let (team_nickname, is_on) = event.next_parse(parse_high_pressure)?;
@@ -6047,9 +5882,6 @@ pub fn parse_next_event_r(
                 team_nickname: "Lovers".to_string(),
             }
         }
-        EventType::NutButton => {
-            todo!()
-        }
         EventType::PostseasonEliminated => {
             let (team_nickname, season_num, overbracket) =
                 event.next_parse(parse_postseason_eliminated)?;
@@ -6066,6 +5898,11 @@ pub fn parse_next_event_r(
                     }
                 }),
             }
+        }
+        other_type => {
+            return Err(FeedParseError::UnexpectedTopLevelEvent {
+                event_type: other_type,
+            })
         }
     };
     // NOTE: There are some paths in the big `match event.event_type` statement
