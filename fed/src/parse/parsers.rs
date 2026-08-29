@@ -1,3 +1,4 @@
+use nom::Err;
 use crate::fed_event::{ActivePositionType, AttrCategory, ModDuration};
 use crate::parse::PendingPrizeMatch;
 use crate::{
@@ -14,6 +15,7 @@ use nom::multi::{many0, separated_list0, separated_list1};
 use nom::number::complete::{double, float};
 use nom::sequence::{pair, preceded, terminated};
 use nom::{AsChar, IResult, Parser};
+use nom_language::error::VerboseErrorKind;
 use uuid::Uuid;
 
 pub(crate) type ParserError<'a> = nom_language::error::VerboseError<&'a str>;
@@ -50,16 +52,21 @@ pub(crate) fn parse_terminated(tag_content: &str) -> impl Fn(&str) -> ParserResu
     }
 }
 
-// This is for use in place of parse_terminated when the only remaining text in the string is ".",
-// and so you can't use parse_terminated because that would improperly cut off names with periods
-// like "Kaj Statter Jr."
+// This is for use in place of parse_terminated when the only remaining text in
+// the string is ".", and so you can't use parse_terminated because that would
+// improperly cut off names with periods like "Kaj Statter Jr."
 pub(crate) fn parse_until_period_eof(input: &str) -> ParserResult<'_, &str> {
-    let (input, replacement_name_with_dot) = is_not("\n").parse(input)?;
-    let replacement_name = replacement_name_with_dot
-        .strip_suffix(".")
-        .ok_or_else(|| todo!("Figure out how to make an error of the correct type"))?;
+    let (input, rest_of_line) = is_not("\n").parse(input)?;
+    let Some(result) = rest_of_line.strip_suffix(".") else {
+        return Err(Err::Error(ParserError {
+            errors: vec![(
+                rest_of_line,
+                VerboseErrorKind::Context("input to parse_until_period_eof did not end with a period"),
+            )],
+        }));
+    };
 
-    Ok((input, replacement_name))
+    Ok((input, result))
 }
 
 pub(crate) fn parse_game_start(input: &str) -> ParserResult<'_, Option<(&str, &str)>> {
@@ -148,7 +155,12 @@ pub(crate) fn parse_wielding_item(input: &str) -> ParserResult<'_, &str> {
         let (input, _) = tag(".").parse(input)?;
         Ok((input, item_name))
     } else {
-        todo!("Figure out how to make an error of the correct type")
+        Err(Err::Error(ParserError {
+            errors: vec![(
+                input,
+                VerboseErrorKind::Context("expected input to be split with a period '.'"),
+            )],
+        }))
     }
 }
 
@@ -3285,7 +3297,12 @@ pub(crate) fn parse_home_field_advantage(input: &str) -> ParserResult<'_, &str> 
 pub(crate) fn parse_prize_match(input: &str) -> ParserResult<'_, &str> {
     let (input, _) = tag("Prize Match!\nThe Winner gets ").parse(input)?;
     let (input, item_name) = if input.contains('\n') {
-        todo!("Figure out how to fail with the correct type")
+        return Err(Err::Error(ParserError {
+            errors: vec![(
+                input,
+                VerboseErrorKind::Context("unexpected newline after prize match item"),
+            )],
+        }));
     } else {
         Ok(("", input))
     }?;
