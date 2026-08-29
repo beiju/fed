@@ -21,7 +21,6 @@ use with_structure::WithStructure;
 
 use crate::FeedParseError;
 use crate::format_utils::{NewlineDelimiter, RunDisplay, Runs};
-use crate::parse::event_builder_new::possessive;
 
 fn is_false(b: &bool) -> bool {
     *b == false
@@ -316,57 +315,6 @@ pub struct Scores<LedgerRunT: LedgerV2> {
 }
 
 impl<T: LedgerV2> Scores<T> {
-    #[deprecated = "This is part of the old event builder"]
-    pub fn to_description_with_text_between(
-        &self,
-        score_text: &str,
-        text_between: &str,
-        extra_space: bool,
-    ) -> String {
-        let mut output = String::new();
-        for score in &self.scores {
-            if let Some(damage) = &score.item_damage {
-                write!(
-                    output,
-                    "\n{}{} {} {}",
-                    if extra_space { " " } else { "" },
-                    possessive(score.player_name.clone()),
-                    damage.item_name,
-                    if damage.health == 0 {
-                        "broke!"
-                    } else {
-                        "was damaged."
-                    }
-                )
-                .unwrap();
-            }
-
-            write!(output, "\n{}{}", score.player_name, score_text).unwrap();
-
-            if let Some(attraction) = &score.attraction {
-                write!(
-                    output,
-                    "\nThe {} Attract {}!",
-                    attraction.team_nickname, score.player_name
-                )
-                .unwrap();
-            }
-        }
-
-        write!(output, "{}", text_between).unwrap();
-
-        for refill in &self.free_refills {
-            write!(
-                output,
-                "\n{} used their Free Refill.\n{} Refills the In!",
-                refill.player_name, refill.player_name
-            )
-            .unwrap();
-        }
-
-        output
-    }
-
     pub fn scorer_ids(&self) -> Vec<Uuid> {
         self.scores.iter().map(|p| p.player_id).collect()
     }

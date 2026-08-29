@@ -1,6 +1,5 @@
-pub mod builder;
 pub mod error;
-pub mod event_builder_new;
+pub mod event_builder;
 mod parse_wrapper;
 mod parsers;
 pub mod stream;

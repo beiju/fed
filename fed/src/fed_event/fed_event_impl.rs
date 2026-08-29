@@ -18,7 +18,7 @@ use serde_json::json;
 use std::iter;
 
 use crate::format_utils::Possessive;
-use crate::parse::event_builder_new::{possessive, EventBuilder};
+use crate::parse::event_builder::{possessive, EventBuilder};
 use crate::*;
 
 impl FedEvent {
