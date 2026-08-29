@@ -4535,21 +4535,6 @@ pub fn parse_next_event_r(
                 championships: event.metadata_i64("championships")?,
             }
         }
-        EventType::EarnedPostseasonSlot => {
-            let (team_nickname, season_num) = event.next_parse(parse_earned_postseason_slot)?;
-            assert!(is_known_team_nickname(team_nickname));
-            assert_eq!(season_num, event.season + 1);
-
-            // FedEventData::EarnedPostseasonSlot {
-            //     team_id: event.next_team_id()?,
-            //     team_nickname: team_nickname.to_string(),
-            // }
-
-            todo!(
-                "I think this should be turned into a \"this event must come after a PlayerHatched \
-                event\" error"
-            )
-        }
         EventType::FinalStandings => {
             let (team_nickname, place, division_name) = event.next_parse(parse_final_standings)?;
             assert!(is_known_team_nickname(team_nickname));

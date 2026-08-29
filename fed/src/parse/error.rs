@@ -7,7 +7,7 @@ pub enum FeedParseError {
     #[error(transparent)]
     EventuallyEventJsonParseFailed(#[from] serde_json::Error),
 
-    #[error("Event type {event_type:?} is not allowed on top-level events")]
+    #[error("Event type {event_type:?} is not allowed on top-level, non-grouped events")]
     UnexpectedTopLevelEvent {
         event_type: EventType,
     },
