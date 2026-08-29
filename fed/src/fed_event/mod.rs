@@ -4408,11 +4408,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted 
         /// 
-        /// Usually this can be inferred from other fields. However, the early
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4480,12 +4482,14 @@ pub enum FedEventData {
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
         /// `true` if the event was a Special type, otherwise omitted 
-        /// 
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        ///
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4559,11 +4563,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted 
         ///
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4657,14 +4663,15 @@ pub enum FedEventData {
         #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-
-        /// `true` if the event was a Special type, otherwise omitted 
+        /// `true` if the event was a Special type, otherwise omitted
         ///
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4724,11 +4731,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted 
         ///
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4810,11 +4819,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted 
         ///
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4899,11 +4910,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted 
         ///
-        /// Usually this can be inferred from other fields. However, the early 
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that 
-        /// there are other circumstances that cause an otherwise-undetectable 
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -4950,11 +4963,13 @@ pub enum FedEventData {
 
         /// `true` if the event was a Special type, otherwise omitted
         ///
-        /// Usually this can be inferred from other fields. However, the early
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that
-        /// there are other circumstances that cause an otherwise-undetectable
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
 
@@ -5021,14 +5036,15 @@ pub enum FedEventData {
         #[serde(skip_serializing_if="Option::is_none")]
         stopped_inhabiting: Option<StoppedInhabiting>,
 
-
         /// `true` if the event was a Special type, otherwise omitted
         ///
-        /// Usually this can be inferred from other fields. However, the early
-        /// Expansion Era, when players scored with Tired or Wired the event was
-        /// Special but that was the only way of knowing. (It's possible that
-        /// there are other circumstances that cause an otherwise-undetectable
-        /// Special event.)
+        /// Usually this can be inferred from other fields. However, in the
+        /// Expansion Era before Season 20, when players scored with Tired or
+        /// Wired the event was Special but that was the only way of knowing.
+        /// There are also three mysterious events that were `is_special` for
+        /// as-yet-unknown reasons: 0479d5b4-701b-40c2-93b6-72e05a5f510f,
+        /// d3753d01-4873-47b1-8576-3dc36c6c43ae, and
+        /// dd97d0bb-48ec-408b-923f-20055da83d1f.
         #[serde(skip_serializing_if="is_false")]
         is_special: bool,
     },
