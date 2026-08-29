@@ -1,4 +1,3 @@
-- Figure out and properly taxonify the various "type" integers in the metadata
 - Consume and produce tags, children, and pieces of description one by one
 
 https://discord.com/channels/738107179294523402/834940656211591178/879495741779902495
@@ -9,3 +8,4 @@ https://discord.com/channels/738107179294523402/834940656211591178/8794957417799
 - Audit for events that should be grouped
 - Remove fed/src/parse/builder.rs, rename event_builder_new to event_builder
 - Get rid of all `ref`s in into_feed_events
+- Audit all panics, unwraps, and expects

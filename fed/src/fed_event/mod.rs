@@ -1090,7 +1090,18 @@ pub enum BatterSkippedReason {
     Elsewhere(Uuid),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    WithStructure,
+    TryFromPrimitive,
+    IntoPrimitive,
+)]
 #[repr(i64)]
 pub enum StatChangeCategory {
     Batting = 0,

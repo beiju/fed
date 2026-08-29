@@ -273,7 +273,7 @@ impl FedEvent {
                         child.push_player_tag(batter_id);
                         child.push_team_tag(mod_change.team_id);
                         child.push_metadata_str("mod", "MAGMATIC");
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.push_metadata_i64("type", ModDuration::Permanent);
                         child.build(EventType::RemovedMod)
                     });
                 }
@@ -600,7 +600,7 @@ impl FedEvent {
                         child.push_player_tag(player_id);
                         child.push_team_tag(mod_added.team_id);
                         child.push_metadata_str("mod", "MAGMATIC");
-                        child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child.push_metadata_i64("type", ModDuration::Permanent);
                         child.build(EventType::AddedMod)
                     })
                 }
@@ -847,7 +847,7 @@ impl FedEvent {
                                 child.push_player_tag(carc.player_id);
                                 child.push_team_tag(carc.new_team_id);
                                 child.push_metadata_str("mod", "TEMP_STOLEN");
-                                child.push_metadata_i64("type", ModDuration::Game as i64);
+                                child.push_metadata_i64("type", ModDuration::Game);
                                 child.build(EventType::AddedMod)
                             });
                         }
@@ -876,7 +876,7 @@ impl FedEvent {
                         child.push_team_tag(gamma.team_id);
                         child.push_metadata_f64("before", gamma.rating_before);
                         child.push_metadata_f64("after", gamma.rating_after);
-                        child.push_metadata_i64("type", StatChangeCategory::All as i64);
+                        child.push_metadata_i64("type", StatChangeCategory::All);
                         child.build(EventType::PlayerStatDecrease)
                     })
                 }
@@ -958,7 +958,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{player_name} had an allergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
                     child_eb.build(EventType::PlayerStatDecrease)
@@ -977,7 +977,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{player_name} had a Superallergic reaction."));
                     child_eb.push_team_tag(team_id);
                     child_eb.push_player_tag(player_id);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
                     child_eb.build(EventType::PlayerStatDecreaseFromSuperallergic)
@@ -1034,7 +1034,7 @@ impl FedEvent {
                         child.push_description(&description);
                         child.push_player_tag(change.player_id);
                         child.push_team_tag(change.team_id);
-                        child.build_player_stat_changed(change.rating_before, change.rating_after, sipped_category as i64)
+                        child.build_player_stat_changed(change.rating_before, change.rating_after, sipped_category)
                     });
                 };
 
@@ -1098,12 +1098,12 @@ impl FedEvent {
                     child.push_player_tag(player_b.player_id);
                     child.push_team_tag(player_a.team_id);
                     child.push_team_tag(player_b.team_id);
-                    child.push_metadata_i64("aLocation", player_a.location as i64);
+                    child.push_metadata_i64("aLocation", player_a.location);
                     child.push_metadata_uuid("aPlayerId", player_a.player_id);
                     child.push_metadata_str("aPlayerName", player_a.player_name);
                     child.push_metadata_uuid("aTeamId", player_a.team_id);
                     child.push_metadata_str("aTeamName", player_a.team_nickname);
-                    child.push_metadata_i64("bLocation", player_b.location as i64);
+                    child.push_metadata_i64("bLocation", player_b.location);
                     child.push_metadata_uuid("bPlayerId", player_b.player_id);
                     child.push_metadata_str("bPlayerName", player_b.player_name);
                     child.push_metadata_uuid("bTeamId", player_b.team_id);
@@ -1224,10 +1224,10 @@ impl FedEvent {
                                         child.push_team_tag(team_id);
                                         child.push_player_tag(first_player_id);
                                         child.push_player_tag(second_player_id);
-                                        child.push_metadata_i64("aLocation", first_player_new_location as i64);
+                                        child.push_metadata_i64("aLocation", first_player_new_location);
                                         child.push_metadata_uuid("aPlayerId", first_player_id);
                                         child.push_metadata_str("aPlayerName", first_player_name);
-                                        child.push_metadata_i64("bLocation", second_player_new_location as i64);
+                                        child.push_metadata_i64("bLocation", second_player_new_location);
                                         child.push_metadata_uuid("bPlayerId", second_player_id);
                                         child.push_metadata_str("bPlayerName", second_player_name);
                                         child.push_metadata_uuid("teamId", team_id);
@@ -1383,7 +1383,7 @@ impl FedEvent {
                     child_eb.push_player_tag(tangled_id);
                     child_eb.push_metadata_f64("before", tangled_rating_before);
                     child_eb.push_metadata_f64("after", tangled_rating_after);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.build(EventType::PlayerStatDecrease)
                 });
                 eb.build(EventType::FeedbackBlocked)
@@ -1505,7 +1505,7 @@ impl FedEvent {
                                 child.push_team_tag(team_id);
                                 child.push_player_tag(player_id);
                                 child.push_metadata_str("mod", "ELSEWHERE");
-                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.push_metadata_i64("type", ModDuration::Permanent);
                                 child.build(EventType::RemovedMod)
                             });
 
@@ -1514,7 +1514,7 @@ impl FedEvent {
                                     child.push_description(format!("{} re-congealed differently.", recongeal.player_name));
                                     child.push_team_tag(recongeal.team_id);
                                     child.push_player_tag(recongeal.player_id);
-                                    child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                    child.push_metadata_i64("type", ModDuration::Permanent);
                                     child.build_player_stat_changed(recongeal.rating_before, recongeal.rating_after, 4)
                                 });
                             }
@@ -1533,7 +1533,7 @@ impl FedEvent {
                                 child.push_team_tag(team_id);
                                 child.push_player_tag(player_id);
                                 child.push_metadata_str("mod", "ELSEWHERE");
-                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.push_metadata_i64("type", ModDuration::Permanent);
                                 child.build(EventType::RemovedMod)
                             });
                         }
@@ -1559,7 +1559,7 @@ impl FedEvent {
                                 child.push_team_tag(team_id);
                                 child.push_player_tag(sought_player_id);
                                 child.push_metadata_str("mod", "ELSEWHERE");
-                                child.push_metadata_i64("type", ModDuration::Permanent as i64);
+                                child.push_metadata_i64("type", ModDuration::Permanent);
                                 child.build(EventType::RemovedMod)
                             });
                         }
@@ -1711,7 +1711,7 @@ impl FedEvent {
                         child_eb.push_team_tag(ambush.team_id);
                         child_eb.push_metadata_f64("after", ambush.player_rating_after);
                         child_eb.push_metadata_f64("before", ambush.player_rating_before);
-                        child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                        child_eb.push_metadata_i64("type", StatChangeCategory::All);
                         child_eb.build(EventType::PlayerStatIncrease)
                     });
                 }
@@ -1739,7 +1739,7 @@ impl FedEvent {
                     child_eb.push_description(&description);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.push_player_tag(player_id);
                     child_eb.push_team_tag(team_id);
                     child_eb.build(EventType::PlayerStatIncrease)
@@ -1888,7 +1888,7 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.push_metadata_f64("before", rating_before);
                 eb.push_metadata_f64("after", rating_after);
-                eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                eb.push_metadata_i64("type", StatChangeCategory::All);
                 eb.build(EventType::PlayerStatIncrease)
             }
             FedEventData::TeamEnteredPartyTime { team_id, team_nickname } => {
@@ -1927,7 +1927,7 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.push_metadata_f64("before", rating_before);
                 eb.push_metadata_f64("after", rating_after);
-                eb.push_metadata_i64("type", StatChangeCategory::Team as i64);
+                eb.push_metadata_i64("type", StatChangeCategory::Team);
                 eb.build(EventType::PlayerStatIncrease)
             }
             FedEventData::WillReceived { team_id, will_title, metadata } => {
@@ -2341,7 +2341,7 @@ impl FedEvent {
                             child.push_player_tag(player_id);
                             child.push_team_tag(team_id);
                             child.set_description(description);
-                            child.build_player_stat_changed(rating_before, rating_after, StatChangeCategory::All as i64)
+                            child.build_player_stat_changed(rating_before, rating_after, StatChangeCategory::All)
                         });
                     }
                     ConsumerAttackEffect::DefendedWithItem(damage) => {
@@ -2536,7 +2536,7 @@ impl FedEvent {
                     child_eb.push_team_tag(previous_team_id);
                     child_eb.push_team_tag(new_team_id);
                     child_eb.push_player_tag(player_id);
-                    child_eb.push_metadata_i64("location", previous_location as i64);
+                    child_eb.push_metadata_i64("location", previous_location);
                     child_eb.push_metadata_uuid("playerId", player_id);
                     child_eb.push_metadata_str("playerName", &player_name);
                     child_eb.push_metadata_i64("receiveLocation", 3);
@@ -2553,7 +2553,7 @@ impl FedEvent {
                     child_eb.push_player_tag(player_id);
                     child_eb.push_metadata_f64("before", rating_before);
                     child_eb.push_metadata_f64("after", rating_after);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.build(EventType::PlayerStatIncrease)
                 });
                 eb.build(EventType::EnterCrimeScene)
@@ -2775,7 +2775,7 @@ impl FedEvent {
                 eb.push_team_tag(team_id);
                 eb.push_metadata_str("source", source_mod_id);
                 eb.push_metadata_json_vec("removes", mods_removed.iter()
-                    .map(|r| json!({ "mod": r.mod_id, "type": r.mod_duration as i64 }))
+                    .map(|r| json!({ "mod": r.mod_id, "type": r.mod_duration }))
                     .collect());
 
                 eb.build(EventType::RemovedModsFromAnotherMod)
@@ -2946,10 +2946,10 @@ impl FedEvent {
                     child.push_player_tag(exiting_pitcher_id);
                     child.push_player_tag(entering_pitcher_id);
                     child.push_team_tag(team_id);
-                    child.push_metadata_i64("aLocation", PositionType::Rotation as i64);
+                    child.push_metadata_i64("aLocation", PositionType::Rotation);
                     child.push_metadata_uuid("aPlayerId", exiting_pitcher_id);
                     child.push_metadata_str("aPlayerName", &exiting_pitcher_name);
-                    child.push_metadata_i64("bLocation", shadows_location as i64);
+                    child.push_metadata_i64("bLocation", shadows_location);
                     child.push_metadata_uuid("bPlayerId", entering_pitcher_id);
                     child.push_metadata_str("bPlayerName", &entering_pitcher_name);
                     child.push_metadata_uuid("teamId", team_id);
@@ -2965,7 +2965,7 @@ impl FedEvent {
                     }
                     child.push_metadata_f64("after", rating_after);
                     child.push_metadata_f64("before", rating_before);
-                    child.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child.push_metadata_i64("type", StatChangeCategory::All);
                     child.build(EventType::PlayerStatIncrease)
                 });
 
@@ -3567,7 +3567,7 @@ impl FedEvent {
                     child_eb.push_description(format!("{replaced_player_name} entered the Shadows."));
                     child_eb.push_metadata_f64("before", shadowed_sub_event.rating_before);
                     child_eb.push_metadata_f64("after", shadowed_sub_event.rating_after);
-                    child_eb.push_metadata_i64("type", StatChangeCategory::All as i64);
+                    child_eb.push_metadata_i64("type", StatChangeCategory::All);
                     child_eb.push_player_tag(replaced_player_id);
                     child_eb.push_team_tag(team_id);
 
@@ -3882,10 +3882,10 @@ impl FedEvent {
                             child_eb.push_player_tag(shadowed_player_id);
                             child_eb.push_player_tag(unshadowed_player_id);
                             child_eb.push_team_tag(team_id);
-                            child_eb.push_metadata_i64("aLocation", active_location as i64);
+                            child_eb.push_metadata_i64("aLocation", active_location);
                             child_eb.push_metadata_uuid("aPlayerId", shadowed_player_id);
                             child_eb.push_metadata_str("aPlayerName", &shadowed_player_name);
-                            child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows as i64);
+                            child_eb.push_metadata_i64("bLocation", PositionType::BenchOrShadows);
                             child_eb.push_metadata_uuid("bPlayerId", unshadowed_player_id);
                             child_eb.push_metadata_str("bPlayerName", &unshadowed_player_name);
                             child_eb.push_metadata_uuid("teamId", team_id);
@@ -3916,7 +3916,7 @@ impl FedEvent {
                             child_eb.push_player_tag(shadowed_player_id);
                             child_eb.push_metadata_str("mod", "MARKED");
                             // Permanent! oh shit
-                            child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent);
                             child_eb.build(EventType::AddedMod)
                         });
                     }
@@ -4208,12 +4208,12 @@ impl FedEvent {
                         child_eb.push_team_tag(target_team_id);
                         child_eb.push_team_tag(thieving_team_id);
 
-                        child_eb.push_metadata_i64("location", player_collected.location as i64);
+                        child_eb.push_metadata_i64("location", player_collected.location);
                         child_eb.push_metadata_uuid("playerId", target_player_id);
                         child_eb.push_metadata_str("playerName", &target_player_name);
                         child_eb.push_metadata_uuid("sendTeamId", target_team_id);
                         child_eb.push_metadata_str("sendTeamName", player_collected.target_team_nickname);
-                        child_eb.push_metadata_i64("receiveLocation", player_collected.location as i64);
+                        child_eb.push_metadata_i64("receiveLocation", player_collected.location);
                         child_eb.push_metadata_uuid("receiveTeamId", thieving_team_id);
                         child_eb.push_metadata_str("receiveTeamName", thieving_team_nickname);
 
@@ -4225,7 +4225,7 @@ impl FedEvent {
                         child_eb.push_player_tag(target_player_id);
                         child_eb.push_team_tag(thieving_team_id);
 
-                        child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
                         child_eb.push_metadata_str("to", "LEGENDARY");
                         child_eb.push_metadata_str("from", player_collected.replaced_mod_id);
 
@@ -4309,7 +4309,7 @@ impl FedEvent {
                         child_eb.push_team_tag(stabled_player.team_id);
                         child_eb.push_player_tag(stabled_player.player_id);
                         child_eb.push_metadata_str("mod", "MARKED");
-                        child_eb.push_metadata_i64("type", stabled_player.duration as i64);
+                        child_eb.push_metadata_i64("type", stabled_player.duration);
 
                         child_eb.build(EventType::RemovedMod)
                     });
@@ -4352,7 +4352,7 @@ impl FedEvent {
                     eb.push_player_tag(player.player_id);
                 }
 
-                eb.push_metadata_i64("location", location as i64);
+                eb.push_metadata_i64("location", location);
                 eb.push_metadata_uuid("teamId", team_id);
                 eb.push_metadata_str("teamName", &team_nickname);
                 eb.push_metadata_str_vec("playerIds", players.iter().map(|p| p.player_id.to_string()).collect());
@@ -4367,7 +4367,7 @@ impl FedEvent {
 
                 let mut add_to_team_eb = eb.connected_event(add_to_team_sub_event);
                 add_to_team_eb.set_description(format!("The {new_team_nickname} added a player to their roster."));
-                add_to_team_eb.push_metadata_i64("location", location as i64);
+                add_to_team_eb.push_metadata_i64("location", location);
                 add_to_team_eb.push_metadata_uuid("teamId", new_team_id);
                 add_to_team_eb.push_metadata_str("teamName", new_team_nickname);
                 add_to_team_eb.push_metadata_uuid("playerId", player_id);
@@ -4453,7 +4453,7 @@ impl FedEvent {
                         child_eb.push_description(format!("{} ate some flame.", surviving_player.player_name));
                         child_eb.push_player_tag(surviving_player.player_id);
                         child_eb.push_team_tag(incinerated_team_id);
-                        child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                        child_eb.push_metadata_i64("type", ModDuration::Permanent);
                         child_eb.push_metadata_str("mod", "MAGMATIC");
                         child_eb.build(EventType::AddedMod)
                     });
@@ -4482,7 +4482,7 @@ impl FedEvent {
                             child_eb.push_description(format!("The {replacement_team_nickname} became Squiddish!"));
                             child_eb.push_team_tag(replacement_team_id);
                             child_eb.push_metadata_str("mod", "SQUIDDISH");
-                            child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                            child_eb.push_metadata_i64("type", ModDuration::Permanent);
                             child_eb.build(EventType::AddedMod)
                         });
 
@@ -4574,14 +4574,14 @@ impl FedEvent {
                 black_hole_mod_added_event.set_category(EventCategory::Changes);
                 black_hole_mod_added_event.set_description("BLACK HOLE (BLACK HOLE) DRAINS".to_string());
                 black_hole_mod_added_event.push_metadata_str("mod", "SMBH");
-                black_hole_mod_added_event.push_metadata_i64("type", ModDuration::Permanent as i64);
+                black_hole_mod_added_event.push_metadata_i64("type", ModDuration::Permanent);
                 events.push(black_hole_mod_added_event.build(EventType::LeagueModificationAdded));
 
                 let mut pulsar_mod_added_event = eb.connected_event(pulsar_mod_added_sub_event);
                 pulsar_mod_added_event.set_category(EventCategory::Changes);
                 pulsar_mod_added_event.set_description("PULSAR (PULSAR) BEAMS".to_string());
                 pulsar_mod_added_event.push_metadata_str("mod", "PULSAR");
-                pulsar_mod_added_event.push_metadata_i64("type", ModDuration::Permanent as i64);
+                pulsar_mod_added_event.push_metadata_i64("type", ModDuration::Permanent);
                 events.push(pulsar_mod_added_event.build(EventType::LeagueModificationAdded));
 
                 events.insert(0, eb.build(EventType::Announcement));
@@ -4598,7 +4598,7 @@ impl FedEvent {
                 eb.push_child(nullified_mod_sub_event, |mut child_eb| {
                     child_eb.push_description(nullified_description);
                     child_eb.push_metadata_str("mod", nullified_mod_id);
-                    child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
                     child_eb.build(EventType::LeagueModificationRemoved)
                 });
 
@@ -4616,7 +4616,7 @@ impl FedEvent {
                     child_eb.push_description(nullified_description);
                     child_eb.push_team_tag(someones_team_id);
                     child_eb.push_metadata_str("mod", nullified_mod_id);
-                    child_eb.push_metadata_i64("type", ModDuration::Permanent as i64);
+                    child_eb.push_metadata_i64("type", ModDuration::Permanent);
                     child_eb.build(EventType::RemovedMod)
                 });
 

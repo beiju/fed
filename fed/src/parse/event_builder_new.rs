@@ -1555,11 +1555,12 @@ impl EventBuilder {
         })
     }
 
+    // TODO Search for `push_metadata_f64("before", rating_before)` and replace it with this
     pub fn build_player_stat_changed(
         mut self,
         rating_before: f64,
         rating_after: f64,
-        attribute_type: i64,
+        attribute_type: impl Into<i64>,
     ) -> EventuallyEvent {
         self.push_metadata_f64("before", rating_before);
         self.push_metadata_f64("after", rating_after);
