@@ -14,6 +14,7 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter, Write};
 use std::iter;
 use std::marker::PhantomData;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, Display as StrumDisplay, EnumIter};
 use uuid::Uuid;
@@ -250,7 +251,17 @@ pub struct ScoringPlayer {
     #[serde(skip_serializing_if="is_false")]
     pub is_slippery: bool,
 
-    /// Info about the Shame on this score, if any
+    // TODO check whether these docs are picked up by JsonSchema
+    // TODO check that hype's docs are picked up by JsonSchema
+    /// Whether there was shame on this score, if known
+    ///
+    /// If shame status is unknown, as it was for all events prior to Season 17,
+    /// this is omitted. Otherwise, `true` if this score shamed, `false`
+    /// otherwise.
+    ///
+    /// If this is `true`, there may be Hype on this event. See the `hype`
+    /// property.
+    #[serde(flatten, skip_serializing_if = "Shame::is_unknown", default)]
     pub shame: Shame,
 }
 
@@ -2013,13 +2024,14 @@ impl Display for HitType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize_repr, Deserialize_repr, JsonSchema, WithStructure)]
+#[repr(i64)]
 pub enum Base {
-    First,
-    Second,
-    Third,
-    Fourth,
-    Fifth,
+    First = 1,
+    Second = 2,
+    Third = 3,
+    Fourth = 4,
+    Fifth = 5,
 }
 
 impl Display for Base {
@@ -2297,15 +2309,74 @@ pub struct Hype {
     pub sub_event: SubEvent,
 }
 
-// TODO manage serde serialization, including omitting when appropriate
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-// TODO Document variants
+// Don't derive Serialize and Deserialize because we implement them manually
+#[derive(Debug, Clone, PartialEq, JsonSchema, WithStructure)]
+#[serde(tag = "shame")]
 pub enum Shame {
+    /// It is not known whether this score caused shame (all scores prior to
+    /// Season 17)
     Unknown,
+
+    /// This score did not cause shame
     No,
-    Yes { hype: Option<Hype> },
+
+    /// This score may have caused shame
+    Yes {
+        /// If this score caused Hype, an object containing metadata about the
+        /// Hype gain. Otherwise omitted.
+        // Note about the above: the "omitted" is implemented in the custom
+        // serializer/deserializer
+        hype: Option<Hype>
+    },
 }
 
+impl Shame {
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Shame::Unknown)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct ShameSerdeHelper {
+    shame: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hype: Option<Hype>,
+}
+
+impl Serialize for Shame {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Shame::Unknown => serializer.serialize_none(),
+            Shame::No => ShameSerdeHelper {
+                shame: false,
+                hype: None,
+            }
+                .serialize(serializer),
+            Shame::Yes { hype } => ShameSerdeHelper {
+                shame: true,
+                hype: hype.clone(),
+            }
+                .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Shame {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let helper = Option::<ShameSerdeHelper>::deserialize(deserializer)?;
+        Ok(match helper {
+            None => Shame::Unknown,
+            Some(ShameSerdeHelper { shame: false, .. }) => Shame::No,
+            Some(ShameSerdeHelper { shame: true, hype }) => Shame::Yes { hype },
+        })
+    }
+}
 #[derive(
     Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
@@ -3227,16 +3298,35 @@ impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
 pub struct ScoreSummary<LedgerRunT: LedgerV2> {
-    // TODO document fields
+    /// The away team's emoji
     pub away_emoji: String,
+
+    /// The away team's score after this scoring event
+    // TODO check the above
     pub away_score: f64,
+
+    /// The home team's emoji
     pub home_emoji: String,
+
+    /// The home team's score after this scoring event
+    // TODO check the above
     pub home_score: f64,
-    pub runs_scored: f64, // negative for unruns
+
+    /// The number of runs scored on this scoring event. Negative for unruns.
+    pub runs_scored: f64,
+
+    // TODO document this
     pub ledger: Ledger<LedgerRunT>,
+
+    /// Uuid of the team who scored
     pub team_id: Uuid,
+
+    /// Nickname of the team who scored
     pub team_nickname: String,
+
+    /// Metadata for the sub-event associated with this score
     pub sub_event: SubEvent,
 }
 

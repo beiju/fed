@@ -26,3 +26,4 @@ with_structure = { path = "../with_structure", features = ["either", "serde"] }
 stacker = "0.1"
 strum = "0.28.0"
 float-cmp = "0.10.0"
+serde_repr = "0.1.21"
