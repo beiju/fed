@@ -64,6 +64,12 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     println!("Test starting...");
 
+    // Delete existing contents of sample_outputs
+    if let Some(so) = &args.sample_outputs {
+        clear_sample_outputs_dir(so)
+            .context("Clearing sample outputs directory")?;
+    }
+
     let err = Arc::new(Mutex::new(None));
 
     let progress = MultiProgress::new();
@@ -225,6 +231,40 @@ fn run_test_on_season(
     }
 
     progress.finish();
+
+    Ok(())
+}
+
+fn clear_sample_outputs_dir(dir: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            return Err(anyhow!("child directory {path:?} found in sample outputs directory"))?
+        }
+
+        let name = path.file_name()
+            .ok_or_else(|| anyhow!("file in sample_outputs does not have a file name"))?
+            .to_str()
+            .ok_or_else(|| anyhow!("file in sample_outputs has a non-unicode file name"))?;
+
+        let structure_str = "-structure.json";
+        let json_str = ".json";
+        let name_id = if name.ends_with(structure_str) {
+            &name[..name.len() - structure_str.len()]
+        } else {
+            &name[..name.len() - json_str.len()]
+        };
+
+        uuid::Uuid::parse_str(&name_id)
+            .context("parsing uuid from sample output file name")?;
+    }
+
+    // If we haven't exited yet, the folder checked out
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        std::fs::remove_file(entry.path())?;
+    }
 
     Ok(())
 }

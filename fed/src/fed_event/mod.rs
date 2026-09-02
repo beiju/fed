@@ -118,11 +118,11 @@ pub struct GameEvent {
 #[serde(rename_all = "camelCase")]
 pub struct GamePitch {
     /// If a Double Strike was fired, the name of the pitcher who fired it.
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if="Option::is_none", rename="doubleStrikePitcherName")]
     pub double_strike: Option<String>,
 
     /// If an Acidic pitch was thrown, the name of the pitcher who threw it.
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if="Option::is_none", rename="acidicPitcherName")]
     pub acidic_pitch: Option<String>,
 }
 
@@ -180,7 +180,7 @@ pub struct WinSubEvent {
 
     /// If the stadium inflated some Balloons from this Win, the name of the
     /// stadium that inflated the Balloons
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if="Option::is_none", rename="balloonsInflatedInStadium")]
     pub balloons: Option<String>,
 }
 
@@ -201,7 +201,7 @@ pub struct WinSubEventWithNickname {
 
     /// If the stadium inflated some Balloons from this Win, the name of the
     /// stadium that inflated the Balloons
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if="Option::is_none", rename="balloonsInflatedInStadium")]
     pub balloons: Option<String>,
 }
 
@@ -321,7 +321,7 @@ pub struct Scores<LedgerRunT: LedgerV2> {
     // inside score_summary because scores under HotelMotel don't have summaries
     // but they can have balloons. This may need to be extended to support
     // number of balloons.
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if="Option::is_none", rename="balloonsInflatedInStadium")]
     pub balloons: Option<String>,
 }
 
@@ -604,6 +604,8 @@ pub struct FlipNegative {
     /// Metadata for the sub-event associated with flipping the player negative
     pub flip_negative_sub_event: SubEvent,
 }
+
+
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
 #[serde(rename_all = "camelCase")]
@@ -1154,6 +1156,7 @@ pub enum FloodingSweptEffect {
 
         /// If this event caused Shame, the metadata about the Shame, including
         /// any associated Hype
+        #[serde(flatten, skip_serializing_if = "Shame::is_unknown", default)]
         shame: Shame,
     },
     Ego(PlayerNameId),
@@ -2057,7 +2060,6 @@ impl Display for Base {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
-#[serde(tag = "hitType", content = "chargeBlood")]
 pub enum HomeRunType {
     Solo,
     TwoRun,
@@ -2295,6 +2297,7 @@ pub struct GoodRiddanceParty {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+#[serde(rename_all = "camelCase")]
 pub struct Hype {
     /// Name of stadium which built hype
     pub stadium_name: String,
@@ -2326,6 +2329,7 @@ pub enum Shame {
         /// Hype gain. Otherwise omitted.
         // Note about the above: the "omitted" is implemented in the custom
         // serializer/deserializer
+        #[serde(rename = "hypeBuilt")]
         hype: Option<Hype>
     },
 }
@@ -2339,7 +2343,7 @@ impl Shame {
 #[derive(Serialize, Deserialize)]
 struct ShameSerdeHelper {
     shame: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "hypeBuilt")]
     hype: Option<Hype>,
 }
 
@@ -2377,6 +2381,7 @@ impl<'de> Deserialize<'de> for Shame {
         })
     }
 }
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
 )]
@@ -2386,7 +2391,8 @@ pub enum HomeRunShameSource {
     Hoops,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, WithStructure)]
+// Manually implements Serialize and Deserialize
+#[derive(Debug, Clone, PartialEq, JsonSchema, WithStructure)]
 // TODO Document variants
 pub enum HomeRunShame {
     // TODO Return this for games pre-s18
@@ -2399,9 +2405,60 @@ pub enum HomeRunShame {
         source: HomeRunShameSource,
 
         /// If this Shame caused Hype to build, metadata about the Hype building
-        #[serde(skip_serializing_if="Option::is_none")]
+        #[serde(skip_serializing_if="Option::is_none", rename = "hypeBuilt")]
         hype: Option<Hype>,
     },
+}
+
+impl HomeRunShame {
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, HomeRunShame::Unknown)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HomeRunShameSerdeHelper {
+    // Don't skip serializing this, otherwise we can't tell Unknown from No
+    shame_source: Option<HomeRunShameSource>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "hypeBuilt")]
+    hype: Option<Hype>,
+}
+
+impl Serialize for HomeRunShame {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            HomeRunShame::Unknown => serializer.serialize_none(),
+            HomeRunShame::No => HomeRunShameSerdeHelper {
+                shame_source: None,
+                hype: None,
+            }
+                .serialize(serializer),
+            HomeRunShame::Yes { source, hype } => HomeRunShameSerdeHelper {
+                shame_source: Some(source.clone()),
+                hype: hype.clone(),
+            }
+                .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HomeRunShame {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let helper = Option::<HomeRunShameSerdeHelper>::deserialize(deserializer)?;
+        Ok(match helper {
+            None => HomeRunShame::Unknown,
+            // TODO error on shame: None, hype: Some
+            Some(HomeRunShameSerdeHelper { shame_source: None, .. }) => HomeRunShame::No,
+            Some(HomeRunShameSerdeHelper { shame_source: Some(source), hype }) => HomeRunShame::Yes { source, hype },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
@@ -2816,10 +2873,14 @@ pub trait LedgerV2: WithStructure {
 
 // TODO Document this
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, WithStructure)]
+#[serde(rename_all = "camelCase")]
 pub struct SimpleLedgerV2<RunSourceT: WithStructure> {
     pub runs: Vec<LedgerRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sum_sun: Option<i64>,
+    #[serde(skip_serializing_if = "is_false")]
     pub maximum_sun: bool,
+    #[serde(skip)]
     source: PhantomData<RunSourceT>,
 }
 
@@ -3227,20 +3288,34 @@ impl LedgerV2 for StolenBaseLedger {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure)]
+#[serde(tag = "version", rename_all = "camelCase")]
 pub enum Ledger<LedgerRunT>
 where
     LedgerRunT: LedgerV2 + with_structure::WithStructure,
 {
     None,
     // TODO: If possible, have the V1 parser convert to V2 and always store V2
+    #[serde(rename_all = "camelCase")]
     V1 {
         base_runs: f64,
         lines: Vec<LedgerLineV1>,
     },
+    #[serde(rename_all = "camelCase")]
     V2(LedgerRunT),
 }
 
+impl<LedgerRunT: LedgerV2> Default for Ledger<LedgerRunT> {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+
 impl<LedgerRunT: LedgerV2> Ledger<LedgerRunT> {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
     pub fn to_string(&self, season: i64, day: i64) -> String {
         let mut s = String::new();
         self.write(season, day, &mut s)
@@ -3318,13 +3393,14 @@ pub struct ScoreSummary<LedgerRunT: LedgerV2> {
     pub runs_scored: f64,
 
     // TODO document this
+    #[serde(skip_serializing_if = "Ledger::is_none")]
     pub ledger: Ledger<LedgerRunT>,
 
     /// Uuid of the team who scored
-    pub team_id: Uuid,
+    pub scoring_team_id: Uuid,
 
     /// Nickname of the team who scored
-    pub team_nickname: String,
+    pub scoring_team_nickname: String,
 
     /// Metadata for the sub-event associated with this score
     pub sub_event: SubEvent,
@@ -4460,7 +4536,9 @@ pub enum FedEventData {
         #[serde(skip_serializing_if="Option::is_none")]
         cooled_off: Option<ModChangeSubEventWithPlayer>,
 
-        /// `true` if the event was a Special type, otherwise omitted 
+        // TODO also omit this when the event is special for reasons that we
+        //   can discern from either fields
+        /// `true` if the event was a Special type, otherwise omitted
         /// 
         /// Usually this can be inferred from other fields. However, in the
         /// Expansion Era before Season 20, when players scored with Tired or
@@ -4516,7 +4594,9 @@ pub enum FedEventData {
         /// Name of fielder who caught the ground out
         fielder_name: String,
 
-        /// Whether the fielder who caught the ground out was shelled
+        /// `true` if the fielder who caught the ground out was shelled,
+        /// otherwise omitted
+        #[serde(skip_serializing_if = "is_false")]
         fielder_shelled: bool,
 
         #[serde(flatten)]
@@ -4690,12 +4770,14 @@ pub enum FedEventData {
         batter_id: Uuid,
 
         /// Type of hit: Single, Double, etc.
+        #[serde(flatten)]
         hit_type: HitType,
 
         #[serde(flatten)]
         scores: Scores<SimpleLedgerV2<run_source::Hit>>,
 
         /// The Spicy status of the batter
+        #[serde(skip_serializing_if = "SpicyStatus::is_none")]
         spicy_status: SpicyStatus,
 
 
@@ -4766,6 +4848,11 @@ pub enum FedEventData {
         batter_id: Uuid,
 
         /// Type of home run
+        ///
+        /// This is a categorical type, rather than a number, because we can't
+        /// tell whether "Grand Slam" is a 4-base grand slam or a 5-base grand
+        /// slam. Possible values are "Solo", "TwoRun", "ThreeRun", "FourRun"
+        /// (which only applies when there are 5 bases), and "GrandSlam".
         home_run_type: HomeRunType,
         
         /// If the batter was Inhabiting, contains metadata about the player 
@@ -4781,6 +4868,7 @@ pub enum FedEventData {
         free_refills: Vec<FreeRefill>,
 
         /// The Spicy status of the batter
+        #[serde(skip_serializing_if = "SpicyStatus::is_none")]
         spicy_status: SpicyStatus,
 
         /// `true` if the event was a Special type, otherwise omitted 
@@ -4817,7 +4905,15 @@ pub enum FedEventData {
         #[serde(skip_serializing_if="Vec::is_empty")]
         hotel_motel_parties: Vec<HotelMotelScoringPlayer>,
 
-        /// If the home run caused Shame, the metadata about the hype event
+        /// Whether there was shame on this home run score, if known
+        ///
+        /// If shame status is unknown, as it was for all events prior to Season 17,
+        /// this is omitted. Otherwise, `true` if this score shamed, `false`
+        /// otherwise.
+        ///
+        /// If this is `true`, there may be Hype on this event. See the `hype`
+        /// property.
+        #[serde(flatten, skip_serializing_if = "HomeRunShame::is_unknown", default)]
         shame: HomeRunShame,
 
         /// If a player went for an alley oop, the player's name and whether 
@@ -4885,6 +4981,7 @@ pub enum FedEventData {
 
         /// If this event caused Shame, the metadata about the Shame, including
         /// any associated Hype
+        #[serde(flatten, skip_serializing_if = "Shame::is_unknown", default)]
         shame: Shame,
 
         /// Score summary effects, if applicable
@@ -7902,6 +7999,7 @@ pub enum FedEventData {
         /// Once, due to a bug, Moderation accidentally took too many runs and
         /// caused the opposing team to win. Since this was at the end of the
         /// game it counted as Shame and built Hype.
+        #[serde(flatten, skip_serializing_if = "Shame::is_unknown", default)]
         shame: Shame,
 
         /// The associated score summary, if applicable
@@ -8017,6 +8115,7 @@ pub enum FedEventData {
         /// If this run steal caused Shame, information about the Shame,
         /// including Hype.
         // TODO check json representation
+        #[serde(flatten, skip_serializing_if = "Shame::is_unknown", default)]
         shame: Shame,
 
         /// Free Refill data if one was used, otherwise omitted

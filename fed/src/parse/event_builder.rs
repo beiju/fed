@@ -799,8 +799,8 @@ impl EventBuilder {
         let (season, day) = (self.event.season, self.event.day);
         self.push_child(score.sub_event, |mut child_eb| {
             child_eb.set_category(EventCategory::Game);
-            child_eb.push_team_tag(score.team_id);
-            child_eb.push_description(format!("The {} scored!", score.team_nickname));
+            child_eb.push_team_tag(score.scoring_team_id);
+            child_eb.push_description(format!("The {} scored!", score.scoring_team_nickname));
             child_eb.push_metadata_str("awayEmoji", &score.away_emoji);
             child_eb.push_metadata_i64_or_f64("awayScore", score.away_score);
             child_eb.push_metadata_str("homeEmoji", &score.home_emoji);

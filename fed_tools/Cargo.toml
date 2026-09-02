@@ -29,3 +29,4 @@ with_structure = { path = "../with_structure" }
 serde_json = "1.0.149"
 chrono = "0.4.44"
 itertools = "0.14.0"
+uuid = "1.23.1"

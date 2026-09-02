@@ -739,6 +739,7 @@ dependencies = [
  "json-structural-diff",
  "schemars",
  "serde_json",
+ "uuid",
  "with_structure",
 ]
 

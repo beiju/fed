@@ -839,7 +839,7 @@ impl<'e> EventParseWrapper<'e> {
             return Ok(None);
         };
 
-        let team_nickname = score_child.next_parse(parse_team_scored)?;
+        let scoring_team_nickname = score_child.next_parse(parse_team_scored)?;
 
         let score_update = score_child.metadata_str("update")?;
         let (_, runs_scored) = parse_score_update
@@ -903,8 +903,8 @@ impl<'e> EventParseWrapper<'e> {
             home_score: score_child.metadata_f64("homeScore")?,
             runs_scored,
             ledger,
-            team_id: score_child.next_team_id()?,
-            team_nickname: team_nickname.to_string(),
+            scoring_team_id: score_child.next_team_id()?,
+            scoring_team_nickname: scoring_team_nickname.to_string(),
             sub_event: score_child.as_sub_event(),
         }))
     }

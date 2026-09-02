@@ -1,5 +1,6 @@
 - Figure out why the progress bar for s15 is ending at d47 (note that I think it displays values past d47 while it's running)
 - Inspect json outputs and change serde annotations to make it idiomatic
+- Add a round-trip check on serialization/deserialization of FedEvent
 - Address TODOs and todo!()s
 - Audit for events that should be grouped
 - Audit all panics, unwraps, and expects
