@@ -80,6 +80,10 @@ impl EventBuilder {
                 created: sub_event.created,
                 nuts: sub_event.nuts,
                 metadata: self.event.metadata.connected_event_metadata(),
+                // TODO also reset player_tags
+                // TODO look for anywhere I was clearing team tags because this
+                //    used to not reset them
+                team_tags: Some(vec![]), // TODO See if I can simplify this further
                 ..self.event.clone()
             },
             phantom_children: 0,

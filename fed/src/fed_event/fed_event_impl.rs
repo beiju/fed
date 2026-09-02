@@ -1,4 +1,4 @@
-use crate::fed_event::FedEventData;
+use crate::fed_event::{FedEventData, ReplicaGiftSuccessors};
 use crate::fed_event::GameStartAnnouncement;
 use crate::fed_event::HitType;
 use crate::fed_event::HomeRunShameSource;
@@ -3089,14 +3089,132 @@ impl FedEvent {
                 eb.push_metadata_i64("totalGifts", total_gifts);
                 eb.build(EventType::TeamReceivedGifts)
             }
-            FedEventData::GiftReceived { team_id, title_and_recipient, metadata, mut successors } => {
+            FedEventData::GiftReceived { team_id, title_and_recipient, metadata, replica } => {
                 eb.set_category(EventCategory::Outcomes);
                 eb.push_description(format!("Gift Received: {title_and_recipient}"));
                 eb.push_team_tag(team_id);
                 eb.set_full_metadata(metadata);
-                let main = eb.build(EventType::BlessingOrGiftWon);
-                successors.insert(0, main);
-                return successors;
+
+                // This is. Complicated
+                if let Some(replica) = replica {
+                    match replica.successors {
+                        ReplicaGiftSuccessors::BothRedacted { first_event_description, first_event_scales, second_event_description, second_event_scales } => {
+                            // EventBuilder intentionally doesn't support Redacted events because they violate
+                            // too many invariants (like "tags arrays exist")
+                            let first_event = EventuallyEvent {
+                                id: replica.first_event.id,
+                                created: replica.first_event.created,
+                                r#type: EventType::Undefined,
+                                category: EventCategory::Redacted,
+                                metadata: eventually_api::EventMetadata {
+                                    other: json!({
+                                        "scales": first_event_scales,
+                                        "redacted": true,
+                                    }),
+                                    ..Default::default()
+                                },
+                                blurb: "".to_string(),
+                                description: first_event_description,
+                                election_option_id: None,
+                                player_tags: None,
+                                game_tags: None,
+                                team_tags: None,
+                                sim: self.sim.clone(),
+                                day: self.day,
+                                season: self.season,
+                                tournament: self.tournament,
+                                phase: self.phase.into(),
+                                nuts: replica.first_event.nuts,
+                            };
+
+                            // EventBuilder intentionally doesn't support Redacted events because they violate
+                            // too many invariants (like "tags arrays exist")
+                            let second_event = EventuallyEvent {
+                                id: replica.second_event.id,
+                                created: replica.second_event.created,
+                                r#type: EventType::Undefined,
+                                category: EventCategory::Redacted,
+                                metadata: eventually_api::EventMetadata {
+                                    other: json!({
+                                        "scales": second_event_scales,
+                                        "redacted": true,
+                                    }),
+                                    ..Default::default()
+                                },
+                                blurb: "".to_string(),
+                                description: second_event_description,
+                                election_option_id: None,
+                                player_tags: None,
+                                game_tags: None,
+                                team_tags: None,
+                                sim: self.sim,
+                                day: self.day,
+                                season: self.season,
+                                tournament: self.tournament,
+                                phase: self.phase.into(),
+                                nuts: replica.second_event.nuts,
+                            };
+                            let main_event = eb.build(EventType::BlessingOrGiftWon);
+                            return vec![
+                                main_event,
+                                first_event,
+                                second_event,
+                            ];
+                        }
+                        ReplicaGiftSuccessors::SecondRedacted { original_player_id, original_player_name, replica_player_id, second_event_scales, replica_player_redacted_name } => {
+                            let mut first_eb = eb.connected_event(replica.first_event);
+                            first_eb.set_category(EventCategory::Changes);
+                            first_eb.push_metadata_str("mod", "REPLICA");
+                            first_eb.push_metadata_i64("type", ModDuration::Permanent);
+                            // Exactly the number needed to reveal a Redacted event
+                            first_eb.push_metadata_i64("scales", 1000);
+                            first_eb.push_metadata_bool("redacted", false);
+                            first_eb.clear_description();
+                            first_eb.push_description(format!("{} is Heated, Shaped, and Replicated.", original_player_name));
+                            first_eb.push_player_tag(replica_player_id);
+                            first_eb.push_player_tag(original_player_id);
+
+                            // EventBuilder intentionally doesn't support Redacted events because they violate
+                            // too many invariants (like "tags arrays exist")
+                            let second_event = EventuallyEvent {
+                                id: replica.second_event.id,
+                                created: replica.second_event.created,
+                                r#type: EventType::Undefined,
+                                category: EventCategory::Redacted,
+                                metadata: eventually_api::EventMetadata {
+                                    other: json!({
+                                        "redacted": true,
+                                        "scales": second_event_scales,
+                                    }),
+                                    ..Default::default()
+                                },
+                                blurb: "".to_string(),
+                                description: format!("{} || |||||||", replica_player_redacted_name),
+                                election_option_id: None,
+                                player_tags: None,
+                                game_tags: None,
+                                team_tags: None,
+                                sim: self.sim,
+                                day: self.day,
+                                season: self.season,
+                                tournament: self.tournament,
+                                phase: self.phase.into(),
+                                nuts: replica.second_event.nuts,
+                            };
+
+
+                            let first_event = first_eb.build(EventType::AddedMod);
+                            let main_event = eb.build(EventType::BlessingOrGiftWon);
+                            return vec![
+                                main_event,
+                                first_event,
+                                second_event,
+                            ];
+                        }
+                    }
+                } else {
+                    eb.build(EventType::BlessingOrGiftWon)
+                }
             }
             FedEventData::ReplicaFadedToDust { team_id, team_nickname, player_id, player_name, mod_added_event, weaker_apart_event } => {
                 let mut dust_eb = eb.connected_event(mod_added_event);
@@ -4684,6 +4802,7 @@ impl FedEvent {
                         eb.push_player_tag(player.player_id);
                         eb.push_metadata_str("mod", "SCATTERED");
                         eb.push_metadata_i64("type", ModDuration::Permanent);
+                        eb.push_team_tag(team_id);
 
                         eb.build(EventType::AddedMod)
                     })
@@ -4723,6 +4842,7 @@ impl FedEvent {
                 let mut team_joined_division_eb = eb.connected_event(team_joined_division_sub_event);
                 team_joined_division_eb.clear_description(); // TODO connected_event shouldn't save description
                 team_joined_division_eb.push_description(format!("The {team_name} have joined the {division_name} division."));
+                team_joined_division_eb.push_team_tag(team_id);
                 team_joined_division_eb.push_metadata_uuid("teamId", team_id);
                 team_joined_division_eb.push_metadata_str("teamName", team_name);
                 team_joined_division_eb.push_metadata_uuid("divisionId", division_id);

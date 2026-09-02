@@ -2373,8 +2373,8 @@ pub(crate) enum ParsedBlessingOrGift<'a> {
 
 pub(crate) fn parse_blessing_or_gift(input: &str) -> ParserResult<'_, ParsedBlessingOrGift<'_>> {
     alt((
-        parse_blessing_won.map(|n| ParsedBlessingOrGift::Blessing(n)),
-        parse_gift_received.map(|n| ParsedBlessingOrGift::Gift(n)),
+        parse_blessing_won.map(ParsedBlessingOrGift::Blessing),
+        parse_gift_received.map(ParsedBlessingOrGift::Gift),
     ))
     .parse(input)
 }

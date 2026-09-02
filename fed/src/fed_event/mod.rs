@@ -5,7 +5,7 @@ pub use run_source::RunSource;
 
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
-use eventually_api::{EventMetadata, EventType, EventuallyEvent, Weather};
+use eventually_api::{EventMetadata, EventType, Weather};
 use itertools::{Either, Itertools};
 use num_enum::{IntoPrimitive, TryFromPrimitive, TryFromPrimitiveError};
 use schemars::JsonSchema;
@@ -4020,6 +4020,41 @@ pub enum EndZone {
     TODOWhereDoesForceComeFrom,
 }
 
+// TODO Document this, and adjust it as appropriate
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, WithStructure,
+)]
+pub enum ReplicaGiftSuccessors {
+    BothRedacted {
+        // TODO check against unredacted name
+        first_event_description: String,
+        first_event_scales: i64,
+        // TODO check against unredacted name
+        second_event_description: String,
+        second_event_scales: i64,
+    },
+    SecondRedacted {
+        original_player_id: Uuid,
+        original_player_name: String,
+
+        replica_player_id: Uuid,
+
+        // The following fields are for the second event
+        // This assumes that the second event is redacted, not necessarily true!
+        second_event_scales: i64,
+        replica_player_redacted_name: String, // whim
+    },
+}
+
+// TODO Document this
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, WithStructure)]
+pub struct ReplicaGift {
+    pub successors: ReplicaGiftSuccessors,
+
+    // These are one hundo per cento gonna have to change
+    pub first_event: SubEvent,
+    pub second_event: SubEvent,
+}
 
 // Check the following:
 // - Option<...> fields are annotated with `#[serde(skip_serializing_if="Option::is_none")]`,
@@ -7635,8 +7670,8 @@ pub enum FedEventData {
         #[with_structure(ignore)]
         metadata: EventMetadata,
 
-        // TODO Figure out what should happen here
-        successors: Vec<EventuallyEvent>,
+        // TODO document what the fuck is going on here
+        replica: Option<ReplicaGift>,
     },
 
     /// Replica player faded to dust at the end of the season

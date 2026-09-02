@@ -2367,39 +2367,76 @@ pub fn parse_next_event_r(
                     metadata: event.full_metadata().clone(),
                 },
                 ParsedBlessingOrGift::Gift(title_and_recipient) => {
+                    let team_id = event.next_team_id()?;
+
                     // TODO Clean this up once I understand it more
                     // See this discord conversation for me going a little insane about these events: https://discord.com/channels/738107179294523402/1047288668953530389/1272058222806831186
                     // and then a small continuation here: https://discord.com/channels/738107179294523402/1047288668953530389/1314845918855565333
-                    let successors = if title_and_recipient.contains("Mint Edition") {
+                    let replica = if title_and_recipient.contains("Mint Edition") {
                         if event_iter.peek().unwrap().r#type == EventType::BlessingOrGiftWon {
                             // Sometimes (I think if the replica is being reused) there's nothing special after it.
                             // This still needs handling for what if the last BlessingOrGiftWon is a non-special mint edition one
-                            vec![]
+                            None
                         } else {
-                            let next1 = event_iter.next().unwrap();
-                            let next2 = event_iter.next().unwrap();
-                            // I'm hoping eventually this assert will trigger and then I will finally know what the other event is
-                            assert!(
-                                // So sometimes there are 2 events after this event and both start out redacted,
-                                // and apparently we've only ever unredacted one of them (which is AddedMod).
-                                // This assert is meant to catch the other one.
-                                (next1.r#type == EventType::Undefined
-                                    && next2.r#type == EventType::Undefined)
-                                    || (next1.r#type == EventType::AddedMod
-                                        && next2.r#type == EventType::Undefined)
-                                    || (next1.r#type == EventType::Undefined
-                                        && next2.r#type == EventType::AddedMod)
-                            );
-                            vec![next1, next2]
+                            let first_event = event_iter.next().unwrap();
+                            let mut first_event = EventParseWrapper::new(&first_event)?;
+                            let second_event = event_iter.next().unwrap();
+                            let mut second_event = EventParseWrapper::new(&second_event)?;
+
+                            let successors = if first_event.event_type == EventType::Undefined {
+                                if second_event.event_type == EventType::Undefined {
+                                    // This is a guess
+                                    // TODO remove once done
+                                    // let first_player_redacted_name = first_event.next_parse(parse_terminated(" ||||||| ||||||| ||| |||||||||||"))?;
+                                    let first_event_description = first_event.description();
+                                    // TODO Constrain this once known
+                                    let second_event_description = second_event.description();
+
+                                    ReplicaGiftSuccessors::BothRedacted {
+                                        first_event_description: first_event_description.to_string(),
+                                        first_event_scales: first_event.metadata_i64("scales")?,
+                                        second_event_description: second_event_description.to_string(),
+                                        second_event_scales: second_event.metadata_i64("scales")?,
+                                    }
+                                } else {
+                                    todo!("This never happened in Blaseball")
+                                }
+                            } else {
+                                if second_event.event_type == EventType::Undefined {
+                                    // In this branch, first_event is not redacted
+                                    let replica_player_id = first_event.next_player_id()?;
+                                    let original_player_id = first_event.next_player_id()?;
+                                    let original_player_name = first_event.next_parse(parse_terminated(" is Heated, Shaped, and Replicated."))?;
+
+                                    let replica_player_redacted_name = second_event.next_parse(parse_terminated(" || |||||||"))?;
+
+                                    ReplicaGiftSuccessors::SecondRedacted {
+                                        original_player_id,
+                                        original_player_name: original_player_name.to_string(),
+                                        replica_player_id,
+                                        second_event_scales: second_event.metadata_i64("scales")?,
+                                        replica_player_redacted_name: replica_player_redacted_name.to_string(),
+                                    }
+                                } else {
+                                    todo!("This never happened in Blaseball")
+                                }
+                            };
+
+                            Some(ReplicaGift {
+                                successors,
+                                first_event: first_event.as_sub_event(),
+                                second_event: second_event.as_sub_event(),
+                            })
                         }
                     } else {
-                        Vec::new()
+                        None
                     };
+
                     FedEventData::GiftReceived {
-                        team_id: event.next_team_id()?,
+                        team_id,
                         title_and_recipient: title_and_recipient.into(),
                         metadata: event.full_metadata().clone(),
-                        successors,
+                        replica,
                     }
                 }
             }

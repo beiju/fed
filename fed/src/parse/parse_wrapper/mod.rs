@@ -120,9 +120,11 @@ impl<'e> EventParseWrapper<'e> {
         self.consumed_player_id_count += 1;
         let (&id, rest) = self
             .player_ids
-            .ok_or_else(|| FeedParseError::MissingTags {
-                event_type: self.event_type,
-                tag_type: "player",
+            .ok_or_else(|| {
+                FeedParseError::MissingTags {
+                    event_type: self.event_type,
+                    tag_type: "player",
+                }
             })?
             .split_first()
             .ok_or_else(|| {
@@ -142,9 +144,11 @@ impl<'e> EventParseWrapper<'e> {
     pub fn peek_player_id(&self) -> Result<Option<Uuid>, FeedParseError> {
         Ok(self
             .player_ids
-            .ok_or_else(|| FeedParseError::MissingTags {
-                event_type: self.event_type,
-                tag_type: "player",
+            .ok_or_else(|| {
+                FeedParseError::MissingTags {
+                    event_type: self.event_type,
+                    tag_type: "player",
+                }
             })?
             .first()
             .copied())
@@ -153,9 +157,11 @@ impl<'e> EventParseWrapper<'e> {
     pub fn next_team_id(&mut self) -> Result<Uuid, FeedParseError> {
         let (&id, rest) = self
             .team_ids
-            .ok_or_else(|| FeedParseError::MissingTags {
-                event_type: self.event_type,
-                tag_type: "team",
+            .ok_or_else(|| {
+                FeedParseError::MissingTags {
+                    event_type: self.event_type,
+                    tag_type: "team",
+                }
             })?
             .split_first()
             .ok_or_else(|| FeedParseError::NotEnoughTags {
@@ -192,9 +198,11 @@ impl<'e> EventParseWrapper<'e> {
         self.consumed_game_id_count += 1;
         let (&id, rest) = self
             .game_ids
-            .ok_or_else(|| FeedParseError::MissingTags {
-                event_type: self.event_type,
-                tag_type: "game",
+            .ok_or_else(|| {
+                FeedParseError::MissingTags {
+                    event_type: self.event_type,
+                    tag_type: "game",
+                }
             })?
             .split_first()
             .ok_or_else(|| FeedParseError::NotEnoughTags {
@@ -544,16 +552,20 @@ impl<'e> EventParseWrapper<'e> {
     }
 
     pub fn player_tags(&self) -> Result<&'e [Uuid], FeedParseError> {
-        self.player_ids.ok_or_else(|| FeedParseError::MissingTags {
-            event_type: self.event_type,
-            tag_type: "player",
+        self.player_ids.ok_or_else(|| {
+            FeedParseError::MissingTags {
+                event_type: self.event_type,
+                tag_type: "player",
+            }
         })
     }
 
     pub fn team_tags(&self) -> Result<&'e [Uuid], FeedParseError> {
-        self.team_ids.ok_or_else(|| FeedParseError::MissingTags {
-            event_type: self.event_type,
-            tag_type: "team",
+        self.team_ids.ok_or_else(|| {
+            FeedParseError::MissingTags {
+                event_type: self.event_type,
+                tag_type: "team",
+            }
         })
     }
 
